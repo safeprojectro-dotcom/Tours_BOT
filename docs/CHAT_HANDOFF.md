@@ -7,7 +7,7 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 4 / Step 13 completed
+Phase 4 / Step 15 completed
 
 ## Completed Steps
 
@@ -273,6 +273,20 @@ Phase 4 / Step 13 completed
   - eligible confirmed, paid, active orders departing within the reminder window can now be prepared and enqueued for `telegram_private`
   - repeated prepare/enqueue execution stays dedupe-friendly and state-safe
 
+- Phase 4 / Step 14 completed
+  - departure-day reminder groundwork added
+  - implemented through `app/services/departure_day_reminder.py` and `app/services/departure_day_reminder_outbox.py`
+  - `departure_day_reminder` event support added to notification preparation
+  - eligible confirmed, paid, active same-day departure orders can now be prepared and enqueued for `telegram_private`
+  - repeated prepare/enqueue execution stays dedupe-friendly and state-safe
+
+- Phase 4 / Step 15 completed
+  - post-trip reminder groundwork added
+  - implemented through `app/services/post_trip_reminder.py` and `app/services/post_trip_reminder_outbox.py`
+  - `post_trip_reminder` event support added to notification preparation
+  - eligible confirmed, paid, active returned trips within the reminder window can now be prepared and enqueued for `telegram_private`
+  - repeated prepare/enqueue execution stays dedupe-friendly and state-safe
+
 ### Phase 4 Test/Dependency/Cleanup Checkpoint
 - missing `httpx` issue was identified as an environment sync issue, not a project dependency-definition issue
 - project dependency definition already included `httpx`
@@ -325,8 +339,12 @@ Phase 4 / Step 13 completed
 - notification outbox retry execution tests pass
 - predeparture reminder tests pass
 - predeparture reminder outbox tests pass
+- departure-day reminder tests pass
+- departure-day reminder outbox tests pass
+- post-trip reminder tests pass
+- post-trip reminder outbox tests pass
 - `python -m unittest discover -s tests/unit -v` currently passes
-- latest known status: 93/93 unit tests passed
+- latest known status: 107/107 unit tests passed
 - previous `psycopg ResourceWarning` no longer appears in full suite output
 
 ### Latest Payment/Webhook Checkpoint
@@ -344,6 +362,8 @@ Phase 4 / Step 13 completed
 - payment-pending reminder selection, delivery, and outbox slices pass tests
 - notification outbox persistence, processing, recovery, and retry execution slices pass tests
 - predeparture reminder groundwork and outbox slices pass tests
+- departure-day reminder groundwork and outbox slices pass tests
+- post-trip reminder groundwork and outbox slices pass tests
 - notification preparation, dispatch, delivery, outbox, and reminder logic remain service-layer driven
 - current real notification delivery remains limited to `telegram_private`
 
@@ -379,12 +399,14 @@ Phase 4 / Step 13 completed
 - notification outbox retry execution slice
 - predeparture reminder groundwork
 - predeparture reminder outbox slice
+- departure-day reminder groundwork
+- departure-day reminder outbox slice
+- post-trip reminder groundwork
+- post-trip reminder outbox slice
 - clean DB-backed unit test harness
 
 ### Not Implemented Yet
 - broader reminder workers and scheduling/orchestration
-- departure-day reminders
-- post-trip reminders
 - refund workflow
 - waitlist actions/workflow
 - handoff lifecycle workflow
@@ -477,6 +499,8 @@ This logic already exists in the temporary reservation creation slice and must b
   - reservation expired
 - multilingual notification preparation for:
   - predeparture reminder
+  - departure-day reminder
+  - post-trip reminder
 - notification event/type definitions
 - channel-specific dispatch envelope preparation for `telegram_private`
 - real `telegram_private` notification delivery
@@ -487,71 +511,60 @@ This logic already exists in the temporary reservation creation slice and must b
 - notification outbox persistence / pending entry tracking
 - notification outbox processing, recovery, and retry execution
 - predeparture reminder selection and outbox enqueue groundwork
+- departure-day reminder selection and outbox enqueue groundwork
+- post-trip reminder selection and outbox enqueue groundwork
 
 ### Not yet implemented
 - group delivery
 - Mini App delivery
 - waitlist notifications
 - handoff notifications
-- departure-day reminders
-- post-trip reminders
 
 ---
 
 ## Next Safe Step
-Phase 4 / Step 14
+Phase 5 / Step 1
 
 
-Using `docs/TECH_SPEC_TOURS_BOT.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/TESTING_STRATEGY.md`, `docs/AI_ASSISTANT_SPEC.md`, `docs/AI_DIALOG_FLOWS.md`, `docs/CHAT_HANDOFF.md`, and `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, implement only the departure-day reminder groundwork slice on top of the existing notification preparation, dispatch, outbox, processing, recovery, retry-execution, and predeparture reminder foundations.
+Using `docs/TECH_SPEC_TOURS_BOT.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/TESTING_STRATEGY.md`, `docs/AI_ASSISTANT_SPEC.md`, `docs/AI_DIALOG_FLOWS.md`, `docs/CHAT_HANDOFF.md`, and `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, implement only the Mini App UX definition step before Phase 5 UI work.
 
 Goal:
-Add the first departure-day reminder groundwork so same-day departure notifications can be prepared and pushed through the existing `telegram_private` notification lifecycle without introducing scheduler/orchestrator complexity or broader channel expansion yet.
+Define the Mini App UX in `docs/MINI_APP_UX.md` so the Phase 5 UI can be built against an explicit screen map, CTA hierarchy, and state model without prematurely expanding into Flet UI implementation.
 
 Allowed scope:
-- add a minimal departure-day reminder service/worker path for identifying a narrow set of eligible same-day orders
-- prepare only the first departure-day reminder notification outputs needed for the current notification foundation
-- reuse existing notification preparation, dispatch, outbox, processing, recovery, retry-execution, and predeparture reminder foundations where appropriate
-- preserve explicit and idempotent state transitions
-- keep the implementation PostgreSQL-first
-- add focused tests for reminder eligibility, repeated-run safety, and compatibility with the current notification pipeline
-- keep business rules in the service layer
-- keep worker code thin
-- keep API/UI layers untouched unless a very small integration point is strictly required
+- create or update `docs/MINI_APP_UX.md`
+- define the screen map for catalog, filters, tour card, booking, payment, my bookings, language/settings, and help/operator entry points
+- define CTA hierarchy, loading states, empty states, error states, and reservation timer states
+- define help and handoff entry points from the Mini App experience
+- align the UX definition with the current Phase 2-4 service capabilities and explicit postponed items
+- keep the work documentation-first and avoid UI code or API expansion in this step
 
 Requirements:
-- reuse the existing notification preparation, dispatch, outbox, processing, recovery, and retry-execution foundations where appropriate
-- keep delivery limited to the existing `telegram_private` channel only
-- do not add new channels
-- do not add group delivery
-- do not add Mini App delivery
-- do not add waitlist notifications
-- do not add handoff notifications
-- do not add full scheduler/orchestrator complexity yet
-- do not add advanced retry policy tuning yet
-- preserve the current Step 8–13 behavior unless a very small compatibility fix is strictly necessary
-- keep the aiogram dependency boundary narrow and do not reintroduce broad import coupling into unrelated services/tests
+- do not implement Flet UI yet
+- do not add Mini App auth/init endpoints yet
+- do not add Mini App booking/payment UI yet
+- do not expand bot, payment, waitlist, or handoff code in this step
+- keep the UX definition aligned with the existing architecture and current Phase 2-4 capabilities
+- explicitly mark still-postponed behaviors instead of inventing unsupported flows
 
 Do not implement yet:
-- full production scheduler/orchestrator
-- advanced retry framework/policy engine
+- Flet UI implementation
+- Mini App API delivery changes
+- waitlist workflow implementation
+- handoff workflow implementation
 - group delivery
-- Mini App delivery
-- waitlist notifications
-- handoff notifications
-- post-trip reminders
-- refund workflow
-- advanced admin automation
+- content/admin expansions unrelated to Mini App UX definition
 
 Before writing code:
 1. summarize the current project state
 2. list what is already completed in Phase 4
-3. identify the exact next safe step and explain why departure-day reminder groundwork is the right next foundation
-4. list the repositories, services, workers, schemas, helpers, and tests you will add or extend
-5. explain the departure-day reminder eligibility strategy
-6. explain the idempotency and repeated-run safety strategy
+3. identify the exact next safe step and explain why Mini App UX definition is the right bridge into Phase 5
+4. list the docs or files you will add or extend
+5. explain the proposed screen map and CTA hierarchy
+6. explain what remains explicitly postponed before UI implementation
 7. explain what remains postponed
 
-Then generate the code and tests.
+Then generate the documentation only.
 ---
 
 ## New Chat Startup Prompt
