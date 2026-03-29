@@ -6,7 +6,7 @@ from decimal import Decimal
 from pydantic import BaseModel
 
 from app.models.enums import TourStatus
-from app.schemas.prepared import CatalogTourCardRead, LocalizedTourContentRead
+from app.schemas.prepared import CatalogTourCardRead, LocalizedTourContentRead, ReservationPreparationTourRead
 from app.schemas.tour import BoardingPointRead, TourRead
 
 
@@ -30,3 +30,10 @@ class MiniAppTourDetailRead(BaseModel):
     localized_content: LocalizedTourContentRead
     boarding_points: list[BoardingPointRead]
     is_available: bool
+
+
+class MiniAppReservationPreparationRead(BaseModel):
+    tour: ReservationPreparationTourRead
+    boarding_points: list[BoardingPointRead]
+    seat_count_options: list[int]
+    preparation_only: bool = True

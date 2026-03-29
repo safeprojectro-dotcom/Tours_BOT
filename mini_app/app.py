@@ -7,8 +7,8 @@ from decimal import Decimal, InvalidOperation
 import flet as ft
 import httpx
 
-from app.schemas.mini_app import MiniAppCatalogRead, MiniAppTourDetailRead
-from app.schemas.prepared import CatalogTourCardRead
+from app.schemas.mini_app import MiniAppCatalogRead, MiniAppReservationPreparationRead, MiniAppTourDetailRead
+from app.schemas.prepared import CatalogTourCardRead, ReservationPreparationSummaryRead
 from app.schemas.tour import BoardingPointRead
 from mini_app.api_client import MiniAppApiClient
 from mini_app.config import get_mini_app_settings
@@ -268,11 +268,13 @@ class TourDetailScreen:
         api_client: MiniAppApiClient,
         default_language_code: str,
         on_back: Callable[[], None],
+        on_prepare: Callable[[str], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
         self.language_code = default_language_code
         self.on_back = on_back
+        self.on_prepare = on_prepare
         self.current_tour_code: str | None = None
 
         self.loading_row = ft.Row(
@@ -379,6 +381,18 @@ class TourDetailScreen:
             ]
         )
 
+        self.content_column.controls.append(
+            ft.Row(
+                [
+                    ft.ElevatedButton(
+                        "Prepare reservation",
+                        on_click=lambda _, code=detail.tour.code: self.on_prepare(code),
+                    )
+                ],
+                alignment=ft.MainAxisAlignment.START,
+            )
+        )
+
         if localized.used_fallback:
             self.content_column.controls.append(
                 ft.Text(
@@ -447,8 +461,222 @@ class TourDetailScreen:
         self.loading_row.visible = is_loading
 
 
+class ReservationPreparationScreen:
+    def __init__(
+        self,
+        page: ft.Page,
+        *,
+        api_client: MiniAppApiClient,
+        default_language_code: str,
+        on_back: Callable[[str], None],
+    ) -> None:
+        self.page = page
+        self.api_client = api_client
+        self.language_code = default_language_code
+        self.on_back = on_back
+        self.current_tour_code: str | None = None
+
+        self.loading_row = ft.Row(
+            [ft.ProgressRing(width=18, height=18, stroke_width=2), ft.Text("Loading reservation options...")],
+            visible=False,
+            spacing=10,
+        )
+        self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
+        self.selection_container = ft.Column(spacing=12)
+        self.summary_container = ft.Column(spacing=12)
+        self.seats_dropdown = ft.Dropdown(label="Seats", dense=True, options=[])
+        self.boarding_dropdown = ft.Dropdown(label="Boarding point", dense=True, options=[])
+        self.preview_button = ft.ElevatedButton("Preview reservation", on_click=self._on_preview_summary)
+        self.preparation_note = ft.Text(
+            "Preparation only. No reservation is created at this step.",
+            color=ft.Colors.ON_SURFACE_VARIANT,
+        )
+
+    def set_tour_code(self, tour_code: str) -> None:
+        self.current_tour_code = tour_code
+
+    def build(self) -> ft.Control:
+        return ft.SafeArea(
+            content=ft.Container(
+                padding=16,
+                content=ft.Column(
+                    [
+                        ft.Row(
+                            [
+                                ft.TextButton(
+                                    "Back to tour details",
+                                    icon=ft.Icons.ARROW_BACK,
+                                    on_click=lambda _: self.on_back(self.current_tour_code or ""),
+                                )
+                            ]
+                        ),
+                        self.loading_row,
+                        self.error_text,
+                        self.preparation_note,
+                        self.selection_container,
+                        self.summary_container,
+                    ],
+                    spacing=14,
+                    scroll=ft.ScrollMode.AUTO,
+                ),
+            )
+        )
+
+    async def load_preparation(self) -> None:
+        if not self.current_tour_code:
+            self._show_error("Tour not found.")
+            self._render_preparation(None)
+            return
+
+        self._set_loading(True)
+        self.error_text.visible = False
+        self.page.update()
+
+        try:
+            preparation = await self.api_client.get_tour_preparation(
+                tour_code=self.current_tour_code,
+                language_code=self.language_code,
+            )
+        except httpx.HTTPStatusError as exc:
+            message = CatalogScreen._http_error_message(
+                exc,
+                default="Unable to load reservation options right now.",
+            )
+            self._show_error(message)
+            self._render_preparation(None)
+        except Exception:
+            self._show_error("Unable to load reservation options right now.")
+            self._render_preparation(None)
+        else:
+            self._render_preparation(preparation)
+        finally:
+            self._set_loading(False)
+            self.page.update()
+
+    async def load_summary(self) -> None:
+        if not self.current_tour_code:
+            self._show_error("Tour not found.")
+            return
+        if not self.seats_dropdown.value or not self.boarding_dropdown.value:
+            self._show_error("Choose seats and a boarding point to preview the summary.")
+            return
+
+        self._set_loading(True)
+        self.error_text.visible = False
+        self.page.update()
+
+        try:
+            summary = await self.api_client.get_preparation_summary(
+                tour_code=self.current_tour_code,
+                seats_count=int(self.seats_dropdown.value),
+                boarding_point_id=int(self.boarding_dropdown.value),
+                language_code=self.language_code,
+            )
+        except httpx.HTTPStatusError as exc:
+            message = CatalogScreen._http_error_message(
+                exc,
+                default="Unable to build the reservation summary right now.",
+            )
+            self._show_error(message)
+            self._render_summary(None)
+        except Exception:
+            self._show_error("Unable to build the reservation summary right now.")
+            self._render_summary(None)
+        else:
+            self._render_summary(summary)
+        finally:
+            self._set_loading(False)
+            self.page.update()
+
+    def _render_preparation(self, preparation: MiniAppReservationPreparationRead | None) -> None:
+        self.selection_container.controls.clear()
+        self.summary_container.controls.clear()
+        if preparation is None:
+            return
+
+        self.seats_dropdown.options = [
+            ft.dropdown.Option(str(option), str(option)) for option in preparation.seat_count_options
+        ]
+        self.seats_dropdown.value = str(preparation.seat_count_options[0]) if preparation.seat_count_options else None
+        self.boarding_dropdown.options = [
+            ft.dropdown.Option(str(point.id), f"{point.city} - {point.address}")
+            for point in preparation.boarding_points
+        ]
+        self.boarding_dropdown.value = (
+            str(preparation.boarding_points[0].id) if preparation.boarding_points else None
+        )
+
+        localized = preparation.tour.localized_content
+        self.selection_container.controls.extend(
+            [
+                ft.Text(localized.title, size=26, weight=ft.FontWeight.BOLD),
+                ft.Text(
+                    f"{CatalogScreen._format_datetime(preparation.tour.departure_datetime)} | "
+                    f"{CatalogScreen._format_price(preparation.tour.base_price)} {preparation.tour.currency}",
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                ),
+                ft.Text(
+                    f"Seats available for preparation: {preparation.tour.seats_available_snapshot}",
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                ),
+                self.seats_dropdown,
+                self.boarding_dropdown,
+                ft.Row([self.preview_button], alignment=ft.MainAxisAlignment.START),
+            ]
+        )
+
+    def _render_summary(self, summary: ReservationPreparationSummaryRead | None) -> None:
+        self.summary_container.controls.clear()
+        if summary is None:
+            return
+
+        self.summary_container.controls.extend(
+            [
+                ft.Text("Preparation summary", size=20, weight=ft.FontWeight.W_600),
+                ft.Container(
+                    bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
+                    border_radius=16,
+                    padding=16,
+                    content=ft.Column(
+                        [
+                            ft.Text(summary.tour.localized_content.title, size=18, weight=ft.FontWeight.BOLD),
+                            ft.Text(f"Seats: {summary.seats_count}"),
+                            ft.Text(
+                                f"Boarding point: {summary.boarding_point.city}, {summary.boarding_point.address}"
+                            ),
+                            ft.Text(
+                                f"Boarding time: {summary.boarding_point.time.strftime('%H:%M')}"
+                            ),
+                            ft.Text(
+                                f"Estimated total: {CatalogScreen._format_price(summary.estimated_total_amount)} {summary.tour.currency}"
+                            ),
+                            ft.Text(
+                                "This is a preparation-only preview. Reservation creation remains the next step.",
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                        ],
+                        spacing=8,
+                    ),
+                ),
+            ]
+        )
+
+    def _on_preview_summary(self, _: ft.ControlEvent) -> None:
+        self.page.run_task(self.load_summary)
+
+    def _show_error(self, message: str) -> None:
+        self.error_text.value = message
+        self.error_text.visible = True
+        self.page.update()
+
+    def _set_loading(self, is_loading: bool) -> None:
+        self.loading_row.visible = is_loading
+        self.preview_button.disabled = is_loading
+
+
 class MiniAppShell:
     TOUR_ROUTE_PREFIX = "/tours/"
+    TOUR_PREPARATION_ROUTE_SUFFIX = "/prepare"
 
     def __init__(self, page: ft.Page) -> None:
         settings = get_mini_app_settings()
@@ -465,11 +693,42 @@ class MiniAppShell:
             api_client=self.api_client,
             default_language_code=settings.mini_app_default_language,
             on_back=self.open_catalog,
+            on_prepare=self.open_tour_preparation,
+        )
+        self.reservation_preparation_screen = ReservationPreparationScreen(
+            page,
+            api_client=self.api_client,
+            default_language_code=settings.mini_app_default_language,
+            on_back=self.open_tour_detail,
         )
 
     def handle_route_change(self, _: ft.RouteChangeEvent) -> None:
         self.page.views.clear()
         self.page.views.append(ft.View(route="/", controls=[self.catalog_screen.build()], padding=0, spacing=0))
+
+        preparation_tour_code = self._extract_preparation_tour_code(self.page.route)
+        if preparation_tour_code is not None:
+            self.tour_detail_screen.set_tour_code(preparation_tour_code)
+            self.reservation_preparation_screen.set_tour_code(preparation_tour_code)
+            self.page.views.append(
+                ft.View(
+                    route=f"{self.TOUR_ROUTE_PREFIX}{preparation_tour_code}",
+                    controls=[self.tour_detail_screen.build()],
+                    padding=0,
+                    spacing=0,
+                )
+            )
+            self.page.views.append(
+                ft.View(
+                    route=f"{self.TOUR_ROUTE_PREFIX}{preparation_tour_code}{self.TOUR_PREPARATION_ROUTE_SUFFIX}",
+                    controls=[self.reservation_preparation_screen.build()],
+                    padding=0,
+                    spacing=0,
+                )
+            )
+            self.page.update()
+            self.page.run_task(self.reservation_preparation_screen.load_preparation)
+            return
 
         tour_code = self._extract_tour_code(self.page.route)
         if tour_code is not None:
@@ -497,10 +756,24 @@ class MiniAppShell:
     def open_tour_detail(self, tour_code: str) -> None:
         self.page.go(f"{self.TOUR_ROUTE_PREFIX}{tour_code}")
 
+    def open_tour_preparation(self, tour_code: str) -> None:
+        self.page.go(f"{self.TOUR_ROUTE_PREFIX}{tour_code}{self.TOUR_PREPARATION_ROUTE_SUFFIX}")
+
     def _extract_tour_code(self, route: str | None) -> str | None:
         if route is None or not route.startswith(self.TOUR_ROUTE_PREFIX):
             return None
+        if route.endswith(self.TOUR_PREPARATION_ROUTE_SUFFIX):
+            return None
         code = route.removeprefix(self.TOUR_ROUTE_PREFIX).strip("/")
+        return code or None
+
+    def _extract_preparation_tour_code(self, route: str | None) -> str | None:
+        if route is None or not route.startswith(self.TOUR_ROUTE_PREFIX):
+            return None
+        if not route.endswith(self.TOUR_PREPARATION_ROUTE_SUFFIX):
+            return None
+        code = route.removeprefix(self.TOUR_ROUTE_PREFIX)
+        code = code.removesuffix(self.TOUR_PREPARATION_ROUTE_SUFFIX).strip("/")
         return code or None
 
 

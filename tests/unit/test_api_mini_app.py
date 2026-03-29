@@ -148,3 +148,86 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(unknown_response.json()["detail"], "tour not found")
         self.assertEqual(collecting_group_response.status_code, 404)
         self.assertEqual(collecting_group_response.json()["detail"], "tour not found")
+
+    def test_preparation_route_returns_preparation_options_for_open_tour(self) -> None:
+        tour = self.create_tour(
+            code="BELGRADE-PREP-API",
+            title_default="Belgrade Prep",
+            departure_datetime=datetime(2026, 4, 5, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 4, 6, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=3,
+        )
+        self.create_translation(tour, language_code="ro", title="Belgrad Pregatire API")
+        point = self.create_boarding_point(tour, city="Timisoara", address="Central Station")
+        self.session.commit()
+
+        response = self.client.get(
+            f"/mini-app/tours/{tour.code}/preparation",
+            params={"language_code": "ro"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["tour"]["code"], tour.code)
+        self.assertEqual(payload["tour"]["localized_content"]["title"], "Belgrad Pregatire API")
+        self.assertEqual(payload["seat_count_options"], [1, 2, 3])
+        self.assertEqual(payload["boarding_points"][0]["id"], point.id)
+        self.assertTrue(payload["preparation_only"])
+
+    def test_preparation_summary_route_returns_preparation_only_summary(self) -> None:
+        tour = self.create_tour(
+            code="BELGRADE-PREP-SUMMARY-API",
+            title_default="Belgrade Prep Summary",
+            departure_datetime=datetime(2026, 4, 5, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 4, 6, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=4,
+            base_price="95.00",
+        )
+        self.create_translation(tour, language_code="ro", title="Belgrad Rezumat API")
+        point = self.create_boarding_point(tour, city="Arad", address="Main Station")
+        self.session.commit()
+
+        response = self.client.get(
+            f"/mini-app/tours/{tour.code}/preparation-summary",
+            params={
+                "language_code": "ro",
+                "seats_count": 2,
+                "boarding_point_id": point.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["tour"]["localized_content"]["title"], "Belgrad Rezumat API")
+        self.assertEqual(payload["seats_count"], 2)
+        self.assertEqual(payload["boarding_point"]["city"], "Arad")
+        self.assertEqual(payload["estimated_total_amount"], "190.00")
+        self.assertTrue(payload["preparation_only"])
+
+    def test_preparation_routes_reject_invalid_or_unavailable_inputs(self) -> None:
+        sold_out = self.create_tour(
+            code="SOLDOUT-PREP-API",
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=0,
+        )
+        point = self.create_boarding_point(sold_out)
+        self.session.commit()
+
+        unavailable_response = self.client.get(f"/mini-app/tours/{sold_out.code}/preparation")
+        invalid_summary_response = self.client.get(
+            f"/mini-app/tours/{sold_out.code}/preparation-summary",
+            params={"seats_count": 1, "boarding_point_id": point.id},
+        )
+
+        self.assertEqual(unavailable_response.status_code, 404)
+        self.assertEqual(
+            unavailable_response.json()["detail"],
+            "tour is not available for reservation preparation",
+        )
+        self.assertEqual(invalid_summary_response.status_code, 400)
+        self.assertEqual(
+            invalid_summary_response.json()["detail"],
+            "invalid reservation preparation selection",
+        )

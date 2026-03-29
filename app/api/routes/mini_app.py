@@ -7,8 +7,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.mini_app import MiniAppCatalogFiltersRead, MiniAppCatalogRead, MiniAppTourDetailRead
+from app.schemas.mini_app import (
+    MiniAppCatalogFiltersRead,
+    MiniAppCatalogRead,
+    MiniAppReservationPreparationRead,
+    MiniAppTourDetailRead,
+)
+from app.schemas.prepared import ReservationPreparationSummaryRead
 from app.services.mini_app_catalog import MiniAppCatalogService
+from app.services.mini_app_reservation_preparation import MiniAppReservationPreparationService
 from app.services.mini_app_tour_detail import MiniAppTourDetailService
 
 router = APIRouter(prefix="/mini-app", tags=["mini-app"])
@@ -58,3 +65,42 @@ def get_tour_detail(
     if detail is None:
         raise HTTPException(status_code=404, detail="tour not found")
     return detail
+
+
+@router.get("/tours/{tour_code}/preparation", response_model=MiniAppReservationPreparationRead)
+def get_tour_preparation(
+    tour_code: str,
+    language_code: str | None = Query(default=None),
+    session: Session = Depends(get_db),
+) -> MiniAppReservationPreparationRead:
+    preparation = MiniAppReservationPreparationService().get_preparation(
+        session,
+        code=tour_code,
+        language_code=language_code,
+    )
+    if preparation is None:
+        raise HTTPException(status_code=404, detail="tour is not available for reservation preparation")
+    return preparation
+
+
+@router.get(
+    "/tours/{tour_code}/preparation-summary",
+    response_model=ReservationPreparationSummaryRead,
+)
+def get_tour_preparation_summary(
+    tour_code: str,
+    seats_count: int = Query(ge=1),
+    boarding_point_id: int = Query(ge=1),
+    language_code: str | None = Query(default=None),
+    session: Session = Depends(get_db),
+) -> ReservationPreparationSummaryRead:
+    summary = MiniAppReservationPreparationService().build_preparation_summary(
+        session,
+        code=tour_code,
+        seats_count=seats_count,
+        boarding_point_id=boarding_point_id,
+        language_code=language_code,
+    )
+    if summary is None:
+        raise HTTPException(status_code=400, detail="invalid reservation preparation selection")
+    return summary

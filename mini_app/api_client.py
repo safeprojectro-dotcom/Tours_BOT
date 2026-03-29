@@ -4,7 +4,12 @@ from decimal import Decimal
 
 import httpx
 
-from app.schemas.mini_app import MiniAppCatalogRead, MiniAppTourDetailRead
+from app.schemas.mini_app import (
+    MiniAppCatalogRead,
+    MiniAppReservationPreparationRead,
+    MiniAppTourDetailRead,
+)
+from app.schemas.prepared import ReservationPreparationSummaryRead
 
 
 class MiniAppApiClient:
@@ -51,3 +56,40 @@ class MiniAppApiClient:
             response = await client.get(f"/mini-app/tours/{tour_code}", params=filtered_params)
             response.raise_for_status()
             return MiniAppTourDetailRead.model_validate(response.json())
+
+    async def get_tour_preparation(
+        self,
+        *,
+        tour_code: str,
+        language_code: str | None = None,
+    ) -> MiniAppReservationPreparationRead:
+        params = {"language_code": language_code}
+        filtered_params = {key: value for key, value in params.items() if value not in (None, "")}
+
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=10.0) as client:
+            response = await client.get(f"/mini-app/tours/{tour_code}/preparation", params=filtered_params)
+            response.raise_for_status()
+            return MiniAppReservationPreparationRead.model_validate(response.json())
+
+    async def get_preparation_summary(
+        self,
+        *,
+        tour_code: str,
+        seats_count: int,
+        boarding_point_id: int,
+        language_code: str | None = None,
+    ) -> ReservationPreparationSummaryRead:
+        params = {
+            "seats_count": seats_count,
+            "boarding_point_id": boarding_point_id,
+            "language_code": language_code,
+        }
+        filtered_params = {key: value for key, value in params.items() if value not in (None, "")}
+
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=10.0) as client:
+            response = await client.get(
+                f"/mini-app/tours/{tour_code}/preparation-summary",
+                params=filtered_params,
+            )
+            response.raise_for_status()
+            return ReservationPreparationSummaryRead.model_validate(response.json())
