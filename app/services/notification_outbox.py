@@ -117,6 +117,25 @@ class NotificationOutboxService:
             picked.append(NotificationOutboxRead.model_validate(updated))
         return picked
 
+    def pickup_pending_entries_by_ids(
+        self,
+        session: Session,
+        *,
+        outbox_ids: list[int],
+    ) -> list[NotificationOutboxRead]:
+        picked: list[NotificationOutboxRead] = []
+        for outbox_id in outbox_ids:
+            entry = self.notification_outbox_repository.get_for_update(session, outbox_id=outbox_id)
+            if entry is None or entry.status != NotificationOutboxStatus.PENDING:
+                continue
+            updated = self.notification_outbox_repository.update(
+                session,
+                instance=entry,
+                data={"status": NotificationOutboxStatus.PROCESSING},
+            )
+            picked.append(NotificationOutboxRead.model_validate(updated))
+        return picked
+
     def apply_delivery_result(
         self,
         session: Session,
