@@ -156,3 +156,27 @@ class OrderRepository(SQLAlchemyRepository[Order]):
             .limit(limit)
         )
         return list(session.scalars(stmt).all())
+
+    def list_post_trip_reminder_order_ids(
+        self,
+        session: Session,
+        *,
+        now: datetime,
+        due_within: timedelta,
+        limit: int = 100,
+    ) -> list[int]:
+        due_after = now - due_within
+        stmt = (
+            select(Order.id)
+            .join(Tour, Tour.id == Order.tour_id)
+            .where(
+                Order.booking_status == BookingStatus.CONFIRMED,
+                Order.payment_status == PaymentStatus.PAID,
+                Order.cancellation_status == CancellationStatus.ACTIVE,
+                Tour.return_datetime <= now,
+                Tour.return_datetime > due_after,
+            )
+            .order_by(Tour.return_datetime.desc(), Order.id)
+            .limit(limit)
+        )
+        return list(session.scalars(stmt).all())

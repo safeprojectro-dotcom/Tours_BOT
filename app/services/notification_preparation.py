@@ -47,6 +47,12 @@ NOTIFICATION_TRANSLATIONS: dict[str, TemplateMap] = {
             "Reference: #{order_id}\n"
             "Departure: {departure_datetime}"
         ),
+        "post_trip_reminder_title": "Trip completed",
+        "post_trip_reminder_body": (
+            "Your trip {tour_title} has been completed.\n"
+            "Reference: #{order_id}\n"
+            "Return: {return_datetime}"
+        ),
         "reservation_expired_title": "Reservation expired",
         "reservation_expired_body": (
             "Your temporary reservation for {tour_title} has expired.\n"
@@ -87,6 +93,12 @@ NOTIFICATION_TRANSLATIONS: dict[str, TemplateMap] = {
             "Calatoria ta {tour_title} pleaca astazi.\n"
             "Referinta: #{order_id}\n"
             "Plecare: {departure_datetime}"
+        ),
+        "post_trip_reminder_title": "Calatorie finalizata",
+        "post_trip_reminder_body": (
+            "Calatoria ta {tour_title} a fost finalizata.\n"
+            "Referinta: #{order_id}\n"
+            "Intoarcere: {return_datetime}"
         ),
         "reservation_expired_title": "Rezervarea a expirat",
         "reservation_expired_body": (
@@ -129,6 +141,12 @@ NOTIFICATION_TRANSLATIONS: dict[str, TemplateMap] = {
             "Nomer: #{order_id}\n"
             "Vyezd: {departure_datetime}"
         ),
+        "post_trip_reminder_title": "Poezdka zavershena",
+        "post_trip_reminder_body": (
+            "Vasha poezdka {tour_title} zavershena.\n"
+            "Nomer: #{order_id}\n"
+            "Vozvrashchenie: {return_datetime}"
+        ),
         "reservation_expired_title": "Bronirovanie isteklo",
         "reservation_expired_body": (
             "Vashe vremennoe bronirovanie dlya {tour_title} isteklo.\n"
@@ -169,6 +187,12 @@ NOTIFICATION_TRANSLATIONS: dict[str, TemplateMap] = {
             "Tvoje putovanje {tour_title} polazi danas.\n"
             "Referenca: #{order_id}\n"
             "Polazak: {departure_datetime}"
+        ),
+        "post_trip_reminder_title": "Putovanje zavrseno",
+        "post_trip_reminder_body": (
+            "Tvoje putovanje {tour_title} je zavrseno.\n"
+            "Referenca: #{order_id}\n"
+            "Povratak: {return_datetime}"
         ),
         "reservation_expired_title": "Rezervacija je istekla",
         "reservation_expired_body": (
@@ -211,6 +235,12 @@ NOTIFICATION_TRANSLATIONS: dict[str, TemplateMap] = {
             "Azonosito: #{order_id}\n"
             "Indulas: {departure_datetime}"
         ),
+        "post_trip_reminder_title": "Utazas befejezve",
+        "post_trip_reminder_body": (
+            "A(z) {tour_title} utazas befejezodott.\n"
+            "Azonosito: #{order_id}\n"
+            "Erkezes: {return_datetime}"
+        ),
         "reservation_expired_title": "A foglalas lejart",
         "reservation_expired_body": (
             "Az ideiglenes foglalasa lejart ehhez: {tour_title}.\n"
@@ -251,6 +281,12 @@ NOTIFICATION_TRANSLATIONS: dict[str, TemplateMap] = {
             "Il tuo viaggio {tour_title} parte oggi.\n"
             "Riferimento: #{order_id}\n"
             "Partenza: {departure_datetime}"
+        ),
+        "post_trip_reminder_title": "Viaggio completato",
+        "post_trip_reminder_body": (
+            "Il tuo viaggio {tour_title} e stato completato.\n"
+            "Riferimento: #{order_id}\n"
+            "Rientro: {return_datetime}"
         ),
         "reservation_expired_title": "Prenotazione scaduta",
         "reservation_expired_body": (
@@ -293,6 +329,12 @@ NOTIFICATION_TRANSLATIONS: dict[str, TemplateMap] = {
             "Referenz: #{order_id}\n"
             "Abfahrt: {departure_datetime}"
         ),
+        "post_trip_reminder_title": "Reise abgeschlossen",
+        "post_trip_reminder_body": (
+            "Ihre Reise {tour_title} wurde abgeschlossen.\n"
+            "Referenz: #{order_id}\n"
+            "Rueckkehr: {return_datetime}"
+        ),
         "reservation_expired_title": "Reservierung abgelaufen",
         "reservation_expired_body": (
             "Ihre temporaere Reservierung fuer {tour_title} ist abgelaufen.\n"
@@ -332,6 +374,7 @@ class NotificationPreparationService:
             events.append(NotificationEventType.PAYMENT_CONFIRMED)
             events.append(NotificationEventType.PREDEPARTURE_REMINDER)
             events.append(NotificationEventType.DEPARTURE_DAY_REMINDER)
+            events.append(NotificationEventType.POST_TRIP_REMINDER)
         if self._is_reservation_expired(order_summary):
             events.append(NotificationEventType.RESERVATION_EXPIRED)
         return events
@@ -399,6 +442,7 @@ class NotificationPreparationService:
             events.append(NotificationEventType.PAYMENT_CONFIRMED)
             events.append(NotificationEventType.PREDEPARTURE_REMINDER)
             events.append(NotificationEventType.DEPARTURE_DAY_REMINDER)
+            events.append(NotificationEventType.POST_TRIP_REMINDER)
         if self._is_reservation_expired(order_summary):
             events.append(NotificationEventType.RESERVATION_EXPIRED)
         return events
@@ -446,6 +490,7 @@ class NotificationPreparationService:
             "amount": order.total_amount,
             "currency": order.currency,
             "departure_datetime": f"{order_summary.tour.departure_datetime:%Y-%m-%d %H:%M}",
+            "return_datetime": f"{order_summary.tour.return_datetime:%Y-%m-%d %H:%M}",
             "reservation_expires_at": (
                 f"{order.reservation_expires_at:%Y-%m-%d %H:%M}" if order.reservation_expires_at is not None else "-"
             ),

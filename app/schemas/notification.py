@@ -14,6 +14,7 @@ class NotificationEventType(StrEnum):
     PAYMENT_CONFIRMED = "payment_confirmed"
     PREDEPARTURE_REMINDER = "predeparture_reminder"
     DEPARTURE_DAY_REMINDER = "departure_day_reminder"
+    POST_TRIP_REMINDER = "post_trip_reminder"
     RESERVATION_EXPIRED = "reservation_expired"
 
 
