@@ -7,7 +7,7 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 4 / Step 7 completed
+Phase 4 / Step 8 completed
 
 ## Completed Steps
 
@@ -435,7 +435,7 @@ This logic already exists in the temporary reservation creation slice and must b
 ---
 
 ## Next Safe Step
-Phase 4 / Step 8
+Phase 4 / Step 9
 
 ### Goal
 Add the first real `telegram_private` notification delivery slice on top of the existing notification preparation, dispatch, and reminder groundwork, without introducing advanced queue/scheduler complexity.
