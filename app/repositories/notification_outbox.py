@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -41,6 +43,35 @@ class NotificationOutboxRepository(SQLAlchemyRepository[NotificationOutbox]):
             select(NotificationOutbox.id)
             .where(NotificationOutbox.status == "pending")
             .order_by(NotificationOutbox.created_at, NotificationOutbox.id)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        return list(session.scalars(stmt).all())
+
+    def list_failed_ids_for_retry(self, session: Session, *, limit: int = 100) -> list[int]:
+        stmt = (
+            select(NotificationOutbox.id)
+            .where(NotificationOutbox.status == "failed")
+            .order_by(NotificationOutbox.updated_at, NotificationOutbox.id)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        return list(session.scalars(stmt).all())
+
+    def list_stale_processing_ids(
+        self,
+        session: Session,
+        *,
+        stale_before: datetime,
+        limit: int = 100,
+    ) -> list[int]:
+        stmt = (
+            select(NotificationOutbox.id)
+            .where(
+                NotificationOutbox.status == "processing",
+                NotificationOutbox.updated_at <= stale_before,
+            )
+            .order_by(NotificationOutbox.updated_at, NotificationOutbox.id)
             .limit(limit)
             .with_for_update(skip_locked=True)
         )

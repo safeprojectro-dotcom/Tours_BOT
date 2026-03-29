@@ -9,6 +9,7 @@ from app.services.notification_delivery import NotificationDeliveryService
 from app.services.notification_dispatch import NotificationDispatchService
 from app.services.notification_outbox import NotificationOutboxService
 from app.services.notification_outbox_processing import NotificationOutboxProcessingService
+from app.services.notification_outbox_recovery import NotificationOutboxRecoveryService
 from app.services.notification_preparation import NotificationPreparationService
 from app.services.order_read import OrderReadService
 from app.services.order_summary import OrderSummaryService
@@ -33,6 +34,7 @@ __all__ = [
     "NotificationDispatchService",
     "NotificationOutboxService",
     "NotificationOutboxProcessingService",
+    "NotificationOutboxRecoveryService",
     "NotificationPreparationService",
     "OrderReadService",
     "OrderSummaryService",
