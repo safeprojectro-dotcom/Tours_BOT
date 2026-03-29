@@ -7,7 +7,7 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 4 / Step 9 completed
+Phase 4 / Step 13 completed
 
 ## Completed Steps
 
@@ -235,6 +235,44 @@ Phase 4 / Step 9 completed
   - reminder preparation reuses existing notification dispatch groundwork
   - repeated execution stays safe because this slice does not mutate order/payment state or perform real delivery yet
 
+- Phase 4 / Step 8 completed
+  - first real `telegram_private` notification delivery slice added
+  - implemented through `app/services/notification_delivery.py`
+  - minimal delivery adapter/service boundary added for prepared dispatches
+  - payment-pending reminder delivery slice added on top of the existing reminder groundwork
+  - delivery result handling stays explicit and testable
+
+- Phase 4 / Step 9 completed
+  - notification outbox / persistence groundwork added
+  - notification outbox model, repository, and service added
+  - deterministic dispatch-key dedupe now persists pending notification entries safely
+  - payment-pending reminder outbox slice added for enqueueing due reminder dispatches
+
+- Phase 4 / Step 10 completed
+  - notification outbox processing slice added
+  - implemented through `app/services/notification_outbox_processing.py`
+  - pending outbox entries can be picked up in narrow batches for processing
+  - processing reuses the existing delivery service and marks entries delivered or failed explicitly
+
+- Phase 4 / Step 11 completed
+  - notification outbox recovery groundwork added
+  - implemented through `app/services/notification_outbox_recovery.py`
+  - failed and stale-processing outbox entries can be safely recovered to `pending`
+  - repeated recovery execution stays explicit and repeat-safe
+
+- Phase 4 / Step 12 completed
+  - notification outbox retry execution slice added
+  - implemented through `app/services/notification_outbox_retry_execution.py`
+  - recovered or targeted pending outbox entries can be reprocessed through the existing processing path
+  - retry execution remains narrow and does not add scheduler/orchestrator complexity
+
+- Phase 4 / Step 13 completed
+  - predeparture reminder groundwork added
+  - implemented through `app/services/predeparture_reminder.py` and `app/services/predeparture_reminder_outbox.py`
+  - `predeparture_reminder` event support added to notification preparation
+  - eligible confirmed, paid, active orders departing within the reminder window can now be prepared and enqueued for `telegram_private`
+  - repeated prepare/enqueue execution stays dedupe-friendly and state-safe
+
 ### Phase 4 Test/Dependency/Cleanup Checkpoint
 - missing `httpx` issue was identified as an environment sync issue, not a project dependency-definition issue
 - project dependency definition already included `httpx`
@@ -277,9 +315,18 @@ Phase 4 / Step 9 completed
 - API payment tests pass
 - notification preparation tests pass
 - notification dispatch tests pass
+- notification delivery tests pass
 - payment-pending reminder worker tests pass
+- payment-pending reminder delivery tests pass
+- notification outbox tests pass
+- payment-pending reminder outbox tests pass
+- notification outbox processing tests pass
+- notification outbox recovery tests pass
+- notification outbox retry execution tests pass
+- predeparture reminder tests pass
+- predeparture reminder outbox tests pass
 - `python -m unittest discover -s tests/unit -v` currently passes
-- latest known status: 64/64 unit tests passed
+- latest known status: 93/93 unit tests passed
 - previous `psycopg ResourceWarning` no longer appears in full suite output
 
 ### Latest Payment/Webhook Checkpoint
@@ -293,9 +340,12 @@ Phase 4 / Step 9 completed
 - reservation expiry slice passes tests
 - notification preparation slice passes tests
 - notification dispatch slice passes tests
-- payment-pending reminder slice passes tests
-- notification preparation, dispatch, and reminder logic remain service-layer driven
-- no real notification delivery has been added yet
+- `telegram_private` notification delivery slice passes tests
+- payment-pending reminder selection, delivery, and outbox slices pass tests
+- notification outbox persistence, processing, recovery, and retry execution slices pass tests
+- predeparture reminder groundwork and outbox slices pass tests
+- notification preparation, dispatch, delivery, outbox, and reminder logic remain service-layer driven
+- current real notification delivery remains limited to `telegram_private`
 
 ---
 
@@ -319,12 +369,22 @@ Phase 4 / Step 9 completed
 - reservation expiry worker
 - notification preparation foundation
 - notification dispatch foundation
+- `telegram_private` notification delivery slice
 - payment-pending reminder worker slice
+- payment-pending reminder delivery slice
+- notification outbox persistence foundation
+- payment-pending reminder outbox slice
+- notification outbox processing slice
+- notification outbox recovery slice
+- notification outbox retry execution slice
+- predeparture reminder groundwork
+- predeparture reminder outbox slice
 - clean DB-backed unit test harness
 
 ### Not Implemented Yet
-- real `telegram_private` notification delivery
 - broader reminder workers and scheduling/orchestration
+- departure-day reminders
+- post-trip reminders
 - refund workflow
 - waitlist actions/workflow
 - handoff lifecycle workflow
@@ -402,7 +462,6 @@ This logic already exists in the temporary reservation creation slice and must b
 
 ### Not yet implemented
 - refund workflow
-- real `telegram_private` notification delivery
 - advanced provider SDK integration
 - admin-facing payment operations beyond current core flow
 
@@ -416,102 +475,83 @@ This logic already exists in the temporary reservation creation slice and must b
   - payment pending
   - payment confirmed
   - reservation expired
+- multilingual notification preparation for:
+  - predeparture reminder
 - notification event/type definitions
 - channel-specific dispatch envelope preparation for `telegram_private`
+- real `telegram_private` notification delivery
 - deterministic dispatch key generation for prepared dispatches
 - due reminder selection for active reservations approaching expiry
 - first payment-pending reminder worker slice
+- payment-pending reminder delivery and outbox slices
+- notification outbox persistence / pending entry tracking
+- notification outbox processing, recovery, and retry execution
+- predeparture reminder selection and outbox enqueue groundwork
 
 ### Not yet implemented
-- real `telegram_private` notification sending
-- outbox persistence / dispatch tracking
 - group delivery
 - Mini App delivery
 - waitlist notifications
 - handoff notifications
-- predeparture reminders
+- departure-day reminders
 - post-trip reminders
 
 ---
 
 ## Next Safe Step
-Phase 4 / Step 10
+Phase 4 / Step 14
 
 
-### Goal
-Add the first notification outbox processing/pickup worker slice on top of the existing notification outbox persistence, dispatch, reminder, and telegram_private delivery foundations.
-
-### Safe scope for next step
-- add worker/service logic to read pending notification outbox entries
-- safely pick up a narrow batch of pending entries for processing
-- connect picked entries to the existing telegram_private delivery flow where appropriate
-- keep processing idempotent and explicit
-- add focused tests for pickup rules, repeated execution safety, and state transitions
-- keep business logic in service layer
-- keep API/UI layers untouched unless a minimal integration point is strictly necessary
-
-### Must Not Be Implemented Yet
-- full scheduler/orchestrator
-- advanced retry framework
-- group delivery
-- Mini App delivery
-- waitlist notifications
-- handoff notifications
-- refund workflow
-- advanced admin automation
-
-## Recommended Next Prompt
-Use this in the new chat:
-
-Using `docs/TECH_SPEC_TOURS_BOT.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/TESTING_STRATEGY.md`, `docs/AI_ASSISTANT_SPEC.md`, `docs/AI_DIALOG_FLOWS.md`, `docs/CHAT_HANDOFF.md`, and `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, implement only the notification outbox processing/pickup worker slice on top of the existing notification outbox persistence, dispatch, reminder, and telegram_private delivery foundations.
+Using `docs/TECH_SPEC_TOURS_BOT.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/TESTING_STRATEGY.md`, `docs/AI_ASSISTANT_SPEC.md`, `docs/AI_DIALOG_FLOWS.md`, `docs/CHAT_HANDOFF.md`, and `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, implement only the departure-day reminder groundwork slice on top of the existing notification preparation, dispatch, outbox, processing, recovery, retry-execution, and predeparture reminder foundations.
 
 Goal:
-Add the first notification outbox processing/pickup worker slice so pending notification outbox entries can be safely selected and processed without introducing full scheduler/orchestrator complexity yet.
+Add the first departure-day reminder groundwork so same-day departure notifications can be prepared and pushed through the existing `telegram_private` notification lifecycle without introducing scheduler/orchestrator complexity or broader channel expansion yet.
 
 Allowed scope:
-- add a minimal worker/service path for reading pending notification outbox entries
-- support safe pickup of pending entries in small explicit batches
-- support idempotent state handling for picked entries
-- integrate with the existing telegram_private delivery flow only where needed for this narrow slice
-- add focused tests for pickup rules, repeated execution safety, and processing state transitions
+- add a minimal departure-day reminder service/worker path for identifying a narrow set of eligible same-day orders
+- prepare only the first departure-day reminder notification outputs needed for the current notification foundation
+- reuse existing notification preparation, dispatch, outbox, processing, recovery, retry-execution, and predeparture reminder foundations where appropriate
+- preserve explicit and idempotent state transitions
+- keep the implementation PostgreSQL-first
+- add focused tests for reminder eligibility, repeated-run safety, and compatibility with the current notification pipeline
 - keep business rules in the service layer
 - keep worker code thin
 - keep API/UI layers untouched unless a very small integration point is strictly required
 
 Requirements:
-- reuse the existing outbox/persistence, notification dispatch, reminder, and telegram_private delivery foundations where appropriate
-- keep the implementation PostgreSQL-first
-- keep scope limited to the current telegram_private-related notification flow only
+- reuse the existing notification preparation, dispatch, outbox, processing, recovery, and retry-execution foundations where appropriate
+- keep delivery limited to the existing `telegram_private` channel only
+- do not add new channels
 - do not add group delivery
 - do not add Mini App delivery
 - do not add waitlist notifications
 - do not add handoff notifications
 - do not add full scheduler/orchestrator complexity yet
-- do not add advanced retry logic yet
-- preserve the current Step 8 and Step 9 behavior unless a very small compatibility fix is strictly necessary
-- run the minimal relevant tests first and do not claim broader coverage than what is actually tested
+- do not add advanced retry policy tuning yet
+- preserve the current Step 8–13 behavior unless a very small compatibility fix is strictly necessary
+- keep the aiogram dependency boundary narrow and do not reintroduce broad import coupling into unrelated services/tests
 
 Do not implement yet:
 - full production scheduler/orchestrator
-- advanced retry framework
+- advanced retry framework/policy engine
 - group delivery
 - Mini App delivery
 - waitlist notifications
 - handoff notifications
+- post-trip reminders
 - refund workflow
 - advanced admin automation
 
 Before writing code:
 1. summarize the current project state
 2. list what is already completed in Phase 4
-3. identify the exact next safe step and explain why outbox processing/pickup is the right next foundation
-4. list the models, migrations, repositories, services, workers, schemas, helpers, and tests you will add or extend
-5. explain the pickup/idempotency strategy
-6. explain how the current telegram_private delivery slice will remain compatible
+3. identify the exact next safe step and explain why departure-day reminder groundwork is the right next foundation
+4. list the repositories, services, workers, schemas, helpers, and tests you will add or extend
+5. explain the departure-day reminder eligibility strategy
+6. explain the idempotency and repeated-run safety strategy
 7. explain what remains postponed
 
 Then generate the code and tests.
-
 ---
 
 ## New Chat Startup Prompt
