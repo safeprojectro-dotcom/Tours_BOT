@@ -1,0 +1,23 @@
+---
+alwaysApply: true
+---
+
+---
+alwaysApply: true
+---
+
+Code quality rules for this project:
+
+- Keep modules small and focused.
+- Separate bot handlers, business services, repositories, and schemas.
+- Use pydantic models for request/response validation.
+- Use SQLAlchemy/Alembic for data and migrations cleanly.
+- Do not mix Telegram bot code with payment logic or DB logic.
+- Avoid hardcoded strings for statuses, languages, and business rules.
+- Prefer config/settings via environment variables.
+- Write extensible code suitable for future RAG integration.
+- Add type hints where practical.
+- Prefer explicit service methods over large monolithic handlers.
+- Keep Mini App logic isolated from Telegram bot handlers.
+- Avoid breaking existing working code without a clear reason.
+- When changing architecture-sensitive modules, explain the change first.

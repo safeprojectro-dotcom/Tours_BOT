@@ -1,0 +1,88 @@
+Вот простой рабочий чеклист, который можно использовать после каждого шага Cursor.
+
+Мини-чеклист после каждого шага Cursor
+1. Проверка, что окружение то же самое
+
+Убедись, что ты в .venv:
+
+python -c "import sys; print(sys.executable)"
+python --version
+pip --version
+
+Ожидаемо:
+
+Python из .venv
+версия 3.13.x
+
+2. Компиляция кода
+
+Проверяет грубые синтаксические ошибки:
+
+python -m compileall app alembic
+
+3. Миграции
+
+Если Cursor менял модели, Alembic или схему БД — прогоняй обязательно:
+
+python -m alembic current
+python -m alembic heads
+python -m alembic downgrade -1
+python -m alembic upgrade head
+
+Если изменений в схеме не было, этот блок можно не гонять каждый раз.
+
+4. Smoke-check приложения
+
+Запусти backend:
+
+uvicorn app.main:app --reload
+
+Проверь в браузере:
+
+http://127.0.0.1:8000/health
+http://127.0.0.1:8000/healthz
+
+Ожидаемо:
+
+/health = 200
+/healthz = 200, если БД доступна
+
+5. Проверка логов
+
+Смотри, нет ли:
+
+traceback
+import errors
+sqlalchemy mapping errors
+alembic errors
+config validation errors
+
+favicon.ico 404 можно игнорировать.
+
+6. Если есть тесты — запускай их
+
+Когда начнут появляться реальные тесты:
+
+pytest
+
+Позже можно разделять:
+
+pytest tests/unit
+pytest tests/integration
+
+
+
+
+Самый короткий обязательный набор для тебя сейчас
+
+Пока проект ещё ранний, после каждого кодового шага гоняй вот это:
+
+python -m compileall app alembic
+python -m alembic downgrade -1
+python -m alembic upgrade head
+uvicorn app.main:app --reload
+
+И руками Проверь в браузере:
+
+открыть /health      http://127.0.0.1:8000/health
+открыть /healthz     http://127.0.0.1:8000/healthz

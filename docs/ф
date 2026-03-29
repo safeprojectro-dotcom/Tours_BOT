@@ -1,0 +1,38 @@
+Что ещё мы не должны забыть
+
+Вот это тоже стоит явно внести в план, если Cursor не добавит сам:
+
+1. docs/MINI_APP_UX.md
+
+Отдельный документ на:
+
+экраны
+состояния
+CTA
+flow map
+2. docs/DEPLOYMENT.md
+
+Отдельный документ на:
+
+local run
+GitHub
+Railway staging
+Railway production
+env vars
+health checks
+3. docs/RELEASE_CHECKLIST.md
+
+На финальный запуск.
+
+4. docs/TELEGRAM_SETUP.md
+
+На:
+
+BotFather
+commands
+menu button
+webhook
+group settings
+Mini App entry
+
+

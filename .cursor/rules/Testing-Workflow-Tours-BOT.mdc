@@ -1,0 +1,21 @@
+---
+alwaysApply: true
+---
+
+Testing workflow rules for this project:
+
+- For every non-trivial feature, propose how it will be tested before or вместе with implementation.
+- Prefer small, verifiable implementation steps.
+- After implementing a feature, run or propose the minimal relevant tests first, not the whole codebase by default.
+- Do not claim something works unless it was actually tested.
+- When touching critical flows, prioritize tests for:
+  - booking logic
+  - payment status flow
+  - reservation expiration
+  - waitlist behavior
+  - multilingual fallbacks
+  - handoff triggers
+- Prefer unit tests for business logic and service layer.
+- Prefer integration tests for API endpoints and critical bot flows.
+- When changing schemas or DB logic, include migration safety checks.
+- When a feature is hard to test automatically, provide a manual test checklist.

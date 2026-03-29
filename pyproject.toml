@@ -1,0 +1,22 @@
+[project]
+name = "tours-bot"
+version = "0.1.0"
+description = "Phase 1 backend skeleton for Tours_BOT"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiogram",
+    "alembic",
+    "fastapi",
+    "psycopg[binary]",
+    "pydantic-settings",
+    "sqlalchemy",
+    "uvicorn[standard]",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]

@@ -1,0 +1,44 @@
+---
+description: 
+alwaysApply: true
+---
+
+Use `docs/TECH_SPEC_TOURS_BOT.md` as the main source of truth for this project.
+
+Project scope:
+- Telegram sales bot for 1–2 day bus tours.
+- One main customer bot only.
+- Telegram group = warming up, engagement, lead qualification.
+- Private chat + Mini App = booking, payment, confirmation.
+- Tour catalog must be managed from a central admin panel.
+- Booking must be time-limited.
+- MVP payment model: full payment after temporary reservation.
+- Waitlist is required.
+- Handoff to human operator is required for complex cases.
+- Architecture must be multilingual-ready.
+- Content assistant prepares content from admin panel tour data.
+- After admin approval, content can be published automatically.
+
+Required stack:
+- Python
+- aiogram
+- FastAPI
+- PostgreSQL
+- Flet Mini App
+
+Implementation rules:
+- Do not break architecture without explicit approval.
+- Implement the system step by step.
+- Keep bot logic, business logic, and data layer separated.
+- Do not hardcode languages, statuses, or business rules in UI.
+- Use clean modular architecture.
+- Use environment-based configuration.
+- Prefer service layer for business rules.
+- Keep the code extensible for future RAG integration.
+- Use Context7 when library/framework documentation is needed.
+
+Working behavior:
+- Always check `docs/TECH_SPEC_TOURS_BOT.md` first.
+- If something is unclear, follow the document rather than inventing behavior.
+- Propose the smallest safe implementation step first.
+- Prefer planning before code generation.
