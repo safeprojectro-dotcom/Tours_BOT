@@ -16,6 +16,8 @@ from app.schemas.notification import (
     NotificationDispatchRead,
     NotificationDispatchStatus,
     NotificationEventType,
+    NotificationOutboxRead,
+    NotificationOutboxStatus,
     NotificationPayloadRead,
 )
 from app.schemas.order import OrderCreate, OrderRead, OrderUpdate
@@ -76,6 +78,8 @@ __all__ = [
     "NotificationDispatchRead",
     "NotificationDispatchStatus",
     "NotificationEventType",
+    "NotificationOutboxRead",
+    "NotificationOutboxStatus",
     "NotificationPayloadRead",
     "ORMBaseSchema",
     "OrderCreate",

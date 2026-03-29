@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.models.enums import BookingStatus, PaymentStatus, TourStatus
 from app.repositories.knowledge_base import KnowledgeBaseRepository
+from app.repositories.notification_outbox import NotificationOutboxRepository
 from app.repositories.order import OrderRepository
 from app.repositories.payment import PaymentRepository
 from app.repositories.tour import BoardingPointRepository, TourRepository, TourTranslationRepository
@@ -112,3 +113,39 @@ class RepositoryTests(FoundationDBTestCase):
 
         self.assertEqual([item.id for item in active], [active_entry.id])
         self.assertEqual(len(by_category), 2)
+
+    def test_notification_outbox_repository_helpers(self) -> None:
+        user = self.create_user()
+        tour = self.create_tour()
+        point = self.create_boarding_point(tour)
+        order = self.create_order(user, tour, point)
+        outbox = NotificationOutboxRepository().create(
+            self.session,
+            data={
+                "dispatch_key": "telegram_private:payment_pending:1:en",
+                "channel": "telegram_private",
+                "event_type": "payment_pending",
+                "order_id": order.id,
+                "user_id": user.id,
+                "telegram_user_id": user.telegram_user_id,
+                "language_code": "en",
+                "title": "Payment pending",
+                "message": "Reminder message",
+                "payload_metadata": {"order_id": order.id},
+                "status": "pending",
+            },
+        )
+
+        by_key = NotificationOutboxRepository().get_by_dispatch_key(
+            self.session,
+            dispatch_key="telegram_private:payment_pending:1:en",
+        )
+        pending = NotificationOutboxRepository().list_by_status(
+            self.session,
+            status="pending",
+        )
+
+        self.assertIsNotNone(by_key)
+        assert by_key is not None
+        self.assertEqual(by_key.id, outbox.id)
+        self.assertEqual([item.id for item in pending], [outbox.id])

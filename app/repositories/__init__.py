@@ -5,6 +5,7 @@ from app.repositories.content_item import ContentItemRepository
 from app.repositories.handoff import HandoffRepository
 from app.repositories.knowledge_base import KnowledgeBaseRepository
 from app.repositories.message import MessageRepository
+from app.repositories.notification_outbox import NotificationOutboxRepository
 from app.repositories.order import OrderRepository
 from app.repositories.payment import PaymentRepository
 from app.repositories.tour import BoardingPointRepository, TourRepository, TourTranslationRepository
@@ -17,6 +18,7 @@ __all__ = [
     "HandoffRepository",
     "KnowledgeBaseRepository",
     "MessageRepository",
+    "NotificationOutboxRepository",
     "OrderRepository",
     "PaymentRepository",
     "SQLAlchemyRepository",

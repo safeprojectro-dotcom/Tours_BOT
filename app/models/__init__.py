@@ -4,6 +4,7 @@ from app.models.content_item import ContentItem
 from app.models.handoff import Handoff
 from app.models.knowledge_base import KnowledgeBaseEntry
 from app.models.message import Message
+from app.models.notification_outbox import NotificationOutbox
 from app.models.order import Order
 from app.models.payment import Payment
 from app.models.tour import BoardingPoint, Tour, TourTranslation
@@ -16,6 +17,7 @@ __all__ = [
     "Handoff",
     "KnowledgeBaseEntry",
     "Message",
+    "NotificationOutbox",
     "Order",
     "Payment",
     "Tour",

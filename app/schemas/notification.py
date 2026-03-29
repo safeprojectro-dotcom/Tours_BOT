@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.schemas.common import ORMBaseSchema
+
 
 class NotificationEventType(StrEnum):
     TEMPORARY_RESERVATION_CREATED = "temporary_reservation_created"
@@ -24,6 +26,10 @@ class NotificationDispatchStatus(StrEnum):
 class NotificationDeliveryStatus(StrEnum):
     DELIVERED = "delivered"
     FAILED = "failed"
+
+
+class NotificationOutboxStatus(StrEnum):
+    PENDING = "pending"
 
 
 class NotificationPayloadRead(BaseModel):
@@ -51,3 +57,18 @@ class NotificationDeliveryRead(BaseModel):
     payload: NotificationPayloadRead
     provider_message_id: str | None = None
     error_message: str | None = None
+
+
+class NotificationOutboxRead(ORMBaseSchema):
+    id: int
+    dispatch_key: str
+    channel: NotificationChannel
+    event_type: NotificationEventType
+    order_id: int
+    user_id: int
+    telegram_user_id: int
+    language_code: str
+    title: str
+    message: str
+    payload_metadata: dict[str, Any] = Field(default_factory=dict)
+    status: NotificationOutboxStatus
