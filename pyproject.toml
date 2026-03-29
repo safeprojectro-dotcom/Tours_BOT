@@ -12,6 +12,7 @@ dependencies = [
     "pydantic-settings",
     "sqlalchemy",
     "uvicorn[standard]",
+    "httpx",
 ]
 
 [build-system]
