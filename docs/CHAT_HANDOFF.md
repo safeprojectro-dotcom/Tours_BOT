@@ -7,7 +7,9 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 4 / Step 15 completed
+Phase 5 (Mini App MVP) — **Phase 5 / Step 4** completed
+
+`docs/IMPLEMENTATION_PLAN.md` defines **Phase 5 as a single phase** (no numbered substeps in the plan). The **Step N** labels here are **project execution checkpoints** mapped to Phase 5 *Included Scope* / *Done-When* bullets (UX first, then screens, booking, payment, help/bookings as the phase exit signal).
 
 ## Completed Steps
 
@@ -287,6 +289,49 @@ Phase 4 / Step 15 completed
   - eligible confirmed, paid, active returned trips within the reminder window can now be prepared and enqueued for `telegram_private`
   - repeated prepare/enqueue execution stays dedupe-friendly and state-safe
 
+### Phase 5
+- Phase 5 / Step 1 completed
+  - Mini App UX definition added in `docs/MINI_APP_UX.md`
+  - screen map, CTA hierarchy, loading/empty/error states, timer states, and postponed behaviors documented
+  - Mini App UX aligned with current Phase 2-4 service capabilities and postponed scope
+
+- Phase 5 / Step 2 completed
+  - first Mini App implementation slice added for foundation + catalog + filters
+  - minimal Mini App catalog endpoint added at `GET /mini-app/catalog`
+  - Mini App read-only catalog/filter service added in `app/services/mini_app_catalog.py`
+  - Flet Mini App foundation added under `mini_app/`
+  - scope kept narrow:
+    - no reservation UI
+    - no payment UI
+    - no waitlist flow
+    - no handoff/operator workflow
+    - no Mini App auth/init expansion
+
+- Phase 5 / Step 3 completed
+  - read-only Mini App tour detail screen added
+  - catalog cards now navigate to a dedicated tour detail view
+  - minimal read-only tour detail endpoint added at `GET /mini-app/tours/{tour_code}`
+  - Mini App read-only detail service added in `app/services/mini_app_tour_detail.py`
+  - detail screen reuses existing localization and boarding-point read capabilities
+  - scope kept narrow:
+    - no reservation UI
+    - no payment UI
+    - no waitlist flow
+    - no handoff/operator workflow
+    - no Mini App auth/init expansion
+
+- Phase 5 / Step 4 completed
+  - commit: `a9342cc` — `feat: add mini app reservation preparation ui`
+  - Mini App reservation **preparation** UI (seat count, boarding point, preparation-only summary)
+  - preparation endpoints: `GET /mini-app/tours/{tour_code}/preparation`, `GET /mini-app/tours/{tour_code}/preparation-summary`
+  - service: `app/services/mini_app_reservation_preparation.py`
+  - scope kept narrow:
+    - preparation-only — **no** real reservation/order creation in this step
+    - no payment UI
+    - no waitlist flow
+    - no handoff/operator workflow
+    - no Mini App auth/init expansion
+
 ### Phase 4 Test/Dependency/Cleanup Checkpoint
 - missing `httpx` issue was identified as an environment sync issue, not a project dependency-definition issue
 - project dependency definition already included `httpx`
@@ -344,7 +389,7 @@ Phase 4 / Step 15 completed
 - post-trip reminder tests pass
 - post-trip reminder outbox tests pass
 - `python -m unittest discover -s tests/unit -v` currently passes
-- latest known status: 107/107 unit tests passed
+- latest known status: full unit suite passed at Phase 5 / Step 4 checkpoint (update count on next run)
 - previous `psycopg ResourceWarning` no longer appears in full suite output
 
 ### Latest Payment/Webhook Checkpoint
@@ -411,7 +456,7 @@ Phase 4 / Step 15 completed
 - waitlist actions/workflow
 - handoff lifecycle workflow
 - Telegram group behavior
-- Mini App UI
+- Mini App: real reservation creation, payment UI, my bookings, auth/init, help/operator flows (Phase 5 remaining scope per `docs/IMPLEMENTATION_PLAN.md`)
 - admin workflows
 - content publication workflows
 
@@ -457,7 +502,10 @@ Phase 4 / Step 15 completed
 - no waitlist actions yet
 - no handoff actions yet
 - no group logic yet
-- no Mini App UI yet
+
+### Mini App constraints (latest checkpoint)
+- catalog, filters, read-only tour detail, reservation **preparation** UI only
+- no real reservation creation or payment flow in the Mini App yet (next Phase 5 work per implementation plan)
 
 ---
 
@@ -523,48 +571,49 @@ This logic already exists in the temporary reservation creation slice and must b
 ---
 
 ## Next Safe Step
-Phase 5 / Step 1
+Phase 5 / Step 5
 
+**Plan alignment (`docs/IMPLEMENTATION_PLAN.md` Phase 5):** the phase exit signal is *“Mini App UX defined first, then screens, booking, payment, and help flow implemented”*. The next **Included Scope** items not yet satisfied after Step 4 are the **reserve action** and **payment** slices: *“Build reservation screen for seat count, boarding point, reservation timer, and reserve action”* and *“Build payment screen with amount, timer, and transition into payment scenario”*, matching *Done-When*: *“reserve seats, start payment”*. Step 4 completed only preparation UI; Step 5 implements **real temporary reservation creation** and **starting payment** in the Mini App by reusing existing Phase 3–4 service-layer flows (`TemporaryReservationService`, `PaymentEntryService`, reconciliation assumptions), not by duplicating rules in the UI.
 
-Using `docs/TECH_SPEC_TOURS_BOT.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/TESTING_STRATEGY.md`, `docs/AI_ASSISTANT_SPEC.md`, `docs/AI_DIALOG_FLOWS.md`, `docs/CHAT_HANDOFF.md`, and `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, implement only the Mini App UX definition step before Phase 5 UI work.
+### Goal
+Deliver the Mini App **reserve** action and **start payment** flow on top of the existing foundation (catalog, filters, tour detail, reservation preparation UI), until a user can create a temporary reservation and enter the payment step consistent with the private bot behavior.
+
+### Safe scope for next step
+- wire Mini App to create a **temporary reservation** (order) using existing reservation creation services and validations
+- wire Mini App to **continue to payment** / payment entry for that reservation using existing payment-entry behavior
+- surface **reservation timer** and amount/expiry in UI where the plan expects them for reservation and payment screens
+- add only **minimal** Mini App API endpoints if needed; keep business rules in services
+- add focused tests for new endpoints or adapters, not for re-proving Phase 3–4 core logic
+
+### Must not expand yet (unless `IMPLEMENTATION_PLAN.md` / spec explicitly pulls them in)
+- waitlist workflow
+- handoff/operator workflow
+- **Mini App auth/init with Telegram context** (listed in Phase 5 scope; keep postponed until explicitly scheduled—do not block reserve/payment on it if the narrow slice can use the same assumptions as current dev Mini App)
+- my bookings / booking status screen (plan *Done-When* also mentions *“later view booking status”*—can be a follow-up checkpoint if reserve+pay is large)
+- unrelated admin, group, or content work
+
+## Recommended Next Prompt
+Use this in the new chat:
+
+Using `docs/TECH_SPEC_TOURS_BOT.md`, `docs/IMPLEMENTATION_PLAN.md` (Phase 5 *Included Scope* and *Done-When*), `docs/TESTING_STRATEGY.md`, `docs/AI_ASSISTANT_SPEC.md`, `docs/AI_DIALOG_FLOWS.md`, `docs/CHAT_HANDOFF.md`, `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, and `docs/MINI_APP_UX.md`, implement **Phase 5 / Step 5**: Mini App **temporary reservation creation** and **payment start** on top of the existing Mini App foundation (catalog, filters, read-only tour detail, reservation preparation UI).
 
 Goal:
-Define the Mini App UX in `docs/MINI_APP_UX.md` so the Phase 5 UI can be built against an explicit screen map, CTA hierarchy, and state model without prematurely expanding into Flet UI implementation.
-
-Allowed scope:
-- create or update `docs/MINI_APP_UX.md`
-- define the screen map for catalog, filters, tour card, booking, payment, my bookings, language/settings, and help/operator entry points
-- define CTA hierarchy, loading states, empty states, error states, and reservation timer states
-- define help and handoff entry points from the Mini App experience
-- align the UX definition with the current Phase 2-4 service capabilities and explicit postponed items
-- keep the work documentation-first and avoid UI code or API expansion in this step
+Match the implementation plan’s next booking/payment slices: **reserve action** + **payment screen entry** (amount, timer, transition into payment scenario), reusing `TemporaryReservationService`, `PaymentEntryService`, and existing payment/reconciliation assumptions—no duplicated business rules in Flet.
 
 Requirements:
-- do not implement Flet UI yet
-- do not add Mini App auth/init endpoints yet
-- do not add Mini App booking/payment UI yet
-- do not expand bot, payment, waitlist, or handoff code in this step
-- keep the UX definition aligned with the existing architecture and current Phase 2-4 capabilities
-- explicitly mark still-postponed behaviors instead of inventing unsupported flows
-
-Do not implement yet:
-- Flet UI implementation
-- Mini App API delivery changes
-- waitlist workflow implementation
-- handoff workflow implementation
-- group delivery
-- content/admin expansions unrelated to Mini App UX definition
+- keep scope narrow: no waitlist, no handoff, no Mini App auth/init expansion unless strictly required for a minimal integration stub
+- add minimal API/adapter layer only; services own mutations
+- mobile-first; align with `docs/MINI_APP_UX.md`
+- add tests for new Mini App-specific glue (routes/adapters), not a rewrite of Phase 3–4 tests
 
 Before writing code:
-1. summarize the current project state
-2. list what is already completed in Phase 4
-3. identify the exact next safe step and explain why Mini App UX definition is the right bridge into Phase 5
-4. list the docs or files you will add or extend
-5. explain the proposed screen map and CTA hierarchy
-6. explain what remains explicitly postponed before UI implementation
-7. explain what remains postponed
+1. summarize current state and what Phase 5 Steps 1–4 already delivered
+2. quote how this maps to `IMPLEMENTATION_PLAN.md` Phase 5 bullets
+3. list files/endpoints/UI to add or extend
+4. list what remains postponed (my bookings, auth/init, help, etc.)
 
-Then generate the documentation only.
+Then generate the code and tests.
+
 ---
 
 ## New Chat Startup Prompt
