@@ -12,6 +12,7 @@ class NotificationEventType(StrEnum):
     TEMPORARY_RESERVATION_CREATED = "temporary_reservation_created"
     PAYMENT_PENDING = "payment_pending"
     PAYMENT_CONFIRMED = "payment_confirmed"
+    PREDEPARTURE_REMINDER = "predeparture_reminder"
     RESERVATION_EXPIRED = "reservation_expired"
 
 

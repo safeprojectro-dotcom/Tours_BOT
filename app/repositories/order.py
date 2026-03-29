@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus
 from app.models.order import Order
+from app.models.tour import Tour
 from app.repositories.base import SQLAlchemyRepository
 
 
@@ -96,6 +97,30 @@ class OrderRepository(SQLAlchemyRepository[Order]):
                 Order.reservation_expires_at <= due_before,
             )
             .order_by(Order.reservation_expires_at, Order.id)
+            .limit(limit)
+        )
+        return list(session.scalars(stmt).all())
+
+    def list_predeparture_reminder_order_ids(
+        self,
+        session: Session,
+        *,
+        now: datetime,
+        due_within: timedelta,
+        limit: int = 100,
+    ) -> list[int]:
+        due_before = now + due_within
+        stmt = (
+            select(Order.id)
+            .join(Tour, Tour.id == Order.tour_id)
+            .where(
+                Order.booking_status == BookingStatus.CONFIRMED,
+                Order.payment_status == PaymentStatus.PAID,
+                Order.cancellation_status == CancellationStatus.ACTIVE,
+                Tour.departure_datetime > now,
+                Tour.departure_datetime <= due_before,
+            )
+            .order_by(Tour.departure_datetime, Order.id)
             .limit(limit)
         )
         return list(session.scalars(stmt).all())

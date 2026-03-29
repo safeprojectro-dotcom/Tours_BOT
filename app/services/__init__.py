@@ -21,6 +21,8 @@ from app.services.payment_pending_reminder_outbox import PaymentPendingReminderO
 from app.services.payment_read import PaymentReadService
 from app.services.payment_reconciliation import PaymentReconciliationService
 from app.services.payment_summary import PaymentSummaryService
+from app.services.predeparture_reminder import PredepartureReminderService
+from app.services.predeparture_reminder_outbox import PredepartureReminderOutboxService
 from app.services.reservation_expiry import ReservationExpiryService
 from app.services.tour_detail import TourDetailService
 from app.services.user_profile import UserProfileService
@@ -47,6 +49,8 @@ __all__ = [
     "PaymentReadService",
     "PaymentReconciliationService",
     "PaymentSummaryService",
+    "PredepartureReminderService",
+    "PredepartureReminderOutboxService",
     "ReservationExpiryService",
     "TourDetailService",
     "UserProfileService",
