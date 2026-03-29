@@ -124,3 +124,35 @@ class OrderRepository(SQLAlchemyRepository[Order]):
             .limit(limit)
         )
         return list(session.scalars(stmt).all())
+
+    def list_departure_day_reminder_order_ids(
+        self,
+        session: Session,
+        *,
+        now: datetime,
+        due_within: timedelta,
+        limit: int = 100,
+    ) -> list[int]:
+        due_before = now + due_within
+        same_day_cutoff = datetime(
+            year=now.year,
+            month=now.month,
+            day=now.day,
+            tzinfo=now.tzinfo,
+        ) + timedelta(days=1)
+        effective_due_before = min(due_before, same_day_cutoff)
+        stmt = (
+            select(Order.id)
+            .join(Tour, Tour.id == Order.tour_id)
+            .where(
+                Order.booking_status == BookingStatus.CONFIRMED,
+                Order.payment_status == PaymentStatus.PAID,
+                Order.cancellation_status == CancellationStatus.ACTIVE,
+                Tour.departure_datetime > now,
+                Tour.departure_datetime < same_day_cutoff,
+                Tour.departure_datetime <= effective_due_before,
+            )
+            .order_by(Tour.departure_datetime, Order.id)
+            .limit(limit)
+        )
+        return list(session.scalars(stmt).all())

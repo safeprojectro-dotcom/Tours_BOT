@@ -1,5 +1,7 @@
 """Worker package placeholder for future background jobs."""
 
+from app.workers.departure_day_reminder import run_once as run_departure_day_reminder_once
+from app.workers.departure_day_reminder_outbox import run_once as run_departure_day_reminder_outbox_once
 from app.workers.notification_outbox_processing import run_once as run_notification_outbox_processing_once
 from app.workers.notification_outbox_recovery import run_once as run_notification_outbox_recovery_once
 from app.workers.notification_outbox_retry_execution import run_once as run_notification_outbox_retry_execution_once
@@ -11,6 +13,8 @@ from app.workers.predeparture_reminder_outbox import run_once as run_predepartur
 from app.workers.reservation_expiry import run_once as run_reservation_expiry_once
 
 __all__ = [
+    "run_departure_day_reminder_once",
+    "run_departure_day_reminder_outbox_once",
     "run_notification_outbox_processing_once",
     "run_notification_outbox_recovery_once",
     "run_notification_outbox_retry_execution_once",

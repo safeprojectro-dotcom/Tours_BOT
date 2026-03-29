@@ -127,6 +127,38 @@ class NotificationPreparationServiceTests(FoundationDBTestCase):
         self.assertIn("2026-04-05 09:30", payload.message)
         self.assertEqual(payload.metadata["departure_datetime"], "2026-04-05 09:30")
 
+    def test_prepare_departure_day_notification_for_confirmed_paid_order(self) -> None:
+        user = self.create_user(preferred_language="de")
+        tour = self.create_tour(
+            code="NOTIF-3C",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 4, 5, 6, 45, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+            total_amount="149.50",
+        )
+        self.create_payment(order, external_payment_id="pay-departure-day", status=PaymentStatus.PAID)
+
+        payload = NotificationPreparationService().prepare_notification(
+            self.session,
+            order_id=order.id,
+            event_type=NotificationEventType.DEPARTURE_DAY_REMINDER,
+        )
+
+        self.assertIsNotNone(payload)
+        assert payload is not None
+        self.assertEqual(payload.language_code, "de")
+        self.assertEqual(payload.title, "Abfahrt heute")
+        self.assertIn("2026-04-05 06:45", payload.message)
+        self.assertEqual(payload.metadata["departure_datetime"], "2026-04-05 06:45")
+
     def test_prepare_reservation_expired_notification_respects_current_status_semantics(self) -> None:
         user = self.create_user(preferred_language="en")
         tour = self.create_tour(code="NOTIF-4", status=TourStatus.OPEN_FOR_SALE)

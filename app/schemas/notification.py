@@ -13,6 +13,7 @@ class NotificationEventType(StrEnum):
     PAYMENT_PENDING = "payment_pending"
     PAYMENT_CONFIRMED = "payment_confirmed"
     PREDEPARTURE_REMINDER = "predeparture_reminder"
+    DEPARTURE_DAY_REMINDER = "departure_day_reminder"
     RESERVATION_EXPIRED = "reservation_expired"
 
 

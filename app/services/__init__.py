@@ -3,6 +3,8 @@
 from app.services.boarding_point import BoardingPointService
 from app.services.catalog import CatalogLookupService
 from app.services.catalog_preparation import CatalogPreparationService
+from app.services.departure_day_reminder import DepartureDayReminderService
+from app.services.departure_day_reminder_outbox import DepartureDayReminderOutboxService
 from app.services.knowledge_base import KnowledgeBaseLookupService
 from app.services.language_aware_tour import LanguageAwareTourReadService
 from app.services.notification_delivery import NotificationDeliveryService
@@ -31,6 +33,8 @@ __all__ = [
     "BoardingPointService",
     "CatalogLookupService",
     "CatalogPreparationService",
+    "DepartureDayReminderService",
+    "DepartureDayReminderOutboxService",
     "KnowledgeBaseLookupService",
     "LanguageAwareTourReadService",
     "NotificationDeliveryService",

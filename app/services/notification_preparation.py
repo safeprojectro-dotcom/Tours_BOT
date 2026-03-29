@@ -41,6 +41,12 @@ NOTIFICATION_TRANSLATIONS: dict[str, TemplateMap] = {
             "Reference: #{order_id}\n"
             "Departure: {departure_datetime}"
         ),
+        "departure_day_reminder_title": "Departure today",
+        "departure_day_reminder_body": (
+            "Your trip {tour_title} departs today.\n"
+            "Reference: #{order_id}\n"
+            "Departure: {departure_datetime}"
+        ),
         "reservation_expired_title": "Reservation expired",
         "reservation_expired_body": (
             "Your temporary reservation for {tour_title} has expired.\n"
@@ -73,6 +79,12 @@ NOTIFICATION_TRANSLATIONS: dict[str, TemplateMap] = {
         "predeparture_reminder_title": "Reminder de plecare",
         "predeparture_reminder_body": (
             "Calatoria ta {tour_title} urmeaza in curand.\n"
+            "Referinta: #{order_id}\n"
+            "Plecare: {departure_datetime}"
+        ),
+        "departure_day_reminder_title": "Plecare astazi",
+        "departure_day_reminder_body": (
+            "Calatoria ta {tour_title} pleaca astazi.\n"
             "Referinta: #{order_id}\n"
             "Plecare: {departure_datetime}"
         ),
@@ -111,6 +123,12 @@ NOTIFICATION_TRANSLATIONS: dict[str, TemplateMap] = {
             "Nomer: #{order_id}\n"
             "Vyezd: {departure_datetime}"
         ),
+        "departure_day_reminder_title": "Vyyezd segodnya",
+        "departure_day_reminder_body": (
+            "Vasha poezdka {tour_title} otpravlyaetsya segodnya.\n"
+            "Nomer: #{order_id}\n"
+            "Vyezd: {departure_datetime}"
+        ),
         "reservation_expired_title": "Bronirovanie isteklo",
         "reservation_expired_body": (
             "Vashe vremennoe bronirovanie dlya {tour_title} isteklo.\n"
@@ -143,6 +161,12 @@ NOTIFICATION_TRANSLATIONS: dict[str, TemplateMap] = {
         "predeparture_reminder_title": "Podsetnik za polazak",
         "predeparture_reminder_body": (
             "Tvoje putovanje {tour_title} uskoro pocinje.\n"
+            "Referenca: #{order_id}\n"
+            "Polazak: {departure_datetime}"
+        ),
+        "departure_day_reminder_title": "Polazak danas",
+        "departure_day_reminder_body": (
+            "Tvoje putovanje {tour_title} polazi danas.\n"
             "Referenca: #{order_id}\n"
             "Polazak: {departure_datetime}"
         ),
@@ -181,6 +205,12 @@ NOTIFICATION_TRANSLATIONS: dict[str, TemplateMap] = {
             "Azonosito: #{order_id}\n"
             "Indulas: {departure_datetime}"
         ),
+        "departure_day_reminder_title": "Indulas ma",
+        "departure_day_reminder_body": (
+            "A(z) {tour_title} utazas ma indul.\n"
+            "Azonosito: #{order_id}\n"
+            "Indulas: {departure_datetime}"
+        ),
         "reservation_expired_title": "A foglalas lejart",
         "reservation_expired_body": (
             "Az ideiglenes foglalasa lejart ehhez: {tour_title}.\n"
@@ -216,6 +246,12 @@ NOTIFICATION_TRANSLATIONS: dict[str, TemplateMap] = {
             "Riferimento: #{order_id}\n"
             "Partenza: {departure_datetime}"
         ),
+        "departure_day_reminder_title": "Partenza oggi",
+        "departure_day_reminder_body": (
+            "Il tuo viaggio {tour_title} parte oggi.\n"
+            "Riferimento: #{order_id}\n"
+            "Partenza: {departure_datetime}"
+        ),
         "reservation_expired_title": "Prenotazione scaduta",
         "reservation_expired_body": (
             "La tua prenotazione temporanea per {tour_title} e scaduta.\n"
@@ -248,6 +284,12 @@ NOTIFICATION_TRANSLATIONS: dict[str, TemplateMap] = {
         "predeparture_reminder_title": "Abfahrts-Erinnerung",
         "predeparture_reminder_body": (
             "Ihre Reise {tour_title} beginnt bald.\n"
+            "Referenz: #{order_id}\n"
+            "Abfahrt: {departure_datetime}"
+        ),
+        "departure_day_reminder_title": "Abfahrt heute",
+        "departure_day_reminder_body": (
+            "Ihre Reise {tour_title} faehrt heute ab.\n"
             "Referenz: #{order_id}\n"
             "Abfahrt: {departure_datetime}"
         ),
@@ -289,6 +331,7 @@ class NotificationPreparationService:
         if self._is_payment_confirmed(order_summary):
             events.append(NotificationEventType.PAYMENT_CONFIRMED)
             events.append(NotificationEventType.PREDEPARTURE_REMINDER)
+            events.append(NotificationEventType.DEPARTURE_DAY_REMINDER)
         if self._is_reservation_expired(order_summary):
             events.append(NotificationEventType.RESERVATION_EXPIRED)
         return events
@@ -355,6 +398,7 @@ class NotificationPreparationService:
         if self._is_payment_confirmed(order_summary):
             events.append(NotificationEventType.PAYMENT_CONFIRMED)
             events.append(NotificationEventType.PREDEPARTURE_REMINDER)
+            events.append(NotificationEventType.DEPARTURE_DAY_REMINDER)
         if self._is_reservation_expired(order_summary):
             events.append(NotificationEventType.RESERVATION_EXPIRED)
         return events
