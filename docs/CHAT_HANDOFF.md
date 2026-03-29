@@ -7,7 +7,7 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 4 / Step 8 completed
+Phase 4 / Step 9 completed
 
 ## Completed Steps
 
@@ -435,91 +435,80 @@ This logic already exists in the temporary reservation creation slice and must b
 ---
 
 ## Next Safe Step
-Phase 4 / Step 9
+Phase 4 / Step 10
+
 
 ### Goal
-Add the first real `telegram_private` notification delivery slice on top of the existing notification preparation, dispatch, and reminder groundwork, without introducing advanced queue/scheduler complexity.
-
+Add the first notification outbox processing/pickup worker slice on top of the existing notification outbox persistence, dispatch, reminder, and telegram_private delivery foundations.
 
 ### Safe scope for next step
-- add a minimal delivery service or adapter for `telegram_private` only
-- deliver already prepared notification dispatches through the Telegram private channel only
-- support the currently existing notification groundwork only:
-  - prepared notification payloads
-  - dispatch envelopes
-  - payment-pending reminder outputs
-- keep the integration narrow and explicit
-- add focused tests for delivery behavior, safe failure handling, and service boundaries
-- keep business rules in the service layer
-- keep worker and bot wiring thin
+- add worker/service logic to read pending notification outbox entries
+- safely pick up a narrow batch of pending entries for processing
+- connect picked entries to the existing telegram_private delivery flow where appropriate
+- keep processing idempotent and explicit
+- add focused tests for pickup rules, repeated execution safety, and state transitions
+- keep business logic in service layer
 - keep API/UI layers untouched unless a minimal integration point is strictly necessary
 
 ### Must Not Be Implemented Yet
+- full scheduler/orchestrator
+- advanced retry framework
 - group delivery
 - Mini App delivery
 - waitlist notifications
 - handoff notifications
-- full production scheduler/orchestrator
-- advanced outbox/queue persistence
-- group bot behavior
-- Mini App UI
 - refund workflow
 - advanced admin automation
----
 
 ## Recommended Next Prompt
 Use this in the new chat:
 
-Using `docs/TECH_SPEC_TOURS_BOT.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/TESTING_STRATEGY.md`, `docs/AI_ASSISTANT_SPEC.md`, `docs/AI_DIALOG_FLOWS.md`, `docs/CHAT_HANDOFF.md`, and `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, implement only the first real `telegram_private` notification delivery slice on top of the existing notification preparation, dispatch, and reminder groundwork.
+Using `docs/TECH_SPEC_TOURS_BOT.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/TESTING_STRATEGY.md`, `docs/AI_ASSISTANT_SPEC.md`, `docs/AI_DIALOG_FLOWS.md`, `docs/CHAT_HANDOFF.md`, and `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, implement only the notification outbox processing/pickup worker slice on top of the existing notification outbox persistence, dispatch, reminder, and telegram_private delivery foundations.
 
 Goal:
-Add the first real `telegram_private` notification delivery path without expanding into group delivery, Mini App delivery, waitlist/handoff notifications, or advanced queue/scheduler complexity.
+Add the first notification outbox processing/pickup worker slice so pending notification outbox entries can be safely selected and processed without introducing full scheduler/orchestrator complexity yet.
 
 Allowed scope:
-- add a minimal delivery service or adapter for `telegram_private` only
-- send already prepared notification dispatches through the Telegram private channel only
-- support the currently existing notification groundwork only:
-  - notification preparation outputs
-  - notification dispatch envelopes
-  - payment-pending reminder outputs
-- add any minimal schemas/helpers needed for delivery results if strictly necessary
-- add focused tests for delivery behavior, safe failure handling, and clear service boundaries
-- keep business rules in the service layer and keep worker/bot wiring thin
+- add a minimal worker/service path for reading pending notification outbox entries
+- support safe pickup of pending entries in small explicit batches
+- support idempotent state handling for picked entries
+- integrate with the existing telegram_private delivery flow only where needed for this narrow slice
+- add focused tests for pickup rules, repeated execution safety, and processing state transitions
+- keep business rules in the service layer
+- keep worker code thin
+- keep API/UI layers untouched unless a very small integration point is strictly required
 
 Requirements:
-- reuse the existing notification preparation, dispatch, and payment-pending reminder foundations where appropriate
+- reuse the existing outbox/persistence, notification dispatch, reminder, and telegram_private delivery foundations where appropriate
 - keep the implementation PostgreSQL-first
-- keep delivery limited to `telegram_private`
+- keep scope limited to the current telegram_private-related notification flow only
 - do not add group delivery
 - do not add Mini App delivery
 - do not add waitlist notifications
 - do not add handoff notifications
-- do not add predeparture reminders yet
-- do not add post-trip reminders yet
 - do not add full scheduler/orchestrator complexity yet
-- do not add advanced outbox persistence or queueing unless it is strictly necessary for the narrow current slice
-- keep API/UI layers untouched unless a very small integration point is strictly required
+- do not add advanced retry logic yet
+- preserve the current Step 8 and Step 9 behavior unless a very small compatibility fix is strictly necessary
 - run the minimal relevant tests first and do not claim broader coverage than what is actually tested
 
 Do not implement yet:
+- full production scheduler/orchestrator
+- advanced retry framework
 - group delivery
 - Mini App delivery
 - waitlist notifications
 - handoff notifications
-- full production scheduler/orchestrator
-- advanced outbox/queue persistence
-- group bot behavior
-- Mini App UI
 - refund workflow
 - advanced admin automation
 
 Before writing code:
 1. summarize the current project state
 2. list what is already completed in Phase 4
-3. identify the exact next safe step and explain why it is smaller than broader notification delivery rollout
-4. list the services, workers, schemas, adapters, helpers, and tests you will add or extend
-5. explain the boundary between notification preparation/dispatch/reminder selection and real Telegram private delivery
-6. explain what remains postponed
+3. identify the exact next safe step and explain why outbox processing/pickup is the right next foundation
+4. list the models, migrations, repositories, services, workers, schemas, helpers, and tests you will add or extend
+5. explain the pickup/idempotency strategy
+6. explain how the current telegram_private delivery slice will remain compatible
+7. explain what remains postponed
 
 Then generate the code and tests.
 
