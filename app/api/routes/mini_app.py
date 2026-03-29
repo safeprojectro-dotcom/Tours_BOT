@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.mini_app import MiniAppCatalogFiltersRead, MiniAppCatalogRead
+from app.schemas.mini_app import MiniAppCatalogFiltersRead, MiniAppCatalogRead, MiniAppTourDetailRead
 from app.services.mini_app_catalog import MiniAppCatalogService
+from app.services.mini_app_tour_detail import MiniAppTourDetailService
 
 router = APIRouter(prefix="/mini-app", tags=["mini-app"])
 
@@ -41,3 +42,19 @@ def get_catalog(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/tours/{tour_code}", response_model=MiniAppTourDetailRead)
+def get_tour_detail(
+    tour_code: str,
+    language_code: str | None = Query(default=None),
+    session: Session = Depends(get_db),
+) -> MiniAppTourDetailRead:
+    detail = MiniAppTourDetailService().get_tour_detail(
+        session,
+        code=tour_code,
+        language_code=language_code,
+    )
+    if detail is None:
+        raise HTTPException(status_code=404, detail="tour not found")
+    return detail

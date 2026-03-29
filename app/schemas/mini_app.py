@@ -6,7 +6,8 @@ from decimal import Decimal
 from pydantic import BaseModel
 
 from app.models.enums import TourStatus
-from app.schemas.prepared import CatalogTourCardRead
+from app.schemas.prepared import CatalogTourCardRead, LocalizedTourContentRead
+from app.schemas.tour import BoardingPointRead, TourRead
 
 
 class MiniAppCatalogFiltersRead(BaseModel):
@@ -22,3 +23,10 @@ class MiniAppCatalogRead(BaseModel):
     limit: int
     offset: int
     status_scope: list[TourStatus]
+
+
+class MiniAppTourDetailRead(BaseModel):
+    tour: TourRead
+    localized_content: LocalizedTourContentRead
+    boarding_points: list[BoardingPointRead]
+    is_available: bool

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
-import httpx
 import flet as ft
+import httpx
 
-from app.schemas.mini_app import MiniAppCatalogRead
+from app.schemas.mini_app import MiniAppCatalogRead, MiniAppTourDetailRead
 from app.schemas.prepared import CatalogTourCardRead
+from app.schemas.tour import BoardingPointRead
 from mini_app.api_client import MiniAppApiClient
 from mini_app.config import get_mini_app_settings
 
@@ -19,38 +21,21 @@ class CatalogScreen:
         *,
         api_client: MiniAppApiClient,
         default_language_code: str,
+        on_open_detail: Callable[[str], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
         self.language_code = default_language_code
+        self.on_open_detail = on_open_detail
 
-        self.destination_field = ft.TextField(
-            label="Destination",
-            hint_text="Belgrade",
-            dense=True,
-        )
-        self.departure_from_field = ft.TextField(
-            label="Departure from",
-            hint_text="YYYY-MM-DD",
-            dense=True,
-        )
-        self.departure_to_field = ft.TextField(
-            label="Departure to",
-            hint_text="YYYY-MM-DD",
-            dense=True,
-        )
-        self.max_price_field = ft.TextField(
-            label="Max price",
-            hint_text="150",
-            dense=True,
-        )
+        self.destination_field = ft.TextField(label="Destination", hint_text="Belgrade", dense=True)
+        self.departure_from_field = ft.TextField(label="Departure from", hint_text="YYYY-MM-DD", dense=True)
+        self.departure_to_field = ft.TextField(label="Departure to", hint_text="YYYY-MM-DD", dense=True)
+        self.max_price_field = ft.TextField(label="Max price", hint_text="150", dense=True)
         self.apply_button = ft.ElevatedButton("Apply filters", on_click=self._on_apply_filters)
         self.clear_button = ft.TextButton("Clear", on_click=self._on_clear_filters)
         self.loading_row = ft.Row(
-            [
-                ft.ProgressRing(width=18, height=18, stroke_width=2),
-                ft.Text("Loading tours..."),
-            ],
+            [ft.ProgressRing(width=18, height=18, stroke_width=2), ft.Text("Loading tours...")],
             visible=False,
             spacing=10,
         )
@@ -124,13 +109,7 @@ class CatalogScreen:
                 max_price=max_price,
             )
         except httpx.HTTPStatusError as exc:
-            detail = "Unable to load tours right now."
-            if exc.response is not None:
-                try:
-                    detail = exc.response.json().get("detail", detail)
-                except Exception:
-                    detail = detail
-            self._show_error(detail)
+            self._show_error(self._http_error_message(exc, default="Unable to load tours right now."))
             self._render_catalog(None)
         except Exception:
             self._show_error("Unable to load tours right now.")
@@ -165,7 +144,7 @@ class CatalogScreen:
             ],
             spacing=8,
         )
-        description = card.short_description or "Tour summary will expand in the next Mini App slice."
+        description = card.short_description or "Open the detail screen to see the full tour description."
         return ft.Container(
             bgcolor=ft.Colors.SURFACE_CONTAINER_LOW,
             border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
@@ -184,6 +163,10 @@ class CatalogScreen:
                         color=ft.Colors.ON_SURFACE_VARIANT,
                     ),
                     ft.Text(description, max_lines=3, overflow=ft.TextOverflow.ELLIPSIS),
+                    ft.Row(
+                        [ft.TextButton("View details", on_click=lambda _, code=card.code: self.on_open_detail(code))],
+                        alignment=ft.MainAxisAlignment.END,
+                    ),
                 ],
                 spacing=8,
             ),
@@ -267,28 +250,258 @@ class CatalogScreen:
             content=ft.Text(text, color=foreground, size=12),
         )
 
+    @staticmethod
+    def _http_error_message(exc: httpx.HTTPStatusError, *, default: str) -> str:
+        if exc.response is None:
+            return default
+        try:
+            return exc.response.json().get("detail", default)
+        except Exception:
+            return default
+
+
+class TourDetailScreen:
+    def __init__(
+        self,
+        page: ft.Page,
+        *,
+        api_client: MiniAppApiClient,
+        default_language_code: str,
+        on_back: Callable[[], None],
+    ) -> None:
+        self.page = page
+        self.api_client = api_client
+        self.language_code = default_language_code
+        self.on_back = on_back
+        self.current_tour_code: str | None = None
+
+        self.loading_row = ft.Row(
+            [ft.ProgressRing(width=18, height=18, stroke_width=2), ft.Text("Loading tour details...")],
+            visible=False,
+            spacing=10,
+        )
+        self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
+        self.content_column = ft.Column(spacing=14)
+
+    def set_tour_code(self, tour_code: str) -> None:
+        self.current_tour_code = tour_code
+
+    def build(self) -> ft.Control:
+        return ft.SafeArea(
+            content=ft.Container(
+                padding=16,
+                content=ft.Column(
+                    [
+                        ft.Row(
+                            [
+                                ft.TextButton(
+                                    "Back to catalog",
+                                    icon=ft.Icons.ARROW_BACK,
+                                    on_click=lambda _: self.on_back(),
+                                )
+                            ]
+                        ),
+                        self.loading_row,
+                        self.error_text,
+                        self.content_column,
+                    ],
+                    spacing=14,
+                    scroll=ft.ScrollMode.AUTO,
+                ),
+            )
+        )
+
+    async def load_tour_detail(self) -> None:
+        if not self.current_tour_code:
+            self._show_error("Tour not found.")
+            self._render_detail(None)
+            return
+
+        self._set_loading(True)
+        self.error_text.visible = False
+        self.page.update()
+
+        try:
+            detail = await self.api_client.get_tour_detail(
+                tour_code=self.current_tour_code,
+                language_code=self.language_code,
+            )
+        except httpx.HTTPStatusError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                message = "This tour is not available in the Mini App catalog."
+            else:
+                message = CatalogScreen._http_error_message(exc, default="Unable to load tour details right now.")
+            self._show_error(message)
+            self._render_detail(None)
+        except Exception:
+            self._show_error("Unable to load tour details right now.")
+            self._render_detail(None)
+        else:
+            self._render_detail(detail)
+        finally:
+            self._set_loading(False)
+            self.page.update()
+
+    def _render_detail(self, detail: MiniAppTourDetailRead | None) -> None:
+        self.content_column.controls.clear()
+        if detail is None:
+            return
+
+        badges = ft.Row(
+            [
+                CatalogScreen._build_badge(
+                    CatalogScreen._status_label(detail.tour.status.value),
+                    ft.Colors.BLUE_50,
+                    ft.Colors.BLUE_900,
+                ),
+                CatalogScreen._build_badge(
+                    "Seats available" if detail.is_available else "Sold out",
+                    ft.Colors.GREEN_50 if detail.is_available else ft.Colors.RED_50,
+                    ft.Colors.GREEN_900 if detail.is_available else ft.Colors.RED_900,
+                ),
+            ],
+            spacing=8,
+        )
+
+        localized = detail.localized_content
+        self.content_column.controls.extend(
+            [
+                badges,
+                ft.Text(localized.title, size=28, weight=ft.FontWeight.BOLD),
+                ft.Text(
+                    f"{CatalogScreen._format_datetime(detail.tour.departure_datetime)} | {detail.tour.duration_days} day(s)",
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                ),
+                ft.Text(
+                    f"{CatalogScreen._format_price(detail.tour.base_price)} {detail.tour.currency} | {detail.tour.seats_available} / {detail.tour.seats_total} seats left",
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                ),
+            ]
+        )
+
+        if localized.used_fallback:
+            self.content_column.controls.append(
+                ft.Text(
+                    "Showing fallback language content for this tour.",
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                )
+            )
+
+        overview = localized.full_description or localized.short_description
+        if overview:
+            self.content_column.controls.append(self._build_text_section("Overview", overview))
+        if localized.program_text:
+            self.content_column.controls.append(self._build_text_section("Program", localized.program_text))
+        if localized.included_text:
+            self.content_column.controls.append(self._build_text_section("Included", localized.included_text))
+        if localized.excluded_text:
+            self.content_column.controls.append(self._build_text_section("Not included", localized.excluded_text))
+
+        self.content_column.controls.append(ft.Text("Boarding points", size=18, weight=ft.FontWeight.W_600))
+        if detail.boarding_points:
+            for boarding_point in detail.boarding_points:
+                self.content_column.controls.append(self._build_boarding_point_card(boarding_point))
+        else:
+            self.content_column.controls.append(
+                ft.Text("Boarding point details are not available for this tour yet.")
+            )
+
+    def _build_text_section(self, title: str, body: str) -> ft.Control:
+        return ft.Container(
+            bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
+            border_radius=16,
+            padding=16,
+            content=ft.Column(
+                [
+                    ft.Text(title, size=18, weight=ft.FontWeight.W_600),
+                    ft.Text(body),
+                ],
+                spacing=8,
+            ),
+        )
+
+    def _build_boarding_point_card(self, boarding_point: BoardingPointRead) -> ft.Control:
+        notes = boarding_point.notes or "No extra notes for this boarding point."
+        return ft.Container(
+            bgcolor=ft.Colors.SURFACE_CONTAINER_LOW,
+            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+            border_radius=16,
+            padding=16,
+            content=ft.Column(
+                [
+                    ft.Text(boarding_point.city, size=16, weight=ft.FontWeight.BOLD),
+                    ft.Text(boarding_point.address),
+                    ft.Text(f"Departure time: {boarding_point.time.strftime('%H:%M')}"),
+                    ft.Text(notes, color=ft.Colors.ON_SURFACE_VARIANT),
+                ],
+                spacing=6,
+            ),
+        )
+
+    def _show_error(self, message: str) -> None:
+        self.error_text.value = message
+        self.error_text.visible = True
+        self.page.update()
+
+    def _set_loading(self, is_loading: bool) -> None:
+        self.loading_row.visible = is_loading
+
 
 class MiniAppShell:
+    TOUR_ROUTE_PREFIX = "/tours/"
+
     def __init__(self, page: ft.Page) -> None:
         settings = get_mini_app_settings()
         self.page = page
+        self.api_client = MiniAppApiClient(settings.normalized_api_base_url)
         self.catalog_screen = CatalogScreen(
             page,
-            api_client=MiniAppApiClient(settings.normalized_api_base_url),
+            api_client=self.api_client,
             default_language_code=settings.mini_app_default_language,
+            on_open_detail=self.open_tour_detail,
+        )
+        self.tour_detail_screen = TourDetailScreen(
+            page,
+            api_client=self.api_client,
+            default_language_code=settings.mini_app_default_language,
+            on_back=self.open_catalog,
         )
 
     def handle_route_change(self, _: ft.RouteChangeEvent) -> None:
         self.page.views.clear()
-        self.page.views.append(
-            ft.View(
-                route="/",
-                controls=[self.catalog_screen.build()],
-                padding=0,
-                spacing=0,
+        self.page.views.append(ft.View(route="/", controls=[self.catalog_screen.build()], padding=0, spacing=0))
+
+        tour_code = self._extract_tour_code(self.page.route)
+        if tour_code is not None:
+            self.tour_detail_screen.set_tour_code(tour_code)
+            self.page.views.append(
+                ft.View(route=f"{self.TOUR_ROUTE_PREFIX}{tour_code}", controls=[self.tour_detail_screen.build()], padding=0, spacing=0)
             )
-        )
+            self.page.update()
+            self.page.run_task(self.tour_detail_screen.load_tour_detail)
+            return
+
         self.page.update()
+        self.page.run_task(self.catalog_screen.load_catalog)
+
+    def handle_view_pop(self, _: ft.ViewPopEvent) -> None:
+        if len(self.page.views) <= 1:
+            self.page.go("/")
+            return
+        self.page.views.pop()
+        self.page.go(self.page.views[-1].route)
+
+    def open_catalog(self) -> None:
+        self.page.go("/")
+
+    def open_tour_detail(self, tour_code: str) -> None:
+        self.page.go(f"{self.TOUR_ROUTE_PREFIX}{tour_code}")
+
+    def _extract_tour_code(self, route: str | None) -> str | None:
+        if route is None or not route.startswith(self.TOUR_ROUTE_PREFIX):
+            return None
+        code = route.removeprefix(self.TOUR_ROUTE_PREFIX).strip("/")
+        return code or None
 
 
 def main(page: ft.Page) -> None:
@@ -300,5 +513,5 @@ def main(page: ft.Page) -> None:
 
     shell = MiniAppShell(page)
     page.on_route_change = shell.handle_route_change
+    page.on_view_pop = shell.handle_view_pop
     page.go(page.route or "/")
-    page.run_task(shell.catalog_screen.load_catalog)

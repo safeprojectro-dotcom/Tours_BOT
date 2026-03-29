@@ -95,3 +95,56 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "departure date range is invalid")
+
+    def test_tour_detail_route_returns_localized_read_only_detail(self) -> None:
+        tour = self.create_tour(
+            code="BELGRADE-DETAIL-API",
+            title_default="Belgrade Default",
+            short_description_default="Default short",
+            full_description_default="Default full",
+            departure_datetime=datetime(2026, 4, 5, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 4, 6, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=6,
+        )
+        self.create_translation(
+            tour,
+            language_code="ro",
+            title="Belgrad API",
+            short_description="Scurt API",
+            full_description="Detalii API",
+            program_text="Program API",
+        )
+        self.create_boarding_point(tour, city="Arad", address="Central Station")
+        self.session.commit()
+
+        response = self.client.get(
+            f"/mini-app/tours/{tour.code}",
+            params={"language_code": "ro"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["tour"]["code"], tour.code)
+        self.assertEqual(payload["localized_content"]["title"], "Belgrad API")
+        self.assertEqual(payload["localized_content"]["full_description"], "Detalii API")
+        self.assertEqual(payload["boarding_points"][0]["city"], "Arad")
+        self.assertTrue(payload["is_available"])
+
+    def test_tour_detail_route_returns_not_found_for_unknown_or_non_open_tour(self) -> None:
+        collecting_group = self.create_tour(
+            code="BELGRADE-GROUP-DETAIL-API",
+            title_default="Belgrade Group",
+            status=TourStatus.COLLECTING_GROUP,
+        )
+        self.create_translation(collecting_group, language_code="ro", title="Belgrad Grup")
+        self.create_boarding_point(collecting_group)
+        self.session.commit()
+
+        unknown_response = self.client.get("/mini-app/tours/UNKNOWN-CODE")
+        collecting_group_response = self.client.get(f"/mini-app/tours/{collecting_group.code}")
+
+        self.assertEqual(unknown_response.status_code, 404)
+        self.assertEqual(unknown_response.json()["detail"], "tour not found")
+        self.assertEqual(collecting_group_response.status_code, 404)
+        self.assertEqual(collecting_group_response.json()["detail"], "tour not found")
