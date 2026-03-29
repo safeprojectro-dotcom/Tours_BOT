@@ -30,6 +30,9 @@ class NotificationDeliveryStatus(StrEnum):
 
 class NotificationOutboxStatus(StrEnum):
     PENDING = "pending"
+    PROCESSING = "processing"
+    DELIVERED = "delivered"
+    FAILED = "failed"
 
 
 class NotificationPayloadRead(BaseModel):
