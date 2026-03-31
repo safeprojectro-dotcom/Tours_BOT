@@ -1,0 +1,9 @@
+aiogram
+alembic
+fastapi
+flet
+psycopg[binary]
+pydantic-settings
+sqlalchemy
+uvicorn[standard]
+httpx
