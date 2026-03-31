@@ -8,6 +8,7 @@ from sqlalchemy import event
 from app.db.session import get_db
 from app.main import create_app
 from app.models.enums import TourStatus
+from app.repositories.user import UserRepository
 from tests.unit.base import FoundationDBTestCase
 
 
@@ -376,3 +377,52 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
             params={"telegram_user_id": 999_993, "language_code": "en"},
         )
         self.assertEqual(detail_other.status_code, 404)
+
+    def test_mini_app_help_route_returns_structure(self) -> None:
+        response = self.client.get("/mini-app/help")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["title"], "Help")
+        self.assertTrue(len(body["categories"]) >= 1)
+        self.assertIn("operator_notice", body)
+        self.assertIn("not implemented", body["operator_notice"].lower())
+
+    def test_mini_app_settings_route_returns_supported_languages(self) -> None:
+        response = self.client.get("/mini-app/settings")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIn("en", body["supported_languages"])
+        self.assertIn(body["resolved_language"], body["supported_languages"])
+
+    def test_mini_app_settings_with_telegram_user_reflects_preferred_language(self) -> None:
+        self.create_user(telegram_user_id=777_010, preferred_language="ro")
+        self.session.commit()
+        response = self.client.get("/mini-app/settings", params={"telegram_user_id": 777_010})
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["active_language"], "ro")
+        self.assertEqual(body["resolved_language"], "ro")
+
+    def test_mini_app_language_preference_updates_profile(self) -> None:
+        self.create_user(telegram_user_id=777_011, preferred_language="en")
+        self.session.commit()
+        response = self.client.post(
+            "/mini-app/language-preference",
+            json={"telegram_user_id": 777_011, "language_code": "de"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["language_code"], "de")
+        self.session.expire_all()
+        user = UserRepository().get_by_telegram_user_id(self.session, telegram_user_id=777_011)
+        self.assertIsNotNone(user)
+        assert user is not None
+        self.assertEqual(user.preferred_language, "de")
+
+    def test_mini_app_language_preference_rejects_unknown_code(self) -> None:
+        self.create_user(telegram_user_id=777_012, preferred_language="en")
+        self.session.commit()
+        response = self.client.post(
+            "/mini-app/language-preference",
+            json={"telegram_user_id": 777_012, "language_code": "xx"},
+        )
+        self.assertEqual(response.status_code, 400)
