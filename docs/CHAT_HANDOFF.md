@@ -7,7 +7,7 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 5 (Mini App MVP) — **Phase 5 / Step 4** completed
+Phase 5 (Mini App MVP) — **Phase 5 / Step 5 completed
 
 `docs/IMPLEMENTATION_PLAN.md` defines **Phase 5 as a single phase** (no numbered substeps in the plan). The **Step N** labels here are **project execution checkpoints** mapped to Phase 5 *Included Scope* / *Done-When* bullets (UX first, then screens, booking, payment, help/bookings as the phase exit signal).
 
@@ -332,13 +332,51 @@ Phase 5 (Mini App MVP) — **Phase 5 / Step 4** completed
     - no handoff/operator workflow
     - no Mini App auth/init expansion
 
-### Phase 4 Test/Dependency/Cleanup Checkpoint
-- missing `httpx` issue was identified as an environment sync issue, not a project dependency-definition issue
-- project dependency definition already included `httpx`
-- API payment tests now pass
-- test-harness cleanup step completed
-- `psycopg ResourceWarning` from open pooled connection was removed by centralizing engine disposal in shared DB test base
-- cleanup touched test harness only, not production business logic
+- Phase 5 / Step 5 completed
+  - commit: `929988f` — `feat: add mini app reservation creation and payment start`
+  - real Mini App temporary reservation creation added
+  - implemented through thin Mini App glue on top of existing service-layer foundations
+  - Mini App now supports:
+    - real temporary reservation creation from preparation flow
+    - reservation success screen with:
+      - reservation reference
+      - amount to pay
+      - payment status
+      - reservation expiry / timer-friendly text
+    - payment start / continue-to-payment from Mini App
+    - payment screen with:
+      - amount due
+      - reservation deadline
+      - payment session reference
+      - provider-neutral `Pay Now` flow
+  - added Mini App reservation overview glue for user-facing reservation/payment state display
+  - business rules remain owned by existing backend services:
+    - `TemporaryReservationService`
+    - `PaymentEntryService`
+  - payment reconciliation remains unchanged and is still the only source of truth for paid-state transition
+  - scope kept narrow:
+    - no waitlist workflow
+    - no handoff/operator workflow
+    - no Mini App auth/init expansion
+    - no my bookings screen
+    - no provider-specific payment integration
+    - no admin/group/content changes
+
+### Phase 5 / Step 5 manual local validation
+- local backend startup passed
+- `/health` returned 200
+- `/healthz` returned 200
+- Mini App manual flow passed locally using a temporary local test tour:
+  - catalog
+  - tour detail
+  - reservation preparation
+  - preparation summary
+  - confirm reservation
+  - reservation success state
+  - reservation overview
+  - payment entry
+  - payment screen
+- current payment screen remains honest/provider-neutral and does not mark anything as paid before backend reconciliation
 
 ---
 
@@ -571,7 +609,7 @@ This logic already exists in the temporary reservation creation slice and must b
 ---
 
 ## Next Safe Step
-Phase 5 / Step 5
+Phase 5 / Step 6
 
 **Plan alignment (`docs/IMPLEMENTATION_PLAN.md` Phase 5):** the phase exit signal is *“Mini App UX defined first, then screens, booking, payment, and help flow implemented”*. The next **Included Scope** items not yet satisfied after Step 4 are the **reserve action** and **payment** slices: *“Build reservation screen for seat count, boarding point, reservation timer, and reserve action”* and *“Build payment screen with amount, timer, and transition into payment scenario”*, matching *Done-When*: *“reserve seats, start payment”*. Step 4 completed only preparation UI; Step 5 implements **real temporary reservation creation** and **starting payment** in the Mini App by reusing existing Phase 3–4 service-layer flows (`TemporaryReservationService`, `PaymentEntryService`, reconciliation assumptions), not by duplicating rules in the UI.
 
