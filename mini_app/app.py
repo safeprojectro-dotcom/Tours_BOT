@@ -9,7 +9,15 @@ import flet as ft
 import httpx
 
 from app.models.enums import PaymentStatus
-from app.schemas.mini_app import MiniAppCatalogRead, MiniAppReservationPreparationRead, MiniAppTourDetailRead
+from app.schemas.mini_app import (
+    MiniAppBookingDetailRead,
+    MiniAppBookingFacadeState,
+    MiniAppBookingPrimaryCta,
+    MiniAppBookingsListRead,
+    MiniAppCatalogRead,
+    MiniAppReservationPreparationRead,
+    MiniAppTourDetailRead,
+)
 from app.schemas.prepared import (
     CatalogTourCardRead,
     OrderSummaryRead,
@@ -53,11 +61,13 @@ class CatalogScreen:
         api_client: MiniAppApiClient,
         default_language_code: str,
         on_open_detail: Callable[[str], None],
+        on_my_bookings: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
         self.language_code = default_language_code
         self.on_open_detail = on_open_detail
+        self.on_my_bookings = on_my_bookings
 
         self.destination_field = ft.TextField(label="Destination", hint_text="Belgrade", dense=True)
         self.departure_from_field = ft.TextField(label="Departure from", hint_text="YYYY-MM-DD", dense=True)
@@ -88,6 +98,15 @@ class CatalogScreen:
                         ft.Text(
                             "Browse open tours and narrow the list with a small set of safe filters.",
                             color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        ft.Row(
+                            [
+                                ft.OutlinedButton(
+                                    "My bookings",
+                                    on_click=lambda _: self.on_my_bookings(),
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.START,
                         ),
                         ft.Container(
                             bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
@@ -1055,6 +1074,289 @@ class PaymentEntryScreen:
         self.loading_row.visible = is_loading
 
 
+class MyBookingsScreen:
+    def __init__(
+        self,
+        page: ft.Page,
+        *,
+        api_client: MiniAppApiClient,
+        language_code: str,
+        dev_telegram_user_id: int,
+        on_back_catalog: Callable[[], None],
+        on_open_booking: Callable[[int], None],
+    ) -> None:
+        self.page = page
+        self.api_client = api_client
+        self.language_code = language_code
+        self.dev_telegram_user_id = dev_telegram_user_id
+        self.on_back_catalog = on_back_catalog
+        self.on_open_booking = on_open_booking
+
+        self.loading_row = ft.Row(
+            [ft.ProgressRing(width=18, height=18, stroke_width=2), ft.Text("Loading bookings...")],
+            visible=False,
+            spacing=10,
+        )
+        self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
+        self.items_column = ft.Column(spacing=12)
+
+    def build(self) -> ft.Control:
+        return ft.SafeArea(
+            content=ft.Container(
+                padding=16,
+                content=ft.Column(
+                    [
+                        ft.Row(
+                            [ft.TextButton("Back to catalog", on_click=lambda _: self.on_back_catalog())],
+                            alignment=ft.MainAxisAlignment.START,
+                        ),
+                        ft.Text("My bookings", size=26, weight=ft.FontWeight.BOLD),
+                        ft.Text(
+                            "Temporary holds, confirmed trips, and released holds (not paid) are listed below.",
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        self.loading_row,
+                        self.error_text,
+                        self.items_column,
+                    ],
+                    spacing=12,
+                    scroll=ft.ScrollMode.AUTO,
+                ),
+            )
+        )
+
+    async def load_bookings(self) -> None:
+        self.loading_row.visible = True
+        self.error_text.visible = False
+        self.page.update()
+        try:
+            data = await self.api_client.list_my_bookings(
+                telegram_user_id=self.dev_telegram_user_id,
+                language_code=self.language_code,
+            )
+        except httpx.HTTPStatusError as exc:
+            self._show_error(CatalogScreen._http_error_message(exc, default="Unable to load bookings."))
+            self._render(None)
+        except Exception:
+            self._show_error("Unable to load bookings.")
+            self._render(None)
+        else:
+            self._render(data)
+        finally:
+            self.loading_row.visible = False
+            self.page.update()
+
+    def _render(self, data: MiniAppBookingsListRead | None) -> None:
+        self.items_column.controls.clear()
+        if data is None:
+            return
+        if not data.items:
+            self.items_column.controls.append(
+                ft.Text("No bookings yet. Browse the catalog to reserve a tour.", color=ft.Colors.ON_SURFACE_VARIANT)
+            )
+            return
+        for item in data.items:
+            s = item.summary
+            tour = s.tour
+            title = tour.localized_content.title
+            dep = CatalogScreen._format_datetime(tour.departure_datetime)
+            amount = f"{CatalogScreen._format_price(s.order.total_amount)} {s.order.currency}"
+            self.items_column.controls.append(
+                ft.Container(
+                    bgcolor=ft.Colors.SURFACE_CONTAINER_LOW,
+                    border_radius=16,
+                    padding=16,
+                    content=ft.Column(
+                        [
+                            ft.Text(title, size=18, weight=ft.FontWeight.BOLD),
+                            ft.Text(dep, color=ft.Colors.ON_SURFACE_VARIANT),
+                            ft.Text(f"{amount} · {s.order.seats_count} seat(s)", color=ft.Colors.ON_SURFACE_VARIANT),
+                            ft.Text(item.user_visible_booking_label, weight=ft.FontWeight.W_500),
+                            ft.Text(item.user_visible_payment_label, color=ft.Colors.ON_SURFACE_VARIANT, size=13),
+                            ft.Row(
+                                [
+                                    ft.FilledButton(
+                                        "Open",
+                                        on_click=lambda _, oid=s.order.id: self.on_open_booking(oid),
+                                    )
+                                ],
+                                alignment=ft.MainAxisAlignment.END,
+                            ),
+                        ],
+                        spacing=6,
+                    ),
+                )
+            )
+
+    def _show_error(self, message: str) -> None:
+        self.error_text.value = message
+        self.error_text.visible = True
+
+
+class BookingDetailScreen:
+    def __init__(
+        self,
+        page: ft.Page,
+        *,
+        api_client: MiniAppApiClient,
+        language_code: str,
+        dev_telegram_user_id: int,
+        on_back_to_bookings: Callable[[], None],
+        on_browse_tours: Callable[[], None],
+        on_pay_now: Callable[[str, int], None],
+    ) -> None:
+        self.page = page
+        self.api_client = api_client
+        self.language_code = language_code
+        self.dev_telegram_user_id = dev_telegram_user_id
+        self.on_back_to_bookings = on_back_to_bookings
+        self.on_browse_tours = on_browse_tours
+        self.on_pay_now = on_pay_now
+        self.order_id: int | None = None
+        self._last_detail: MiniAppBookingDetailRead | None = None
+
+        self.loading_row = ft.Row(
+            [ft.ProgressRing(width=18, height=18, stroke_width=2), ft.Text("Loading booking...")],
+            visible=False,
+            spacing=10,
+        )
+        self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
+        self.body_column = ft.Column(spacing=12)
+
+    def set_order_id(self, order_id: int) -> None:
+        self.order_id = order_id
+
+    def build(self) -> ft.Control:
+        return ft.SafeArea(
+            content=ft.Container(
+                padding=16,
+                content=ft.Column(
+                    [
+                        ft.Row(
+                            [ft.TextButton("Back to bookings", on_click=lambda _: self.on_back_to_bookings())],
+                            alignment=ft.MainAxisAlignment.START,
+                        ),
+                        ft.Text("Booking details", size=22, weight=ft.FontWeight.BOLD),
+                        self.loading_row,
+                        self.error_text,
+                        self.body_column,
+                    ],
+                    spacing=12,
+                    scroll=ft.ScrollMode.AUTO,
+                ),
+            )
+        )
+
+    async def load_detail(self) -> None:
+        if self.order_id is None:
+            return
+        self.loading_row.visible = True
+        self.error_text.visible = False
+        self.page.update()
+        try:
+            detail = await self.api_client.get_booking_status(
+                order_id=self.order_id,
+                telegram_user_id=self.dev_telegram_user_id,
+                language_code=self.language_code,
+            )
+        except httpx.HTTPStatusError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                self._show_error("This booking was not found or you do not have access.")
+            else:
+                self._show_error(CatalogScreen._http_error_message(exc, default="Unable to load this booking."))
+            self._render(None)
+        except Exception:
+            self._show_error("Unable to load this booking.")
+            self._render(None)
+        else:
+            self._render(detail)
+        finally:
+            self.loading_row.visible = False
+            self.page.update()
+
+    def _render(self, detail: MiniAppBookingDetailRead | None) -> None:
+        self._last_detail = detail
+        self.body_column.controls.clear()
+        if detail is None:
+            return
+        s = detail.summary
+        order = s.order
+        tour = s.tour
+        bp = s.boarding_point
+        boarding_lines = (
+            [ft.Text(f"Boarding: {bp.city}, {bp.address} ({bp.time})", color=ft.Colors.ON_SURFACE_VARIANT)]
+            if bp
+            else []
+        )
+        timer_line = (
+            [ft.Text(_hold_timer_hint(order.reservation_expires_at), color=ft.Colors.ON_SURFACE_VARIANT)]
+            if detail.facade_state == MiniAppBookingFacadeState.ACTIVE_TEMPORARY_RESERVATION
+            else []
+        )
+        pay_hint = (
+            [ft.Text(detail.payment_session_hint, size=12, color=ft.Colors.ON_SURFACE_VARIANT)]
+            if detail.payment_session_hint
+            else []
+        )
+        self.body_column.controls = [
+            ft.Container(
+                bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
+                border_radius=16,
+                padding=16,
+                content=ft.Column(
+                    [
+                        ft.Text(f"Booking reference: #{order.id}", weight=ft.FontWeight.W_600),
+                        ft.Text(tour.localized_content.title, size=18, weight=ft.FontWeight.BOLD),
+                        ft.Text(
+                            f"{CatalogScreen._format_datetime(tour.departure_datetime)} → "
+                            f"{CatalogScreen._format_datetime(tour.return_datetime)}",
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        ft.Text(
+                            f"Seats: {order.seats_count} · Amount: "
+                            f"{CatalogScreen._format_price(order.total_amount)} {order.currency}",
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        *boarding_lines,
+                        ft.Divider(),
+                        ft.Text(detail.user_visible_booking_label, weight=ft.FontWeight.W_600),
+                        ft.Text(detail.user_visible_payment_label, color=ft.Colors.ON_SURFACE_VARIANT),
+                        *timer_line,
+                        *pay_hint,
+                    ],
+                    spacing=8,
+                ),
+            ),
+        ]
+        cta_row: list[ft.Control] = []
+        if detail.primary_cta == MiniAppBookingPrimaryCta.PAY_NOW:
+            cta_row.append(
+                ft.FilledButton(
+                    "Pay now",
+                    on_click=lambda _: self.on_pay_now(tour.code, order.id),
+                )
+            )
+        elif detail.primary_cta == MiniAppBookingPrimaryCta.BROWSE_TOURS:
+            cta_row.append(
+                ft.FilledButton(
+                    "Browse tours",
+                    on_click=lambda _: self.on_browse_tours(),
+                )
+            )
+        else:
+            cta_row.append(
+                ft.OutlinedButton(
+                    "Back to bookings",
+                    on_click=lambda _: self.on_back_to_bookings(),
+                )
+            )
+        self.body_column.controls.append(ft.Row(cta_row, alignment=ft.MainAxisAlignment.START))
+
+    def _show_error(self, message: str) -> None:
+        self.error_text.value = message
+        self.error_text.visible = True
+
+
 class MiniAppShell:
     TOUR_ROUTE_PREFIX = "/tours/"
     TOUR_PREPARATION_ROUTE_SUFFIX = "/prepare"
@@ -1069,6 +1371,24 @@ class MiniAppShell:
             api_client=self.api_client,
             default_language_code=settings.mini_app_default_language,
             on_open_detail=self.open_tour_detail,
+            on_my_bookings=self.open_bookings,
+        )
+        self.my_bookings_screen = MyBookingsScreen(
+            page,
+            api_client=self.api_client,
+            language_code=settings.mini_app_default_language,
+            dev_telegram_user_id=self._dev_telegram_user_id,
+            on_back_catalog=self.open_catalog,
+            on_open_booking=self.open_booking_detail,
+        )
+        self.booking_detail_screen = BookingDetailScreen(
+            page,
+            api_client=self.api_client,
+            language_code=settings.mini_app_default_language,
+            dev_telegram_user_id=self._dev_telegram_user_id,
+            on_back_to_bookings=self.open_bookings,
+            on_browse_tours=self.open_catalog,
+            on_pay_now=self.open_payment_entry,
         )
         self.tour_detail_screen = TourDetailScreen(
             page,
@@ -1186,6 +1506,37 @@ class MiniAppShell:
             self.page.run_task(self.reservation_success_screen.load_overview)
             return
 
+        booking_order_id = self._extract_booking_detail_order_id(self.page.route)
+        if booking_order_id is not None:
+            self.booking_detail_screen.set_order_id(booking_order_id)
+            self.page.views.append(
+                ft.View(route="/bookings", controls=[self.my_bookings_screen.build()], padding=0, spacing=0)
+            )
+            self.page.views.append(
+                ft.View(
+                    route=self.page.route or "/",
+                    controls=[self.booking_detail_screen.build()],
+                    padding=0,
+                    spacing=0,
+                )
+            )
+            self.page.update()
+
+            async def _load_booking_stack() -> None:
+                await self.my_bookings_screen.load_bookings()
+                await self.booking_detail_screen.load_detail()
+
+            self.page.run_task(_load_booking_stack)
+            return
+
+        if self._is_bookings_list_route(self.page.route):
+            self.page.views.append(
+                ft.View(route="/bookings", controls=[self.my_bookings_screen.build()], padding=0, spacing=0)
+            )
+            self.page.update()
+            self.page.run_task(self.my_bookings_screen.load_bookings)
+            return
+
         preparation_tour_code = self._extract_preparation_tour_code(self.page.route)
         if preparation_tour_code is not None:
             self.tour_detail_screen.set_tour_code(preparation_tour_code)
@@ -1233,6 +1584,12 @@ class MiniAppShell:
     def open_catalog(self) -> None:
         self.page.go("/")
 
+    def open_bookings(self) -> None:
+        self.page.go("/bookings")
+
+    def open_booking_detail(self, order_id: int) -> None:
+        self.page.go(f"/bookings/{order_id}")
+
     def open_tour_detail(self, tour_code: str) -> None:
         self.page.go(f"{self.TOUR_ROUTE_PREFIX}{tour_code}")
 
@@ -1252,6 +1609,22 @@ class MiniAppShell:
             self.open_reservation_success(tour_code, order_id)
             return
         self.open_tour_preparation(tour_code)
+
+    @staticmethod
+    def _extract_booking_detail_order_id(route: str | None) -> int | None:
+        if not route:
+            return None
+        m = re.match(r"^/bookings/(\d+)$", route.strip())
+        if not m:
+            return None
+        return int(m.group(1))
+
+    @staticmethod
+    def _is_bookings_list_route(route: str | None) -> bool:
+        if not route:
+            return False
+        normalized = route.strip()
+        return normalized == "/bookings" or normalized == "/bookings/"
 
     @staticmethod
     def _extract_payment_route(route: str | None) -> tuple[str, int] | None:

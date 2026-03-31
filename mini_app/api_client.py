@@ -5,6 +5,8 @@ from decimal import Decimal
 import httpx
 
 from app.schemas.mini_app import (
+    MiniAppBookingDetailRead,
+    MiniAppBookingsListRead,
     MiniAppCatalogRead,
     MiniAppReservationPreparationRead,
     MiniAppTourDetailRead,
@@ -15,6 +17,33 @@ from app.schemas.prepared import OrderSummaryRead, PaymentEntryRead, Reservation
 class MiniAppApiClient:
     def __init__(self, base_url: str) -> None:
         self.base_url = base_url.rstrip("/")
+
+    async def list_my_bookings(
+        self,
+        *,
+        telegram_user_id: int,
+        language_code: str | None = None,
+    ) -> MiniAppBookingsListRead:
+        params = {"telegram_user_id": telegram_user_id, "language_code": language_code}
+        filtered_params = {key: value for key, value in params.items() if value not in (None, "")}
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=15.0) as client:
+            response = await client.get("/mini-app/bookings", params=filtered_params)
+            response.raise_for_status()
+            return MiniAppBookingsListRead.model_validate(response.json())
+
+    async def get_booking_status(
+        self,
+        *,
+        order_id: int,
+        telegram_user_id: int,
+        language_code: str | None = None,
+    ) -> MiniAppBookingDetailRead:
+        params = {"telegram_user_id": telegram_user_id, "language_code": language_code}
+        filtered_params = {key: value for key, value in params.items() if value not in (None, "")}
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=15.0) as client:
+            response = await client.get(f"/mini-app/orders/{order_id}/booking-status", params=filtered_params)
+            response.raise_for_status()
+            return MiniAppBookingDetailRead.model_validate(response.json())
 
     async def list_catalog(
         self,

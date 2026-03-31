@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.mini_app import (
+    MiniAppBookingDetailRead,
+    MiniAppBookingsListRead,
     MiniAppCatalogFiltersRead,
     MiniAppCatalogRead,
     MiniAppCreateReservationRequest,
@@ -18,11 +20,47 @@ from app.schemas.mini_app import (
 from app.schemas.prepared import OrderSummaryRead, PaymentEntryRead, ReservationPreparationSummaryRead
 from app.services.catalog import CatalogLookupService
 from app.services.mini_app_booking import MiniAppBookingService
+from app.services.mini_app_bookings import MiniAppBookingsService
 from app.services.mini_app_catalog import MiniAppCatalogService
 from app.services.mini_app_reservation_preparation import MiniAppReservationPreparationService
 from app.services.mini_app_tour_detail import MiniAppTourDetailService
 
 router = APIRouter(prefix="/mini-app", tags=["mini-app"])
+
+
+@router.get("/bookings", response_model=MiniAppBookingsListRead)
+def list_my_bookings(
+    telegram_user_id: int = Query(gt=0),
+    language_code: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_db),
+) -> MiniAppBookingsListRead:
+    return MiniAppBookingsService().list_bookings(
+        session,
+        telegram_user_id=telegram_user_id,
+        language_code=language_code,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/orders/{order_id}/booking-status", response_model=MiniAppBookingDetailRead)
+def get_booking_status(
+    order_id: int,
+    telegram_user_id: int = Query(gt=0),
+    language_code: str | None = Query(default=None),
+    session: Session = Depends(get_db),
+) -> MiniAppBookingDetailRead:
+    detail = MiniAppBookingsService().get_booking_detail(
+        session,
+        order_id=order_id,
+        telegram_user_id=telegram_user_id,
+        language_code=language_code,
+    )
+    if detail is None:
+        raise HTTPException(status_code=404, detail="booking not found")
+    return detail
 
 
 @router.get("/catalog", response_model=MiniAppCatalogRead)

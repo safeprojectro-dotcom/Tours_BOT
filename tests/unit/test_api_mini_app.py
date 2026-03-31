@@ -317,3 +317,62 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         body = overview.json()
         self.assertEqual(body["order"]["id"], order_id)
         self.assertIsNotNone(body["order"]["reservation_expires_at"])
+
+    def test_bookings_list_empty_for_new_telegram_user(self) -> None:
+        response = self.client.get("/mini-app/bookings", params={"telegram_user_id": 999_991})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items"], [])
+
+    def test_bookings_list_and_booking_status_after_reservation(self) -> None:
+        tour = self.create_tour(
+            code="MINI-BOOKINGS-LIST",
+            title_default="Bookings List Tour",
+            departure_datetime=datetime(2026, 7, 10, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 7, 11, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=5,
+            base_price="60.00",
+        )
+        self.create_translation(tour, language_code="en", title="Bookings List EN")
+        point = self.create_boarding_point(tour)
+        self.session.commit()
+
+        telegram_user_id = 999_992
+        reserve = self.client.post(
+            f"/mini-app/tours/{tour.code}/reservations",
+            params={"language_code": "en"},
+            json={
+                "telegram_user_id": telegram_user_id,
+                "seats_count": 1,
+                "boarding_point_id": point.id,
+            },
+        )
+        self.assertEqual(reserve.status_code, 200)
+        order_id = reserve.json()["order"]["id"]
+
+        list_response = self.client.get(
+            "/mini-app/bookings",
+            params={"telegram_user_id": telegram_user_id, "language_code": "en"},
+        )
+        self.assertEqual(list_response.status_code, 200)
+        items = list_response.json()["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["summary"]["order"]["id"], order_id)
+        self.assertEqual(items[0]["facade_state"], "active_temporary_reservation")
+        self.assertEqual(items[0]["primary_cta"], "pay_now")
+        self.assertIn("user_visible_booking_label", items[0])
+
+        detail_ok = self.client.get(
+            f"/mini-app/orders/{order_id}/booking-status",
+            params={"telegram_user_id": telegram_user_id, "language_code": "en"},
+        )
+        self.assertEqual(detail_ok.status_code, 200)
+        detail_body = detail_ok.json()
+        self.assertEqual(detail_body["summary"]["order"]["id"], order_id)
+        self.assertEqual(detail_body["primary_cta"], "pay_now")
+
+        detail_other = self.client.get(
+            f"/mini-app/orders/{order_id}/booking-status",
+            params={"telegram_user_id": 999_993, "language_code": "en"},
+        )
+        self.assertEqual(detail_other.status_code, 404)
