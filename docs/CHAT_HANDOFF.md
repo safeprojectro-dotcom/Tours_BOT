@@ -7,7 +7,7 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 5 (Mini App MVP) — **Phase 5 / Step 6 completed
+Phase 5 (Mini App MVP) — **Phase 5 / Step 7 completed
 
 `docs/IMPLEMENTATION_PLAN.md` defines **Phase 5 as a single phase** (no numbered substeps in the plan). The **Step N** labels here are **project execution checkpoints** mapped to Phase 5 *Included Scope* / *Done-When* bullets (UX first, then screens, booking, payment, help/bookings as the phase exit signal).
 
@@ -413,6 +413,39 @@ Phase 5 (Mini App MVP) — **Phase 5 / Step 6 completed
   - `python -m unittest tests.unit.test_api_mini_app tests.unit.test_services_mini_app_booking_facade tests.unit.test_services_mini_app_booking -v`
 - result:
   - all listed tests passed
+
+- Phase 5 / Step 7 completed
+  - commit: `<PUT_COMMIT_HASH_HERE>` — `feat: add mini app help placeholder and language settings`
+  - Mini App help placeholder added
+  - Mini App language/settings screens added
+  - added:
+    - `GET /mini-app/help`
+    - `GET /mini-app/settings`
+    - `POST /mini-app/language-preference`
+  - Flet Mini App now supports:
+    - `/help`
+    - `/settings`
+    - help/settings entry points from high-friction screens
+    - server-backed language hydration after startup
+    - language preference update through the existing user context path
+  - current help behavior stays honest:
+    - support/help information is available
+    - real operator handoff from Mini App is still not implemented
+  - language preference is persisted through existing Telegram user context service behavior
+  - scope kept narrow:
+    - no waitlist workflow
+    - no real handoff/operator workflow
+    - no Mini App auth/init expansion
+    - no provider-specific checkout
+    - no refund flow
+    - no admin/group/content changes
+
+### Phase 5 / Step 7 test checkpoint
+- tests run:
+  - `python -m unittest tests.unit.test_api_mini_app -v`
+- result:
+  - all listed tests passed
+
 ---
 
 ## Verified
@@ -644,7 +677,7 @@ This logic already exists in the temporary reservation creation slice and must b
 ---
 
 ## Next Safe Step
-Phase 5 / Step 7
+Phase 5 / Step 8
 
 **Plan alignment (`docs/IMPLEMENTATION_PLAN.md` Phase 5):** the phase exit signal is *“Mini App UX defined first, then screens, booking, payment, and help flow implemented”*. The next **Included Scope** items not yet satisfied after Step 4 are the **reserve action** and **payment** slices: *“Build reservation screen for seat count, boarding point, reservation timer, and reserve action”* and *“Build payment screen with amount, timer, and transition into payment scenario”*, matching *Done-When*: *“reserve seats, start payment”*. Step 4 completed only preparation UI; Step 5 implements **real temporary reservation creation** and **starting payment** in the Mini App by reusing existing Phase 3–4 service-layer flows (`TemporaryReservationService`, `PaymentEntryService`, reconciliation assumptions), not by duplicating rules in the UI.
 
