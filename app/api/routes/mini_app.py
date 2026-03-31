@@ -13,8 +13,12 @@ from app.schemas.mini_app import (
     MiniAppCatalogFiltersRead,
     MiniAppCatalogRead,
     MiniAppCreateReservationRequest,
+    MiniAppHelpRead,
+    MiniAppLanguagePreferenceRequest,
+    MiniAppLanguagePreferenceResponse,
     MiniAppPaymentEntryRequest,
     MiniAppReservationPreparationRead,
+    MiniAppSettingsRead,
     MiniAppTourDetailRead,
 )
 from app.schemas.prepared import OrderSummaryRead, PaymentEntryRead, ReservationPreparationSummaryRead
@@ -22,6 +26,7 @@ from app.services.catalog import CatalogLookupService
 from app.services.mini_app_booking import MiniAppBookingService
 from app.services.mini_app_bookings import MiniAppBookingsService
 from app.services.mini_app_catalog import MiniAppCatalogService
+from app.services.mini_app_help_settings import MiniAppHelpSettingsService
 from app.services.mini_app_reservation_preparation import MiniAppReservationPreparationService
 from app.services.mini_app_tour_detail import MiniAppTourDetailService
 
@@ -61,6 +66,38 @@ def get_booking_status(
     if detail is None:
         raise HTTPException(status_code=404, detail="booking not found")
     return detail
+
+
+@router.get("/help", response_model=MiniAppHelpRead)
+def get_mini_app_help() -> MiniAppHelpRead:
+    return MiniAppHelpSettingsService().get_help_read()
+
+
+@router.get("/settings", response_model=MiniAppSettingsRead)
+def get_mini_app_ui_settings(
+    telegram_user_id: int | None = Query(default=None),
+    session: Session = Depends(get_db),
+) -> MiniAppSettingsRead:
+    tid = telegram_user_id if telegram_user_id is not None and telegram_user_id > 0 else None
+    return MiniAppHelpSettingsService().get_settings_read(session, telegram_user_id=tid)
+
+
+@router.post("/language-preference", response_model=MiniAppLanguagePreferenceResponse)
+def post_mini_app_language_preference(
+    payload: MiniAppLanguagePreferenceRequest,
+    session: Session = Depends(get_db),
+) -> MiniAppLanguagePreferenceResponse:
+    service = MiniAppHelpSettingsService()
+    applied = service.set_language_preference(
+        session,
+        telegram_user_id=payload.telegram_user_id,
+        language_code=payload.language_code,
+    )
+    if applied is None:
+        session.rollback()
+        raise HTTPException(status_code=400, detail="unsupported language code")
+    session.commit()
+    return MiniAppLanguagePreferenceResponse(language_code=applied)
 
 
 @router.get("/catalog", response_model=MiniAppCatalogRead)

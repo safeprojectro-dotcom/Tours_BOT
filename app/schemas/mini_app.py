@@ -86,3 +86,39 @@ class MiniAppCreateReservationRequest(BaseModel):
 
 class MiniAppPaymentEntryRequest(BaseModel):
     telegram_user_id: int = Field(gt=0)
+
+
+class MiniAppHelpCategoryRead(BaseModel):
+    title: str
+    bullets: list[str]
+
+
+class MiniAppHelpRead(BaseModel):
+    """Static, honest help copy for Mini App (no live handoff)."""
+
+    title: str
+    intro: str
+    categories: list[MiniAppHelpCategoryRead]
+    operator_notice: str
+    when_to_contact_support: str
+
+
+class MiniAppSettingsRead(BaseModel):
+    supported_languages: list[str]
+    mini_app_default_language: str
+    active_language: str | None = Field(
+        default=None,
+        description="User profile language when known and supported; otherwise None.",
+    )
+    resolved_language: str = Field(
+        description="Language the Mini App UI should use (active if set, else default, else first supported).",
+    )
+
+
+class MiniAppLanguagePreferenceRequest(BaseModel):
+    telegram_user_id: int = Field(gt=0)
+    language_code: str = Field(min_length=2, max_length=16)
+
+
+class MiniAppLanguagePreferenceResponse(BaseModel):
+    language_code: str

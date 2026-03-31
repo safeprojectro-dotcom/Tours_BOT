@@ -8,7 +8,10 @@ from app.schemas.mini_app import (
     MiniAppBookingDetailRead,
     MiniAppBookingsListRead,
     MiniAppCatalogRead,
+    MiniAppHelpRead,
+    MiniAppLanguagePreferenceResponse,
     MiniAppReservationPreparationRead,
+    MiniAppSettingsRead,
     MiniAppTourDetailRead,
 )
 from app.schemas.prepared import OrderSummaryRead, PaymentEntryRead, ReservationPreparationSummaryRead
@@ -17,6 +20,29 @@ from app.schemas.prepared import OrderSummaryRead, PaymentEntryRead, Reservation
 class MiniAppApiClient:
     def __init__(self, base_url: str) -> None:
         self.base_url = base_url.rstrip("/")
+
+    async def get_help(self) -> MiniAppHelpRead:
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=10.0) as client:
+            response = await client.get("/mini-app/help")
+            response.raise_for_status()
+            return MiniAppHelpRead.model_validate(response.json())
+
+    async def get_mini_app_settings(self, *, telegram_user_id: int | None = None) -> MiniAppSettingsRead:
+        params: dict[str, object] = {}
+        if telegram_user_id is not None:
+            params["telegram_user_id"] = telegram_user_id
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=10.0) as client:
+            response = await client.get("/mini-app/settings", params=params or None)
+            response.raise_for_status()
+            return MiniAppSettingsRead.model_validate(response.json())
+
+    async def post_language_preference(self, *, telegram_user_id: int, language_code: str) -> str:
+        body = {"telegram_user_id": telegram_user_id, "language_code": language_code}
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=10.0) as client:
+            response = await client.post("/mini-app/language-preference", json=body)
+            response.raise_for_status()
+            data = MiniAppLanguagePreferenceResponse.model_validate(response.json())
+            return data.language_code
 
     async def list_my_bookings(
         self,

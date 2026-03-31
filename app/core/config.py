@@ -23,6 +23,7 @@ class Settings(BaseSettings):
         default="en,ro,ru,sr,hu,it,de",
         alias="TELEGRAM_SUPPORTED_LANGUAGES",
     )
+    mini_app_default_language: str = Field(default="en", alias="MINI_APP_DEFAULT_LANGUAGE")
 
     model_config = SettingsConfigDict(
         env_file=".env",

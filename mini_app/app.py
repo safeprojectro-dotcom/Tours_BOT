@@ -62,12 +62,16 @@ class CatalogScreen:
         default_language_code: str,
         on_open_detail: Callable[[str], None],
         on_my_bookings: Callable[[], None],
+        on_open_settings: Callable[[], None],
+        on_help: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
         self.language_code = default_language_code
         self.on_open_detail = on_open_detail
         self.on_my_bookings = on_my_bookings
+        self.on_open_settings = on_open_settings
+        self.on_help = on_help
 
         self.destination_field = ft.TextField(label="Destination", hint_text="Belgrade", dense=True)
         self.departure_from_field = ft.TextField(label="Departure from", hint_text="YYYY-MM-DD", dense=True)
@@ -101,12 +105,15 @@ class CatalogScreen:
                         ),
                         ft.Row(
                             [
+                                ft.OutlinedButton("My bookings", on_click=lambda _: self.on_my_bookings()),
                                 ft.OutlinedButton(
-                                    "My bookings",
-                                    on_click=lambda _: self.on_my_bookings(),
+                                    "Language & settings",
+                                    on_click=lambda _: self.on_open_settings(),
                                 ),
+                                ft.TextButton("Help", on_click=lambda _: self.on_help()),
                             ],
                             alignment=ft.MainAxisAlignment.START,
+                            wrap=True,
                         ),
                         ft.Container(
                             bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
@@ -319,12 +326,16 @@ class TourDetailScreen:
         default_language_code: str,
         on_back: Callable[[], None],
         on_prepare: Callable[[str], None],
+        on_help: Callable[[], None],
+        on_open_settings: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
         self.language_code = default_language_code
         self.on_back = on_back
         self.on_prepare = on_prepare
+        self.on_help = on_help
+        self.on_open_settings = on_open_settings
         self.current_tour_code: str | None = None
 
         self.loading_row = ft.Row(
@@ -350,8 +361,12 @@ class TourDetailScreen:
                                     "Back to catalog",
                                     icon=ft.Icons.ARROW_BACK,
                                     on_click=lambda _: self.on_back(),
-                                )
-                            ]
+                                ),
+                                ft.TextButton("Help", on_click=lambda _: self.on_help()),
+                                ft.TextButton("Settings", on_click=lambda _: self.on_open_settings()),
+                            ],
+                            alignment=ft.MainAxisAlignment.START,
+                            wrap=True,
                         ),
                         self.loading_row,
                         self.error_text,
@@ -446,7 +461,8 @@ class TourDetailScreen:
         if localized.used_fallback:
             self.content_column.controls.append(
                 ft.Text(
-                    "Showing fallback language content for this tour.",
+                    "No translation is available for your selected language for this tour; "
+                    "showing the next available language (see Language & settings).",
                     color=ft.Colors.ON_SURFACE_VARIANT,
                 )
             )
@@ -521,6 +537,8 @@ class ReservationPreparationScreen:
         dev_telegram_user_id: int,
         on_back: Callable[[str], None],
         on_reserved: Callable[[str, int], None],
+        on_help: Callable[[], None],
+        on_open_settings: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
@@ -528,6 +546,8 @@ class ReservationPreparationScreen:
         self.dev_telegram_user_id = dev_telegram_user_id
         self.on_back = on_back
         self.on_reserved = on_reserved
+        self.on_help = on_help
+        self.on_open_settings = on_open_settings
         self.current_tour_code: str | None = None
 
         self.loading_row = ft.Row(
@@ -567,8 +587,12 @@ class ReservationPreparationScreen:
                                     "Back to tour details",
                                     icon=ft.Icons.ARROW_BACK,
                                     on_click=lambda _: self.on_back(self.current_tour_code or ""),
-                                )
-                            ]
+                                ),
+                                ft.TextButton("Help", on_click=lambda _: self.on_help()),
+                                ft.TextButton("Settings", on_click=lambda _: self.on_open_settings()),
+                            ],
+                            alignment=ft.MainAxisAlignment.START,
+                            wrap=True,
                         ),
                         self.loading_row,
                         self.error_text,
@@ -785,6 +809,8 @@ class ReservationSuccessScreen:
         dev_telegram_user_id: int,
         on_back: Callable[[str], None],
         on_continue_to_payment: Callable[[str, int], None],
+        on_help: Callable[[], None],
+        on_open_settings: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
@@ -792,6 +818,8 @@ class ReservationSuccessScreen:
         self.dev_telegram_user_id = dev_telegram_user_id
         self.on_back = on_back
         self.on_continue_to_payment = on_continue_to_payment
+        self.on_help = on_help
+        self.on_open_settings = on_open_settings
         self.tour_code: str | None = None
         self.order_id: int | None = None
 
@@ -824,8 +852,12 @@ class ReservationSuccessScreen:
                                     "Back to preparation",
                                     icon=ft.Icons.ARROW_BACK,
                                     on_click=lambda _: self.on_back(self.tour_code or ""),
-                                )
-                            ]
+                                ),
+                                ft.TextButton("Help", on_click=lambda _: self.on_help()),
+                                ft.TextButton("Settings", on_click=lambda _: self.on_open_settings()),
+                            ],
+                            alignment=ft.MainAxisAlignment.START,
+                            wrap=True,
                         ),
                         self.loading_row,
                         self.error_text,
@@ -926,11 +958,15 @@ class PaymentEntryScreen:
         api_client: MiniAppApiClient,
         dev_telegram_user_id: int,
         on_back: Callable[[str], None],
+        on_help: Callable[[], None],
+        on_open_settings: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
         self.dev_telegram_user_id = dev_telegram_user_id
         self.on_back = on_back
+        self.on_help = on_help
+        self.on_open_settings = on_open_settings
         self.tour_code: str | None = None
         self.order_id: int | None = None
         self._last_entry: PaymentEntryRead | None = None
@@ -960,8 +996,12 @@ class PaymentEntryScreen:
                                     "Back to preparation",
                                     icon=ft.Icons.ARROW_BACK,
                                     on_click=lambda _: self.on_back(self.tour_code or ""),
-                                )
-                            ]
+                                ),
+                                ft.TextButton("Help", on_click=lambda _: self.on_help()),
+                                ft.TextButton("Settings", on_click=lambda _: self.on_open_settings()),
+                            ],
+                            alignment=ft.MainAxisAlignment.START,
+                            wrap=True,
                         ),
                         self.loading_row,
                         self.error_text,
@@ -1084,6 +1124,8 @@ class MyBookingsScreen:
         dev_telegram_user_id: int,
         on_back_catalog: Callable[[], None],
         on_open_booking: Callable[[int], None],
+        on_help: Callable[[], None],
+        on_open_settings: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
@@ -1091,6 +1133,8 @@ class MyBookingsScreen:
         self.dev_telegram_user_id = dev_telegram_user_id
         self.on_back_catalog = on_back_catalog
         self.on_open_booking = on_open_booking
+        self.on_help = on_help
+        self.on_open_settings = on_open_settings
 
         self.loading_row = ft.Row(
             [ft.ProgressRing(width=18, height=18, stroke_width=2), ft.Text("Loading bookings...")],
@@ -1107,8 +1151,13 @@ class MyBookingsScreen:
                 content=ft.Column(
                     [
                         ft.Row(
-                            [ft.TextButton("Back to catalog", on_click=lambda _: self.on_back_catalog())],
+                            [
+                                ft.TextButton("Back to catalog", on_click=lambda _: self.on_back_catalog()),
+                                ft.TextButton("Help", on_click=lambda _: self.on_help()),
+                                ft.TextButton("Settings", on_click=lambda _: self.on_open_settings()),
+                            ],
                             alignment=ft.MainAxisAlignment.START,
+                            wrap=True,
                         ),
                         ft.Text("My bookings", size=26, weight=ft.FontWeight.BOLD),
                         ft.Text(
@@ -1204,6 +1253,8 @@ class BookingDetailScreen:
         on_back_to_bookings: Callable[[], None],
         on_browse_tours: Callable[[], None],
         on_pay_now: Callable[[str, int], None],
+        on_help: Callable[[], None],
+        on_open_settings: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
@@ -1212,6 +1263,8 @@ class BookingDetailScreen:
         self.on_back_to_bookings = on_back_to_bookings
         self.on_browse_tours = on_browse_tours
         self.on_pay_now = on_pay_now
+        self.on_help = on_help
+        self.on_open_settings = on_open_settings
         self.order_id: int | None = None
         self._last_detail: MiniAppBookingDetailRead | None = None
 
@@ -1233,8 +1286,13 @@ class BookingDetailScreen:
                 content=ft.Column(
                     [
                         ft.Row(
-                            [ft.TextButton("Back to bookings", on_click=lambda _: self.on_back_to_bookings())],
+                            [
+                                ft.TextButton("Back to bookings", on_click=lambda _: self.on_back_to_bookings()),
+                                ft.TextButton("Help", on_click=lambda _: self.on_help()),
+                                ft.TextButton("Settings", on_click=lambda _: self.on_open_settings()),
+                            ],
                             alignment=ft.MainAxisAlignment.START,
+                            wrap=True,
                         ),
                         ft.Text("Booking details", size=22, weight=ft.FontWeight.BOLD),
                         self.loading_row,
@@ -1357,6 +1415,177 @@ class BookingDetailScreen:
         self.error_text.visible = True
 
 
+class HelpScreen:
+    def __init__(
+        self,
+        page: ft.Page,
+        *,
+        api_client: MiniAppApiClient,
+        on_close: Callable[[], None],
+    ) -> None:
+        self.page = page
+        self.api_client = api_client
+        self.on_close = on_close
+        self.body_column = ft.Column(spacing=12)
+
+    def build(self) -> ft.Control:
+        return ft.SafeArea(
+            content=ft.Container(
+                padding=16,
+                content=ft.Column(
+                    [
+                        ft.Row(
+                            [ft.TextButton("Back", icon=ft.Icons.ARROW_BACK, on_click=lambda _: self.on_close())],
+                            alignment=ft.MainAxisAlignment.START,
+                        ),
+                        ft.Text("Help", size=26, weight=ft.FontWeight.BOLD),
+                        self.body_column,
+                    ],
+                    spacing=12,
+                    scroll=ft.ScrollMode.AUTO,
+                ),
+            )
+        )
+
+    async def load_content(self) -> None:
+        self.body_column.controls = [
+            ft.Row(
+                [ft.ProgressRing(width=20, height=20, stroke_width=2), ft.Text("Loading help...")],
+                spacing=10,
+            )
+        ]
+        self.page.update()
+        try:
+            h = await self.api_client.get_help()
+        except httpx.HTTPStatusError as exc:
+            self.body_column.controls = [
+                ft.Text(
+                    CatalogScreen._http_error_message(exc, default="Unable to load help right now."),
+                    color=ft.Colors.ERROR,
+                )
+            ]
+        except Exception:
+            self.body_column.controls = [ft.Text("Unable to load help right now.", color=ft.Colors.ERROR)]
+        else:
+            blocks: list[ft.Control] = [
+                ft.Text(h.intro, color=ft.Colors.ON_SURFACE_VARIANT),
+            ]
+            for cat in h.categories:
+                blocks.append(ft.Text(cat.title, size=18, weight=ft.FontWeight.W_600))
+                for bullet in cat.bullets:
+                    blocks.append(ft.Text(f"• {bullet}", size=14))
+                blocks.append(ft.Container(height=8))
+            blocks.append(
+                ft.Container(
+                    bgcolor=ft.Colors.AMBER_50,
+                    border_radius=12,
+                    padding=12,
+                    content=ft.Text(h.operator_notice, color=ft.Colors.AMBER_900, size=14),
+                )
+            )
+            blocks.append(ft.Text(h.when_to_contact_support, color=ft.Colors.ON_SURFACE_VARIANT, size=14))
+            self.body_column.controls = blocks
+        self.page.update()
+
+
+class SettingsScreen:
+    def __init__(
+        self,
+        page: ft.Page,
+        *,
+        api_client: MiniAppApiClient,
+        dev_telegram_user_id: int,
+        on_language_applied: Callable[[str], None],
+        on_close: Callable[[], None],
+    ) -> None:
+        self.page = page
+        self.api_client = api_client
+        self.dev_telegram_user_id = dev_telegram_user_id
+        self.on_language_applied = on_language_applied
+        self.on_close = on_close
+        self.language_dropdown = ft.Dropdown(label="Display language", dense=True, width=320, options=[])
+        self.hint_text = ft.Text("", size=13, color=ft.Colors.ON_SURFACE_VARIANT)
+        self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
+        self.save_button = ft.FilledButton("Save", on_click=lambda _: self.page.run_task(self._save_language))
+
+    def build(self) -> ft.Control:
+        return ft.SafeArea(
+            content=ft.Container(
+                padding=16,
+                content=ft.Column(
+                    [
+                        ft.Row(
+                            [ft.TextButton("Back", icon=ft.Icons.ARROW_BACK, on_click=lambda _: self.on_close())],
+                            alignment=ft.MainAxisAlignment.START,
+                        ),
+                        ft.Text("Language & settings", size=26, weight=ft.FontWeight.BOLD),
+                        ft.Text(
+                            "Choose the language for tour content and booking summaries. "
+                            "If a translation is missing, the app falls back and tells you.",
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        self.language_dropdown,
+                        self.hint_text,
+                        self.error_text,
+                        ft.Row([self.save_button], alignment=ft.MainAxisAlignment.START),
+                    ],
+                    spacing=14,
+                    scroll=ft.ScrollMode.AUTO,
+                ),
+            )
+        )
+
+    async def load_options(self) -> None:
+        self.error_text.visible = False
+        self.page.update()
+        try:
+            snap = await self.api_client.get_mini_app_settings(telegram_user_id=self.dev_telegram_user_id)
+        except httpx.HTTPStatusError as exc:
+            self.hint_text.value = CatalogScreen._http_error_message(exc, default="Unable to load settings.")
+            self.language_dropdown.options = []
+        except Exception:
+            self.hint_text.value = "Unable to load settings."
+            self.language_dropdown.options = []
+        else:
+            self.language_dropdown.options = [ft.dropdown.Option(code) for code in snap.supported_languages]
+            self.language_dropdown.value = snap.resolved_language
+            active = snap.active_language or "not set yet"
+            self.hint_text.value = (
+                f"Server default: {snap.mini_app_default_language}. "
+                f"Your saved preference: {active}. "
+                f"Fallback still applies when a tour has no translation."
+            )
+        self.page.update()
+
+    async def _save_language(self) -> None:
+        code = self.language_dropdown.value
+        if not code:
+            self.error_text.value = "Pick a language first."
+            self.error_text.visible = True
+            self.page.update()
+            return
+        self.save_button.disabled = True
+        self.error_text.visible = False
+        self.page.update()
+        try:
+            applied = await self.api_client.post_language_preference(
+                telegram_user_id=self.dev_telegram_user_id,
+                language_code=str(code),
+            )
+        except httpx.HTTPStatusError as exc:
+            self.error_text.value = CatalogScreen._http_error_message(exc, default="Could not save language.")
+            self.error_text.visible = True
+        except Exception:
+            self.error_text.value = "Could not save language."
+            self.error_text.visible = True
+        else:
+            self.on_language_applied(applied)
+            self.on_close()
+        finally:
+            self.save_button.disabled = False
+            self.page.update()
+
+
 class MiniAppShell:
     TOUR_ROUTE_PREFIX = "/tours/"
     TOUR_PREPARATION_ROUTE_SUFFIX = "/prepare"
@@ -1366,12 +1595,15 @@ class MiniAppShell:
         self.page = page
         self.api_client = MiniAppApiClient(settings.normalized_api_base_url)
         self._dev_telegram_user_id = settings.mini_app_dev_telegram_user_id
+        self._modal_return_route: str = "/"
         self.catalog_screen = CatalogScreen(
             page,
             api_client=self.api_client,
             default_language_code=settings.mini_app_default_language,
             on_open_detail=self.open_tour_detail,
             on_my_bookings=self.open_bookings,
+            on_open_settings=self.open_settings,
+            on_help=self.open_help,
         )
         self.my_bookings_screen = MyBookingsScreen(
             page,
@@ -1380,6 +1612,8 @@ class MiniAppShell:
             dev_telegram_user_id=self._dev_telegram_user_id,
             on_back_catalog=self.open_catalog,
             on_open_booking=self.open_booking_detail,
+            on_help=self.open_help,
+            on_open_settings=self.open_settings,
         )
         self.booking_detail_screen = BookingDetailScreen(
             page,
@@ -1389,6 +1623,8 @@ class MiniAppShell:
             on_back_to_bookings=self.open_bookings,
             on_browse_tours=self.open_catalog,
             on_pay_now=self.open_payment_entry,
+            on_help=self.open_help,
+            on_open_settings=self.open_settings,
         )
         self.tour_detail_screen = TourDetailScreen(
             page,
@@ -1396,6 +1632,8 @@ class MiniAppShell:
             default_language_code=settings.mini_app_default_language,
             on_back=self.open_catalog,
             on_prepare=self.open_tour_preparation,
+            on_help=self.open_help,
+            on_open_settings=self.open_settings,
         )
         self.reservation_preparation_screen = ReservationPreparationScreen(
             page,
@@ -1404,6 +1642,8 @@ class MiniAppShell:
             dev_telegram_user_id=self._dev_telegram_user_id,
             on_back=self.open_tour_detail,
             on_reserved=self.open_reservation_success,
+            on_help=self.open_help,
+            on_open_settings=self.open_settings,
         )
         self.reservation_success_screen = ReservationSuccessScreen(
             page,
@@ -1412,17 +1652,73 @@ class MiniAppShell:
             dev_telegram_user_id=self._dev_telegram_user_id,
             on_back=self.open_tour_preparation,
             on_continue_to_payment=self.open_payment_entry,
+            on_help=self.open_help,
+            on_open_settings=self.open_settings,
         )
         self.payment_entry_screen = PaymentEntryScreen(
             page,
             api_client=self.api_client,
             dev_telegram_user_id=self._dev_telegram_user_id,
             on_back=self.open_reservation_success_from_payment,
+            on_help=self.open_help,
+            on_open_settings=self.open_settings,
         )
+        self.help_screen = HelpScreen(page, api_client=self.api_client, on_close=self.close_modal)
+        self.settings_screen = SettingsScreen(
+            page,
+            api_client=self.api_client,
+            dev_telegram_user_id=self._dev_telegram_user_id,
+            on_language_applied=self.apply_language,
+            on_close=self.close_modal,
+        )
+
+    def apply_language(self, code: str) -> None:
+        self.catalog_screen.language_code = code
+        self.tour_detail_screen.language_code = code
+        self.reservation_preparation_screen.language_code = code
+        self.reservation_success_screen.language_code = code
+        self.my_bookings_screen.language_code = code
+        self.booking_detail_screen.language_code = code
+
+    async def hydrate_language_from_server(self) -> None:
+        try:
+            snap = await self.api_client.get_mini_app_settings(telegram_user_id=self._dev_telegram_user_id)
+        except Exception:
+            return
+        self.apply_language(snap.resolved_language)
+        route = (self.page.route or "/").strip() or "/"
+        if route in ("/", ""):
+            await self.catalog_screen.load_catalog()
+
+    def open_help(self) -> None:
+        self._modal_return_route = self.page.route or "/"
+        self.page.go("/help")
+
+    def open_settings(self) -> None:
+        self._modal_return_route = self.page.route or "/"
+        self.page.go("/settings")
+
+    def close_modal(self) -> None:
+        target = self._modal_return_route or "/"
+        self.page.go(target)
 
     def handle_route_change(self, _: ft.RouteChangeEvent) -> None:
         self.page.views.clear()
         self.page.views.append(ft.View(route="/", controls=[self.catalog_screen.build()], padding=0, spacing=0))
+
+        if self._is_help_route(self.page.route):
+            self.page.views.append(ft.View(route="/help", controls=[self.help_screen.build()], padding=0, spacing=0))
+            self.page.update()
+            self.page.run_task(self.help_screen.load_content)
+            return
+
+        if self._is_settings_route(self.page.route):
+            self.page.views.append(
+                ft.View(route="/settings", controls=[self.settings_screen.build()], padding=0, spacing=0)
+            )
+            self.page.update()
+            self.page.run_task(self.settings_screen.load_options)
+            return
 
         payment_ctx = self._extract_payment_route(self.page.route)
         if payment_ctx is not None:
@@ -1627,6 +1923,20 @@ class MiniAppShell:
         return normalized == "/bookings" or normalized == "/bookings/"
 
     @staticmethod
+    def _is_help_route(route: str | None) -> bool:
+        if not route:
+            return False
+        normalized = route.strip()
+        return normalized == "/help" or normalized == "/help/"
+
+    @staticmethod
+    def _is_settings_route(route: str | None) -> bool:
+        if not route:
+            return False
+        normalized = route.strip()
+        return normalized == "/settings" or normalized == "/settings/"
+
+    @staticmethod
     def _extract_payment_route(route: str | None) -> tuple[str, int] | None:
         if not route:
             return None
@@ -1682,3 +1992,4 @@ def main(page: ft.Page) -> None:
     shell.handle_route_change(
         ft.RouteChangeEvent("route_change", page, page.route or "/")
     )
+    page.run_task(shell.hydrate_language_from_server)
