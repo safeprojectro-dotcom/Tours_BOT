@@ -8,6 +8,8 @@ class MiniAppSettings(BaseSettings):
     mini_app_title: str = Field(default="Tours_BOT Mini App", alias="MINI_APP_TITLE")
     mini_app_api_base_url: str = Field(default="http://127.0.0.1:8000", alias="MINI_APP_API_BASE_URL")
     mini_app_default_language: str = Field(default="en", alias="MINI_APP_DEFAULT_LANGUAGE")
+    # Until Mini App Telegram init-data auth exists, API calls use this Telegram user id (local/dev).
+    mini_app_dev_telegram_user_id: int = Field(default=100_001, alias="MINI_APP_DEV_TELEGRAM_USER_ID")
 
     model_config = SettingsConfigDict(
         env_file=".env",

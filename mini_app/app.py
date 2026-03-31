@@ -1,17 +1,48 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 
 import flet as ft
 import httpx
 
+from app.models.enums import PaymentStatus
 from app.schemas.mini_app import MiniAppCatalogRead, MiniAppReservationPreparationRead, MiniAppTourDetailRead
-from app.schemas.prepared import CatalogTourCardRead, ReservationPreparationSummaryRead
+from app.schemas.prepared import (
+    CatalogTourCardRead,
+    OrderSummaryRead,
+    PaymentEntryRead,
+    ReservationPreparationSummaryRead,
+)
 from app.schemas.tour import BoardingPointRead
 from mini_app.api_client import MiniAppApiClient
 from mini_app.config import get_mini_app_settings
+
+
+def _payment_status_user_label(status: PaymentStatus) -> str:
+    labels: dict[PaymentStatus, str] = {
+        PaymentStatus.AWAITING_PAYMENT: "Waiting for payment",
+        PaymentStatus.UNPAID: "Not paid yet",
+        PaymentStatus.PAID: "Paid",
+    }
+    return labels.get(status, status.value.replace("_", " ").title())
+
+
+def _hold_timer_hint(expires_at: datetime | None) -> str:
+    if expires_at is None:
+        return "No payment deadline is set for this hold."
+    now = datetime.now(UTC)
+    end = expires_at if expires_at.tzinfo else expires_at.replace(tzinfo=UTC)
+    if end <= now:
+        return "This hold has expired. Return to the catalog to check availability."
+    total_minutes = max(0, int((end - now).total_seconds() // 60))
+    hours, minutes = divmod(total_minutes, 60)
+    return (
+        f"Time left to pay: about {hours}h {minutes}m "
+        f"(deadline {CatalogScreen._format_datetime(expires_at)})."
+    )
 
 
 class CatalogScreen:
@@ -468,12 +499,16 @@ class ReservationPreparationScreen:
         *,
         api_client: MiniAppApiClient,
         default_language_code: str,
+        dev_telegram_user_id: int,
         on_back: Callable[[str], None],
+        on_reserved: Callable[[str, int], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
         self.language_code = default_language_code
+        self.dev_telegram_user_id = dev_telegram_user_id
         self.on_back = on_back
+        self.on_reserved = on_reserved
         self.current_tour_code: str | None = None
 
         self.loading_row = ft.Row(
@@ -486,9 +521,15 @@ class ReservationPreparationScreen:
         self.summary_container = ft.Column(spacing=12)
         self.seats_dropdown = ft.Dropdown(label="Seats", dense=True, options=[])
         self.boarding_dropdown = ft.Dropdown(label="Boarding point", dense=True, options=[])
-        self.preview_button = ft.ElevatedButton("Preview reservation", on_click=self._on_preview_summary)
+        self.preview_button = ft.OutlinedButton("Preview summary", on_click=self._on_preview_summary)
+        self.confirm_reserve_button = ft.ElevatedButton(
+            "Confirm Reservation",
+            disabled=True,
+            on_click=lambda _: self.page.run_task(self._confirm_reservation),
+        )
         self.preparation_note = ft.Text(
-            "Preparation only. No reservation is created at this step.",
+            "Pick seats and boarding, preview the summary, then confirm to create a temporary reservation "
+            f"(dev user id {dev_telegram_user_id}). Payment entry follows on the next screen.",
             color=ft.Colors.ON_SURFACE_VARIANT,
         )
 
@@ -591,6 +632,7 @@ class ReservationPreparationScreen:
     def _render_preparation(self, preparation: MiniAppReservationPreparationRead | None) -> None:
         self.selection_container.controls.clear()
         self.summary_container.controls.clear()
+        self.confirm_reserve_button.disabled = True
         if preparation is None:
             return
 
@@ -628,8 +670,10 @@ class ReservationPreparationScreen:
     def _render_summary(self, summary: ReservationPreparationSummaryRead | None) -> None:
         self.summary_container.controls.clear()
         if summary is None:
+            self.confirm_reserve_button.disabled = True
             return
 
+        self.confirm_reserve_button.disabled = False
         self.summary_container.controls.extend(
             [
                 ft.Text("Preparation summary", size=20, weight=ft.FontWeight.W_600),
@@ -651,18 +695,54 @@ class ReservationPreparationScreen:
                                 f"Estimated total: {CatalogScreen._format_price(summary.estimated_total_amount)} {summary.tour.currency}"
                             ),
                             ft.Text(
-                                "This is a preparation-only preview. Reservation creation remains the next step.",
+                                "Your seats are not held until you confirm. This creates a temporary hold; "
+                                "complete payment before the deadline on the next screens.",
                                 color=ft.Colors.ON_SURFACE_VARIANT,
                             ),
                         ],
                         spacing=8,
                     ),
                 ),
+                ft.Row([self.confirm_reserve_button], alignment=ft.MainAxisAlignment.START),
             ]
         )
 
     def _on_preview_summary(self, _: ft.ControlEvent) -> None:
         self.page.run_task(self.load_summary)
+
+    async def _confirm_reservation(self) -> None:
+        if not self.current_tour_code:
+            self._show_error("Tour not found.")
+            return
+        if not self.seats_dropdown.value or not self.boarding_dropdown.value:
+            self._show_error("Choose seats and a boarding point before confirming.")
+            return
+
+        self._set_loading(True)
+        self.error_text.visible = False
+        self.page.update()
+
+        try:
+            summary = await self.api_client.create_temporary_reservation(
+                tour_code=self.current_tour_code,
+                telegram_user_id=self.dev_telegram_user_id,
+                seats_count=int(self.seats_dropdown.value),
+                boarding_point_id=int(self.boarding_dropdown.value),
+                language_code=self.language_code,
+            )
+        except httpx.HTTPStatusError as exc:
+            message = CatalogScreen._http_error_message(
+                exc,
+                default="Unable to create a temporary reservation right now.",
+            )
+            self._show_error(message)
+        except Exception:
+            self._show_error("Unable to create a temporary reservation right now.")
+        else:
+            self.on_reserved(self.current_tour_code, summary.order.id)
+        finally:
+            self._set_loading(False)
+            self.page.update()
 
     def _show_error(self, message: str) -> None:
         self.error_text.value = message
@@ -672,6 +752,307 @@ class ReservationPreparationScreen:
     def _set_loading(self, is_loading: bool) -> None:
         self.loading_row.visible = is_loading
         self.preview_button.disabled = is_loading
+        has_summary = bool(self.summary_container.controls)
+        self.confirm_reserve_button.disabled = is_loading or not has_summary
+
+
+class ReservationSuccessScreen:
+    def __init__(
+        self,
+        page: ft.Page,
+        *,
+        api_client: MiniAppApiClient,
+        default_language_code: str,
+        dev_telegram_user_id: int,
+        on_back: Callable[[str], None],
+        on_continue_to_payment: Callable[[str, int], None],
+    ) -> None:
+        self.page = page
+        self.api_client = api_client
+        self.language_code = default_language_code
+        self.dev_telegram_user_id = dev_telegram_user_id
+        self.on_back = on_back
+        self.on_continue_to_payment = on_continue_to_payment
+        self.tour_code: str | None = None
+        self.order_id: int | None = None
+
+        self.loading_row = ft.Row(
+            [ft.ProgressRing(width=18, height=18, stroke_width=2), ft.Text("Loading reservation...")],
+            visible=False,
+            spacing=10,
+        )
+        self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
+        self.body_column = ft.Column(spacing=10)
+        self.continue_button = ft.ElevatedButton(
+            "Continue to payment",
+            disabled=True,
+            on_click=lambda _: self._on_continue(),
+        )
+
+    def set_context(self, *, tour_code: str, order_id: int) -> None:
+        self.tour_code = tour_code
+        self.order_id = order_id
+
+    def build(self) -> ft.Control:
+        return ft.SafeArea(
+            content=ft.Container(
+                padding=16,
+                content=ft.Column(
+                    [
+                        ft.Row(
+                            [
+                                ft.TextButton(
+                                    "Back to preparation",
+                                    icon=ft.Icons.ARROW_BACK,
+                                    on_click=lambda _: self.on_back(self.tour_code or ""),
+                                )
+                            ]
+                        ),
+                        self.loading_row,
+                        self.error_text,
+                        ft.Text("Reservation confirmed", size=26, weight=ft.FontWeight.BOLD),
+                        ft.Text(
+                            "Temporary hold is active. Pay before the deadline or the seats may be released.",
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        self.body_column,
+                        ft.Row([self.continue_button], alignment=ft.MainAxisAlignment.START),
+                    ],
+                    spacing=14,
+                    scroll=ft.ScrollMode.AUTO,
+                ),
+            )
+        )
+
+    async def load_overview(self) -> None:
+        if self.order_id is None:
+            self._show_error("Missing order reference.")
+            return
+
+        self._set_loading(True)
+        self.error_text.visible = False
+        self.body_column.controls.clear()
+        self.continue_button.disabled = True
+        self.page.update()
+
+        try:
+            overview = await self.api_client.get_reservation_overview(
+                order_id=self.order_id,
+                telegram_user_id=self.dev_telegram_user_id,
+                language_code=self.language_code,
+            )
+        except httpx.HTTPStatusError as exc:
+            message = CatalogScreen._http_error_message(
+                exc,
+                default="Unable to load your reservation. It may have expired or been released.",
+            )
+            self._show_error(message)
+        except Exception:
+            self._show_error("Unable to load your reservation. It may have expired or been released.")
+        else:
+            self._render_overview(overview)
+        finally:
+            self._set_loading(False)
+            self.page.update()
+
+    def _render_overview(self, overview: OrderSummaryRead) -> None:
+        order = overview.order
+        expires = order.reservation_expires_at
+        now = datetime.now(UTC)
+        end = expires if expires is None or expires.tzinfo else expires.replace(tzinfo=UTC)
+        hold_ok = expires is not None and end > now
+
+        self.continue_button.disabled = not hold_ok
+        self.body_column.controls = [
+            ft.Container(
+                bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
+                border_radius=16,
+                padding=16,
+                content=ft.Column(
+                    [
+                        ft.Text(overview.tour.localized_content.title, size=18, weight=ft.FontWeight.BOLD),
+                        ft.Text(f"Reservation reference: #{order.id}"),
+                        ft.Text(
+                            f"Amount to pay: {CatalogScreen._format_price(order.total_amount)} {order.currency}"
+                        ),
+                        ft.Text(
+                            f"Payment status: {_payment_status_user_label(order.payment_status)}",
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        ft.Text(_hold_timer_hint(expires)),
+                    ],
+                    spacing=8,
+                ),
+            ),
+        ]
+
+    def _on_continue(self) -> None:
+        if self.tour_code is not None and self.order_id is not None:
+            self.on_continue_to_payment(self.tour_code, self.order_id)
+
+    def _show_error(self, message: str) -> None:
+        self.error_text.value = message
+        self.error_text.visible = True
+        self.page.update()
+
+    def _set_loading(self, is_loading: bool) -> None:
+        self.loading_row.visible = is_loading
+
+
+class PaymentEntryScreen:
+    def __init__(
+        self,
+        page: ft.Page,
+        *,
+        api_client: MiniAppApiClient,
+        dev_telegram_user_id: int,
+        on_back: Callable[[str], None],
+    ) -> None:
+        self.page = page
+        self.api_client = api_client
+        self.dev_telegram_user_id = dev_telegram_user_id
+        self.on_back = on_back
+        self.tour_code: str | None = None
+        self.order_id: int | None = None
+        self._last_entry: PaymentEntryRead | None = None
+
+        self.loading_row = ft.Row(
+            [ft.ProgressRing(width=18, height=18, stroke_width=2), ft.Text("Starting payment entry...")],
+            visible=False,
+            spacing=10,
+        )
+        self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
+        self.body_column = ft.Column(spacing=10)
+        self.pay_now_button = ft.ElevatedButton("Pay Now", on_click=self._on_pay_now)
+
+    def set_context(self, *, tour_code: str, order_id: int) -> None:
+        self.tour_code = tour_code
+        self.order_id = order_id
+
+    def build(self) -> ft.Control:
+        return ft.SafeArea(
+            content=ft.Container(
+                padding=16,
+                content=ft.Column(
+                    [
+                        ft.Row(
+                            [
+                                ft.TextButton(
+                                    "Back to preparation",
+                                    icon=ft.Icons.ARROW_BACK,
+                                    on_click=lambda _: self.on_back(self.tour_code or ""),
+                                )
+                            ]
+                        ),
+                        self.loading_row,
+                        self.error_text,
+                        ft.Text("Payment", size=26, weight=ft.FontWeight.BOLD),
+                        ft.Text(
+                            "Reservation is temporary. Complete payment before the hold expires. "
+                            "Details below come from the server; payment is not marked successful until the backend confirms it.",
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        self.body_column,
+                    ],
+                    spacing=14,
+                    scroll=ft.ScrollMode.AUTO,
+                ),
+            )
+        )
+
+    async def load_payment_entry(self) -> None:
+        if self.order_id is None:
+            self._show_error("Missing order reference.")
+            return
+
+        self._set_loading(True)
+        self.error_text.visible = False
+        self.body_column.controls.clear()
+        self.page.update()
+
+        try:
+            entry = await self.api_client.start_payment_entry(
+                order_id=self.order_id,
+                telegram_user_id=self.dev_telegram_user_id,
+            )
+        except httpx.HTTPStatusError as exc:
+            message = CatalogScreen._http_error_message(
+                exc,
+                default="Unable to start payment entry for this reservation.",
+            )
+            self._show_error(message)
+        except Exception:
+            self._show_error("Unable to start payment entry for this reservation.")
+        else:
+            self._render_entry(entry)
+        finally:
+            self._set_loading(False)
+            self.page.update()
+
+    def _render_entry(self, entry: PaymentEntryRead) -> None:
+        self._last_entry = entry
+        order = entry.order
+        expires = order.reservation_expires_at
+        expiry_line = (
+            f"Pay before: {CatalogScreen._format_datetime(expires)}"
+            if expires
+            else "Reservation expiry time is not available."
+        )
+        self.body_column.controls = [
+            ft.Container(
+                bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
+                border_radius=16,
+                padding=16,
+                content=ft.Column(
+                    [
+                        ft.Text(f"Reservation reference: #{order.id}", weight=ft.FontWeight.W_600),
+                        ft.Text(expiry_line),
+                        ft.Text(_hold_timer_hint(expires)),
+                        ft.Text(
+                            f"Amount due: {CatalogScreen._format_price(order.total_amount)} {order.currency}"
+                        ),
+                        ft.Text(f"Payment session reference: {entry.payment_session_reference}"),
+                        ft.Text(
+                            f"Status: {_payment_status_user_label(entry.payment.status)}",
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        ft.Text(
+                            "Provider checkout inside this app is not connected yet. "
+                            "Pay Now explains the next step; nothing is shown as paid until reconciliation confirms it.",
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                    ],
+                    spacing=8,
+                ),
+            ),
+            ft.Row([self.pay_now_button], alignment=ft.MainAxisAlignment.START),
+        ]
+
+    def _on_pay_now(self, _: ft.ControlEvent) -> None:
+        entry = self._last_entry
+        if entry is None:
+            return
+        if entry.payment_url:
+            self.page.launch_url(entry.payment_url)
+            return
+        self.page.snack_bar = ft.SnackBar(
+            content=ft.Text(
+                "Checkout is not available inside this Mini App yet. Keep your payment session reference; "
+                "when a provider URL is configured, Pay Now will open it. "
+                "Your booking is not paid until the server confirms payment."
+            ),
+            action="OK",
+        )
+        self.page.snack_bar.open = True
+        self.page.update()
+
+    def _show_error(self, message: str) -> None:
+        self.error_text.value = message
+        self.error_text.visible = True
+        self.page.update()
+
+    def _set_loading(self, is_loading: bool) -> None:
+        self.loading_row.visible = is_loading
 
 
 class MiniAppShell:
@@ -682,6 +1063,7 @@ class MiniAppShell:
         settings = get_mini_app_settings()
         self.page = page
         self.api_client = MiniAppApiClient(settings.normalized_api_base_url)
+        self._dev_telegram_user_id = settings.mini_app_dev_telegram_user_id
         self.catalog_screen = CatalogScreen(
             page,
             api_client=self.api_client,
@@ -699,12 +1081,110 @@ class MiniAppShell:
             page,
             api_client=self.api_client,
             default_language_code=settings.mini_app_default_language,
+            dev_telegram_user_id=self._dev_telegram_user_id,
             on_back=self.open_tour_detail,
+            on_reserved=self.open_reservation_success,
+        )
+        self.reservation_success_screen = ReservationSuccessScreen(
+            page,
+            api_client=self.api_client,
+            default_language_code=settings.mini_app_default_language,
+            dev_telegram_user_id=self._dev_telegram_user_id,
+            on_back=self.open_tour_preparation,
+            on_continue_to_payment=self.open_payment_entry,
+        )
+        self.payment_entry_screen = PaymentEntryScreen(
+            page,
+            api_client=self.api_client,
+            dev_telegram_user_id=self._dev_telegram_user_id,
+            on_back=self.open_reservation_success_from_payment,
         )
 
     def handle_route_change(self, _: ft.RouteChangeEvent) -> None:
         self.page.views.clear()
         self.page.views.append(ft.View(route="/", controls=[self.catalog_screen.build()], padding=0, spacing=0))
+
+        payment_ctx = self._extract_payment_route(self.page.route)
+        if payment_ctx is not None:
+            tour_code, order_id = payment_ctx
+            self.tour_detail_screen.set_tour_code(tour_code)
+            self.reservation_preparation_screen.set_tour_code(tour_code)
+            self.reservation_success_screen.set_context(tour_code=tour_code, order_id=order_id)
+            self.payment_entry_screen.set_context(tour_code=tour_code, order_id=order_id)
+            self.page.views.append(
+                ft.View(
+                    route=f"{self.TOUR_ROUTE_PREFIX}{tour_code}",
+                    controls=[self.tour_detail_screen.build()],
+                    padding=0,
+                    spacing=0,
+                )
+            )
+            self.page.views.append(
+                ft.View(
+                    route=f"{self.TOUR_ROUTE_PREFIX}{tour_code}{self.TOUR_PREPARATION_ROUTE_SUFFIX}",
+                    controls=[self.reservation_preparation_screen.build()],
+                    padding=0,
+                    spacing=0,
+                )
+            )
+            self.page.views.append(
+                ft.View(
+                    route=f"{self.TOUR_ROUTE_PREFIX}{tour_code}/prepare/reserved/{order_id}",
+                    controls=[self.reservation_success_screen.build()],
+                    padding=0,
+                    spacing=0,
+                )
+            )
+            self.page.views.append(
+                ft.View(
+                    route=self.page.route or "/",
+                    controls=[self.payment_entry_screen.build()],
+                    padding=0,
+                    spacing=0,
+                )
+            )
+            self.page.update()
+
+            async def _load_payment_flow() -> None:
+                await self.reservation_success_screen.load_overview()
+                await self.payment_entry_screen.load_payment_entry()
+
+            self.page.run_task(_load_payment_flow)
+            return
+
+        reserved_ctx = self._extract_reserved_route(self.page.route)
+        if reserved_ctx is not None:
+            tour_code, order_id = reserved_ctx
+            self.tour_detail_screen.set_tour_code(tour_code)
+            self.reservation_preparation_screen.set_tour_code(tour_code)
+            self.reservation_success_screen.set_context(tour_code=tour_code, order_id=order_id)
+            self.page.views.append(
+                ft.View(
+                    route=f"{self.TOUR_ROUTE_PREFIX}{tour_code}",
+                    controls=[self.tour_detail_screen.build()],
+                    padding=0,
+                    spacing=0,
+                )
+            )
+            self.page.views.append(
+                ft.View(
+                    route=f"{self.TOUR_ROUTE_PREFIX}{tour_code}{self.TOUR_PREPARATION_ROUTE_SUFFIX}",
+                    controls=[self.reservation_preparation_screen.build()],
+                    padding=0,
+                    spacing=0,
+                )
+            )
+            self.page.views.append(
+                ft.View(
+                    route=self.page.route or "/",
+                    controls=[self.reservation_success_screen.build()],
+                    padding=0,
+                    spacing=0,
+                )
+            )
+            self.page.update()
+            self.page.run_task(self.reservation_success_screen.load_overview)
+            return
 
         preparation_tour_code = self._extract_preparation_tour_code(self.page.route)
         if preparation_tour_code is not None:
@@ -759,8 +1239,42 @@ class MiniAppShell:
     def open_tour_preparation(self, tour_code: str) -> None:
         self.page.go(f"{self.TOUR_ROUTE_PREFIX}{tour_code}{self.TOUR_PREPARATION_ROUTE_SUFFIX}")
 
+    def open_reservation_success(self, tour_code: str, order_id: int) -> None:
+        self.page.go(f"{self.TOUR_ROUTE_PREFIX}{tour_code}/prepare/reserved/{order_id}")
+
+    def open_payment_entry(self, tour_code: str, order_id: int) -> None:
+        self.page.go(f"{self.TOUR_ROUTE_PREFIX}{tour_code}/prepare/payment/{order_id}")
+
+    def open_reservation_success_from_payment(self, tour_code: str) -> None:
+        payment_ctx = self._extract_payment_route(self.page.route)
+        if payment_ctx is not None:
+            _, order_id = payment_ctx
+            self.open_reservation_success(tour_code, order_id)
+            return
+        self.open_tour_preparation(tour_code)
+
+    @staticmethod
+    def _extract_payment_route(route: str | None) -> tuple[str, int] | None:
+        if not route:
+            return None
+        m = re.match(r"^/tours/([^/]+)/prepare/payment/(\d+)$", route)
+        if not m:
+            return None
+        return m.group(1), int(m.group(2))
+
+    @staticmethod
+    def _extract_reserved_route(route: str | None) -> tuple[str, int] | None:
+        if not route:
+            return None
+        m = re.match(r"^/tours/([^/]+)/prepare/reserved/(\d+)$", route)
+        if not m:
+            return None
+        return m.group(1), int(m.group(2))
+
     def _extract_tour_code(self, route: str | None) -> str | None:
         if route is None or not route.startswith(self.TOUR_ROUTE_PREFIX):
+            return None
+        if "/prepare/payment/" in route or "/prepare/reserved/" in route:
             return None
         if route.endswith(self.TOUR_PREPARATION_ROUTE_SUFFIX):
             return None
@@ -769,6 +1283,8 @@ class MiniAppShell:
 
     def _extract_preparation_tour_code(self, route: str | None) -> str | None:
         if route is None or not route.startswith(self.TOUR_ROUTE_PREFIX):
+            return None
+        if "/prepare/payment/" in route or "/prepare/reserved/" in route:
             return None
         if not route.endswith(self.TOUR_PREPARATION_ROUTE_SUFFIX):
             return None
@@ -787,4 +1303,9 @@ def main(page: ft.Page) -> None:
     shell = MiniAppShell(page)
     page.on_route_change = shell.handle_route_change
     page.on_view_pop = shell.handle_view_pop
-    page.go(page.route or "/")
+    # Web client often syncs route "/" before this runs. A later page.go("/") then matches
+    # Page.__last_route and Flet skips on_route_change (before_event returns False), so
+    # views stay empty — white screen. Mirror Flet routing docs: invoke the handler once.
+    shell.handle_route_change(
+        ft.RouteChangeEvent("route_change", page, page.route or "/")
+    )

@@ -9,7 +9,7 @@ from app.schemas.mini_app import (
     MiniAppReservationPreparationRead,
     MiniAppTourDetailRead,
 )
-from app.schemas.prepared import ReservationPreparationSummaryRead
+from app.schemas.prepared import OrderSummaryRead, PaymentEntryRead, ReservationPreparationSummaryRead
 
 
 class MiniAppApiClient:
@@ -93,3 +93,57 @@ class MiniAppApiClient:
             )
             response.raise_for_status()
             return ReservationPreparationSummaryRead.model_validate(response.json())
+
+    async def create_temporary_reservation(
+        self,
+        *,
+        tour_code: str,
+        telegram_user_id: int,
+        seats_count: int,
+        boarding_point_id: int,
+        language_code: str | None = None,
+    ) -> OrderSummaryRead:
+        params = {"language_code": language_code}
+        filtered_params = {key: value for key, value in params.items() if value not in (None, "")}
+        body = {
+            "telegram_user_id": telegram_user_id,
+            "seats_count": seats_count,
+            "boarding_point_id": boarding_point_id,
+        }
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=15.0) as client:
+            response = await client.post(
+                f"/mini-app/tours/{tour_code}/reservations",
+                params=filtered_params,
+                json=body,
+            )
+            response.raise_for_status()
+            return OrderSummaryRead.model_validate(response.json())
+
+    async def get_reservation_overview(
+        self,
+        *,
+        order_id: int,
+        telegram_user_id: int,
+        language_code: str | None = None,
+    ) -> OrderSummaryRead:
+        params = {"telegram_user_id": telegram_user_id, "language_code": language_code}
+        filtered_params = {key: value for key, value in params.items() if value not in (None, "")}
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=15.0) as client:
+            response = await client.get(
+                f"/mini-app/orders/{order_id}/reservation-overview",
+                params=filtered_params,
+            )
+            response.raise_for_status()
+            return OrderSummaryRead.model_validate(response.json())
+
+    async def start_payment_entry(
+        self,
+        *,
+        order_id: int,
+        telegram_user_id: int,
+    ) -> PaymentEntryRead:
+        body = {"telegram_user_id": telegram_user_id}
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=15.0) as client:
+            response = await client.post(f"/mini-app/orders/{order_id}/payment-entry", json=body)
+            response.raise_for_status()
+            return PaymentEntryRead.model_validate(response.json())

@@ -4,4 +4,5 @@ from mini_app.app import main
 
 
 if __name__ == "__main__":
-    ft.app(target=main, view=ft.AppView.WEB_BROWSER)
+    # Use ft.run (ft.app is deprecated). no_cdn=True avoids blank web UI when CDN assets are blocked.
+    ft.run(main, view=ft.AppView.WEB_BROWSER, no_cdn=True)

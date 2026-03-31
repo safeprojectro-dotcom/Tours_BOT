@@ -10,10 +10,14 @@ from app.db.session import get_db
 from app.schemas.mini_app import (
     MiniAppCatalogFiltersRead,
     MiniAppCatalogRead,
+    MiniAppCreateReservationRequest,
+    MiniAppPaymentEntryRequest,
     MiniAppReservationPreparationRead,
     MiniAppTourDetailRead,
 )
-from app.schemas.prepared import ReservationPreparationSummaryRead
+from app.schemas.prepared import OrderSummaryRead, PaymentEntryRead, ReservationPreparationSummaryRead
+from app.services.catalog import CatalogLookupService
+from app.services.mini_app_booking import MiniAppBookingService
 from app.services.mini_app_catalog import MiniAppCatalogService
 from app.services.mini_app_reservation_preparation import MiniAppReservationPreparationService
 from app.services.mini_app_tour_detail import MiniAppTourDetailService
@@ -104,3 +108,78 @@ def get_tour_preparation_summary(
     if summary is None:
         raise HTTPException(status_code=400, detail="invalid reservation preparation selection")
     return summary
+
+
+@router.post(
+    "/tours/{tour_code}/reservations",
+    response_model=OrderSummaryRead,
+)
+def create_temporary_reservation(
+    tour_code: str,
+    payload: MiniAppCreateReservationRequest,
+    language_code: str | None = Query(default=None),
+    session: Session = Depends(get_db),
+) -> OrderSummaryRead:
+    summary = MiniAppBookingService().create_temporary_reservation(
+        session,
+        tour_code=tour_code,
+        telegram_user_id=payload.telegram_user_id,
+        seats_count=payload.seats_count,
+        boarding_point_id=payload.boarding_point_id,
+        language_code=language_code,
+    )
+    if summary is None:
+        session.rollback()
+        if CatalogLookupService().get_tour_by_code(session, code=tour_code) is None:
+            raise HTTPException(status_code=404, detail="tour not found")
+        raise HTTPException(
+            status_code=400,
+            detail="temporary reservation could not be created",
+        )
+    session.commit()
+    return summary
+
+
+@router.get(
+    "/orders/{order_id}/reservation-overview",
+    response_model=OrderSummaryRead,
+)
+def get_reservation_overview(
+    order_id: int,
+    telegram_user_id: int = Query(gt=0),
+    language_code: str | None = Query(default=None),
+    session: Session = Depends(get_db),
+) -> OrderSummaryRead:
+    summary = MiniAppBookingService().get_reservation_overview_for_user(
+        session,
+        order_id=order_id,
+        telegram_user_id=telegram_user_id,
+        language_code=language_code,
+    )
+    if summary is None:
+        raise HTTPException(status_code=404, detail="reservation overview not found")
+    return summary
+
+
+@router.post(
+    "/orders/{order_id}/payment-entry",
+    response_model=PaymentEntryRead,
+)
+def start_payment_entry(
+    order_id: int,
+    payload: MiniAppPaymentEntryRequest,
+    session: Session = Depends(get_db),
+) -> PaymentEntryRead:
+    entry = MiniAppBookingService().start_payment_entry(
+        session,
+        order_id=order_id,
+        telegram_user_id=payload.telegram_user_id,
+    )
+    if entry is None:
+        session.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="payment entry is not available for this order",
+        )
+    session.commit()
+    return entry

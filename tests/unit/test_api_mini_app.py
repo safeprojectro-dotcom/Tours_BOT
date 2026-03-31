@@ -231,3 +231,89 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
             invalid_summary_response.json()["detail"],
             "invalid reservation preparation selection",
         )
+
+    def test_create_reservation_and_payment_entry_routes(self) -> None:
+        tour = self.create_tour(
+            code="MINI-API-RESERVE",
+            title_default="Mini API Reserve",
+            departure_datetime=datetime(2026, 5, 10, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 5, 11, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=4,
+            base_price="80.00",
+        )
+        self.create_translation(tour, language_code="en", title="Mini API Reserve EN")
+        point = self.create_boarding_point(tour)
+        self.session.commit()
+
+        telegram_user_id = 88_001
+        reserve_response = self.client.post(
+            f"/mini-app/tours/{tour.code}/reservations",
+            params={"language_code": "en"},
+            json={
+                "telegram_user_id": telegram_user_id,
+                "seats_count": 2,
+                "boarding_point_id": point.id,
+            },
+        )
+        self.assertEqual(reserve_response.status_code, 200)
+        order_payload = reserve_response.json()["order"]
+        self.assertEqual(order_payload["source_channel"], "mini_app")
+        order_id = order_payload["id"]
+
+        pay_response = self.client.post(
+            f"/mini-app/orders/{order_id}/payment-entry",
+            json={"telegram_user_id": telegram_user_id},
+        )
+        self.assertEqual(pay_response.status_code, 200)
+        pay_json = pay_response.json()
+        self.assertEqual(pay_json["order"]["id"], order_id)
+        self.assertTrue(pay_json["payment_session_reference"])
+
+    def test_create_reservation_returns_404_for_unknown_tour(self) -> None:
+        response = self.client.post(
+            "/mini-app/tours/UNKNOWN-CODE-NOPE/reservations",
+            json={
+                "telegram_user_id": 88_002,
+                "seats_count": 1,
+                "boarding_point_id": 1,
+            },
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "tour not found")
+
+    def test_reservation_overview_returns_order_summary_for_owner(self) -> None:
+        tour = self.create_tour(
+            code="MINI-OVERVIEW-API",
+            title_default="Overview API",
+            departure_datetime=datetime(2026, 6, 1, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 6, 2, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=3,
+            base_price="55.00",
+        )
+        self.create_translation(tour, language_code="en", title="Overview API EN")
+        point = self.create_boarding_point(tour)
+        self.session.commit()
+
+        telegram_user_id = 88_010
+        reserve = self.client.post(
+            f"/mini-app/tours/{tour.code}/reservations",
+            params={"language_code": "en"},
+            json={
+                "telegram_user_id": telegram_user_id,
+                "seats_count": 1,
+                "boarding_point_id": point.id,
+            },
+        )
+        self.assertEqual(reserve.status_code, 200)
+        order_id = reserve.json()["order"]["id"]
+
+        overview = self.client.get(
+            f"/mini-app/orders/{order_id}/reservation-overview",
+            params={"telegram_user_id": telegram_user_id, "language_code": "en"},
+        )
+        self.assertEqual(overview.status_code, 200)
+        body = overview.json()
+        self.assertEqual(body["order"]["id"], order_id)
+        self.assertIsNotNone(body["order"]["reservation_expires_at"])

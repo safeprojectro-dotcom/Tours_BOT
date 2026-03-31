@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.models.enums import TourStatus
 from app.schemas.prepared import CatalogTourCardRead, LocalizedTourContentRead, ReservationPreparationTourRead
@@ -37,3 +37,15 @@ class MiniAppReservationPreparationRead(BaseModel):
     boarding_points: list[BoardingPointRead]
     seat_count_options: list[int]
     preparation_only: bool = True
+
+
+class MiniAppCreateReservationRequest(BaseModel):
+    """Body for Mini App temporary reservation until Telegram init-data auth exists."""
+
+    telegram_user_id: int = Field(gt=0)
+    seats_count: int = Field(ge=1)
+    boarding_point_id: int = Field(ge=1)
+
+
+class MiniAppPaymentEntryRequest(BaseModel):
+    telegram_user_id: int = Field(gt=0)
