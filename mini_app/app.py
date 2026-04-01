@@ -100,7 +100,8 @@ class CatalogScreen:
                     [
                         ft.Text("Tours catalog", size=26, weight=ft.FontWeight.BOLD),
                         ft.Text(
-                            "Browse open tours and narrow the list with a small set of safe filters.",
+                            "Main booking flow: browse here, then use My bookings for reservation and payment status. "
+                            "Optional filters below mirror the quick shortcuts in the bot chat.",
                             color=ft.Colors.ON_SURFACE_VARIANT,
                         ),
                         ft.Row(
@@ -1439,6 +1440,12 @@ class HelpScreen:
                             alignment=ft.MainAxisAlignment.START,
                         ),
                         ft.Text("Help", size=26, weight=ft.FontWeight.BOLD),
+                        ft.Text(
+                            "Close the Mini App or switch back to the bot chat in Telegram anytime — "
+                            "the bot is your guide; this app is where you book and pay.",
+                            size=13,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
                         self.body_column,
                     ],
                     spacing=12,

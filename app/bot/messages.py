@@ -18,8 +18,19 @@ TRANSLATIONS: dict[str, TemplateMap] = {
     "en": {
         "language_prompt": "I can continue in your preferred language. Please choose one:",
         "language_saved": "Language updated to {language_name}.",
-        "welcome": "I can help you browse tours in private chat and show the next safe step.",
-        "browse_cta": "Choose a tour below or open the catalog.",
+        "welcome": "Welcome. The Mini App is the main place to browse tours, manage bookings, and complete payment.",
+        "browse_cta": "In this chat you can use quick filters or the short tour list. For the full experience, open the Mini App.",
+        "open_mini_app_bookings": "My bookings (Mini App)",
+        "help_command_reply": "This chat is your guide.\n\n"
+        "• Open Mini App — full catalog, booking, and payment\n"
+        "• My bookings (Mini App) — reservation and payment status\n"
+        "• Quick filters below — optional shortcuts in chat\n\n"
+        "Commands: /tours (tour list here), /language, /bookings, /contact. "
+        "Tap Help inside the Mini App for detailed topics.",
+        "bookings_command_reply": "Reservation and payment status live in the Mini App.\n\n"
+        "Use the buttons below to open the Mini App or go straight to My bookings.",
+        "contact_command_reply": "For support topics, open Help inside the Mini App (including when to contact an operator). "
+        "You can also write in this chat; the team will respond when that workflow is available.",
         "catalog_empty": "There are no open tours to show right now. Please try again later.",
         "catalog_intro": "Here are up to 3 open tours you can review now:",
         "tour_missing": "I could not find that tour in the current catalog.",
@@ -80,8 +91,19 @@ TRANSLATIONS: dict[str, TemplateMap] = {
     "ro": {
         "language_prompt": "Pot continua in limba preferata. Alege o limba:",
         "language_saved": "Limba a fost schimbata in {language_name}.",
-        "welcome": "Te pot ajuta sa vezi tururile disponibile in chat privat si sa alegi urmatorul pas sigur.",
-        "browse_cta": "Alege un tur de mai jos sau deschide catalogul.",
+        "welcome": "Bun venit. Mini App este locul principal pentru catalog, rezervari si plata.",
+        "browse_cta": "In acest chat poti folosi filtre rapide sau lista scurta de mai jos. Pentru experienta completa, deschide Mini App.",
+        "open_mini_app_bookings": "Rezervarile mele (Mini App)",
+        "help_command_reply": "Acest chat este ghidul tau.\n\n"
+        "• Deschide Mini App — catalog complet, rezervare si plata\n"
+        "• Rezervarile mele (Mini App) — status rezervare si plata\n"
+        "• Filtre rapide mai jos — scurtaturi optionale in chat\n\n"
+        "Comenzi: /tours (lista aici), /language, /bookings, /contact. "
+        "Apasa Help in Mini App pentru detalii.",
+        "bookings_command_reply": "Statusul rezervarii si al platii este in Mini App.\n\n"
+        "Foloseste butoanele de mai jos pentru Mini App sau direct Rezervarile mele.",
+        "contact_command_reply": "Pentru suport, deschide Help in Mini App (inclusiv cand sa contactezi operatorul). "
+        "Poti scrie si aici; echipa raspunde cand fluxul este disponibil.",
         "catalog_empty": "Momentan nu exista tururi deschise pentru vanzare. Te rog incearca mai tarziu.",
         "catalog_intro": "Iata pana la 3 tururi deschise pe care le poti vedea acum:",
         "tour_missing": "Nu am gasit acel tur in catalogul curent.",
@@ -142,8 +164,8 @@ TRANSLATIONS: dict[str, TemplateMap] = {
     "ru": {
         "language_prompt": "Ya mogu prodolzhit na udobnom dlya vas yazyke. Vyberite yazyk:",
         "language_saved": "Yazyk obnovlen: {language_name}.",
-        "welcome": "Ya mogu pomoch s prosmotrom turov v lichnom chate i pokazat sleduyushchiy bezopasnyy shag.",
-        "browse_cta": "Vyberite tur nizhe ili otkroyte katalog.",
+        "welcome": "Dobro pozhalovat. Mini App — osnovnoy interfeys dlya kataloga, upravleniya bronyami i oplaty.",
+        "browse_cta": "V etom chate dostupny bystrye filtry i korotkiy spisok. Polnyy funktsional — v Mini App.",
         "catalog_empty": "Seychas net otkrytykh turov dlya pokaza. Poprobuyte pozhe.",
         "catalog_intro": "Vot do 3 otkrytykh turov, kotorye mozhno posmotret seychas:",
         "tour_missing": "Ya ne nashel etot tur v tekushchem kataloge.",
@@ -204,8 +226,8 @@ TRANSLATIONS: dict[str, TemplateMap] = {
     "sr": {
         "language_prompt": "Mogu da nastavim na vasem jeziku. Izaberite jezik:",
         "language_saved": "Jezik je promenjen na {language_name}.",
-        "welcome": "Mogu da vam pomognem da pregledate ture u privatnom chatu i vidite sledeci bezbedan korak.",
-        "browse_cta": "Izaberite turu ispod ili otvorite katalog.",
+        "welcome": "Dobro dosli. Mini App je glavno mesto za katalog, rezervacije i placanje.",
+        "browse_cta": "U chatu mozete koristiti brze filtere ili kratak spisak. Kompletno iskustvo je u Mini App.",
         "catalog_empty": "Trenutno nema otvorenih tura za prikaz. Pokusajte kasnije.",
         "catalog_intro": "Evo do 3 otvorene ture koje sada mozete pogledati:",
         "tour_missing": "Nisam pronasao tu turu u trenutnom katalogu.",
@@ -266,8 +288,8 @@ TRANSLATIONS: dict[str, TemplateMap] = {
     "hu": {
         "language_prompt": "Folytathatom az on altal valasztott nyelven. Valasszon nyelvet:",
         "language_saved": "A nyelv erre valtozott: {language_name}.",
-        "welcome": "Segitek privat chatben atnezni a turakat es megmutatom a kovetkezo biztonsagos lepest.",
-        "browse_cta": "Valasszon egy turat lent, vagy nyissa meg a katalogust.",
+        "welcome": "Udvozlunk. A Mini App a fo felulet a turakhoz, foglalasokhoz es fizeteshez.",
+        "browse_cta": "A chatben gyors szurok es rovid lista erheto el. A teljes elmenyhez nyissa meg a Mini Appot.",
         "catalog_empty": "Jelenleg nincs nyitott tur, amit meg tudnek mutatni. Probalkozzon kesobb.",
         "catalog_intro": "Itt van legfeljebb 3 most nyitott tur:",
         "tour_missing": "Ezt a turat nem talaltam meg az aktualis katalogusban.",
@@ -328,8 +350,8 @@ TRANSLATIONS: dict[str, TemplateMap] = {
     "it": {
         "language_prompt": "Posso continuare nella lingua che preferisci. Scegli una lingua:",
         "language_saved": "Lingua aggiornata in {language_name}.",
-        "welcome": "Posso aiutarti a vedere i tour in chat privata e mostrarti il prossimo passo sicuro.",
-        "browse_cta": "Scegli un tour qui sotto oppure apri il catalogo.",
+        "welcome": "Benvenuto. La Mini App e il punto principale per catalogo, prenotazioni e pagamento.",
+        "browse_cta": "In chat puoi usare filtri rapidi o un elenco breve. Lesperienza completa e nella Mini App.",
         "catalog_empty": "Al momento non ci sono tour aperti da mostrare. Riprova piu tardi.",
         "catalog_intro": "Ecco fino a 3 tour aperti che puoi vedere adesso:",
         "tour_missing": "Non ho trovato quel tour nel catalogo attuale.",
@@ -390,8 +412,8 @@ TRANSLATIONS: dict[str, TemplateMap] = {
     "de": {
         "language_prompt": "Ich kann in Ihrer bevorzugten Sprache weitermachen. Bitte waehlen Sie eine Sprache:",
         "language_saved": "Sprache aktualisiert: {language_name}.",
-        "welcome": "Ich kann Ihnen im privaten Chat passende Touren zeigen und den naechsten sicheren Schritt erklaeren.",
-        "browse_cta": "Waehlen Sie unten eine Tour oder oeffnen Sie den Katalog.",
+        "welcome": "Willkommen. Die Mini App ist die Hauptoberflaeche fuer Katalog, Buchungen und Zahlung.",
+        "browse_cta": "In diesem Chat gibt es Schnellfilter und eine kurze Liste. Die volle Funktion bietet die Mini App.",
         "catalog_empty": "Zurzeit gibt es keine offenen Touren zum Anzeigen. Bitte spaeter erneut versuchen.",
         "catalog_intro": "Hier sind bis zu 3 offene Touren, die Sie jetzt ansehen koennen:",
         "tour_missing": "Ich konnte diese Tour im aktuellen Katalog nicht finden.",

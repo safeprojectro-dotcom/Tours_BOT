@@ -44,12 +44,58 @@ def build_language_keyboard(language_codes: tuple[str, ...]) -> InlineKeyboardMa
     return builder.as_markup()
 
 
+def _mini_app_bookings_url(mini_app_url: str | None) -> str | None:
+    if not mini_app_url:
+        return None
+    return f"{mini_app_url.rstrip('/')}/bookings"
+
+
+def append_mini_app_url_buttons(
+    builder: InlineKeyboardBuilder,
+    *,
+    language_code: str | None,
+    mini_app_url: str | None,
+) -> None:
+    """Primary + secondary Mini App entry (catalog root and /bookings)."""
+    if not mini_app_url:
+        return
+    builder.row(
+        InlineKeyboardButton(
+            text=translate(language_code, "open_mini_app"),
+            url=mini_app_url,
+        )
+    )
+    bookings_url = _mini_app_bookings_url(mini_app_url)
+    if bookings_url:
+        builder.row(
+            InlineKeyboardButton(
+                text=translate(language_code, "open_mini_app_bookings"),
+                url=bookings_url,
+            )
+        )
+
+
+def build_mini_app_entry_keyboard(
+    *,
+    language_code: str | None,
+    mini_app_url: str | None,
+) -> InlineKeyboardMarkup | None:
+    """Compact CTA: open Mini App + My bookings (e.g. /bookings, /help)."""
+    if not mini_app_url:
+        return None
+    builder = InlineKeyboardBuilder()
+    append_mini_app_url_buttons(builder, language_code=language_code, mini_app_url=mini_app_url)
+    return builder.as_markup()
+
+
 def build_private_home_keyboard(
     *,
     language_code: str | None,
     mini_app_url: str | None = None,
 ) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
+    append_mini_app_url_buttons(builder, language_code=language_code, mini_app_url=mini_app_url)
+    # Secondary: lightweight filters in chat (MVP fallback).
     builder.button(
         text=translate(language_code, "browse_by_date"),
         callback_data=FILTER_BY_DATE_CALLBACK,
@@ -70,13 +116,6 @@ def build_private_home_keyboard(
         text=translate(language_code, "change_language"),
         callback_data=CHANGE_LANGUAGE_CALLBACK,
     )
-    if mini_app_url:
-        builder.row(
-            InlineKeyboardButton(
-                text=translate(language_code, "open_mini_app"),
-                url=mini_app_url,
-            )
-        )
     builder.adjust(1, 1, 1, 1, 1)
     return builder.as_markup()
 

@@ -33,6 +33,7 @@ from app.bot.keyboards import (
     build_date_filter_keyboard,
     build_destination_prompt_keyboard,
     build_language_keyboard,
+    build_mini_app_entry_keyboard,
     build_private_home_keyboard,
     build_preparation_summary_keyboard,
     build_payment_entry_keyboard,
@@ -147,6 +148,66 @@ async def handle_tours_command(message: Message, state: FSMContext) -> None:
 
     await state.clear()
     await _send_catalog_overview(message, language_code=language_code)
+
+
+@router.message(Command("help"))
+async def handle_help_command(message: Message) -> None:
+    language_code = await _resolve_message_language(message)
+    if language_code is None:
+        settings = get_settings()
+        await message.answer(
+            translate(settings.telegram_default_language, "language_prompt"),
+            reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
+        )
+        return
+    settings = get_settings()
+    await message.answer(
+        translate(language_code, "help_command_reply"),
+        reply_markup=build_mini_app_entry_keyboard(
+            language_code=language_code,
+            mini_app_url=settings.telegram_mini_app_url,
+        ),
+    )
+
+
+@router.message(Command("bookings"))
+async def handle_bookings_command(message: Message) -> None:
+    language_code = await _resolve_message_language(message)
+    if language_code is None:
+        settings = get_settings()
+        await message.answer(
+            translate(settings.telegram_default_language, "language_prompt"),
+            reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
+        )
+        return
+    settings = get_settings()
+    await message.answer(
+        translate(language_code, "bookings_command_reply"),
+        reply_markup=build_mini_app_entry_keyboard(
+            language_code=language_code,
+            mini_app_url=settings.telegram_mini_app_url,
+        ),
+    )
+
+
+@router.message(Command("contact"))
+async def handle_contact_command(message: Message) -> None:
+    language_code = await _resolve_message_language(message)
+    if language_code is None:
+        settings = get_settings()
+        await message.answer(
+            translate(settings.telegram_default_language, "language_prompt"),
+            reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
+        )
+        return
+    settings = get_settings()
+    await message.answer(
+        translate(language_code, "contact_command_reply"),
+        reply_markup=build_mini_app_entry_keyboard(
+            language_code=language_code,
+            mini_app_url=settings.telegram_mini_app_url,
+        ),
+    )
 
 
 @router.callback_query(F.data == CHANGE_LANGUAGE_CALLBACK)
