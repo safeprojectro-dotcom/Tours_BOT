@@ -10,6 +10,12 @@ from app.core.logging import configure_logging
 
 
 async def run_polling() -> None:
+    """
+    Local dev: long-polling. Deletes any Telegram webhook first so getUpdates works.
+
+    Staging/prod: use the API process (`uvicorn app.main:app`) + POST /telegram/webhook instead;
+    do not run this module on Railway for production delivery.
+    """
     settings = get_settings()
     if not settings.telegram_bot_token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN must be set before starting the bot process.")
