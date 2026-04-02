@@ -7,7 +7,7 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 5 (Mini App MVP) — **Phase 5 / Step 7A completed
+Phase 5 (Mini App MVP) — **Phase 5 / Step 8B completed
 
 `docs/IMPLEMENTATION_PLAN.md` defines **Phase 5 as a single phase** (no numbered substeps in the plan). The **Step N** labels here are **project execution checkpoints** mapped to Phase 5 *Included Scope* / *Done-When* bullets (UX first, then screens, booking, payment, help/bookings as the phase exit signal).
 
@@ -446,6 +446,87 @@ Phase 5 (Mini App MVP) — **Phase 5 / Step 7A completed
 - result:
   - all listed tests passed
 
+Фаза: Phase 5 / Step 8
+Шаг: связка private chat и Mini App в одном staging-сценарии
+Сделано: welcome/CTA обновлены, Mini App и My bookings подняты наверх, добавлены /help /bookings /contact, тексты бота и Mini App согласованы, добавлен smoke-checklist
+Не трогали: booking/payment rules, API, DB schema, waitlist, handoff, webhook, deploy model
+Замечание: один тест падает из-за seeded TEST_BELGRADE_001 в БД, не из-за логики Step 8
+
+ТЕКУЩЕЕ СОСТОЯНИЕ STAGING ПОСЛЕ STEP 8A
+
+Инфраструктура:
+- API backend работает на Railway
+- Telegram bot работает через Railway webhook, локальный polling больше не нужен для обычной работы
+- Mini App UI вынесен в отдельный Railway service и открывается из Telegram
+- PostgreSQL на Railway подключен и используется
+- Миграции применены
+- TEST_BELGRADE_001 seeded в staging
+
+Что уже работает:
+- /start, /tours, /bookings, /language, /help, /contact в боте открываются
+- кнопка "Deschide Mini App" открывает Mini App
+- mobile catalog scroll уже исправлен на главной странице каталога
+- View details на мобильном теперь достижим
+- webhook flow стабилен, апдейты обрабатываются на Railway
+
+Что выявлено после утреннего smoke-test:
+1. Scroll исправлен только на catalog screen; другие Mini App screens ещё не унифицированы:
+   - detail page требует scroll
+   - prepare page требует scroll
+   - booking details / payment / help / settings тоже надо проверить на единый scroll layout
+2. UI-shell Mini App не переведён полностью на выбранный язык:
+   - сам tour content может fallback-иться на EN, это допустимо
+   - но labels/buttons/navigation shell должны переводиться
+3. TEST_BELGRADE_001 часто уходит в sold out / seats_available=0 из-за накопленных staging orders/holds/payments
+   - из-за этого prepare выдаёт "tour is not available for reservation preparation"
+4. В DB есть несколько orders/payments по test tour, но My bookings показывает только одну запись
+   - вероятная причина: фильтрация по current user_id или по статусу
+   - это нужно явно проверить и задокументировать
+
+Что нельзя потерять:
+- Не менять booking/payment business rules
+- Не менять DB schema / migrations
+- Не ломать webhook / Railway deploy model
+- Не убирать отдельный Mini App UI service
+- Все fixes должны быть staging-safe и обратимыми
+
+Следующий правильный шаг:
+- Step 8B stabilization:
+  1) общий scroll pattern для всех Mini App pages
+  2) перевод Mini App UI-shell
+  3) audit/reset test-tour availability
+  4) audit why My bookings shows only one record
+
+РЕШЕНИЕ ПОСЛЕ STEP 8B
+
+Текущее решение:
+- Сейчас НЕ меняем reservation/payment business logic.
+- Сначала восстанавливаем чистый staging-state для TEST_BELGRADE_001, потому что основной smoke-flow стал невоспроизводим из-за накопленных test orders/payments/holds.
+- Проблема prepare сейчас трактуется как data hygiene issue staging, а не как доказанный дефект Mini App UI.
+- My bookings vs many orders in DB трактуется как expected current-user filtering, если не доказано обратное.
+
+Что делать сейчас:
+1. Починить / стабилизировать reset TEST_BELGRADE_001
+2. Вернуть тур в состояние:
+   - status = open_for_sale
+   - seats_available = seats_total
+   - без активных test orders/payments/holds для этого тура
+3. Повторно прогнать smoke:
+   - catalog
+   - detail
+   - prepare
+   - one hold creation
+   - my bookings
+   - payment page
+
+Что делать позже отдельным этапом:
+- review reservation lifecycle как бизнес-логики:
+  - hold TTL
+  - auto-release expired holds
+  - anti-false-sold-out behavior
+  - правила отображения expired/released bookings
+Это уже заложено в архитектуре (temporary reservation / payment entry / expiry), но будет рассматриваться позже как отдельный продуктовый этап, а не в рамках текущего UI stabilization.
+
 ---
 
 ## Verified
@@ -677,7 +758,7 @@ This logic already exists in the temporary reservation creation slice and must b
 ---
 
 ## Next Safe Step
-Phase 5 / Step 7B
+Phase 5 / Step 8C
 
 **Plan alignment (`docs/IMPLEMENTATION_PLAN.md` Phase 5):** the phase exit signal is *“Mini App UX defined first, then screens, booking, payment, and help flow implemented”*. The next **Included Scope** items not yet satisfied after Step 4 are the **reserve action** and **payment** slices: *“Build reservation screen for seat count, boarding point, reservation timer, and reserve action”* and *“Build payment screen with amount, timer, and transition into payment scenario”*, matching *Done-When*: *“reserve seats, start payment”*. Step 4 completed only preparation UI; Step 5 implements **real temporary reservation creation** and **starting payment** in the Mini App by reusing existing Phase 3–4 service-layer flows (`TemporaryReservationService`, `PaymentEntryService`, reconciliation assumptions), not by duplicating rules in the UI.
 

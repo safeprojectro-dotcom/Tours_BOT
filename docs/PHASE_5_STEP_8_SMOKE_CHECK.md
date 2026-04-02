@@ -42,6 +42,8 @@ This checklist does **not** replace automated tests or Step 9+ scope.
 
 ## Exact smoke-test order (staging)
 
+0. **Optional but recommended:** If `TEST_BELGRADE_001` was used recently, run `python scripts/reset_test_belgrade_tour_state.py` and confirm stdout ends with **`SMOKE_READY=YES`** (see `docs/PHASE_5_STEP_8C_NOTES.md`). Do **not** treat prepare/catalog issues as UI bugs when seats are exhausted or dates are stale — reset first.
+
 1. **Bot:** `/start` — confirm welcome copy and that **Open Mini App** appears **above** date/destination/budget/catalog rows.
 2. **Bot:** Tap **Open Mini App** — catalog opens (HTTPS Mini App service).
 3. **Mini App (phone):** On each main screen, the **whole body** must scroll (one shared layout: `scrollable_page` — filters + cards on catalog; detail/prepare/success/payment/bookings/booking detail/help/settings the same). **View details** on a card must be reachable without trapped content.
@@ -53,19 +55,21 @@ This checklist does **not** replace automated tests or Step 9+ scope.
 
 ## If `TEST_BELGRADE_001` is sold out on staging
 
-Repeated manual tests can consume seats (`seats_available` → 0) or leave orders that block preparation.
+`TEST_BELGRADE_001` is a **staging-only** test tour. Repeated manual tests can consume seats (`seats_available` → 0), leave orders that block preparation, or let **calendar fields go stale** (departure/sales in the past), which breaks prepare/confirm even when the UI is fine.
 
-**Light reset (keep tour + boarding points + translations):** from project root with `DATABASE_URL` set:
+**Light reset (keep tour + boarding points + translations):** from project root with `DATABASE_URL` set (PowerShell):
 
-```bash
+```powershell
 python scripts/reset_test_belgrade_tour_state.py
 ```
 
-This deletes **payments** and **notification_outbox** rows for orders of that tour, then **orders** and **waitlist** entries for that tour, sets `seats_available = seats_total`, and forces `status = open_for_sale`. It does **not** delete `content_items` (see script docstring).
+Shared logic lives in `scripts/staging_belgrade_helpers.py`. The reset removes **payments**, **notification_outbox**, **orders**, and **waitlist** for that tour; sets `seats_available = seats_total` and `status = open_for_sale`; **rolls `departure_datetime`, `return_datetime`, and `sales_deadline` forward** so reservation expiry logic stays valid. It does **not** delete `content_items`. Stdout includes a **`SMOKE_READY=YES/NO`** block — aim for **YES** before a long smoke.
 
-**Full re-seed** (recreate tour + boarding + translations): use `python scripts/seed_test_belgrade_tour.py` instead (see script docstring).
+**Full re-seed** (replace boarding + translations path, fresh rolling dates): `python scripts/seed_test_belgrade_tour.py` (see script docstring).
 
 **Nuclear option:** `python scripts/delete_test_belgrade_tour.py` removes the tour entirely; run `seed_test_belgrade_tour.py` after to recreate it.
+
+More detail: `docs/PHASE_5_STEP_8C_NOTES.md`.
 
 ## Step 8B — UI language vs content
 

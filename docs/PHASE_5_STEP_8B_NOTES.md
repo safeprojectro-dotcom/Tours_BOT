@@ -24,6 +24,10 @@ Romanian (`ro`) has partial keys; unknown keys fall back to English.
 
 **Full re-seed** (rebuilds boarding + clears more children): `python scripts/seed_test_belgrade_tour.py`.
 
+## Staging reset / smoke reproducibility (Step 8C)
+
+Before blaming the UI when **prepare** fails for `TEST_BELGRADE_001`, run the light reset and check **`SMOKE_READY=YES`**. See **`docs/PHASE_5_STEP_8C_NOTES.md`** and `scripts/staging_belgrade_helpers.py`.
+
 ## My bookings vs raw `orders` in the database
 
 The Mini App calls `MiniAppBookingsService.list_bookings`, which:
