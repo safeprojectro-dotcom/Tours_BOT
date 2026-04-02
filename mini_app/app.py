@@ -93,8 +93,12 @@ class CatalogScreen:
         self.cards_column = ft.Column(spacing=12)
 
     def build(self) -> ft.Control:
+        # Single scroll surface with bounded height (expand=True) so Telegram mobile WebView
+        # can scroll to tour cards and "View details". Avoid nesting with page.scroll.
         return ft.SafeArea(
+            expand=True,
             content=ft.Container(
+                expand=True,
                 padding=16,
                 content=ft.Column(
                     [
@@ -142,9 +146,10 @@ class CatalogScreen:
                         self.cards_column,
                     ],
                     spacing=14,
+                    expand=True,
                     scroll=ft.ScrollMode.AUTO,
                 ),
-            )
+            ),
         )
 
     async def load_catalog(self) -> None:
@@ -1988,7 +1993,9 @@ def main(page: ft.Page) -> None:
     page.title = settings.mini_app_title
     page.theme_mode = ft.ThemeMode.LIGHT
     page.padding = 0
-    page.scroll = ft.ScrollMode.AUTO
+    # Let each screen own scrolling (e.g. catalog Column with expand+scroll). Page-level
+    # scroll competes with inner scroll in Telegram WebView and breaks touch scrolling on mobile.
+    page.scroll = None
 
     shell = MiniAppShell(page)
     page.on_route_change = shell.handle_route_change

@@ -6,6 +6,7 @@ from aiogram.filters.command import CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from app.bot.filters import NotSlashCommandFilter
 from app.bot.constants import (
     BROWSE_TOURS_CALLBACK,
     CANCEL_DESTINATION_INPUT_CALLBACK,
@@ -152,19 +153,13 @@ async def handle_tours_command(message: Message, state: FSMContext) -> None:
 
 @router.message(Command("help"))
 async def handle_help_command(message: Message) -> None:
-    language_code = await _resolve_message_language(message)
-    if language_code is None:
-        settings = get_settings()
-        await message.answer(
-            translate(settings.telegram_default_language, "language_prompt"),
-            reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
-        )
-        return
     settings = get_settings()
+    language_code = await _resolve_message_language(message)
+    effective = language_code or settings.telegram_default_language
     await message.answer(
-        translate(language_code, "help_command_reply"),
+        translate(effective, "help_command_reply"),
         reply_markup=build_mini_app_entry_keyboard(
-            language_code=language_code,
+            language_code=effective,
             mini_app_url=settings.telegram_mini_app_url,
         ),
     )
@@ -172,19 +167,13 @@ async def handle_help_command(message: Message) -> None:
 
 @router.message(Command("bookings"))
 async def handle_bookings_command(message: Message) -> None:
-    language_code = await _resolve_message_language(message)
-    if language_code is None:
-        settings = get_settings()
-        await message.answer(
-            translate(settings.telegram_default_language, "language_prompt"),
-            reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
-        )
-        return
     settings = get_settings()
+    language_code = await _resolve_message_language(message)
+    effective = language_code or settings.telegram_default_language
     await message.answer(
-        translate(language_code, "bookings_command_reply"),
+        translate(effective, "bookings_command_reply"),
         reply_markup=build_mini_app_entry_keyboard(
-            language_code=language_code,
+            language_code=effective,
             mini_app_url=settings.telegram_mini_app_url,
         ),
     )
@@ -192,19 +181,13 @@ async def handle_bookings_command(message: Message) -> None:
 
 @router.message(Command("contact"))
 async def handle_contact_command(message: Message) -> None:
-    language_code = await _resolve_message_language(message)
-    if language_code is None:
-        settings = get_settings()
-        await message.answer(
-            translate(settings.telegram_default_language, "language_prompt"),
-            reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
-        )
-        return
     settings = get_settings()
+    language_code = await _resolve_message_language(message)
+    effective = language_code or settings.telegram_default_language
     await message.answer(
-        translate(language_code, "contact_command_reply"),
+        translate(effective, "contact_command_reply"),
         reply_markup=build_mini_app_entry_keyboard(
-            language_code=language_code,
+            language_code=effective,
             mini_app_url=settings.telegram_mini_app_url,
         ),
     )
@@ -843,7 +826,7 @@ async def handle_tour_detail(callback: CallbackQuery, state: FSMContext) -> None
     )
 
 
-@router.message(PrivateEntryState.choosing_language)
+@router.message(PrivateEntryState.choosing_language, NotSlashCommandFilter())
 async def handle_language_state_message(message: Message) -> None:
     settings = get_settings()
     await message.answer(
@@ -852,7 +835,7 @@ async def handle_language_state_message(message: Message) -> None:
     )
 
 
-@router.message(PrivateEntryState.entering_destination_preference)
+@router.message(PrivateEntryState.entering_destination_preference, NotSlashCommandFilter())
 async def handle_destination_preference_message(message: Message, state: FSMContext) -> None:
     language_code = await _resolve_message_language(message)
     if language_code is None:
