@@ -27,9 +27,30 @@ from app.schemas.prepared import (
 from app.schemas.tour import BoardingPointRead
 from mini_app.api_client import MiniAppApiClient
 from mini_app.config import get_mini_app_settings
-from mini_app.ui_layout import scrollable_page
 from mini_app.ui_strings import hold_timer_hint as _hold_timer_hint_i18n
 from mini_app.ui_strings import payment_status_label, shell
+
+
+def scrollable_page(*controls: ft.Control, padding: int = 16, spacing: float = 14) -> ft.Control:
+    """
+    One bounded scroll surface: SafeArea + Container + Column(expand, scroll).
+
+    Used for full-screen bodies instead of page.scroll + inner Column without expand,
+    which breaks touch scrolling on mobile WebView.
+    """
+    return ft.SafeArea(
+        expand=True,
+        content=ft.Container(
+            expand=True,
+            padding=padding,
+            content=ft.Column(
+                list(controls),
+                expand=True,
+                scroll=ft.ScrollMode.AUTO,
+                spacing=spacing,
+            ),
+        ),
+    )
 
 
 def _payment_status_user_label(status: PaymentStatus, lang: str | None) -> str:

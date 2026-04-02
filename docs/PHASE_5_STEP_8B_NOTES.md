@@ -2,7 +2,7 @@
 
 ## Mobile scroll pattern
 
-Full-screen Mini App bodies use `mini_app/ui_layout.scrollable_page()`: **SafeArea(expand=True) → Container(expand=True) → Column(expand=True, scroll=AUTO)**. This avoids competing with `page.scroll` and fixes touch scrolling in Telegram WebView.
+Full-screen Mini App bodies use `scrollable_page()` in `mini_app/app.py`: **SafeArea(expand=True) → Container(expand=True) → Column(expand=True, scroll=AUTO)**. This avoids competing with `page.scroll` and fixes touch scrolling in Telegram WebView.
 
 **Screens expected to use this pattern:** catalog, tour detail, reservation preparation, reservation success, payment entry, my bookings, booking detail, help, settings.
 
