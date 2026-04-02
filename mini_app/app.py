@@ -27,30 +27,17 @@ from app.schemas.prepared import (
 from app.schemas.tour import BoardingPointRead
 from mini_app.api_client import MiniAppApiClient
 from mini_app.config import get_mini_app_settings
+from mini_app.ui_layout import scrollable_page
+from mini_app.ui_strings import hold_timer_hint as _hold_timer_hint_i18n
+from mini_app.ui_strings import payment_status_label, shell
 
 
-def _payment_status_user_label(status: PaymentStatus) -> str:
-    labels: dict[PaymentStatus, str] = {
-        PaymentStatus.AWAITING_PAYMENT: "Waiting for payment",
-        PaymentStatus.UNPAID: "Not paid yet",
-        PaymentStatus.PAID: "Paid",
-    }
-    return labels.get(status, status.value.replace("_", " ").title())
+def _payment_status_user_label(status: PaymentStatus, lang: str | None) -> str:
+    return payment_status_label(lang, status)
 
 
-def _hold_timer_hint(expires_at: datetime | None) -> str:
-    if expires_at is None:
-        return "No payment deadline is set for this hold."
-    now = datetime.now(UTC)
-    end = expires_at if expires_at.tzinfo else expires_at.replace(tzinfo=UTC)
-    if end <= now:
-        return "This hold has expired. Return to the catalog to check availability."
-    total_minutes = max(0, int((end - now).total_seconds() // 60))
-    hours, minutes = divmod(total_minutes, 60)
-    return (
-        f"Time left to pay: about {hours}h {minutes}m "
-        f"(deadline {CatalogScreen._format_datetime(expires_at)})."
-    )
+def _hold_timer_hint(expires_at: datetime | None, lang: str | None) -> str:
+    return _hold_timer_hint_i18n(expires_at, lang, format_dt=CatalogScreen._format_datetime)
 
 
 class CatalogScreen:
@@ -73,86 +60,101 @@ class CatalogScreen:
         self.on_open_settings = on_open_settings
         self.on_help = on_help
 
-        self.destination_field = ft.TextField(label="Destination", hint_text="Belgrade", dense=True)
-        self.departure_from_field = ft.TextField(label="Departure from", hint_text="YYYY-MM-DD", dense=True)
-        self.departure_to_field = ft.TextField(label="Departure to", hint_text="YYYY-MM-DD", dense=True)
-        self.max_price_field = ft.TextField(label="Max price", hint_text="150", dense=True)
-        self.apply_button = ft.ElevatedButton("Apply filters", on_click=self._on_apply_filters)
-        self.clear_button = ft.TextButton("Clear", on_click=self._on_clear_filters)
+        lg = default_language_code
+        self.destination_field = ft.TextField(
+            label=shell(lg, "label_destination"),
+            hint_text=shell(lg, "hint_destination"),
+            dense=True,
+        )
+        self.departure_from_field = ft.TextField(
+            label=shell(lg, "label_departure_from"),
+            hint_text=shell(lg, "hint_date"),
+            dense=True,
+        )
+        self.departure_to_field = ft.TextField(
+            label=shell(lg, "label_departure_to"),
+            hint_text=shell(lg, "hint_date"),
+            dense=True,
+        )
+        self.max_price_field = ft.TextField(
+            label=shell(lg, "label_max_price"),
+            hint_text=shell(lg, "hint_price"),
+            dense=True,
+        )
+        self.apply_button = ft.ElevatedButton(shell(lg, "btn_apply_filters"), on_click=self._on_apply_filters)
+        self.clear_button = ft.TextButton(shell(lg, "btn_clear"), on_click=self._on_clear_filters)
         self.loading_row = ft.Row(
-            [ft.ProgressRing(width=18, height=18, stroke_width=2), ft.Text("Loading tours...")],
+            [ft.ProgressRing(width=18, height=18, stroke_width=2), ft.Text(shell(lg, "loading_tours"))],
             visible=False,
             spacing=10,
         )
         self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
         self.summary_text = ft.Text("", color=ft.Colors.ON_SURFACE_VARIANT)
         self.empty_state = ft.Text(
-            "No tours match the current filters. Try clearing one or more filters.",
+            shell(lg, "empty_catalog"),
             visible=False,
         )
         self.cards_column = ft.Column(spacing=12)
 
+    def sync_shell_labels(self) -> None:
+        """Refresh UI-shell strings when `language_code` changes (e.g. after Settings)."""
+        lg = self.language_code
+        self.destination_field.label = shell(lg, "label_destination")
+        self.destination_field.hint_text = shell(lg, "hint_destination")
+        self.departure_from_field.label = shell(lg, "label_departure_from")
+        self.departure_from_field.hint_text = shell(lg, "hint_date")
+        self.departure_to_field.label = shell(lg, "label_departure_to")
+        self.departure_to_field.hint_text = shell(lg, "hint_date")
+        self.max_price_field.label = shell(lg, "label_max_price")
+        self.max_price_field.hint_text = shell(lg, "hint_price")
+        self.apply_button.text = shell(lg, "btn_apply_filters")
+        self.clear_button.text = shell(lg, "btn_clear")
+        if self.loading_row.controls:
+            self.loading_row.controls[1].value = shell(lg, "loading_tours")
+        self.empty_state.value = shell(lg, "empty_catalog")
+
     def build(self) -> ft.Control:
-        # Single scroll surface with bounded height (expand=True) so Telegram mobile WebView
-        # can scroll to tour cards and "View details". Avoid nesting with page.scroll.
-        return ft.SafeArea(
-            expand=True,
-            content=ft.Container(
-                expand=True,
+        lg = self.language_code
+        return scrollable_page(
+            ft.Text(shell(lg, "catalog_title"), size=26, weight=ft.FontWeight.BOLD),
+            ft.Text(shell(lg, "catalog_subtitle"), color=ft.Colors.ON_SURFACE_VARIANT),
+            ft.Row(
+                [
+                    ft.OutlinedButton(shell(lg, "btn_my_bookings"), on_click=lambda _: self.on_my_bookings()),
+                    ft.OutlinedButton(shell(lg, "btn_language_settings"), on_click=lambda _: self.on_open_settings()),
+                    ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help()),
+                ],
+                alignment=ft.MainAxisAlignment.START,
+                wrap=True,
+            ),
+            ft.Container(
+                bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
+                border_radius=16,
                 padding=16,
                 content=ft.Column(
                     [
-                        ft.Text("Tours catalog", size=26, weight=ft.FontWeight.BOLD),
-                        ft.Text(
-                            "Main booking flow: browse here, then use My bookings for reservation and payment status. "
-                            "Optional filters below mirror the quick shortcuts in the bot chat.",
-                            color=ft.Colors.ON_SURFACE_VARIANT,
-                        ),
+                        ft.Text(shell(lg, "filters_heading"), size=18, weight=ft.FontWeight.W_600),
+                        self.destination_field,
+                        self.departure_from_field,
+                        self.departure_to_field,
+                        self.max_price_field,
                         ft.Row(
-                            [
-                                ft.OutlinedButton("My bookings", on_click=lambda _: self.on_my_bookings()),
-                                ft.OutlinedButton(
-                                    "Language & settings",
-                                    on_click=lambda _: self.on_open_settings(),
-                                ),
-                                ft.TextButton("Help", on_click=lambda _: self.on_help()),
-                            ],
+                            [self.apply_button, self.clear_button],
                             alignment=ft.MainAxisAlignment.START,
-                            wrap=True,
                         ),
-                        ft.Container(
-                            bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
-                            border_radius=16,
-                            padding=16,
-                            content=ft.Column(
-                                [
-                                    ft.Text("Filters", size=18, weight=ft.FontWeight.W_600),
-                                    self.destination_field,
-                                    self.departure_from_field,
-                                    self.departure_to_field,
-                                    self.max_price_field,
-                                    ft.Row(
-                                        [self.apply_button, self.clear_button],
-                                        alignment=ft.MainAxisAlignment.START,
-                                    ),
-                                ],
-                                spacing=12,
-                            ),
-                        ),
-                        self.loading_row,
-                        self.error_text,
-                        self.summary_text,
-                        self.empty_state,
-                        self.cards_column,
                     ],
-                    spacing=14,
-                    expand=True,
-                    scroll=ft.ScrollMode.AUTO,
+                    spacing=12,
                 ),
             ),
+            self.loading_row,
+            self.error_text,
+            self.summary_text,
+            self.empty_state,
+            self.cards_column,
         )
 
     async def load_catalog(self) -> None:
+        self.sync_shell_labels()
         try:
             max_price = self._parse_max_price()
         except ValueError as exc:
@@ -196,18 +198,19 @@ class CatalogScreen:
             self.cards_column.controls.append(self._build_tour_card(card))
 
     def _build_tour_card(self, card: CatalogTourCardRead) -> ft.Control:
+        lg = self.language_code
         badges = ft.Row(
             [
                 self._build_badge(self._status_label(card.status.value), ft.Colors.BLUE_50, ft.Colors.BLUE_900),
                 self._build_badge(
-                    "Seats available" if card.is_available else "Sold out",
+                    shell(lg, "badge_seats_available") if card.is_available else shell(lg, "badge_sold_out"),
                     ft.Colors.GREEN_50 if card.is_available else ft.Colors.RED_50,
                     ft.Colors.GREEN_900 if card.is_available else ft.Colors.RED_900,
                 ),
             ],
             spacing=8,
         )
-        description = card.short_description or "Open the detail screen to see the full tour description."
+        description = card.short_description or shell(lg, "catalog_card_no_description")
         return ft.Container(
             bgcolor=ft.Colors.SURFACE_CONTAINER_LOW,
             border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
@@ -218,7 +221,8 @@ class CatalogScreen:
                     badges,
                     ft.Text(card.title, size=18, weight=ft.FontWeight.BOLD),
                     ft.Text(
-                        f"{self._format_datetime(card.departure_datetime)} | {card.duration_days} day(s)",
+                        f"{self._format_datetime(card.departure_datetime)} | "
+                        + shell(lg, "days_hours", n=str(card.duration_days)),
                         color=ft.Colors.ON_SURFACE_VARIANT,
                     ),
                     ft.Text(
@@ -227,7 +231,12 @@ class CatalogScreen:
                     ),
                     ft.Text(description, max_lines=3, overflow=ft.TextOverflow.ELLIPSIS),
                     ft.Row(
-                        [ft.TextButton("View details", on_click=lambda _, code=card.code: self.on_open_detail(code))],
+                        [
+                            ft.TextButton(
+                                shell(lg, "view_details"),
+                                on_click=lambda _, code=card.code: self.on_open_detail(code),
+                            )
+                        ],
                         alignment=ft.MainAxisAlignment.END,
                     ),
                 ],
@@ -344,8 +353,19 @@ class TourDetailScreen:
         self.on_open_settings = on_open_settings
         self.current_tour_code: str | None = None
 
+        lg = default_language_code
+        self.nav_back = ft.TextButton(
+            shell(lg, "back_to_catalog"),
+            icon=ft.Icons.ARROW_BACK,
+            on_click=lambda _: self.on_back(),
+        )
+        self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
         self.loading_row = ft.Row(
-            [ft.ProgressRing(width=18, height=18, stroke_width=2), ft.Text("Loading tour details...")],
+            [
+                ft.ProgressRing(width=18, height=18, stroke_width=2),
+                ft.Text(shell(lg, "loading_tour_details")),
+            ],
             visible=False,
             spacing=10,
         )
@@ -355,36 +375,28 @@ class TourDetailScreen:
     def set_tour_code(self, tour_code: str) -> None:
         self.current_tour_code = tour_code
 
+    def sync_shell_labels(self) -> None:
+        lg = self.language_code
+        self.nav_back.text = shell(lg, "back_to_catalog")
+        self.nav_help.text = shell(lg, "btn_help")
+        self.nav_settings.text = shell(lg, "settings")
+        if self.loading_row.controls:
+            self.loading_row.controls[1].value = shell(lg, "loading_tour_details")
+
     def build(self) -> ft.Control:
-        return ft.SafeArea(
-            content=ft.Container(
-                padding=16,
-                content=ft.Column(
-                    [
-                        ft.Row(
-                            [
-                                ft.TextButton(
-                                    "Back to catalog",
-                                    icon=ft.Icons.ARROW_BACK,
-                                    on_click=lambda _: self.on_back(),
-                                ),
-                                ft.TextButton("Help", on_click=lambda _: self.on_help()),
-                                ft.TextButton("Settings", on_click=lambda _: self.on_open_settings()),
-                            ],
-                            alignment=ft.MainAxisAlignment.START,
-                            wrap=True,
-                        ),
-                        self.loading_row,
-                        self.error_text,
-                        self.content_column,
-                    ],
-                    spacing=14,
-                    scroll=ft.ScrollMode.AUTO,
-                ),
-            )
+        return scrollable_page(
+            ft.Row(
+                [self.nav_back, self.nav_help, self.nav_settings],
+                alignment=ft.MainAxisAlignment.START,
+                wrap=True,
+            ),
+            self.loading_row,
+            self.error_text,
+            self.content_column,
         )
 
     async def load_tour_detail(self) -> None:
+        self.sync_shell_labels()
         if not self.current_tour_code:
             self._show_error("Tour not found.")
             self._render_detail(None)
@@ -428,7 +440,9 @@ class TourDetailScreen:
                     ft.Colors.BLUE_900,
                 ),
                 CatalogScreen._build_badge(
-                    "Seats available" if detail.is_available else "Sold out",
+                    shell(self.language_code, "badge_seats_available")
+                    if detail.is_available
+                    else shell(self.language_code, "badge_sold_out"),
                     ft.Colors.GREEN_50 if detail.is_available else ft.Colors.RED_50,
                     ft.Colors.GREEN_900 if detail.is_available else ft.Colors.RED_900,
                 ),
@@ -442,7 +456,8 @@ class TourDetailScreen:
                 badges,
                 ft.Text(localized.title, size=28, weight=ft.FontWeight.BOLD),
                 ft.Text(
-                    f"{CatalogScreen._format_datetime(detail.tour.departure_datetime)} | {detail.tour.duration_days} day(s)",
+                    f"{CatalogScreen._format_datetime(detail.tour.departure_datetime)} | "
+                    + shell(self.language_code, "days_hours", n=str(detail.tour.duration_days)),
                     color=ft.Colors.ON_SURFACE_VARIANT,
                 ),
                 ft.Text(
@@ -456,7 +471,7 @@ class TourDetailScreen:
             ft.Row(
                 [
                     ft.ElevatedButton(
-                        "Prepare reservation",
+                        shell(self.language_code, "prepare_reservation"),
                         on_click=lambda _, code=detail.tour.code: self.on_prepare(code),
                     )
                 ],
@@ -467,29 +482,38 @@ class TourDetailScreen:
         if localized.used_fallback:
             self.content_column.controls.append(
                 ft.Text(
-                    "No translation is available for your selected language for this tour; "
-                    "showing the next available language (see Language & settings).",
+                    shell(self.language_code, "fallback_translation_note"),
                     color=ft.Colors.ON_SURFACE_VARIANT,
                 )
             )
 
         overview = localized.full_description or localized.short_description
         if overview:
-            self.content_column.controls.append(self._build_text_section("Overview", overview))
+            self.content_column.controls.append(
+                self._build_text_section(shell(self.language_code, "section_overview"), overview)
+            )
         if localized.program_text:
-            self.content_column.controls.append(self._build_text_section("Program", localized.program_text))
+            self.content_column.controls.append(
+                self._build_text_section(shell(self.language_code, "section_program"), localized.program_text)
+            )
         if localized.included_text:
-            self.content_column.controls.append(self._build_text_section("Included", localized.included_text))
+            self.content_column.controls.append(
+                self._build_text_section(shell(self.language_code, "section_included"), localized.included_text)
+            )
         if localized.excluded_text:
-            self.content_column.controls.append(self._build_text_section("Not included", localized.excluded_text))
+            self.content_column.controls.append(
+                self._build_text_section(shell(self.language_code, "section_excluded"), localized.excluded_text)
+            )
 
-        self.content_column.controls.append(ft.Text("Boarding points", size=18, weight=ft.FontWeight.W_600))
+        self.content_column.controls.append(
+            ft.Text(shell(self.language_code, "section_boarding_points"), size=18, weight=ft.FontWeight.W_600)
+        )
         if detail.boarding_points:
             for boarding_point in detail.boarding_points:
                 self.content_column.controls.append(self._build_boarding_point_card(boarding_point))
         else:
             self.content_column.controls.append(
-                ft.Text("Boarding point details are not available for this tour yet.")
+                ft.Text(shell(self.language_code, "boarding_no_details"))
             )
 
     def _build_text_section(self, title: str, body: str) -> ft.Control:
@@ -507,7 +531,8 @@ class TourDetailScreen:
         )
 
     def _build_boarding_point_card(self, boarding_point: BoardingPointRead) -> ft.Control:
-        notes = boarding_point.notes or "No extra notes for this boarding point."
+        lg = self.language_code
+        notes = boarding_point.notes or shell(lg, "boarding_notes_fallback")
         return ft.Container(
             bgcolor=ft.Colors.SURFACE_CONTAINER_LOW,
             border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
@@ -517,7 +542,7 @@ class TourDetailScreen:
                 [
                     ft.Text(boarding_point.city, size=16, weight=ft.FontWeight.BOLD),
                     ft.Text(boarding_point.address),
-                    ft.Text(f"Departure time: {boarding_point.time.strftime('%H:%M')}"),
+                    ft.Text(f"{shell(lg, 'boarding_departure_time')}: {boarding_point.time.strftime('%H:%M')}"),
                     ft.Text(notes, color=ft.Colors.ON_SURFACE_VARIANT),
                 ],
                 spacing=6,
@@ -556,63 +581,70 @@ class ReservationPreparationScreen:
         self.on_open_settings = on_open_settings
         self.current_tour_code: str | None = None
 
+        lg = default_language_code
         self.loading_row = ft.Row(
-            [ft.ProgressRing(width=18, height=18, stroke_width=2), ft.Text("Loading reservation options...")],
+            [
+                ft.ProgressRing(width=18, height=18, stroke_width=2),
+                ft.Text(shell(lg, "loading_reservation_options")),
+            ],
             visible=False,
             spacing=10,
         )
         self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
         self.selection_container = ft.Column(spacing=12)
         self.summary_container = ft.Column(spacing=12)
-        self.seats_dropdown = ft.Dropdown(label="Seats", dense=True, options=[])
-        self.boarding_dropdown = ft.Dropdown(label="Boarding point", dense=True, options=[])
-        self.preview_button = ft.OutlinedButton("Preview summary", on_click=self._on_preview_summary)
+        self.seats_dropdown = ft.Dropdown(label=shell(lg, "label_seats"), dense=True, options=[])
+        self.boarding_dropdown = ft.Dropdown(label=shell(lg, "label_boarding"), dense=True, options=[])
+        self.preview_button = ft.OutlinedButton(shell(lg, "btn_preview_summary"), on_click=self._on_preview_summary)
         self.confirm_reserve_button = ft.ElevatedButton(
-            "Confirm Reservation",
+            shell(lg, "btn_confirm_reservation"),
             disabled=True,
             on_click=lambda _: self.page.run_task(self._confirm_reservation),
         )
         self.preparation_note = ft.Text(
-            "Pick seats and boarding, preview the summary, then confirm to create a temporary reservation "
-            f"(dev user id {dev_telegram_user_id}). Payment entry follows on the next screen.",
+            shell(lg, "prep_note", dev_id=str(dev_telegram_user_id)),
             color=ft.Colors.ON_SURFACE_VARIANT,
         )
+        self.nav_back = ft.TextButton(
+            shell(lg, "back_to_tour_details"),
+            icon=ft.Icons.ARROW_BACK,
+            on_click=lambda _: self.on_back(self.current_tour_code or ""),
+        )
+        self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
 
     def set_tour_code(self, tour_code: str) -> None:
         self.current_tour_code = tour_code
 
+    def sync_shell_labels(self) -> None:
+        lg = self.language_code
+        self.nav_back.text = shell(lg, "back_to_tour_details")
+        self.nav_help.text = shell(lg, "btn_help")
+        self.nav_settings.text = shell(lg, "settings")
+        self.seats_dropdown.label = shell(lg, "label_seats")
+        self.boarding_dropdown.label = shell(lg, "label_boarding")
+        self.preview_button.text = shell(lg, "btn_preview_summary")
+        self.confirm_reserve_button.text = shell(lg, "btn_confirm_reservation")
+        self.preparation_note.value = shell(lg, "prep_note", dev_id=str(self.dev_telegram_user_id))
+        if self.loading_row.controls:
+            self.loading_row.controls[1].value = shell(lg, "loading_reservation_options")
+
     def build(self) -> ft.Control:
-        return ft.SafeArea(
-            content=ft.Container(
-                padding=16,
-                content=ft.Column(
-                    [
-                        ft.Row(
-                            [
-                                ft.TextButton(
-                                    "Back to tour details",
-                                    icon=ft.Icons.ARROW_BACK,
-                                    on_click=lambda _: self.on_back(self.current_tour_code or ""),
-                                ),
-                                ft.TextButton("Help", on_click=lambda _: self.on_help()),
-                                ft.TextButton("Settings", on_click=lambda _: self.on_open_settings()),
-                            ],
-                            alignment=ft.MainAxisAlignment.START,
-                            wrap=True,
-                        ),
-                        self.loading_row,
-                        self.error_text,
-                        self.preparation_note,
-                        self.selection_container,
-                        self.summary_container,
-                    ],
-                    spacing=14,
-                    scroll=ft.ScrollMode.AUTO,
-                ),
-            )
+        return scrollable_page(
+            ft.Row(
+                [self.nav_back, self.nav_help, self.nav_settings],
+                alignment=ft.MainAxisAlignment.START,
+                wrap=True,
+            ),
+            self.loading_row,
+            self.error_text,
+            self.preparation_note,
+            self.selection_container,
+            self.summary_container,
         )
 
     async def load_preparation(self) -> None:
+        self.sync_shell_labels()
         if not self.current_tour_code:
             self._show_error("Tour not found.")
             self._render_preparation(None)
@@ -723,9 +755,10 @@ class ReservationPreparationScreen:
             return
 
         self.confirm_reserve_button.disabled = False
+        lg = self.language_code
         self.summary_container.controls.extend(
             [
-                ft.Text("Preparation summary", size=20, weight=ft.FontWeight.W_600),
+                ft.Text(shell(lg, "prep_summary_title"), size=20, weight=ft.FontWeight.W_600),
                 ft.Container(
                     bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
                     border_radius=16,
@@ -733,19 +766,32 @@ class ReservationPreparationScreen:
                     content=ft.Column(
                         [
                             ft.Text(summary.tour.localized_content.title, size=18, weight=ft.FontWeight.BOLD),
-                            ft.Text(f"Seats: {summary.seats_count}"),
+                            ft.Text(shell(lg, "prep_line_seats", n=str(summary.seats_count))),
                             ft.Text(
-                                f"Boarding point: {summary.boarding_point.city}, {summary.boarding_point.address}"
+                                shell(
+                                    lg,
+                                    "prep_line_boarding",
+                                    city=summary.boarding_point.city,
+                                    addr=summary.boarding_point.address,
+                                )
                             ),
                             ft.Text(
-                                f"Boarding time: {summary.boarding_point.time.strftime('%H:%M')}"
+                                shell(
+                                    lg,
+                                    "prep_line_boarding_time",
+                                    t=summary.boarding_point.time.strftime("%H:%M"),
+                                )
                             ),
                             ft.Text(
-                                f"Estimated total: {CatalogScreen._format_price(summary.estimated_total_amount)} {summary.tour.currency}"
+                                shell(
+                                    lg,
+                                    "prep_line_estimated",
+                                    amount=CatalogScreen._format_price(summary.estimated_total_amount),
+                                    currency=summary.tour.currency,
+                                )
                             ),
                             ft.Text(
-                                "Your seats are not held until you confirm. This creates a temporary hold; "
-                                "complete payment before the deadline on the next screens.",
+                                shell(lg, "prep_hold_note"),
                                 color=ft.Colors.ON_SURFACE_VARIANT,
                             ),
                         ],
@@ -829,15 +875,28 @@ class ReservationSuccessScreen:
         self.tour_code: str | None = None
         self.order_id: int | None = None
 
+        lg = default_language_code
+        self.nav_back = ft.TextButton(
+            shell(lg, "back_to_preparation"),
+            icon=ft.Icons.ARROW_BACK,
+            on_click=lambda _: self.on_back(self.tour_code or ""),
+        )
+        self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
+        self._heading = ft.Text(shell(lg, "reservation_confirmed_title"), size=26, weight=ft.FontWeight.BOLD)
+        self._intro = ft.Text(shell(lg, "reservation_hold_intro"), color=ft.Colors.ON_SURFACE_VARIANT)
         self.loading_row = ft.Row(
-            [ft.ProgressRing(width=18, height=18, stroke_width=2), ft.Text("Loading reservation...")],
+            [
+                ft.ProgressRing(width=18, height=18, stroke_width=2),
+                ft.Text(shell(lg, "loading_reservation")),
+            ],
             visible=False,
             spacing=10,
         )
         self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
         self.body_column = ft.Column(spacing=10)
         self.continue_button = ft.ElevatedButton(
-            "Continue to payment",
+            shell(lg, "continue_to_payment"),
             disabled=True,
             on_click=lambda _: self._on_continue(),
         )
@@ -846,42 +905,34 @@ class ReservationSuccessScreen:
         self.tour_code = tour_code
         self.order_id = order_id
 
+    def sync_shell_labels(self) -> None:
+        lg = self.language_code
+        self.nav_back.text = shell(lg, "back_to_preparation")
+        self.nav_help.text = shell(lg, "btn_help")
+        self.nav_settings.text = shell(lg, "settings")
+        self._heading.value = shell(lg, "reservation_confirmed_title")
+        self._intro.value = shell(lg, "reservation_hold_intro")
+        self.continue_button.text = shell(lg, "continue_to_payment")
+        if self.loading_row.controls:
+            self.loading_row.controls[1].value = shell(lg, "loading_reservation")
+
     def build(self) -> ft.Control:
-        return ft.SafeArea(
-            content=ft.Container(
-                padding=16,
-                content=ft.Column(
-                    [
-                        ft.Row(
-                            [
-                                ft.TextButton(
-                                    "Back to preparation",
-                                    icon=ft.Icons.ARROW_BACK,
-                                    on_click=lambda _: self.on_back(self.tour_code or ""),
-                                ),
-                                ft.TextButton("Help", on_click=lambda _: self.on_help()),
-                                ft.TextButton("Settings", on_click=lambda _: self.on_open_settings()),
-                            ],
-                            alignment=ft.MainAxisAlignment.START,
-                            wrap=True,
-                        ),
-                        self.loading_row,
-                        self.error_text,
-                        ft.Text("Reservation confirmed", size=26, weight=ft.FontWeight.BOLD),
-                        ft.Text(
-                            "Temporary hold is active. Pay before the deadline or the seats may be released.",
-                            color=ft.Colors.ON_SURFACE_VARIANT,
-                        ),
-                        self.body_column,
-                        ft.Row([self.continue_button], alignment=ft.MainAxisAlignment.START),
-                    ],
-                    spacing=14,
-                    scroll=ft.ScrollMode.AUTO,
-                ),
-            )
+        return scrollable_page(
+            ft.Row(
+                [self.nav_back, self.nav_help, self.nav_settings],
+                alignment=ft.MainAxisAlignment.START,
+                wrap=True,
+            ),
+            self.loading_row,
+            self.error_text,
+            self._heading,
+            self._intro,
+            self.body_column,
+            ft.Row([self.continue_button], alignment=ft.MainAxisAlignment.START),
         )
 
     async def load_overview(self) -> None:
+        self.sync_shell_labels()
         if self.order_id is None:
             self._show_error("Missing order reference.")
             return
@@ -920,6 +971,7 @@ class ReservationSuccessScreen:
         hold_ok = expires is not None and end > now
 
         self.continue_button.disabled = not hold_ok
+        lg = self.language_code
         self.body_column.controls = [
             ft.Container(
                 bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
@@ -928,15 +980,24 @@ class ReservationSuccessScreen:
                 content=ft.Column(
                     [
                         ft.Text(overview.tour.localized_content.title, size=18, weight=ft.FontWeight.BOLD),
-                        ft.Text(f"Reservation reference: #{order.id}"),
+                        ft.Text(shell(lg, "line_reservation_ref", id=str(order.id))),
                         ft.Text(
-                            f"Amount to pay: {CatalogScreen._format_price(order.total_amount)} {order.currency}"
+                            shell(
+                                lg,
+                                "line_amount_to_pay",
+                                amount=CatalogScreen._format_price(order.total_amount),
+                                currency=order.currency,
+                            )
                         ),
                         ft.Text(
-                            f"Payment status: {_payment_status_user_label(order.payment_status)}",
+                            shell(
+                                lg,
+                                "line_payment_status",
+                                status=_payment_status_user_label(order.payment_status, self.language_code),
+                            ),
                             color=ft.Colors.ON_SURFACE_VARIANT,
                         ),
-                        ft.Text(_hold_timer_hint(expires)),
+                        ft.Text(_hold_timer_hint(expires, self.language_code)),
                     ],
                     spacing=8,
                 ),
@@ -962,6 +1023,7 @@ class PaymentEntryScreen:
         page: ft.Page,
         *,
         api_client: MiniAppApiClient,
+        default_language_code: str,
         dev_telegram_user_id: int,
         on_back: Callable[[str], None],
         on_help: Callable[[], None],
@@ -969,6 +1031,7 @@ class PaymentEntryScreen:
     ) -> None:
         self.page = page
         self.api_client = api_client
+        self.language_code = default_language_code
         self.dev_telegram_user_id = dev_telegram_user_id
         self.on_back = on_back
         self.on_help = on_help
@@ -977,55 +1040,59 @@ class PaymentEntryScreen:
         self.order_id: int | None = None
         self._last_entry: PaymentEntryRead | None = None
 
+        lg = default_language_code
+        self.nav_back = ft.TextButton(
+            shell(lg, "back_to_preparation"),
+            icon=ft.Icons.ARROW_BACK,
+            on_click=lambda _: self.on_back(self.tour_code or ""),
+        )
+        self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
+        self._heading = ft.Text(shell(lg, "payment_title"), size=26, weight=ft.FontWeight.BOLD)
+        self._intro = ft.Text(shell(lg, "payment_intro"), color=ft.Colors.ON_SURFACE_VARIANT)
         self.loading_row = ft.Row(
-            [ft.ProgressRing(width=18, height=18, stroke_width=2), ft.Text("Starting payment entry...")],
+            [
+                ft.ProgressRing(width=18, height=18, stroke_width=2),
+                ft.Text(shell(lg, "starting_payment")),
+            ],
             visible=False,
             spacing=10,
         )
         self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
         self.body_column = ft.Column(spacing=10)
-        self.pay_now_button = ft.ElevatedButton("Pay Now", on_click=self._on_pay_now)
+        self.pay_now_button = ft.ElevatedButton(shell(lg, "pay_now"), on_click=self._on_pay_now)
 
     def set_context(self, *, tour_code: str, order_id: int) -> None:
         self.tour_code = tour_code
         self.order_id = order_id
 
+    def sync_shell_labels(self) -> None:
+        lg = self.language_code
+        self.nav_back.text = shell(lg, "back_to_preparation")
+        self.nav_help.text = shell(lg, "btn_help")
+        self.nav_settings.text = shell(lg, "settings")
+        self._heading.value = shell(lg, "payment_title")
+        self._intro.value = shell(lg, "payment_intro")
+        self.pay_now_button.text = shell(lg, "pay_now")
+        if self.loading_row.controls:
+            self.loading_row.controls[1].value = shell(lg, "starting_payment")
+
     def build(self) -> ft.Control:
-        return ft.SafeArea(
-            content=ft.Container(
-                padding=16,
-                content=ft.Column(
-                    [
-                        ft.Row(
-                            [
-                                ft.TextButton(
-                                    "Back to preparation",
-                                    icon=ft.Icons.ARROW_BACK,
-                                    on_click=lambda _: self.on_back(self.tour_code or ""),
-                                ),
-                                ft.TextButton("Help", on_click=lambda _: self.on_help()),
-                                ft.TextButton("Settings", on_click=lambda _: self.on_open_settings()),
-                            ],
-                            alignment=ft.MainAxisAlignment.START,
-                            wrap=True,
-                        ),
-                        self.loading_row,
-                        self.error_text,
-                        ft.Text("Payment", size=26, weight=ft.FontWeight.BOLD),
-                        ft.Text(
-                            "Reservation is temporary. Complete payment before the hold expires. "
-                            "Details below come from the server; payment is not marked successful until the backend confirms it.",
-                            color=ft.Colors.ON_SURFACE_VARIANT,
-                        ),
-                        self.body_column,
-                    ],
-                    spacing=14,
-                    scroll=ft.ScrollMode.AUTO,
-                ),
-            )
+        return scrollable_page(
+            ft.Row(
+                [self.nav_back, self.nav_help, self.nav_settings],
+                alignment=ft.MainAxisAlignment.START,
+                wrap=True,
+            ),
+            self.loading_row,
+            self.error_text,
+            self._heading,
+            self._intro,
+            self.body_column,
         )
 
     async def load_payment_entry(self) -> None:
+        self.sync_shell_labels()
         if self.order_id is None:
             self._show_error("Missing order reference.")
             return
@@ -1058,10 +1125,11 @@ class PaymentEntryScreen:
         self._last_entry = entry
         order = entry.order
         expires = order.reservation_expires_at
+        lg = self.language_code
         expiry_line = (
-            f"Pay before: {CatalogScreen._format_datetime(expires)}"
+            shell(lg, "line_pay_before", when=CatalogScreen._format_datetime(expires))
             if expires
-            else "Reservation expiry time is not available."
+            else shell(lg, "line_reservation_expiry_na")
         )
         self.body_column.controls = [
             ft.Container(
@@ -1070,20 +1138,28 @@ class PaymentEntryScreen:
                 padding=16,
                 content=ft.Column(
                     [
-                        ft.Text(f"Reservation reference: #{order.id}", weight=ft.FontWeight.W_600),
+                        ft.Text(shell(lg, "line_reservation_ref", id=str(order.id)), weight=ft.FontWeight.W_600),
                         ft.Text(expiry_line),
-                        ft.Text(_hold_timer_hint(expires)),
+                        ft.Text(_hold_timer_hint(expires, self.language_code)),
                         ft.Text(
-                            f"Amount due: {CatalogScreen._format_price(order.total_amount)} {order.currency}"
+                            shell(
+                                lg,
+                                "line_amount_due",
+                                amount=CatalogScreen._format_price(order.total_amount),
+                                currency=order.currency,
+                            )
                         ),
-                        ft.Text(f"Payment session reference: {entry.payment_session_reference}"),
+                        ft.Text(shell(lg, "line_payment_session_ref", ref=entry.payment_session_reference)),
                         ft.Text(
-                            f"Status: {_payment_status_user_label(entry.payment.status)}",
+                            shell(
+                                lg,
+                                "line_payment_status",
+                                status=_payment_status_user_label(entry.payment.status, self.language_code),
+                            ),
                             color=ft.Colors.ON_SURFACE_VARIANT,
                         ),
                         ft.Text(
-                            "Provider checkout inside this app is not connected yet. "
-                            "Pay Now explains the next step; nothing is shown as paid until reconciliation confirms it.",
+                            shell(lg, "payment_stub_notice"),
                             color=ft.Colors.ON_SURFACE_VARIANT,
                         ),
                     ],
@@ -1142,45 +1218,49 @@ class MyBookingsScreen:
         self.on_help = on_help
         self.on_open_settings = on_open_settings
 
+        lg = language_code
+        self.nav_back = ft.TextButton(shell(lg, "back_to_catalog"), on_click=lambda _: self.on_back_catalog())
+        self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
+        self.page_title = ft.Text(shell(lg, "my_bookings_title"), size=26, weight=ft.FontWeight.BOLD)
+        self.page_subtitle = ft.Text(
+            shell(lg, "my_bookings_subtitle"),
+            color=ft.Colors.ON_SURFACE_VARIANT,
+        )
         self.loading_row = ft.Row(
-            [ft.ProgressRing(width=18, height=18, stroke_width=2), ft.Text("Loading bookings...")],
+            [ft.ProgressRing(width=18, height=18, stroke_width=2), ft.Text(shell(lg, "loading_bookings"))],
             visible=False,
             spacing=10,
         )
         self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
         self.items_column = ft.Column(spacing=12)
 
+    def sync_shell_labels(self) -> None:
+        lg = self.language_code
+        self.nav_back.text = shell(lg, "back_to_catalog")
+        self.nav_help.text = shell(lg, "btn_help")
+        self.nav_settings.text = shell(lg, "settings")
+        self.page_title.value = shell(lg, "my_bookings_title")
+        self.page_subtitle.value = shell(lg, "my_bookings_subtitle")
+        if self.loading_row.controls:
+            self.loading_row.controls[1].value = shell(lg, "loading_bookings")
+
     def build(self) -> ft.Control:
-        return ft.SafeArea(
-            content=ft.Container(
-                padding=16,
-                content=ft.Column(
-                    [
-                        ft.Row(
-                            [
-                                ft.TextButton("Back to catalog", on_click=lambda _: self.on_back_catalog()),
-                                ft.TextButton("Help", on_click=lambda _: self.on_help()),
-                                ft.TextButton("Settings", on_click=lambda _: self.on_open_settings()),
-                            ],
-                            alignment=ft.MainAxisAlignment.START,
-                            wrap=True,
-                        ),
-                        ft.Text("My bookings", size=26, weight=ft.FontWeight.BOLD),
-                        ft.Text(
-                            "Temporary holds, confirmed trips, and released holds (not paid) are listed below.",
-                            color=ft.Colors.ON_SURFACE_VARIANT,
-                        ),
-                        self.loading_row,
-                        self.error_text,
-                        self.items_column,
-                    ],
-                    spacing=12,
-                    scroll=ft.ScrollMode.AUTO,
-                ),
-            )
+        return scrollable_page(
+            ft.Row(
+                [self.nav_back, self.nav_help, self.nav_settings],
+                alignment=ft.MainAxisAlignment.START,
+                wrap=True,
+            ),
+            self.page_title,
+            self.page_subtitle,
+            self.loading_row,
+            self.error_text,
+            self.items_column,
         )
 
     async def load_bookings(self) -> None:
+        self.sync_shell_labels()
         self.loading_row.visible = True
         self.error_text.visible = False
         self.page.update()
@@ -1205,9 +1285,10 @@ class MyBookingsScreen:
         self.items_column.controls.clear()
         if data is None:
             return
+        lg = self.language_code
         if not data.items:
             self.items_column.controls.append(
-                ft.Text("No bookings yet. Browse the catalog to reserve a tour.", color=ft.Colors.ON_SURFACE_VARIANT)
+                ft.Text(shell(lg, "no_bookings"), color=ft.Colors.ON_SURFACE_VARIANT)
             )
             return
         for item in data.items:
@@ -1216,6 +1297,12 @@ class MyBookingsScreen:
             title = tour.localized_content.title
             dep = CatalogScreen._format_datetime(tour.departure_datetime)
             amount = f"{CatalogScreen._format_price(s.order.total_amount)} {s.order.currency}"
+            seats_line = shell(
+                lg,
+                "booking_seats_amount",
+                amount=amount,
+                n=str(s.order.seats_count),
+            )
             self.items_column.controls.append(
                 ft.Container(
                     bgcolor=ft.Colors.SURFACE_CONTAINER_LOW,
@@ -1225,13 +1312,13 @@ class MyBookingsScreen:
                         [
                             ft.Text(title, size=18, weight=ft.FontWeight.BOLD),
                             ft.Text(dep, color=ft.Colors.ON_SURFACE_VARIANT),
-                            ft.Text(f"{amount} · {s.order.seats_count} seat(s)", color=ft.Colors.ON_SURFACE_VARIANT),
+                            ft.Text(seats_line, color=ft.Colors.ON_SURFACE_VARIANT),
                             ft.Text(item.user_visible_booking_label, weight=ft.FontWeight.W_500),
                             ft.Text(item.user_visible_payment_label, color=ft.Colors.ON_SURFACE_VARIANT, size=13),
                             ft.Row(
                                 [
                                     ft.FilledButton(
-                                        "Open",
+                                        shell(lg, "booking_open"),
                                         on_click=lambda _, oid=s.order.id: self.on_open_booking(oid),
                                     )
                                 ],
@@ -1274,8 +1361,19 @@ class BookingDetailScreen:
         self.order_id: int | None = None
         self._last_detail: MiniAppBookingDetailRead | None = None
 
+        lg = language_code
+        self.nav_back_bookings = ft.TextButton(
+            shell(lg, "cta_back_to_bookings"),
+            on_click=lambda _: self.on_back_to_bookings(),
+        )
+        self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
+        self.page_title = ft.Text(shell(lg, "booking_details_title"), size=22, weight=ft.FontWeight.BOLD)
         self.loading_row = ft.Row(
-            [ft.ProgressRing(width=18, height=18, stroke_width=2), ft.Text("Loading booking...")],
+            [
+                ft.ProgressRing(width=18, height=18, stroke_width=2),
+                ft.Text(shell(lg, "loading_booking_detail")),
+            ],
             visible=False,
             spacing=10,
         )
@@ -1285,33 +1383,30 @@ class BookingDetailScreen:
     def set_order_id(self, order_id: int) -> None:
         self.order_id = order_id
 
+    def sync_shell_labels(self) -> None:
+        lg = self.language_code
+        self.nav_back_bookings.text = shell(lg, "cta_back_to_bookings")
+        self.nav_help.text = shell(lg, "btn_help")
+        self.nav_settings.text = shell(lg, "settings")
+        self.page_title.value = shell(lg, "booking_details_title")
+        if self.loading_row.controls:
+            self.loading_row.controls[1].value = shell(lg, "loading_booking_detail")
+
     def build(self) -> ft.Control:
-        return ft.SafeArea(
-            content=ft.Container(
-                padding=16,
-                content=ft.Column(
-                    [
-                        ft.Row(
-                            [
-                                ft.TextButton("Back to bookings", on_click=lambda _: self.on_back_to_bookings()),
-                                ft.TextButton("Help", on_click=lambda _: self.on_help()),
-                                ft.TextButton("Settings", on_click=lambda _: self.on_open_settings()),
-                            ],
-                            alignment=ft.MainAxisAlignment.START,
-                            wrap=True,
-                        ),
-                        ft.Text("Booking details", size=22, weight=ft.FontWeight.BOLD),
-                        self.loading_row,
-                        self.error_text,
-                        self.body_column,
-                    ],
-                    spacing=12,
-                    scroll=ft.ScrollMode.AUTO,
-                ),
-            )
+        return scrollable_page(
+            ft.Row(
+                [self.nav_back_bookings, self.nav_help, self.nav_settings],
+                alignment=ft.MainAxisAlignment.START,
+                wrap=True,
+            ),
+            self.page_title,
+            self.loading_row,
+            self.error_text,
+            self.body_column,
         )
 
     async def load_detail(self) -> None:
+        self.sync_shell_labels()
         if self.order_id is None:
             return
         self.loading_row.visible = True
@@ -1353,7 +1448,7 @@ class BookingDetailScreen:
             else []
         )
         timer_line = (
-            [ft.Text(_hold_timer_hint(order.reservation_expires_at), color=ft.Colors.ON_SURFACE_VARIANT)]
+            [ft.Text(_hold_timer_hint(order.reservation_expires_at, self.language_code), color=ft.Colors.ON_SURFACE_VARIANT)]
             if detail.facade_state == MiniAppBookingFacadeState.ACTIVE_TEMPORARY_RESERVATION
             else []
         )
@@ -1393,24 +1488,25 @@ class BookingDetailScreen:
             ),
         ]
         cta_row: list[ft.Control] = []
+        lg = self.language_code
         if detail.primary_cta == MiniAppBookingPrimaryCta.PAY_NOW:
             cta_row.append(
                 ft.FilledButton(
-                    "Pay now",
+                    shell(lg, "cta_pay_now"),
                     on_click=lambda _: self.on_pay_now(tour.code, order.id),
                 )
             )
         elif detail.primary_cta == MiniAppBookingPrimaryCta.BROWSE_TOURS:
             cta_row.append(
                 ft.FilledButton(
-                    "Browse tours",
+                    shell(lg, "cta_browse_tours"),
                     on_click=lambda _: self.on_browse_tours(),
                 )
             )
         else:
             cta_row.append(
                 ft.OutlinedButton(
-                    "Back to bookings",
+                    shell(lg, "cta_back_to_bookings"),
                     on_click=lambda _: self.on_back_to_bookings(),
                 )
             )
@@ -1428,41 +1524,42 @@ class HelpScreen:
         *,
         api_client: MiniAppApiClient,
         on_close: Callable[[], None],
+        language_code: str,
     ) -> None:
         self.page = page
         self.api_client = api_client
         self.on_close = on_close
+        self.language_code = language_code
         self.body_column = ft.Column(spacing=12)
+        lg = language_code
+        self.nav_back = ft.TextButton(shell(lg, "back"), icon=ft.Icons.ARROW_BACK, on_click=lambda _: self.on_close())
+        self.page_title = ft.Text(shell(lg, "help_title"), size=26, weight=ft.FontWeight.BOLD)
+        self.intro_text = ft.Text(
+            shell(lg, "help_return_note"),
+            size=13,
+            color=ft.Colors.ON_SURFACE_VARIANT,
+        )
+
+    def sync_shell_labels(self) -> None:
+        lg = self.language_code
+        self.nav_back.text = shell(lg, "back")
+        self.page_title.value = shell(lg, "help_title")
+        self.intro_text.value = shell(lg, "help_return_note")
 
     def build(self) -> ft.Control:
-        return ft.SafeArea(
-            content=ft.Container(
-                padding=16,
-                content=ft.Column(
-                    [
-                        ft.Row(
-                            [ft.TextButton("Back", icon=ft.Icons.ARROW_BACK, on_click=lambda _: self.on_close())],
-                            alignment=ft.MainAxisAlignment.START,
-                        ),
-                        ft.Text("Help", size=26, weight=ft.FontWeight.BOLD),
-                        ft.Text(
-                            "Close the Mini App or switch back to the bot chat in Telegram anytime — "
-                            "the bot is your guide; this app is where you book and pay.",
-                            size=13,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
-                        ),
-                        self.body_column,
-                    ],
-                    spacing=12,
-                    scroll=ft.ScrollMode.AUTO,
-                ),
-            )
+        return scrollable_page(
+            ft.Row([self.nav_back], alignment=ft.MainAxisAlignment.START),
+            self.page_title,
+            self.intro_text,
+            self.body_column,
         )
 
     async def load_content(self) -> None:
+        self.sync_shell_labels()
+        lg = self.language_code
         self.body_column.controls = [
             ft.Row(
-                [ft.ProgressRing(width=20, height=20, stroke_width=2), ft.Text("Loading help...")],
+                [ft.ProgressRing(width=20, height=20, stroke_width=2), ft.Text(shell(lg, "loading_help"))],
                 spacing=10,
             )
         ]
@@ -1509,43 +1606,45 @@ class SettingsScreen:
         dev_telegram_user_id: int,
         on_language_applied: Callable[[str], None],
         on_close: Callable[[], None],
+        language_code: str,
     ) -> None:
         self.page = page
         self.api_client = api_client
         self.dev_telegram_user_id = dev_telegram_user_id
         self.on_language_applied = on_language_applied
         self.on_close = on_close
-        self.language_dropdown = ft.Dropdown(label="Display language", dense=True, width=320, options=[])
+        self.language_code = language_code
+        lg = language_code
+        self.nav_back = ft.TextButton(shell(lg, "back"), icon=ft.Icons.ARROW_BACK, on_click=lambda _: self.on_close())
+        self.page_title = ft.Text(shell(lg, "settings_title"), size=26, weight=ft.FontWeight.BOLD)
+        self.intro_text = ft.Text(shell(lg, "settings_intro"), color=ft.Colors.ON_SURFACE_VARIANT)
+        self.language_dropdown = ft.Dropdown(
+            label=shell(language_code, "label_display_language"), dense=True, width=320, options=[]
+        )
         self.hint_text = ft.Text("", size=13, color=ft.Colors.ON_SURFACE_VARIANT)
         self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
-        self.save_button = ft.FilledButton("Save", on_click=lambda _: self.page.run_task(self._save_language))
+        self.save_button = ft.FilledButton(
+            shell(language_code, "btn_save"), on_click=lambda _: self.page.run_task(self._save_language)
+        )
 
     def build(self) -> ft.Control:
-        return ft.SafeArea(
-            content=ft.Container(
-                padding=16,
-                content=ft.Column(
-                    [
-                        ft.Row(
-                            [ft.TextButton("Back", icon=ft.Icons.ARROW_BACK, on_click=lambda _: self.on_close())],
-                            alignment=ft.MainAxisAlignment.START,
-                        ),
-                        ft.Text("Language & settings", size=26, weight=ft.FontWeight.BOLD),
-                        ft.Text(
-                            "Choose the language for tour content and booking summaries. "
-                            "If a translation is missing, the app falls back and tells you.",
-                            color=ft.Colors.ON_SURFACE_VARIANT,
-                        ),
-                        self.language_dropdown,
-                        self.hint_text,
-                        self.error_text,
-                        ft.Row([self.save_button], alignment=ft.MainAxisAlignment.START),
-                    ],
-                    spacing=14,
-                    scroll=ft.ScrollMode.AUTO,
-                ),
-            )
+        return scrollable_page(
+            ft.Row([self.nav_back], alignment=ft.MainAxisAlignment.START),
+            self.page_title,
+            self.intro_text,
+            self.language_dropdown,
+            self.hint_text,
+            self.error_text,
+            ft.Row([self.save_button], alignment=ft.MainAxisAlignment.START),
         )
+
+    def sync_shell_labels(self) -> None:
+        lg = self.language_code
+        self.nav_back.text = shell(lg, "back")
+        self.page_title.value = shell(lg, "settings_title")
+        self.intro_text.value = shell(lg, "settings_intro")
+        self.language_dropdown.label = shell(lg, "label_display_language")
+        self.save_button.text = shell(lg, "btn_save")
 
     async def load_options(self) -> None:
         self.error_text.visible = False
@@ -1670,18 +1769,25 @@ class MiniAppShell:
         self.payment_entry_screen = PaymentEntryScreen(
             page,
             api_client=self.api_client,
+            default_language_code=settings.mini_app_default_language,
             dev_telegram_user_id=self._dev_telegram_user_id,
             on_back=self.open_reservation_success_from_payment,
             on_help=self.open_help,
             on_open_settings=self.open_settings,
         )
-        self.help_screen = HelpScreen(page, api_client=self.api_client, on_close=self.close_modal)
+        self.help_screen = HelpScreen(
+            page,
+            api_client=self.api_client,
+            on_close=self.close_modal,
+            language_code=settings.mini_app_default_language,
+        )
         self.settings_screen = SettingsScreen(
             page,
             api_client=self.api_client,
             dev_telegram_user_id=self._dev_telegram_user_id,
             on_language_applied=self.apply_language,
             on_close=self.close_modal,
+            language_code=settings.mini_app_default_language,
         )
 
     def apply_language(self, code: str) -> None:
@@ -1691,6 +1797,18 @@ class MiniAppShell:
         self.reservation_success_screen.language_code = code
         self.my_bookings_screen.language_code = code
         self.booking_detail_screen.language_code = code
+        self.payment_entry_screen.language_code = code
+        self.help_screen.language_code = code
+        self.settings_screen.language_code = code
+        self.catalog_screen.sync_shell_labels()
+        self.settings_screen.sync_shell_labels()
+        self.tour_detail_screen.sync_shell_labels()
+        self.reservation_preparation_screen.sync_shell_labels()
+        self.reservation_success_screen.sync_shell_labels()
+        self.payment_entry_screen.sync_shell_labels()
+        self.my_bookings_screen.sync_shell_labels()
+        self.booking_detail_screen.sync_shell_labels()
+        self.help_screen.sync_shell_labels()
 
     async def hydrate_language_from_server(self) -> None:
         try:

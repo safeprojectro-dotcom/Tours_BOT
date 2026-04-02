@@ -1,7 +1,10 @@
 """
-Staging-only: clear orders / waitlist / content tied to TEST_BELGRADE_001 and restore seat availability.
+Staging-only: clear orders / waitlist tied to TEST_BELGRADE_001 and restore seat availability.
 
-Does not delete the tour, boarding points, or translations — only frees capacity for manual prepare smoke-tests.
+Does not delete the tour, boarding points, translations, or content_items — only frees capacity for manual prepare smoke-tests.
+
+Deletes child payment and notification rows for those orders first (explicit order for DBs that rely on FK cleanup),
+then orders for this tour_id.
 
 Requires DATABASE_URL (e.g. from .env at project root).
 
@@ -22,8 +25,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.models.content_item import ContentItem
+from app.models.enums import TourStatus
+from app.models.notification_outbox import NotificationOutbox
 from app.models.order import Order
+from app.models.payment import Payment
 from app.models.tour import Tour
 from app.models.waitlist import WaitlistEntry
 
@@ -32,12 +37,14 @@ TEST_CODE = "TEST_BELGRADE_001"
 
 def _clear_tour_booking_artifacts(session: Session, tour_id: int) -> int:
     """Remove dependent rows for this tour; return number of orders deleted."""
-    orders = session.scalars(select(Order.id).where(Order.tour_id == tour_id)).all()
+    order_ids = list(session.scalars(select(Order.id).where(Order.tour_id == tour_id)).all())
+    if order_ids:
+        session.execute(delete(Payment).where(Payment.order_id.in_(order_ids)))
+        session.execute(delete(NotificationOutbox).where(NotificationOutbox.order_id.in_(order_ids)))
     session.execute(delete(Order).where(Order.tour_id == tour_id))
     session.execute(delete(WaitlistEntry).where(WaitlistEntry.tour_id == tour_id))
-    session.execute(delete(ContentItem).where(ContentItem.tour_id == tour_id))
     session.flush()
-    return len(orders)
+    return len(order_ids)
 
 
 def main() -> None:
@@ -50,10 +57,11 @@ def main() -> None:
 
         n_orders = _clear_tour_booking_artifacts(session, tour.id)
         tour.seats_available = tour.seats_total
+        tour.status = TourStatus.OPEN_FOR_SALE
         session.commit()
         print(
             f"OK: reset tour id={tour.id} code={TEST_CODE}. "
-            f"Removed {n_orders} order(s); seats_available set to {tour.seats_available}."
+            f"Removed {n_orders} order(s); seats_available={tour.seats_available}; status={tour.status.value}."
         )
     except Exception as exc:
         session.rollback()

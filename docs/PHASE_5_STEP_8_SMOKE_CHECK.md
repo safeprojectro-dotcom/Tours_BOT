@@ -44,9 +44,9 @@ This checklist does **not** replace automated tests or Step 9+ scope.
 
 1. **Bot:** `/start` — confirm welcome copy and that **Open Mini App** appears **above** date/destination/budget/catalog rows.
 2. **Bot:** Tap **Open Mini App** — catalog opens (HTTPS Mini App service).
-3. **Mini App (phone):** Scroll the catalog — filters and tour cards must scroll; **View details** on a card must be reachable (single scroll surface; page-level scroll is off).
+3. **Mini App (phone):** On each main screen, the **whole body** must scroll (one shared layout: `scrollable_page` — filters + cards on catalog; detail/prepare/success/payment/bookings/booking detail/help/settings the same). **View details** on a card must be reachable without trapped content.
 4. **Bot:** `/bookings`, `/help`, `/contact` — each returns the expected text + Mini App URL buttons, even if profile language is not set yet (copy uses default language). `/language` still opens the picker.
-5. **Mini App:** From catalog, open **My bookings** — list loads (same user as `MINI_APP_DEV_TELEGRAM_USER_ID` / your test user).
+5. **Mini App:** From catalog, open **My bookings** — list loads for **only** the Mini App dev Telegram user (`MINI_APP_DEV_TELEGRAM_USER_ID`). Other users’ orders in the DB will not appear (see `docs/PHASE_5_STEP_8B_NOTES.md`).
 6. **Mini App:** Open **Help** — static line about returning to the bot + API-driven help content below.
 7. **Regression:** Complete or spot-check catalog → detail → preparation → payment screen (no business-rule changes expected).
 8. **Webhook:** With local polling **off**, send `/start` again — bot still responds via Railway.
@@ -55,17 +55,21 @@ This checklist does **not** replace automated tests or Step 9+ scope.
 
 Repeated manual tests can consume seats (`seats_available` → 0) or leave orders that block preparation.
 
-**Light reset (keep tour + boarding points):** from project root with `DATABASE_URL` set:
+**Light reset (keep tour + boarding points + translations):** from project root with `DATABASE_URL` set:
 
 ```bash
 python scripts/reset_test_belgrade_tour_state.py
 ```
 
-This deletes **orders** (and cascading payments / notification rows) and waitlist/content rows scoped to that tour, then sets `seats_available = seats_total`.
+This deletes **payments** and **notification_outbox** rows for orders of that tour, then **orders** and **waitlist** entries for that tour, sets `seats_available = seats_total`, and forces `status = open_for_sale`. It does **not** delete `content_items` (see script docstring).
 
 **Full re-seed** (recreate tour + boarding + translations): use `python scripts/seed_test_belgrade_tour.py` instead (see script docstring).
 
 **Nuclear option:** `python scripts/delete_test_belgrade_tour.py` removes the tour entirely; run `seed_test_belgrade_tour.py` after to recreate it.
+
+## Step 8B — UI language vs content
+
+After changing **Language & settings**, shell labels (nav, titles, buttons, filters) should follow the selected language where keys exist; tour paragraphs may still show fallback language from the API. See `docs/PHASE_5_STEP_8B_NOTES.md`.
 
 ## Out of scope for this step
 
