@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +25,8 @@ class Settings(BaseSettings):
         alias="TELEGRAM_SUPPORTED_LANGUAGES",
     )
     mini_app_default_language: str = Field(default="en", alias="MINI_APP_DEFAULT_LANGUAGE")
+    #: If set, temporary reservation hold length in minutes (staging). If unset, use legacy 6h / 24h rule.
+    temp_reservation_ttl_minutes: int | None = Field(default=None, alias="TEMP_RESERVATION_TTL_MINUTES")
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -33,6 +35,19 @@ class Settings(BaseSettings):
         extra="ignore",
         populate_by_name=True,
     )
+
+    @field_validator("temp_reservation_ttl_minutes", mode="before")
+    @classmethod
+    def _coerce_temp_reservation_ttl_minutes(cls, v: object) -> int | None:
+        if v is None or v == "":
+            return None
+        try:
+            n = int(v)
+        except (TypeError, ValueError):
+            return None
+        if n < 1 or n > 10080:
+            return None
+        return n
 
     @property
     def telegram_supported_language_codes(self) -> tuple[str, ...]:

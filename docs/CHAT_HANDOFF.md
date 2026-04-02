@@ -7,7 +7,7 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 5 (Mini App MVP) — **Phase 5 / Step 9 completed
+Phase 5 (Mini App MVP) — **Phase 5 / Step 9 completed**; **Step 9A:** optional hold TTL via `TEMP_RESERVATION_TTL_MINUTES` (see `docs/PHASE_5_STEP_9_NOTES.md`).
 
 `docs/IMPLEMENTATION_PLAN.md` defines **Phase 5 as a single phase** (no numbered substeps in the plan). The **Step N** labels here are **project execution checkpoints** mapped to Phase 5 *Included Scope* / *Done-When* bullets (UX first, then screens, booking, payment, help/bookings as the phase exit signal).
 

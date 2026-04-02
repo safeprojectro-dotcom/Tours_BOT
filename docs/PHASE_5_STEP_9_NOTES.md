@@ -32,6 +32,12 @@ Booking list/detail use **localized shell strings** keyed by `facade_state` (`bo
 3. Open **catalog** or **prepare** again without running the reset script: **seats** on the tour should increase and the order should show as released / expired in **My bookings** (after lazy expiry runs on that request).
 4. **Pay Now** should no longer apply to an expired hold (payment entry rejects expired reservation).
 
+## Step 9A — configurable hold TTL (`TEMP_RESERVATION_TTL_MINUTES`)
+
+- **Optional** env: `TEMP_RESERVATION_TTL_MINUTES` (integer minutes, 1–10080). When set, `calculate_reservation_expiration` uses `now + timedelta(minutes=…)` instead of the legacy **6h / 24h** window (still capped by `sales_deadline` and existing checks).
+- When **unset** or invalid, behavior matches **pre–Step 9A** (6h if departure within 3 days, else 24h).
+- **Staging example:** `TEMP_RESERVATION_TTL_MINUTES=15` on the API service (Railway) for faster manual testing; remove or change when longer holds are desired.
+
 ## Out of scope
 
 - Payment provider integration beyond current mock / payment-entry flow.

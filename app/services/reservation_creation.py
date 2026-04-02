@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourStatus
 from app.repositories.order import OrderRepository
 from app.repositories.tour import BoardingPointRepository, TourRepository
@@ -81,8 +82,14 @@ class TemporaryReservationService:
         if tour.departure_datetime <= current_time:
             return None
 
-        time_until_departure = tour.departure_datetime - current_time
-        hold_window = timedelta(hours=6) if time_until_departure <= timedelta(days=3) else timedelta(hours=24)
+        ttl_minutes = get_settings().temp_reservation_ttl_minutes
+        if ttl_minutes is not None:
+            hold_window = timedelta(minutes=ttl_minutes)
+        else:
+            time_until_departure = tour.departure_datetime - current_time
+            hold_window = (
+                timedelta(hours=6) if time_until_departure <= timedelta(days=3) else timedelta(hours=24)
+            )
         reservation_expires_at = current_time + hold_window
 
         if tour.sales_deadline is not None:

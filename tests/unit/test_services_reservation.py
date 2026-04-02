@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from unittest.mock import patch
 
 from app.models.enums import BookingStatus, PaymentStatus, TourStatus
 from app.services.reservation_creation import TemporaryReservationService
@@ -125,3 +126,37 @@ class TemporaryReservationServiceTests(FoundationDBTestCase):
         )
 
         self.assertEqual(expires_at, datetime(2026, 4, 1, 12, 0, tzinfo=UTC))
+
+    @patch("app.services.reservation_creation.get_settings")
+    def test_calculate_reservation_expiration_uses_ttl_minutes_from_settings(self, mock_get_settings) -> None:
+        mock_get_settings.return_value.temp_reservation_ttl_minutes = 15
+        tour = self.create_tour(
+            departure_datetime=datetime(2026, 4, 10, 8, 0, tzinfo=UTC),
+            sales_deadline=datetime(2026, 4, 9, 8, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+        )
+
+        expires_at = TemporaryReservationService().calculate_reservation_expiration(
+            tour,
+            now=datetime(2026, 4, 1, 8, 0, tzinfo=UTC),
+        )
+
+        self.assertEqual(expires_at, datetime(2026, 4, 1, 8, 15, tzinfo=UTC))
+
+    @patch("app.services.reservation_creation.get_settings")
+    def test_calculate_reservation_expiration_ttl_minutes_still_caps_to_sales_deadline(
+        self, mock_get_settings
+    ) -> None:
+        mock_get_settings.return_value.temp_reservation_ttl_minutes = 60
+        tour = self.create_tour(
+            departure_datetime=datetime(2026, 4, 10, 8, 0, tzinfo=UTC),
+            sales_deadline=datetime(2026, 4, 1, 8, 20, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+        )
+
+        expires_at = TemporaryReservationService().calculate_reservation_expiration(
+            tour,
+            now=datetime(2026, 4, 1, 8, 0, tzinfo=UTC),
+        )
+
+        self.assertEqual(expires_at, datetime(2026, 4, 1, 8, 20, tzinfo=UTC))
