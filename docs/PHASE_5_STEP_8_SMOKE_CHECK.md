@@ -71,6 +71,10 @@ Shared logic lives in `scripts/staging_belgrade_helpers.py`. The reset removes *
 
 More detail: `docs/PHASE_5_STEP_8C_NOTES.md`.
 
+## Hold expiry (Step 9)
+
+Expired unpaid holds are released in the database when you **open catalog, prepare, bookings, or related Mini App actions** (lazy expiry), so seats can return without relying only on manual reset. See `docs/PHASE_5_STEP_9_NOTES.md`.
+
 ## Step 8B — UI language vs content
 
 After changing **Language & settings**, shell labels (nav, titles, buttons, filters) should follow the selected language where keys exist; tour paragraphs may still show fallback language from the API. See `docs/PHASE_5_STEP_8B_NOTES.md`.

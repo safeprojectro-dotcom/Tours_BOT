@@ -8,6 +8,7 @@ from app.models.enums import TourStatus
 from app.schemas.prepared import CatalogBrowseFiltersRead, CatalogTourCardRead
 from app.services.catalog import CatalogLookupService
 from app.services.language_aware_tour import LanguageAwareTourReadService
+from app.services.reservation_expiry import lazy_expire_due_reservations
 
 
 class CatalogPreparationService:
@@ -28,6 +29,7 @@ class CatalogPreparationService:
         limit: int = 100,
         offset: int = 0,
     ) -> list[CatalogTourCardRead]:
+        lazy_expire_due_reservations(session)
         tours = self.catalog_lookup_service.list_tours(
             session,
             status=status,

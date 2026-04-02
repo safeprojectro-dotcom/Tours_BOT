@@ -28,7 +28,7 @@ from app.schemas.tour import BoardingPointRead
 from mini_app.api_client import MiniAppApiClient
 from mini_app.config import get_mini_app_settings
 from mini_app.ui_strings import hold_timer_hint as _hold_timer_hint_i18n
-from mini_app.ui_strings import payment_status_label, shell
+from mini_app.ui_strings import booking_facade_labels, payment_status_label, shell
 
 
 def scrollable_page(*controls: ft.Control, padding: int = 16, spacing: float = 14) -> ft.Control:
@@ -1324,6 +1324,7 @@ class MyBookingsScreen:
                 amount=amount,
                 n=str(s.order.seats_count),
             )
+            bk_label, pay_label = booking_facade_labels(lg, item.facade_state.value)
             self.items_column.controls.append(
                 ft.Container(
                     bgcolor=ft.Colors.SURFACE_CONTAINER_LOW,
@@ -1334,8 +1335,8 @@ class MyBookingsScreen:
                             ft.Text(title, size=18, weight=ft.FontWeight.BOLD),
                             ft.Text(dep, color=ft.Colors.ON_SURFACE_VARIANT),
                             ft.Text(seats_line, color=ft.Colors.ON_SURFACE_VARIANT),
-                            ft.Text(item.user_visible_booking_label, weight=ft.FontWeight.W_500),
-                            ft.Text(item.user_visible_payment_label, color=ft.Colors.ON_SURFACE_VARIANT, size=13),
+                            ft.Text(bk_label, weight=ft.FontWeight.W_500),
+                            ft.Text(pay_label, color=ft.Colors.ON_SURFACE_VARIANT, size=13),
                             ft.Row(
                                 [
                                     ft.FilledButton(
@@ -1478,6 +1479,8 @@ class BookingDetailScreen:
             if detail.payment_session_hint
             else []
         )
+        lg_detail = self.language_code
+        bk_label, pay_label = booking_facade_labels(lg_detail, detail.facade_state.value)
         self.body_column.controls = [
             ft.Container(
                 bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
@@ -1499,8 +1502,8 @@ class BookingDetailScreen:
                         ),
                         *boarding_lines,
                         ft.Divider(),
-                        ft.Text(detail.user_visible_booking_label, weight=ft.FontWeight.W_600),
-                        ft.Text(detail.user_visible_payment_label, color=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.Text(bk_label, weight=ft.FontWeight.W_600),
+                        ft.Text(pay_label, color=ft.Colors.ON_SURFACE_VARIANT),
                         *timer_line,
                         *pay_hint,
                     ],

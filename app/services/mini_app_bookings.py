@@ -13,6 +13,7 @@ from app.schemas.mini_app import (
 )
 from app.services.mini_app_booking_facade import resolve_mini_app_booking_facade
 from app.services.order_read import OrderReadService
+from app.services.reservation_expiry import lazy_expire_due_reservations
 from app.services.order_summary import OrderSummaryService
 from app.services.payment_summary import PaymentSummaryService
 
@@ -45,6 +46,7 @@ class MiniAppBookingsService:
         offset: int = 0,
         now: datetime | None = None,
     ) -> MiniAppBookingsListRead:
+        lazy_expire_due_reservations(session)
         user = self._user_sync().sync_private_user(
             session,
             telegram_user_id=telegram_user_id,
@@ -84,6 +86,7 @@ class MiniAppBookingsService:
         language_code: str | None = None,
         now: datetime | None = None,
     ) -> MiniAppBookingDetailRead | None:
+        lazy_expire_due_reservations(session)
         user = self._user_sync().sync_private_user(
             session,
             telegram_user_id=telegram_user_id,

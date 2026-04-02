@@ -6,6 +6,7 @@ from app.models.enums import TourStatus
 from app.schemas.mini_app import MiniAppTourDetailRead
 from app.services.catalog import CatalogLookupService
 from app.services.language_aware_tour import LanguageAwareTourReadService
+from app.services.reservation_expiry import lazy_expire_due_reservations
 
 
 class MiniAppTourDetailService:
@@ -27,6 +28,7 @@ class MiniAppTourDetailService:
         code: str,
         language_code: str | None = None,
     ) -> MiniAppTourDetailRead | None:
+        lazy_expire_due_reservations(session)
         tour = self.catalog_lookup_service.get_tour_by_code(session, code=code)
         if tour is None or tour.status not in self.STATUS_SCOPE:
             return None

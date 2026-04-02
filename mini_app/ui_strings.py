@@ -110,6 +110,18 @@ _STR: dict[str, dict[str, str]] = {
         "hold_expired": "This hold has expired. Return to the catalog to check availability.",
         "hold_time_left": "Time left to pay: about {hours}h {minutes}m (deadline {deadline}).",
         "days_hours": "{n} day(s)",
+        "facade_active_booking": "Temporary reservation (hold)",
+        "facade_active_payment": "Awaiting payment to confirm your seats.",
+        "facade_expired_booking": "Hold expired",
+        "facade_expired_payment": "Payment was not completed in time; seats were released back to the tour.",
+        "facade_released_booking": "Hold released — not paid",
+        "facade_released_payment": "No payment was received before the deadline.",
+        "facade_confirmed_booking": "Confirmed",
+        "facade_confirmed_payment": "Paid — your booking is confirmed.",
+        "facade_trip_booking": "Booking status",
+        "facade_trip_payment": "Your trip — see details below.",
+        "facade_other_booking": "Booking update",
+        "facade_other_payment": "See booking details below.",
     },
     "ro": {
         "catalog_title": "Catalog tururi",
@@ -186,8 +198,40 @@ _STR: dict[str, dict[str, str]] = {
         "hold_expired": "Rezervarea a expirat. Revino la catalog.",
         "hold_time_left": "Timp ramas pentru plata: ~{hours}h {minutes}m (limita {deadline}).",
         "days_hours": "{n} zi(le)",
+        "facade_active_booking": "Rezervare temporara (hold)",
+        "facade_active_payment": "In asteptarea platii pentru confirmare.",
+        "facade_expired_booking": "Hold expirat",
+        "facade_expired_payment": "Plata nu s-a finalizat la timp; locurile au fost eliberate.",
+        "facade_released_booking": "Hold eliberat — neplatit",
+        "facade_released_payment": "Nu s-a primit plata inainte de termen.",
+        "facade_confirmed_booking": "Confirmat",
+        "facade_confirmed_payment": "Platit — rezervare confirmata.",
+        "facade_trip_booking": "Status rezervare",
+        "facade_trip_payment": "Calatoria ta — vezi detaliile.",
+        "facade_other_booking": "Actualizare rezervare",
+        "facade_other_payment": "Vezi detaliile rezervarii.",
     },
 }
+
+
+# Maps MiniAppBookingFacadeState value -> (booking_line_key, payment_line_key) in _STR tables.
+_BOOKING_FACADE_SHELL_KEYS: dict[str, tuple[str, str]] = {
+    "active_temporary_reservation": ("facade_active_booking", "facade_active_payment"),
+    "expired_temporary_reservation": ("facade_expired_booking", "facade_expired_payment"),
+    "cancelled_no_payment": ("facade_released_booking", "facade_released_payment"),
+    "confirmed": ("facade_confirmed_booking", "facade_confirmed_payment"),
+    "in_trip_pipeline": ("facade_trip_booking", "facade_trip_payment"),
+    "other": ("facade_other_booking", "facade_other_payment"),
+}
+
+
+def booking_facade_labels(lang: str | None, facade_state: str) -> tuple[str, str]:
+    """Localized booking title + payment line for My bookings / detail (API also sends English labels)."""
+    bk, pk = _BOOKING_FACADE_SHELL_KEYS.get(
+        facade_state,
+        ("facade_other_booking", "facade_other_payment"),
+    )
+    return shell(lang, bk), shell(lang, pk)
 
 
 def shell(lang: str | None, key: str, **kwargs: str) -> str:

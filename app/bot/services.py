@@ -26,6 +26,7 @@ from app.schemas.user import UserRead
 from app.services.catalog import CatalogLookupService
 from app.services.catalog_preparation import CatalogPreparationService
 from app.services.language_aware_tour import LanguageAwareTourReadService
+from app.services.reservation_expiry import lazy_expire_due_reservations
 from sqlalchemy.orm import Session
 
 
@@ -298,6 +299,7 @@ class PrivateReservationPreparationService:
         tour_id: int,
         language_code: str | None,
     ) -> PreparedTourDetailRead | None:
+        lazy_expire_due_reservations(session)
         detail = self.tour_browse_service.get_tour_detail(
             session,
             tour_id=tour_id,

@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from unittest.mock import patch
 
 from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourStatus
-from app.services.reservation_expiry import ReservationExpiryService
+from app.services.reservation_expiry import ReservationExpiryService, lazy_expire_due_reservations
 from app.workers.reservation_expiry import run_once
 from tests.unit.base import FoundationDBTestCase
 
@@ -45,6 +45,36 @@ class ReservationExpiryServiceTests(FoundationDBTestCase):
         self.assertEqual(refreshed_order.payment_status, PaymentStatus.UNPAID)
         self.assertEqual(refreshed_order.cancellation_status, CancellationStatus.CANCELLED_NO_PAYMENT)
         self.assertIsNone(refreshed_order.reservation_expires_at)
+        self.assertEqual(refreshed_tour.seats_available, 11)
+
+    def test_lazy_expire_due_reservations_matches_service_behavior(self) -> None:
+        user = self.create_user()
+        tour = self.create_tour(
+            code="LAZY-WRAP",
+            seats_total=40,
+            seats_available=8,
+            status=TourStatus.OPEN_FOR_SALE,
+        )
+        point = self.create_boarding_point(tour)
+        self.create_order(
+            user,
+            tour,
+            point,
+            seats_count=3,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=datetime(2026, 4, 1, 7, 0, tzinfo=UTC),
+        )
+        self.session.commit()
+
+        n = lazy_expire_due_reservations(
+            self.session,
+            now=datetime(2026, 4, 1, 8, 0, tzinfo=UTC),
+        )
+        self.assertEqual(n, 1)
+        refreshed_tour = self.session.get(type(tour), tour.id)
+        assert refreshed_tour is not None
         self.assertEqual(refreshed_tour.seats_available, 11)
 
     def test_expire_due_reservations_skips_non_eligible_orders(self) -> None:

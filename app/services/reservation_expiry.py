@@ -8,6 +8,9 @@ from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus
 from app.repositories.order import OrderRepository
 from app.repositories.tour import TourRepository
 
+# Max orders processed per lazy call (catalog/prepare/booking paths); avoids unbounded work if backlog grows.
+LAZY_EXPIRY_DEFAULT_LIMIT = 500
+
 
 class ReservationExpiryService:
     def __init__(
@@ -84,3 +87,17 @@ class ReservationExpiryService:
         if order.reservation_expires_at > now:
             return False
         return True
+
+
+def lazy_expire_due_reservations(
+    session: Session,
+    *,
+    now: datetime | None = None,
+    limit: int = LAZY_EXPIRY_DEFAULT_LIMIT,
+) -> int:
+    """
+    Release seats for expired temporary holds (AWAITING_PAYMENT + past reservation_expires_at).
+
+    Safe to invoke on common read/write paths when no background worker runs: idempotent and bounded by ``limit``.
+    """
+    return ReservationExpiryService().expire_due_reservations(session, now=now, limit=limit)
