@@ -7,7 +7,7 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 5 (Mini App MVP) — **Phase 5 / Step 12B completed** (editable/reusable home + catalog for `/start` and `/tours`; edit-or-fallback; see `docs/PHASE_5_STEP_12B_NOTES.md`). **Phase 5 / Step 12A** (`docs/PHASE_5_STEP_12A_NOTES.md`). **Phase 5 / Step 12** (payment edge / retry UX: `docs/PHASE_5_STEP_12_NOTES.md`). Step 11: My bookings (`docs/PHASE_5_STEP_11_NOTES.md`). Step 10: mock payment (`docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry (`docs/PHASE_5_STEP_9_NOTES.md`).
+Phase 5 (Mini App MVP) — **Phase 5 / Step 13 completed** (support/handoff entry: `HandoffEntryService`, `/contact` + `/human`, `POST /mini-app/support-request`, Mini App support CTAs + bilingual help; see `docs/PHASE_5_STEP_13_NOTES.md`). **Phase 5 / Step 12B** (`docs/PHASE_5_STEP_12B_NOTES.md`). **Step 12A** (`docs/PHASE_5_STEP_12A_NOTES.md`). **Step 12** (`docs/PHASE_5_STEP_12_NOTES.md`). Step 11: My bookings (`docs/PHASE_5_STEP_11_NOTES.md`). Step 10: mock payment (`docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry (`docs/PHASE_5_STEP_9_NOTES.md`).
 
 `docs/IMPLEMENTATION_PLAN.md` defines **Phase 5 as a single phase** (no numbered substeps in the plan). The **Step N** labels here are **project execution checkpoints** mapped to Phase 5 *Included Scope* / *Done-When* bullets (UX first, then screens, booking, payment, help/bookings as the phase exit signal).
 
@@ -653,6 +653,12 @@ Phase 5 / Step 12B (completed):
 - остальные пути каталога (callback browse, фильтры) по-прежнему **send+register** без edit
 - см. `docs/PHASE_5_STEP_12B_NOTES.md`
 
+Phase 5 / Step 13 (completed):
+- запись в **`handoffs`** через **`HandoffEntryService`**: private **`/contact`**, **`/human`**; Mini App **`POST /mini-app/support-request`** с опциональным `order_id` и `screen_hint`
+- тексты честные: нет обещания live operator / мгновенного ответа; help в Mini App **en/ro** через `GET /mini-app/help?language_code=`
+- CTA на экранах **Payment**, **Booking detail**, **My bookings**
+- см. `docs/PHASE_5_STEP_13_NOTES.md`
+
 Что ещё НЕ завершено:
 - реальный payment provider (PSP)
 - mock failure/cancel пути (вне этого среза)
@@ -712,6 +718,25 @@ Phase 5 / Step 12A (completed):
 
 Phase 5 / Step 12B (completed):
 - `/start` и `/tours` обновляют пару home+catalog через **edit**, иначе **delete+send**; см. `docs/PHASE_5_STEP_12B_NOTES.md`
+
+ПОСЛЕ STEP 12B
+
+Telegram private chat теперь использует reusable/editable service messages для:
+/start
+/tours
+
+Политика:
+- HOME_MESSAGE и CATALOG_MESSAGE переиспользуются через edit_message_text
+- если edit невозможен, используется fallback delete+send+register
+- cleanup из Step 12A для language/filter prompts сохраняется
+- важные итоговые сообщения (оплата, брони, help/contact и т.п.) не удаляются и не редактируются
+
+Результат:
+- private chat стал заметно чище
+- повторные /start и /tours не должны плодить длинную ленту служебных блоков
+
+Phase 5 / Step 13 (completed):
+- см. `docs/PHASE_5_STEP_13_NOTES.md` — minimal запись handoff + честные тексты; operator lifecycle / уведомления — вне среза
 
 ---
 
@@ -944,7 +969,7 @@ This logic already exists in the temporary reservation creation slice and must b
 ---
 
 ## Next Safe Step
-Phase 5 / Step 12
+Phase 5 / Step 13
 
 **Plan alignment (`docs/IMPLEMENTATION_PLAN.md` Phase 5):** the phase exit signal is *“Mini App UX defined first, then screens, booking, payment, and help flow implemented”*. The next **Included Scope** items not yet satisfied after Step 4 are the **reserve action** and **payment** slices: *“Build reservation screen for seat count, boarding point, reservation timer, and reserve action”* and *“Build payment screen with amount, timer, and transition into payment scenario”*, matching *Done-When*: *“reserve seats, start payment”*. Step 4 completed only preparation UI; Step 5 implements **real temporary reservation creation** and **starting payment** in the Mini App by reusing existing Phase 3–4 service-layer flows (`TemporaryReservationService`, `PaymentEntryService`, reconciliation assumptions), not by duplicating rules in the UI.
 

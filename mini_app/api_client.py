@@ -12,6 +12,7 @@ from app.schemas.mini_app import (
     MiniAppLanguagePreferenceResponse,
     MiniAppReservationPreparationRead,
     MiniAppSettingsRead,
+    MiniAppSupportRequestResponse,
     MiniAppTourDetailRead,
 )
 from app.schemas.payment import PaymentReconciliationRead
@@ -22,11 +23,31 @@ class MiniAppApiClient:
     def __init__(self, base_url: str) -> None:
         self.base_url = base_url.rstrip("/")
 
-    async def get_help(self) -> MiniAppHelpRead:
+    async def get_help(self, *, language_code: str | None = None) -> MiniAppHelpRead:
+        params: dict[str, str] = {}
+        if language_code:
+            params["language_code"] = language_code
         async with httpx.AsyncClient(base_url=self.base_url, timeout=10.0) as client:
-            response = await client.get("/mini-app/help")
+            response = await client.get("/mini-app/help", params=params or None)
             response.raise_for_status()
             return MiniAppHelpRead.model_validate(response.json())
+
+    async def post_support_request(
+        self,
+        *,
+        telegram_user_id: int,
+        order_id: int | None,
+        screen_hint: str,
+    ) -> MiniAppSupportRequestResponse:
+        body = {
+            "telegram_user_id": telegram_user_id,
+            "order_id": order_id,
+            "screen_hint": screen_hint,
+        }
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=15.0) as client:
+            response = await client.post("/mini-app/support-request", json=body)
+            response.raise_for_status()
+            return MiniAppSupportRequestResponse.model_validate(response.json())
 
     async def get_mini_app_settings(self, *, telegram_user_id: int | None = None) -> MiniAppSettingsRead:
         params: dict[str, object] = {}

@@ -70,6 +70,7 @@ from app.bot.transient_messages import (
 )
 from app.core.config import get_settings
 from app.db.session import SessionLocal
+from app.services.handoff_entry import HandoffEntryService
 from app.services.order_summary import OrderSummaryService
 from app.services.payment_entry import PaymentEntryService
 from app.services.reservation_creation import TemporaryReservationService
@@ -201,12 +202,32 @@ async def handle_contact_command(message: Message) -> None:
     settings = get_settings()
     language_code = await _resolve_message_language(message)
     effective = language_code or settings.telegram_default_language
-    await message.answer(
-        translate(effective, "contact_command_reply"),
-        reply_markup=build_mini_app_entry_keyboard(
-            language_code=effective,
-            mini_app_url=settings.telegram_mini_app_url,
-        ),
+    markup = build_mini_app_entry_keyboard(
+        language_code=effective,
+        mini_app_url=settings.telegram_mini_app_url,
+    )
+    await message.answer(translate(effective, "contact_command_reply"), reply_markup=markup)
+    await _send_handoff_follow_up(
+        message,
+        language_code=effective,
+        reason=HandoffEntryService.REASON_PRIVATE_CONTACT,
+    )
+
+
+@router.message(Command("human"))
+async def handle_human_command(message: Message) -> None:
+    settings = get_settings()
+    language_code = await _resolve_message_language(message)
+    effective = language_code or settings.telegram_default_language
+    markup = build_mini_app_entry_keyboard(
+        language_code=effective,
+        mini_app_url=settings.telegram_mini_app_url,
+    )
+    await message.answer(translate(effective, "human_command_reply"), reply_markup=markup)
+    await _send_handoff_follow_up(
+        message,
+        language_code=effective,
+        reason=HandoffEntryService.REASON_PRIVATE_HUMAN,
     )
 
 
@@ -1096,6 +1117,36 @@ async def _send_preparation_summary(
             language_code,
             mini_app_url=get_settings().telegram_mini_app_url,
         ),
+    )
+
+
+async def _send_handoff_follow_up(message: Message, *, language_code: str, reason: str) -> None:
+    if message.from_user is None:
+        return
+    settings = get_settings()
+    markup = build_mini_app_entry_keyboard(
+        language_code=language_code,
+        mini_app_url=settings.telegram_mini_app_url,
+    )
+    hid: int | None = None
+    with SessionLocal() as session:
+        svc = HandoffEntryService()
+        hid = svc.create_for_telegram_user(
+            session,
+            telegram_user_id=message.from_user.id,
+            reason=reason,
+            telegram_language_code=message.from_user.language_code,
+        )
+        if hid is None:
+            session.rollback()
+        else:
+            session.commit()
+    if hid is None:
+        await message.answer(translate(language_code, "handoff_request_failed"), reply_markup=markup)
+        return
+    await message.answer(
+        translate(language_code, "handoff_request_recorded", ref=str(hid)),
+        reply_markup=markup,
     )
 
 

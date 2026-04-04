@@ -20,6 +20,8 @@ from app.schemas.mini_app import (
     MiniAppPaymentEntryRequest,
     MiniAppReservationPreparationRead,
     MiniAppSettingsRead,
+    MiniAppSupportRequest,
+    MiniAppSupportRequestResponse,
     MiniAppTourDetailRead,
 )
 from app.schemas.payment import PaymentReconciliationRead
@@ -28,6 +30,7 @@ from app.services.catalog import CatalogLookupService
 from app.services.mini_app_booking import MiniAppBookingService
 from app.services.mini_app_bookings import MiniAppBookingsService
 from app.services.mini_app_catalog import MiniAppCatalogService
+from app.services.handoff_entry import HandoffEntryService
 from app.services.mini_app_help_settings import MiniAppHelpSettingsService
 from app.services.mini_app_reservation_preparation import MiniAppReservationPreparationService
 from app.services.mini_app_mock_payment import MiniAppMockPaymentCompletionService
@@ -72,8 +75,34 @@ def get_booking_status(
 
 
 @router.get("/help", response_model=MiniAppHelpRead)
-def get_mini_app_help() -> MiniAppHelpRead:
-    return MiniAppHelpSettingsService().get_help_read()
+def get_mini_app_help(
+    language_code: str | None = Query(default=None, max_length=16),
+) -> MiniAppHelpRead:
+    return MiniAppHelpSettingsService().get_help_read(language_code=language_code)
+
+
+@router.post("/support-request", response_model=MiniAppSupportRequestResponse)
+def post_mini_app_support_request(
+    payload: MiniAppSupportRequest,
+    session: Session = Depends(get_db),
+) -> MiniAppSupportRequestResponse:
+    service = HandoffEntryService()
+    hint = (payload.screen_hint or "unknown").replace("|", " ").strip()[:40] or "unknown"
+    reason = f"{HandoffEntryService.REASON_MINI_APP_PREFIX}|{hint}"[:255]
+    handoff_id = service.create_for_telegram_user(
+        session,
+        telegram_user_id=payload.telegram_user_id,
+        reason=reason,
+        order_id=payload.order_id,
+    )
+    if handoff_id is None:
+        session.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="support request could not be recorded",
+        )
+    session.commit()
+    return MiniAppSupportRequestResponse(recorded=True, handoff_id=handoff_id)
 
 
 @router.get("/settings", response_model=MiniAppSettingsRead)

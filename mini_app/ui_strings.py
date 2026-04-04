@@ -139,6 +139,12 @@ _STR: dict[str, dict[str, str]] = {
         "facade_trip_payment": "Your trip — see details below.",
         "facade_other_booking": "Booking update",
         "facade_other_payment": "See booking details below.",
+        "support_log_request": "Log support request",
+        "support_snackbar_ok": "Support signal saved (ref {ref}). No instant reply guaranteed.",
+        "support_snackbar_fail": "Could not save a support signal. Open the Telegram bot and use /contact or /human.",
+        "support_note_payment": "Payment or checkout problem? Log a support signal — the team may review it (not live chat).",
+        "support_note_booking_detail": "Need help with this booking? Log a signal, then describe your case in the bot chat if you can.",
+        "support_banner_my_bookings": "Issue with a hold or payment? Log a support signal here or write /human in the bot chat.",
     },
     "ro": {
         "catalog_title": "Catalog tururi",
@@ -244,6 +250,12 @@ _STR: dict[str, dict[str, str]] = {
         "facade_trip_payment": "Calatoria ta — vezi detaliile.",
         "facade_other_booking": "Actualizare rezervare",
         "facade_other_payment": "Vezi detaliile rezervarii.",
+        "support_log_request": "Inregistreaza cerere suport",
+        "support_snackbar_ok": "Semnal salvat (ref {ref}). Fara raspuns instant garantat.",
+        "support_snackbar_fail": "Nu s-a putut salva semnalul. Deschide botul Telegram cu /contact sau /human.",
+        "support_note_payment": "Problema la plata sau checkout? Inregistreaza un semnal — echipa poate revizui (nu chat live).",
+        "support_note_booking_detail": "Ai nevoie de ajutor pentru aceasta rezervare? Inregistreaza un semnal, apoi descrie in bot daca poti.",
+        "support_banner_my_bookings": "Problema la un hold sau la plata? Inregistreaza aici sau scrie /human in bot.",
     },
 }
 

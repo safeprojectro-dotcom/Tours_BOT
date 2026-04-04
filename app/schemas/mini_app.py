@@ -126,3 +126,23 @@ class MiniAppLanguagePreferenceRequest(BaseModel):
 
 class MiniAppLanguagePreferenceResponse(BaseModel):
     language_code: str
+
+
+class MiniAppSupportRequest(BaseModel):
+    """MVP support signal; persisted as a `handoffs` row when valid."""
+
+    telegram_user_id: int = Field(gt=0)
+    order_id: int | None = Field(
+        default=None,
+        description="Optional order scope; must belong to the Telegram user.",
+    )
+    screen_hint: str | None = Field(
+        default=None,
+        max_length=64,
+        description="Short UI origin label, e.g. payment, booking_detail, my_bookings_history.",
+    )
+
+
+class MiniAppSupportRequestResponse(BaseModel):
+    recorded: bool = Field(description="True when a handoff row was stored.")
+    handoff_id: int | None = Field(default=None, description="New handoff primary key when recorded.")

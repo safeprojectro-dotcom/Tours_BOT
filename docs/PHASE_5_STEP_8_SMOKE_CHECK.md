@@ -87,6 +87,12 @@ On **My bookings**, the Mini App shows **Confirmed bookings** first, then **Acti
 
 **Booking detail** adds a short explanation per hold state; **payment** screen uses clearer copy for an active hold, and friendly messages when payment-entry fails (e.g. hold gone) or mock completion is disabled (403). See `docs/PHASE_5_STEP_12_NOTES.md`.
 
+## Support / handoff entry (Step 13)
+
+- **Private chat:** `/help` (guidance only), `/contact` and `/human` record a **`handoffs`** row and reply with an internal reference id (no promise of live operator).
+- **API:** `POST /mini-app/support-request` with `telegram_user_id`, optional `order_id`, optional `screen_hint`; `GET /mini-app/help?language_code=` for EN/RO help text.
+- **Mini App:** “Log support request” on **Payment**, **Booking detail**, and **My bookings** (when list non-empty); snackbar shows ref or failure. See `docs/PHASE_5_STEP_13_NOTES.md`.
+
 ## Step 8B — UI language vs content
 
 After changing **Language & settings**, shell labels (nav, titles, buttons, filters) should follow the selected language where keys exist; tour paragraphs may still show fallback language from the API. See `docs/PHASE_5_STEP_8B_NOTES.md`.

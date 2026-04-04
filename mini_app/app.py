@@ -1093,6 +1093,17 @@ class PaymentEntryScreen:
             visible=False,
             on_click=lambda _: self.on_open_bookings(),
         )
+        self.support_note = ft.Text(
+            shell(lg, "support_note_payment"),
+            size=13,
+            color=ft.Colors.ON_SURFACE_VARIANT,
+            visible=False,
+        )
+        self.support_log_button = ft.OutlinedButton(
+            shell(lg, "support_log_request"),
+            visible=False,
+            on_click=lambda _: self.page.run_task(self._log_support_payment_async),
+        )
 
     def set_context(self, *, tour_code: str, order_id: int) -> None:
         self.tour_code = tour_code
@@ -1109,6 +1120,8 @@ class PaymentEntryScreen:
         self.bookings_after_pay_button.text = shell(lg, "cta_back_to_bookings")
         if self.loading_row.controls:
             self.loading_row.controls[1].value = shell(lg, "starting_payment")
+        self.support_note.value = shell(lg, "support_note_payment")
+        self.support_log_button.text = shell(lg, "support_log_request")
 
     def build(self) -> ft.Control:
         return scrollable_page(
@@ -1121,6 +1134,8 @@ class PaymentEntryScreen:
             self.error_text,
             self._heading,
             self._intro,
+            self.support_note,
+            self.support_log_button,
             self.body_column,
             ft.Row([self.pay_now_button, self.bookings_after_pay_button], alignment=ft.MainAxisAlignment.START, wrap=True),
         )
@@ -1135,6 +1150,8 @@ class PaymentEntryScreen:
 
         self._set_loading(True)
         self.error_text.visible = False
+        self.support_note.visible = False
+        self.support_log_button.visible = False
         self.body_column.controls.clear()
         self.page.update()
 
@@ -1166,11 +1183,44 @@ class PaymentEntryScreen:
             self._set_loading(False)
             self.page.update()
 
+    async def _log_support_payment_async(self) -> None:
+        lg = self.language_code
+        if self.order_id is None:
+            return
+        try:
+            r = await self.api_client.post_support_request(
+                telegram_user_id=self.dev_telegram_user_id,
+                order_id=self.order_id,
+                screen_hint="payment",
+            )
+        except Exception:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "support_snackbar_fail")),
+                action="OK",
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
+        if r.recorded and r.handoff_id is not None:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "support_snackbar_ok", ref=str(r.handoff_id))),
+                action="OK",
+            )
+        else:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "support_snackbar_fail")),
+                action="OK",
+            )
+        self.page.snack_bar.open = True
+        self.page.update()
+
     def _render_entry(self, entry: PaymentEntryRead) -> None:
         self._last_entry = entry
         order = entry.order
         expires = order.reservation_expires_at
         lg = self.language_code
+        self.support_note.visible = True
+        self.support_log_button.visible = True
         self._intro.value = shell(lg, "payment_intro_active_hold")
         expiry_line = (
             shell(lg, "line_pay_before", when=CatalogScreen._format_datetime(expires))
@@ -1258,6 +1308,8 @@ class PaymentEntryScreen:
     def _render_payment_success(self, recon: PaymentReconciliationRead) -> None:
         lg = self.language_code
         order = recon.order
+        self.support_note.visible = False
+        self.support_log_button.visible = False
         self._heading.value = shell(lg, "payment_success_title")
         self._intro.value = shell(lg, "payment_success_intro")
         self.pay_now_button.visible = False
@@ -1332,6 +1384,17 @@ class MyBookingsScreen:
         )
         self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
         self.items_column = ft.Column(spacing=12)
+        self.support_banner_note = ft.Text(
+            shell(lg, "support_banner_my_bookings"),
+            size=13,
+            color=ft.Colors.ON_SURFACE_VARIANT,
+            visible=False,
+        )
+        self.support_banner_button = ft.OutlinedButton(
+            shell(lg, "support_log_request"),
+            visible=False,
+            on_click=lambda _: self.page.run_task(self._log_support_my_bookings_async),
+        )
 
     def sync_shell_labels(self) -> None:
         lg = self.language_code
@@ -1342,6 +1405,8 @@ class MyBookingsScreen:
         self.page_subtitle.value = shell(lg, "my_bookings_subtitle")
         if self.loading_row.controls:
             self.loading_row.controls[1].value = shell(lg, "loading_bookings")
+        self.support_banner_note.value = shell(lg, "support_banner_my_bookings")
+        self.support_banner_button.text = shell(lg, "support_log_request")
 
     def build(self) -> ft.Control:
         return scrollable_page(
@@ -1355,6 +1420,8 @@ class MyBookingsScreen:
             self.loading_row,
             self.error_text,
             self.items_column,
+            self.support_banner_note,
+            self.support_banner_button,
         )
 
     async def load_bookings(self) -> None:
@@ -1381,6 +1448,8 @@ class MyBookingsScreen:
 
     def _render(self, data: MiniAppBookingsListRead | None) -> None:
         self.items_column.controls.clear()
+        self.support_banner_note.visible = False
+        self.support_banner_button.visible = False
         if data is None:
             return
         lg = self.language_code
@@ -1409,6 +1478,37 @@ class MyBookingsScreen:
             )
             for item in bucket:
                 self.items_column.controls.append(self._booking_card(item))
+        self.support_banner_note.visible = True
+        self.support_banner_button.visible = True
+
+    async def _log_support_my_bookings_async(self) -> None:
+        lg = self.language_code
+        try:
+            r = await self.api_client.post_support_request(
+                telegram_user_id=self.dev_telegram_user_id,
+                order_id=None,
+                screen_hint="my_bookings",
+            )
+        except Exception:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "support_snackbar_fail")),
+                action="OK",
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
+        if r.recorded and r.handoff_id is not None:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "support_snackbar_ok", ref=str(r.handoff_id))),
+                action="OK",
+            )
+        else:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "support_snackbar_fail")),
+                action="OK",
+            )
+        self.page.snack_bar.open = True
+        self.page.update()
 
     def _booking_card(self, item: MiniAppBookingListItemRead) -> ft.Control:
         lg = self.language_code
@@ -1499,6 +1599,17 @@ class BookingDetailScreen:
         )
         self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
         self.body_column = ft.Column(spacing=12)
+        self.support_note = ft.Text(
+            shell(lg, "support_note_booking_detail"),
+            size=13,
+            color=ft.Colors.ON_SURFACE_VARIANT,
+            visible=False,
+        )
+        self.support_log_button = ft.OutlinedButton(
+            shell(lg, "support_log_request"),
+            visible=False,
+            on_click=lambda _: self.page.run_task(self._log_support_booking_async),
+        )
 
     def set_order_id(self, order_id: int) -> None:
         self.order_id = order_id
@@ -1511,6 +1622,8 @@ class BookingDetailScreen:
         self.page_title.value = shell(lg, "booking_details_title")
         if self.loading_row.controls:
             self.loading_row.controls[1].value = shell(lg, "loading_booking_detail")
+        self.support_note.value = shell(lg, "support_note_booking_detail")
+        self.support_log_button.text = shell(lg, "support_log_request")
 
     def build(self) -> ft.Control:
         return scrollable_page(
@@ -1523,6 +1636,8 @@ class BookingDetailScreen:
             self.loading_row,
             self.error_text,
             self.body_column,
+            self.support_note,
+            self.support_log_button,
         )
 
     async def load_detail(self) -> None:
@@ -1556,6 +1671,8 @@ class BookingDetailScreen:
     def _render(self, detail: MiniAppBookingDetailRead | None) -> None:
         self._last_detail = detail
         self.body_column.controls.clear()
+        self.support_note.visible = False
+        self.support_log_button.visible = False
         if detail is None:
             return
         s = detail.summary
@@ -1640,6 +1757,39 @@ class BookingDetailScreen:
                 )
             )
         self.body_column.controls.append(ft.Row(cta_row, alignment=ft.MainAxisAlignment.START))
+        self.support_note.visible = True
+        self.support_log_button.visible = True
+
+    async def _log_support_booking_async(self) -> None:
+        lg = self.language_code
+        if self.order_id is None:
+            return
+        try:
+            r = await self.api_client.post_support_request(
+                telegram_user_id=self.dev_telegram_user_id,
+                order_id=self.order_id,
+                screen_hint="booking_detail",
+            )
+        except Exception:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "support_snackbar_fail")),
+                action="OK",
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
+        if r.recorded and r.handoff_id is not None:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "support_snackbar_ok", ref=str(r.handoff_id))),
+                action="OK",
+            )
+        else:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "support_snackbar_fail")),
+                action="OK",
+            )
+        self.page.snack_bar.open = True
+        self.page.update()
 
     def _show_error(self, message: str) -> None:
         self.error_text.value = message
@@ -1694,7 +1844,7 @@ class HelpScreen:
         ]
         self.page.update()
         try:
-            h = await self.api_client.get_help()
+            h = await self.api_client.get_help(language_code=self.language_code)
         except httpx.HTTPStatusError as exc:
             self.body_column.controls = [
                 ft.Text(

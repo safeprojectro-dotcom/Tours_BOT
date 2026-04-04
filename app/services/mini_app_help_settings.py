@@ -12,7 +12,16 @@ from app.schemas.mini_app import (
 from app.services.user_profile import UserProfileService
 
 
-def build_mini_app_help_read() -> MiniAppHelpRead:
+def _normalize_help_language(language_code: str | None) -> str:
+    if not language_code:
+        return "en"
+    low = language_code.strip().lower()
+    if low.startswith("ro"):
+        return "ro"
+    return "en"
+
+
+def _build_help_en() -> MiniAppHelpRead:
     return MiniAppHelpRead(
         title="Help",
         intro=(
@@ -36,20 +45,68 @@ def build_mini_app_help_read() -> MiniAppHelpRead:
                 ],
             ),
             MiniAppHelpCategoryRead(
-                title="Need a person?",
+                title="Scripted help vs human help",
                 bullets=[
-                    "For disputes, changes, or complex cases, human support may be required.",
-                    "Use your usual Telegram bot chat for the operator when that workflow is available.",
+                    "This screen explains how the app works — it is not a live chat with an operator.",
+                    "For payment problems, discounts, custom pickup, complaints, or anything risky, a human may need to review your case.",
+                    "On Payment, Booking detail, or My bookings, use “Log support request” when you see it — that stores a support signal for the team (no instant reply guaranteed).",
                 ],
             ),
         ],
         operator_notice=(
-            "Live operator handoff from this Mini App is not implemented yet. "
-            "No request is sent to a human from this screen; this is information only."
+            "Live operator chat from this Mini App is not implemented. "
+            "The “Log support request” action creates an internal queue record only; it does not assign an operator in real time. "
+            "Use the main Telegram bot chat for written follow-up and /contact or /human when you need help."
         ),
         when_to_contact_support=(
-            "Contact support through the main sales bot in Telegram when you need changes, refunds, "
-            "or help that this app cannot complete."
+            "Use “Log support request” from a booking or payment screen when something is wrong, "
+            "or write in the Telegram bot chat with /contact or /human for complex cases. "
+            "The team responds through normal operational channels when available."
+        ),
+    )
+
+
+def _build_help_ro() -> MiniAppHelpRead:
+    return MiniAppHelpRead(
+        title="Ajutor",
+        intro=(
+            "Mini App te ajuta sa vezi tururi, sa obtii o rezervare temporara cu termen, si sa pornesti plata. "
+            "Informatiile de aici sunt orientative."
+        ),
+        categories=[
+            MiniAppHelpCategoryRead(
+                title="Rezervari si plata",
+                bullets=[
+                    "Rezervarea temporara are deadline; plateste inainte sa expire, altfel hold-ul poate fi eliberat.",
+                    "Plata este confirmata doar dupa ce backend-ul o marcheaza platita — nu in momentul cand apesi Plateste.",
+                    "Daca plata se deschide intr-un browser extern, finalizeaza acolo si revino aici pentru status.",
+                ],
+            ),
+            MiniAppHelpCategoryRead(
+                title="Limba si continut",
+                bullets=[
+                    "Textul unui tur poate folosi limba de rezerva daca lipseste traducerea — aplicatia o va indica.",
+                    "Poti schimba limba afisata din Setari cand este disponibil.",
+                ],
+            ),
+            MiniAppHelpCategoryRead(
+                title="Ajutor in aplicatie vs om",
+                bullets=[
+                    "Acest ecran explica cum functioneaza aplicatia — nu este chat live cu operator.",
+                    "Pentru probleme de plata, reduceri, imbarcare speciala, reclamatii sau cazuri riscante, poate fi nevoie de om.",
+                    "La Plata, Detalii rezervare sau Rezervarile mele, foloseste „Inregistreaza cerere suport” cand apare — creeaza un semnal pentru echipa (fara raspuns instant garantat).",
+                ],
+            ),
+        ],
+        operator_notice=(
+            "Chat live cu operator din Mini App nu este implementat. "
+            "Actiunea „Inregistreaza cerere suport” creeaza doar o inregistrare interna in coada; nu assign-uieste un operator in timp real. "
+            "Foloseste chat-ul principal cu botul Telegram pentru mesaje scrise si comenzile /contact sau /human."
+        ),
+        when_to_contact_support=(
+            "Foloseste „Inregistreaza cerere suport” de pe ecranul de plata sau rezervare cand ceva nu merge, "
+            "sau scrie in botul Telegram cu /contact sau /human pentru cazuri complexe. "
+            "Echipa raspunde prin canalele operationale obisnuite cand este posibil."
         ),
     )
 
@@ -59,8 +116,8 @@ class MiniAppHelpSettingsService:
         self.user_profile_service = user_profile_service or UserProfileService()
 
     @staticmethod
-    def get_help_read() -> MiniAppHelpRead:
-        return build_mini_app_help_read()
+    def get_help_read(language_code: str | None = None) -> MiniAppHelpRead:
+        return _build_help_ro() if _normalize_help_language(language_code) == "ro" else _build_help_en()
 
     def get_settings_read(
         self,

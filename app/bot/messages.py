@@ -25,12 +25,20 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "• Open Mini App — full catalog, booking, and payment\n"
         "• My bookings (Mini App) — reservation and payment status\n"
         "• Quick filters below — optional shortcuts in chat\n\n"
-        "Commands: /tours (tour list here), /language, /bookings, /contact. "
-        "Tap Help inside the Mini App for detailed topics.",
+        "Commands: /tours (tour list here), /language, /bookings, /contact, /human. "
+        "/contact or /human can log a support signal for the team (not a live operator chat). "
+        "Tap Help inside the Mini App for detailed topics and “Log support request” on payment or booking screens.",
         "bookings_command_reply": "Reservation and payment status live in the Mini App.\n\n"
         "Use the buttons below to open the Mini App or go straight to My bookings.",
-        "contact_command_reply": "For support topics, open Help inside the Mini App (including when to contact an operator). "
-        "You can also write in this chat; the team will respond when that workflow is available.",
+        "contact_command_reply": "I can record a support request for the operations team. "
+        "This does not assign an operator in real time and does not guarantee an instant reply.\n\n"
+        "Describe your issue in your next message if you want, or open Help in the Mini App and use “Log support request” on payment or booking screens.",
+        "human_command_reply": "You asked for a person. I will record a human-support signal for the team. "
+        "It is not a live chat and no operator is assigned automatically.\n\n"
+        "Briefly describe your case in your next message if you want (payment issue, discount, pickup, complaint, etc.).",
+        "handoff_request_recorded": "Support signal recorded (reference {ref}). "
+        "The team may review it through normal channels; this is not confirmation that someone is already handling your chat.",
+        "handoff_request_failed": "I could not record a support signal right now. Please try again later or describe what you need in this chat.",
         "catalog_empty": "There are no open tours to show right now. Please try again later.",
         "catalog_intro": "Here are up to 3 open tours you can review now:",
         "tour_missing": "I could not find that tour in the current catalog.",
@@ -98,12 +106,20 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "• Deschide Mini App — catalog complet, rezervare si plata\n"
         "• Rezervarile mele (Mini App) — status rezervare si plata\n"
         "• Filtre rapide mai jos — scurtaturi optionale in chat\n\n"
-        "Comenzi: /tours (lista aici), /language, /bookings, /contact. "
-        "Apasa Help in Mini App pentru detalii.",
+        "Comenzi: /tours (lista aici), /language, /bookings, /contact, /human. "
+        "/contact sau /human pot inregistra un semnal de suport pentru echipa (nu chat live cu operator). "
+        "Apasa Help in Mini App pentru detalii si „Inregistreaza cerere suport” la plata sau pe rezervare.",
         "bookings_command_reply": "Statusul rezervarii si al platii este in Mini App.\n\n"
         "Foloseste butoanele de mai jos pentru Mini App sau direct Rezervarile mele.",
-        "contact_command_reply": "Pentru suport, deschide Help in Mini App (inclusiv cand sa contactezi operatorul). "
-        "Poti scrie si aici; echipa raspunde cand fluxul este disponibil.",
+        "contact_command_reply": "Pot inregistra o cerere de suport pentru echipa operationala. "
+        "Nu inseamna ca un operator este alocat in timp real si nu garanteaza raspuns instant.\n\n"
+        "Descrie problema in mesajul urmator daca vrei, sau deschide Help in Mini App si foloseste „Inregistreaza cerere suport” la plata sau pe rezervare.",
+        "human_command_reply": "Ai cerut un om. Inregistrez un semnal de eskalare catre echipa. "
+        "Nu este chat live si niciun operator nu este assign-at automat.\n\n"
+        "Descrie pe scurt cazul in mesajul urmator daca vrei (plata, reducere, imbarcare, reclamatie, etc.).",
+        "handoff_request_recorded": "Semnal de suport inregistrat (referinta {ref}). "
+        "Echipa il poate revizui prin canalele obisnuite; nu inseamna ca cineva lucreaza deja la conversatia ta.",
+        "handoff_request_failed": "Nu am putut inregistra semnalul de suport acum. Incearca mai tarziu sau descrie ce ai nevoie in acest chat.",
         "catalog_empty": "Momentan nu exista tururi deschise pentru vanzare. Te rog incearca mai tarziu.",
         "catalog_intro": "Iata pana la 3 tururi deschise pe care le poti vedea acum:",
         "tour_missing": "Nu am gasit acel tur in catalogul curent.",
