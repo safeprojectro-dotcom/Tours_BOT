@@ -7,7 +7,7 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 5 (Mini App MVP) — **Phase 5 / Step 10 completed** (mock payment outcome + confirmed booking in Mini App; see `docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry + `TEMP_RESERVATION_TTL_MINUTES` remain as documented in `docs/PHASE_5_STEP_9_NOTES.md`.
+Phase 5 (Mini App MVP) — **Phase 5 / Step 11 completed** (My bookings grouped UX: Confirmed / Active holds / History; see `docs/PHASE_5_STEP_11_NOTES.md`). Step 10: mock payment completion (`docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry + `TEMP_RESERVATION_TTL_MINUTES` (`docs/PHASE_5_STEP_9_NOTES.md`).
 
 `docs/IMPLEMENTATION_PLAN.md` defines **Phase 5 as a single phase** (no numbered substeps in the plan). The **Step N** labels here are **project execution checkpoints** mapped to Phase 5 *Included Scope* / *Done-When* bullets (UX first, then screens, booking, payment, help/bookings as the phase exit signal).
 
@@ -634,12 +634,31 @@ Phase 5 / Step 10 (completed):
 - Mini App: Pay now вызывает mock-complete (если флаг включён); экран успеха + переход к My bookings
 - см. `docs/PHASE_5_STEP_10_NOTES.md`
 
+Phase 5 / Step 11 (completed):
+- Mini App **My bookings**: три секции (заголовки + подсказки) — **Confirmed bookings**, **Active holds**, **History**; группировка только по `facade_state` из API, без смены бэкенда
+- пустые секции скрыты; карточки и **Open** без изменений по смыслу
+- см. `docs/PHASE_5_STEP_11_NOTES.md`
+
 Что ещё НЕ завершено:
 - реальный payment provider (PSP)
 - mock failure/cancel пути (вне этого среза)
 
 Следующий шаг (вне текущего среза):
 - интеграция реального провайдера или расширение mock failure по необходимости
+
+ПОСЛЕ STEP 10 SMOKE CONFIRMED
+
+Проверено вручную на staging:
+- ENABLE_MOCK_PAYMENT_COMPLETION=true в API service
+- кнопка Pay now теперь приводит к mock completion
+- payment status в payments переходит в paid
+- Mini App показывает экран успеха:
+  - Plata confirmata / Payment confirmed
+  - booking reference
+  - payment status paid
+  - booking status confirmed
+- My bookings: секция **Confirmed bookings** сверху, затем **Active holds**, затем **History** (released/expired)
+- старые released/expired holds внизу в History
 
 ---
 
@@ -872,7 +891,7 @@ This logic already exists in the temporary reservation creation slice and must b
 ---
 
 ## Next Safe Step
-Phase 5 / Step 10
+Phase 5 / Step 11
 
 **Plan alignment (`docs/IMPLEMENTATION_PLAN.md` Phase 5):** the phase exit signal is *“Mini App UX defined first, then screens, booking, payment, and help flow implemented”*. The next **Included Scope** items not yet satisfied after Step 4 are the **reserve action** and **payment** slices: *“Build reservation screen for seat count, boarding point, reservation timer, and reserve action”* and *“Build payment screen with amount, timer, and transition into payment scenario”*, matching *Done-When*: *“reserve seats, start payment”*. Step 4 completed only preparation UI; Step 5 implements **real temporary reservation creation** and **starting payment** in the Mini App by reusing existing Phase 3–4 service-layer flows (`TemporaryReservationService`, `PaymentEntryService`, reconciliation assumptions), not by duplicating rules in the UI.
 

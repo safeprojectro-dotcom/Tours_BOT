@@ -12,6 +12,7 @@ from app.models.enums import PaymentStatus
 from app.schemas.mini_app import (
     MiniAppBookingDetailRead,
     MiniAppBookingFacadeState,
+    MiniAppBookingListItemRead,
     MiniAppBookingPrimaryCta,
     MiniAppBookingsListRead,
     MiniAppCatalogRead,
@@ -27,6 +28,7 @@ from app.schemas.prepared import (
 )
 from app.schemas.tour import BoardingPointRead
 from mini_app.api_client import MiniAppApiClient
+from mini_app.booking_grouping import partition_bookings_for_my_bookings_ui
 from mini_app.config import get_mini_app_settings
 from mini_app.ui_strings import hold_timer_hint as _hold_timer_hint_i18n
 from mini_app.ui_strings import booking_facade_labels, payment_status_label, shell
@@ -1376,45 +1378,66 @@ class MyBookingsScreen:
                 ft.Text(shell(lg, "no_bookings"), color=ft.Colors.ON_SURFACE_VARIANT)
             )
             return
-        for item in data.items:
-            s = item.summary
-            tour = s.tour
-            title = tour.localized_content.title
-            dep = CatalogScreen._format_datetime(tour.departure_datetime)
-            amount = f"{CatalogScreen._format_price(s.order.total_amount)} {s.order.currency}"
-            seats_line = shell(
-                lg,
-                "booking_seats_amount",
-                amount=amount,
-                n=str(s.order.seats_count),
-            )
-            bk_label, pay_label = booking_facade_labels(lg, item.facade_state.value)
+        confirmed, active, history = partition_bookings_for_my_bookings_ui(data.items)
+        sections: list[tuple[str, str, list[MiniAppBookingListItemRead]]] = [
+            ("bookings_section_confirmed_title", "bookings_section_confirmed_hint", confirmed),
+            ("bookings_section_active_title", "bookings_section_active_hint", active),
+            ("bookings_section_history_title", "bookings_section_history_hint", history),
+        ]
+        for title_key, hint_key, bucket in sections:
+            if not bucket:
+                continue
             self.items_column.controls.append(
-                ft.Container(
-                    bgcolor=ft.Colors.SURFACE_CONTAINER_LOW,
-                    border_radius=16,
-                    padding=16,
-                    content=ft.Column(
-                        [
-                            ft.Text(title, size=18, weight=ft.FontWeight.BOLD),
-                            ft.Text(dep, color=ft.Colors.ON_SURFACE_VARIANT),
-                            ft.Text(seats_line, color=ft.Colors.ON_SURFACE_VARIANT),
-                            ft.Text(bk_label, weight=ft.FontWeight.W_500),
-                            ft.Text(pay_label, color=ft.Colors.ON_SURFACE_VARIANT, size=13),
-                            ft.Row(
-                                [
-                                    ft.FilledButton(
-                                        shell(lg, "booking_open"),
-                                        on_click=lambda _, oid=s.order.id: self.on_open_booking(oid),
-                                    )
-                                ],
-                                alignment=ft.MainAxisAlignment.END,
-                            ),
-                        ],
-                        spacing=6,
-                    ),
+                ft.Column(
+                    [
+                        ft.Text(shell(lg, title_key), size=20, weight=ft.FontWeight.W_600),
+                        ft.Text(shell(lg, hint_key), size=13, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ],
+                    spacing=4,
                 )
             )
+            for item in bucket:
+                self.items_column.controls.append(self._booking_card(item))
+
+    def _booking_card(self, item: MiniAppBookingListItemRead) -> ft.Control:
+        lg = self.language_code
+        s = item.summary
+        tour = s.tour
+        title = tour.localized_content.title
+        dep = CatalogScreen._format_datetime(tour.departure_datetime)
+        amount = f"{CatalogScreen._format_price(s.order.total_amount)} {s.order.currency}"
+        seats_line = shell(
+            lg,
+            "booking_seats_amount",
+            amount=amount,
+            n=str(s.order.seats_count),
+        )
+        bk_label, pay_label = booking_facade_labels(lg, item.facade_state.value)
+        oid = s.order.id
+        return ft.Container(
+            bgcolor=ft.Colors.SURFACE_CONTAINER_LOW,
+            border_radius=16,
+            padding=16,
+            content=ft.Column(
+                [
+                    ft.Text(title, size=18, weight=ft.FontWeight.BOLD),
+                    ft.Text(dep, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Text(seats_line, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Text(bk_label, weight=ft.FontWeight.W_500),
+                    ft.Text(pay_label, color=ft.Colors.ON_SURFACE_VARIANT, size=13),
+                    ft.Row(
+                        [
+                            ft.FilledButton(
+                                shell(lg, "booking_open"),
+                                on_click=lambda _, order_id=oid: self.on_open_booking(order_id),
+                            )
+                        ],
+                        alignment=ft.MainAxisAlignment.END,
+                    ),
+                ],
+                spacing=6,
+            ),
+        )
 
     def _show_error(self, message: str) -> None:
         self.error_text.value = message
