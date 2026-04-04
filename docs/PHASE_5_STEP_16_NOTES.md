@@ -48,7 +48,7 @@ Requires `OPS_QUEUE_TOKEN` via `Authorization: Bearer …` or `X-Ops-Token`.
 
 ## Out of scope
 
-- Waitlist mutations (still read-only via ops API).
+- Waitlist mutations are covered in **Phase 5 / Step 17** (`docs/PHASE_5_STEP_17_NOTES.md`).
 - Operator roles, SSO, admin UI.
 - Telegram notifications to users or operators.
 - Order-level `assigned_operator_id` and full CRM workflows.

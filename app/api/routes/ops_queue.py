@@ -13,8 +13,10 @@ from app.schemas.ops_queue import (
     OpsHandoffClaimRequest,
     OpsHandoffCloseRequest,
     OpsHandoffQueueRead,
+    OpsWaitlistActionRead,
     OpsWaitlistQueueRead,
 )
+from app.models.waitlist import WaitlistEntry
 from app.services.handoff_ops_actions import (
     HandoffClaimStateError,
     HandoffCloseStateError,
@@ -23,6 +25,13 @@ from app.services.handoff_ops_actions import (
     HandoffOpsActionService,
 )
 from app.services.ops_queue_read import OpsQueueReadService
+from app.services.waitlist_ops_actions import (
+    WAITLIST_STATUS_CLOSED,
+    WaitlistClaimStateError,
+    WaitlistCloseStateError,
+    WaitlistEntryNotFoundError,
+    WaitlistOpsActionService,
+)
 
 router = APIRouter(
     prefix="/internal/ops",
@@ -31,12 +40,23 @@ router = APIRouter(
 )
 
 
-def _to_action_read(row: Handoff) -> OpsHandoffActionRead:
+def _to_handoff_action_read(row: Handoff) -> OpsHandoffActionRead:
     return OpsHandoffActionRead(
         id=row.id,
         status=row.status,
         assigned_operator_id=row.assigned_operator_id,
         updated_at=row.updated_at,
+    )
+
+
+def _to_waitlist_action_read(row: WaitlistEntry) -> OpsWaitlistActionRead:
+    return OpsWaitlistActionRead(
+        id=row.id,
+        status=row.status,
+        user_id=row.user_id,
+        tour_id=row.tour_id,
+        seats_count=row.seats_count,
+        created_at=row.created_at,
     )
 
 
@@ -78,7 +98,7 @@ def claim_handoff(
     except HandoffInvalidOperatorError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_operator_id") from None
     db.commit()
-    return _to_action_read(row)
+    return _to_handoff_action_read(row)
 
 
 @router.patch("/handoffs/{handoff_id}/close", response_model=OpsHandoffActionRead)
@@ -101,4 +121,49 @@ def close_handoff(
     except HandoffInvalidOperatorError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_operator_id") from None
     db.commit()
-    return _to_action_read(row)
+    return _to_handoff_action_read(row)
+
+
+@router.patch("/waitlist/{waitlist_id}/claim", response_model=OpsWaitlistActionRead)
+def claim_waitlist_entry(
+    waitlist_id: int,
+    db: Session = Depends(get_db),
+) -> OpsWaitlistActionRead:
+    """`active` → `in_review`; removes row from GET .../waitlist/active. No operator field on model."""
+    svc = WaitlistOpsActionService()
+    try:
+        row = svc.claim(db, waitlist_entry_id=waitlist_id)
+    except WaitlistEntryNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="waitlist_entry_not_found") from None
+    except WaitlistClaimStateError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "waitlist_not_active", "current_status": exc.current_status},
+        ) from None
+    db.commit()
+    return _to_waitlist_action_read(row)
+
+
+@router.patch("/waitlist/{waitlist_id}/close", response_model=OpsWaitlistActionRead)
+def close_waitlist_entry(
+    waitlist_id: int,
+    db: Session = Depends(get_db),
+) -> OpsWaitlistActionRead:
+    """`active` or `in_review` → `closed`; no seats or payment side effects."""
+    svc = WaitlistOpsActionService()
+    try:
+        row = svc.close(db, waitlist_entry_id=waitlist_id)
+    except WaitlistEntryNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="waitlist_entry_not_found") from None
+    except WaitlistCloseStateError as exc:
+        code = (
+            "waitlist_already_closed"
+            if exc.current_status == WAITLIST_STATUS_CLOSED
+            else "waitlist_close_not_allowed"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": code, "current_status": exc.current_status},
+        ) from None
+    db.commit()
+    return _to_waitlist_action_read(row)

@@ -69,3 +69,14 @@ class OpsHandoffActionRead(BaseModel):
     status: str
     assigned_operator_id: int | None = None
     updated_at: datetime
+
+
+class OpsWaitlistActionRead(BaseModel):
+    """Waitlist row has no `updated_at`; `waitlist` is interest only, not a booking."""
+
+    id: int
+    status: str
+    user_id: int
+    tour_id: int
+    seats_count: int
+    created_at: datetime

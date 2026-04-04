@@ -7,7 +7,7 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 5 (Mini App MVP) — **Phase 5 / Step 16 completed** (handoff `PATCH /internal/ops/handoffs/{id}/claim|close`, `HandoffOpsActionService`, statuses `open` → `in_review` → `closed`; see `docs/PHASE_5_STEP_16_NOTES.md`). **Phase 5 / Step 15** (`docs/PHASE_5_STEP_15_NOTES.md`). **Phase 5 / Step 14** (`docs/PHASE_5_STEP_14_NOTES.md`). **Phase 5 / Step 13** (`docs/PHASE_5_STEP_13_NOTES.md`). **Phase 5 / Step 12B** (`docs/PHASE_5_STEP_12B_NOTES.md`). **Step 12A** (`docs/PHASE_5_STEP_12A_NOTES.md`). **Step 12** (`docs/PHASE_5_STEP_12_NOTES.md`). Step 11: My bookings (`docs/PHASE_5_STEP_11_NOTES.md`). Step 10: mock payment (`docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry (`docs/PHASE_5_STEP_9_NOTES.md`).
+Phase 5 (Mini App MVP) — **Phase 5 / Step 17 completed** (waitlist `PATCH /internal/ops/waitlist/{id}/claim|close`, `WaitlistOpsActionService`, `active` → `in_review` → `closed`, без operator column; see `docs/PHASE_5_STEP_17_NOTES.md`). **Phase 5 / Step 16** (`docs/PHASE_5_STEP_16_NOTES.md`). **Phase 5 / Step 15** (`docs/PHASE_5_STEP_15_NOTES.md`). **Phase 5 / Step 14** (`docs/PHASE_5_STEP_14_NOTES.md`). **Phase 5 / Step 13** (`docs/PHASE_5_STEP_13_NOTES.md`). **Phase 5 / Step 12B** (`docs/PHASE_5_STEP_12B_NOTES.md`). **Step 12A** (`docs/PHASE_5_STEP_12A_NOTES.md`). **Step 12** (`docs/PHASE_5_STEP_12_NOTES.md`). Step 11: My bookings (`docs/PHASE_5_STEP_11_NOTES.md`). Step 10: mock payment (`docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry (`docs/PHASE_5_STEP_9_NOTES.md`).
 
 `docs/IMPLEMENTATION_PLAN.md` defines **Phase 5 as a single phase** (no numbered substeps in the plan). The **Step N** labels here are **project execution checkpoints** mapped to Phase 5 *Included Scope* / *Done-When* bullets (UX first, then screens, booking, payment, help/bookings as the phase exit signal).
 
@@ -745,7 +745,10 @@ Phase 5 / Step 15 (completed):
 - см. `docs/PHASE_5_STEP_15_NOTES.md` — read-only ops JSON queues (`GET /internal/ops/handoffs/open`, `GET /internal/ops/waitlist/active`, `OPS_QUEUE_TOKEN`); handoff и waitlist раздельно; без full admin UI
 
 Phase 5 / Step 16 (completed):
-- см. `docs/PHASE_5_STEP_16_NOTES.md` — `PATCH .../handoffs/{id}/claim` и `.../close` под тем же `OPS_QUEUE_TOKEN`; waitlist по-прежнему только GET; без уведомлений и без изменения public flows
+- см. `docs/PHASE_5_STEP_16_NOTES.md` — `PATCH .../handoffs/{id}/claim` и `.../close` под тем же `OPS_QUEUE_TOKEN`; без уведомлений и без изменения public flows
+
+Phase 5 / Step 17 (completed):
+- см. `docs/PHASE_5_STEP_17_NOTES.md` — `PATCH .../waitlist/{id}/claim|close`, только смена `status` (нет `assigned_operator_id` на waitlist); `GET .../waitlist/active` по-прежнему только `active`
 
 NEXT STEP
 

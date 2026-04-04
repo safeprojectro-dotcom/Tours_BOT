@@ -103,7 +103,11 @@ Staging/production ops can poll **read-only** JSON queues (shared secret `OPS_QU
 
 ## Handoff claim / close (Step 16)
 
-With the same `OPS_QUEUE_TOKEN`, ops can **`PATCH /internal/ops/handoffs/{id}/claim`** (open → `in_review`) and **`PATCH /internal/ops/handoffs/{id}/close`** (→ `closed`). Waitlist endpoints remain read-only. See `docs/PHASE_5_STEP_16_NOTES.md`.
+With the same `OPS_QUEUE_TOKEN`, ops can **`PATCH /internal/ops/handoffs/{id}/claim`** (open → `in_review`) and **`PATCH /internal/ops/handoffs/{id}/close`** (→ `closed`). See `docs/PHASE_5_STEP_16_NOTES.md`.
+
+## Waitlist claim / close (Step 17)
+
+With the same token: **`PATCH /internal/ops/waitlist/{id}/claim`** (`active` → `in_review`) and **`PATCH /internal/ops/waitlist/{id}/close`** (→ `closed`). No booking or promotion side effects. See `docs/PHASE_5_STEP_17_NOTES.md`.
 
 ## Out of scope for this step
 
