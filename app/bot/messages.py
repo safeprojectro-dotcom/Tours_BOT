@@ -5,6 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from app.bot.constants import LANGUAGE_LABELS
+from app.models.enums import TourStatus
 from app.schemas.prepared import (
     CatalogTourCardRead,
     PaymentEntryRead,
@@ -37,6 +38,7 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "catalog_empty": "There are no open tours to show right now. Please try again later.",
         "catalog_intro": "Here are up to 3 open tours you can review now:",
         "tour_missing": "I could not find that tour in the current catalog.",
+        "waitlist_private_hint": "This tour is currently sold out. You can record interest on the waitlist in the Mini App — that is not a confirmed booking.",
         "tour_cta": "Choose another tour or open the catalog for more options.",
         "open_catalog": "Browse tours",
         "change_language": "Change language",
@@ -113,6 +115,7 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "catalog_empty": "Momentan nu exista tururi deschise pentru vanzare. Te rog incearca mai tarziu.",
         "catalog_intro": "Iata pana la 3 tururi deschise pe care le poti vedea acum:",
         "tour_missing": "Nu am gasit acel tur in catalogul curent.",
+        "waitlist_private_hint": "Acest tur este epuizat momentan. Poti inregistra interes pe lista de asteptare in Mini App — aceasta nu este o rezervare confirmata.",
         "tour_cta": "Alege alt tur sau deschide catalogul pentru mai multe optiuni.",
         "open_catalog": "Vezi tururi",
         "change_language": "Schimba limba",
@@ -570,6 +573,9 @@ def format_tour_detail_message(language_code: str | None, detail: PreparedTourDe
 
     if localized.used_fallback:
         parts.append(translate(language_code, "language_note"))
+
+    if detail.tour.status == TourStatus.OPEN_FOR_SALE and detail.tour.seats_available <= 0:
+        parts.append(translate(language_code, "waitlist_private_hint"))
 
     parts.append(translate(language_code, "tour_cta"))
     return "\n".join(parts)

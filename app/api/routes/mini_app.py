@@ -23,6 +23,9 @@ from app.schemas.mini_app import (
     MiniAppSupportRequest,
     MiniAppSupportRequestResponse,
     MiniAppTourDetailRead,
+    MiniAppWaitlistJoinRequest,
+    MiniAppWaitlistJoinResponse,
+    MiniAppWaitlistStatusRead,
 )
 from app.schemas.payment import PaymentReconciliationRead
 from app.schemas.prepared import OrderSummaryRead, PaymentEntryRead, ReservationPreparationSummaryRead
@@ -35,6 +38,7 @@ from app.services.mini_app_help_settings import MiniAppHelpSettingsService
 from app.services.mini_app_reservation_preparation import MiniAppReservationPreparationService
 from app.services.mini_app_mock_payment import MiniAppMockPaymentCompletionService
 from app.services.mini_app_tour_detail import MiniAppTourDetailService
+from app.services.mini_app_waitlist import MiniAppWaitlistService
 
 router = APIRouter(prefix="/mini-app", tags=["mini-app"])
 
@@ -176,6 +180,36 @@ def get_tour_detail(
     if detail is None:
         raise HTTPException(status_code=404, detail="tour not found")
     return detail
+
+
+@router.get("/tours/{tour_code}/waitlist-status", response_model=MiniAppWaitlistStatusRead)
+def get_waitlist_status(
+    tour_code: str,
+    telegram_user_id: int = Query(gt=0),
+    session: Session = Depends(get_db),
+) -> MiniAppWaitlistStatusRead:
+    eligible, on_waitlist = MiniAppWaitlistService().get_status(
+        session,
+        tour_code=tour_code,
+        telegram_user_id=telegram_user_id,
+    )
+    return MiniAppWaitlistStatusRead(eligible=eligible, on_waitlist=on_waitlist)
+
+
+@router.post("/tours/{tour_code}/waitlist", response_model=MiniAppWaitlistJoinResponse)
+def join_waitlist(
+    tour_code: str,
+    payload: MiniAppWaitlistJoinRequest,
+    session: Session = Depends(get_db),
+) -> MiniAppWaitlistJoinResponse:
+    outcome, entry_id = MiniAppWaitlistService().join(
+        session,
+        tour_code=tour_code,
+        telegram_user_id=payload.telegram_user_id,
+        seats_count=payload.seats_count,
+    )
+    session.commit()
+    return MiniAppWaitlistJoinResponse(outcome=outcome.value, waitlist_entry_id=entry_id)
 
 
 @router.get("/tours/{tour_code}/preparation", response_model=MiniAppReservationPreparationRead)

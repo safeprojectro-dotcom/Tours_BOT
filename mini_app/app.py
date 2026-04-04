@@ -8,7 +8,7 @@ from decimal import Decimal, InvalidOperation
 import flet as ft
 import httpx
 
-from app.models.enums import PaymentStatus
+from app.models.enums import PaymentStatus, TourStatus
 from app.schemas.mini_app import (
     MiniAppBookingDetailRead,
     MiniAppBookingFacadeState,
@@ -18,6 +18,7 @@ from app.schemas.mini_app import (
     MiniAppCatalogRead,
     MiniAppReservationPreparationRead,
     MiniAppTourDetailRead,
+    MiniAppWaitlistStatusRead,
 )
 from app.schemas.payment import PaymentReconciliationRead
 from app.schemas.prepared import (
@@ -364,6 +365,7 @@ class TourDetailScreen:
         *,
         api_client: MiniAppApiClient,
         default_language_code: str,
+        dev_telegram_user_id: int,
         on_back: Callable[[], None],
         on_prepare: Callable[[str], None],
         on_help: Callable[[], None],
@@ -372,6 +374,7 @@ class TourDetailScreen:
         self.page = page
         self.api_client = api_client
         self.language_code = default_language_code
+        self._dev_telegram_user_id = dev_telegram_user_id
         self.on_back = on_back
         self.on_prepare = on_prepare
         self.on_help = on_help
@@ -447,12 +450,25 @@ class TourDetailScreen:
             self._show_error("Unable to load tour details right now.")
             self._render_detail(None)
         else:
-            self._render_detail(detail)
+            waitlist_status: MiniAppWaitlistStatusRead | None = None
+            if not detail.is_available and detail.tour.status == TourStatus.OPEN_FOR_SALE:
+                try:
+                    waitlist_status = await self.api_client.get_waitlist_status(
+                        tour_code=self.current_tour_code,
+                        telegram_user_id=self._dev_telegram_user_id,
+                    )
+                except Exception:
+                    waitlist_status = None
+            self._render_detail(detail, waitlist_status)
         finally:
             self._set_loading(False)
             self.page.update()
 
-    def _render_detail(self, detail: MiniAppTourDetailRead | None) -> None:
+    def _render_detail(
+        self,
+        detail: MiniAppTourDetailRead | None,
+        waitlist_status: MiniAppWaitlistStatusRead | None = None,
+    ) -> None:
         self.content_column.controls.clear()
         if detail is None:
             return
@@ -493,15 +509,7 @@ class TourDetailScreen:
         )
 
         self.content_column.controls.append(
-            ft.Row(
-                [
-                    ft.ElevatedButton(
-                        shell(self.language_code, "prepare_reservation"),
-                        on_click=lambda _, code=detail.tour.code: self.on_prepare(code),
-                    )
-                ],
-                alignment=ft.MainAxisAlignment.START,
-            )
+            self._build_booking_or_waitlist_actions(detail, waitlist_status)
         )
 
         if localized.used_fallback:
@@ -540,6 +548,101 @@ class TourDetailScreen:
             self.content_column.controls.append(
                 ft.Text(shell(self.language_code, "boarding_no_details"))
             )
+
+    def _build_booking_or_waitlist_actions(
+        self,
+        detail: MiniAppTourDetailRead,
+        waitlist_status: MiniAppWaitlistStatusRead | None,
+    ) -> ft.Control:
+        lg = self.language_code
+        if detail.is_available:
+            return ft.Row(
+                [
+                    ft.ElevatedButton(
+                        shell(lg, "prepare_reservation"),
+                        on_click=lambda _, code=detail.tour.code: self.on_prepare(code),
+                    )
+                ],
+                alignment=ft.MainAxisAlignment.START,
+            )
+        if detail.tour.status != TourStatus.OPEN_FOR_SALE:
+            return ft.Row(
+                [
+                    ft.Text(
+                        shell(lg, "waitlist_tour_not_eligible"),
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    )
+                ],
+                alignment=ft.MainAxisAlignment.START,
+            )
+        if waitlist_status is not None and not waitlist_status.eligible:
+            return ft.Row(
+                [
+                    ft.Text(
+                        shell(lg, "waitlist_tour_not_eligible"),
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    )
+                ],
+                alignment=ft.MainAxisAlignment.START,
+            )
+        if waitlist_status is not None and waitlist_status.on_waitlist:
+            return ft.Container(
+                padding=ft.padding.only(top=4),
+                content=ft.Text(
+                    shell(lg, "waitlist_status_on"),
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                ),
+            )
+        return ft.Column(
+            [
+                ft.Text(
+                    shell(lg, "waitlist_intro_sold_out"),
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                ),
+                ft.Row(
+                    [
+                        ft.ElevatedButton(
+                            shell(lg, "waitlist_join_cta"),
+                            on_click=lambda _: self.page.run_task(self._join_waitlist_async),
+                        )
+                    ],
+                    alignment=ft.MainAxisAlignment.START,
+                ),
+            ],
+            spacing=8,
+        )
+
+    async def _join_waitlist_async(self) -> None:
+        if not self.current_tour_code:
+            return
+        lg = self.language_code
+        try:
+            result = await self.api_client.post_waitlist(
+                tour_code=self.current_tour_code,
+                telegram_user_id=self._dev_telegram_user_id,
+                seats_count=1,
+            )
+        except Exception:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "waitlist_snackbar_error")),
+                action="OK",
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
+        outcome = result.outcome
+        if outcome == "created":
+            msg = shell(lg, "waitlist_snackbar_created")
+        elif outcome == "already_exists":
+            msg = shell(lg, "waitlist_snackbar_already")
+        elif outcome == "not_eligible":
+            msg = shell(lg, "waitlist_snackbar_not_eligible")
+        else:
+            msg = shell(lg, "waitlist_snackbar_error")
+        self.page.snack_bar = ft.SnackBar(content=ft.Text(msg), action="OK")
+        self.page.snack_bar.open = True
+        self.page.update()
+        await self.load_tour_detail()
 
     def _build_text_section(self, title: str, body: str) -> ft.Control:
         return ft.Container(
@@ -2030,6 +2133,7 @@ class MiniAppShell:
             page,
             api_client=self.api_client,
             default_language_code=settings.mini_app_default_language,
+            dev_telegram_user_id=self._dev_telegram_user_id,
             on_back=self.open_catalog,
             on_prepare=self.open_tour_preparation,
             on_help=self.open_help,

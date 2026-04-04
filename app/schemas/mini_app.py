@@ -146,3 +146,20 @@ class MiniAppSupportRequest(BaseModel):
 class MiniAppSupportRequestResponse(BaseModel):
     recorded: bool = Field(description="True when a handoff row was stored.")
     handoff_id: int | None = Field(default=None, description="New handoff primary key when recorded.")
+
+
+class MiniAppWaitlistJoinRequest(BaseModel):
+    """Record interest on the waitlist (not a booking)."""
+
+    telegram_user_id: int = Field(gt=0)
+    seats_count: int = Field(default=1, ge=1, le=8)
+
+
+class MiniAppWaitlistJoinResponse(BaseModel):
+    outcome: str
+    waitlist_entry_id: int | None = None
+
+
+class MiniAppWaitlistStatusRead(BaseModel):
+    eligible: bool = Field(description="Tour is sold out but open for sale — waitlist is offered.")
+    on_waitlist: bool = Field(description="User already has an active waitlist row for this tour.")

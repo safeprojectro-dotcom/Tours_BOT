@@ -26,3 +26,21 @@ class WaitlistRepository(SQLAlchemyRepository[WaitlistEntry]):
             .order_by(WaitlistEntry.created_at, WaitlistEntry.id)
         )
         return list(session.scalars(stmt).all())
+
+    def get_active_entry(
+        self,
+        session: Session,
+        *,
+        user_id: int,
+        tour_id: int,
+    ) -> WaitlistEntry | None:
+        stmt = (
+            select(WaitlistEntry)
+            .where(
+                WaitlistEntry.user_id == user_id,
+                WaitlistEntry.tour_id == tour_id,
+                WaitlistEntry.status == "active",
+            )
+            .limit(1)
+        )
+        return session.scalars(stmt).first()

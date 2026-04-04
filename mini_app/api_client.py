@@ -14,6 +14,8 @@ from app.schemas.mini_app import (
     MiniAppSettingsRead,
     MiniAppSupportRequestResponse,
     MiniAppTourDetailRead,
+    MiniAppWaitlistJoinResponse,
+    MiniAppWaitlistStatusRead,
 )
 from app.schemas.payment import PaymentReconciliationRead
 from app.schemas.prepared import OrderSummaryRead, PaymentEntryRead, ReservationPreparationSummaryRead
@@ -133,6 +135,31 @@ class MiniAppApiClient:
             response = await client.get(f"/mini-app/tours/{tour_code}", params=filtered_params)
             response.raise_for_status()
             return MiniAppTourDetailRead.model_validate(response.json())
+
+    async def get_waitlist_status(
+        self,
+        *,
+        tour_code: str,
+        telegram_user_id: int,
+    ) -> MiniAppWaitlistStatusRead:
+        params = {"telegram_user_id": telegram_user_id}
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=10.0) as client:
+            response = await client.get(f"/mini-app/tours/{tour_code}/waitlist-status", params=params)
+            response.raise_for_status()
+            return MiniAppWaitlistStatusRead.model_validate(response.json())
+
+    async def post_waitlist(
+        self,
+        *,
+        tour_code: str,
+        telegram_user_id: int,
+        seats_count: int = 1,
+    ) -> MiniAppWaitlistJoinResponse:
+        body = {"telegram_user_id": telegram_user_id, "seats_count": seats_count}
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=15.0) as client:
+            response = await client.post(f"/mini-app/tours/{tour_code}/waitlist", json=body)
+            response.raise_for_status()
+            return MiniAppWaitlistJoinResponse.model_validate(response.json())
 
     async def get_tour_preparation(
         self,
