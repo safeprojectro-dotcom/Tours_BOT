@@ -7,7 +7,7 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 5 (Mini App MVP) — **Phase 5 / Step 11 completed** (My bookings grouped UX: Confirmed / Active holds / History; see `docs/PHASE_5_STEP_11_NOTES.md`). Step 10: mock payment completion (`docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry + `TEMP_RESERVATION_TTL_MINUTES` (`docs/PHASE_5_STEP_9_NOTES.md`).
+Phase 5 (Mini App MVP) — **Phase 5 / Step 12 completed** (payment edge / retry UX: booking detail notes, payment screen copy, 400/403 handling; see `docs/PHASE_5_STEP_12_NOTES.md`). Step 11: My bookings sections (`docs/PHASE_5_STEP_11_NOTES.md`). Step 10: mock payment (`docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry (`docs/PHASE_5_STEP_9_NOTES.md`).
 
 `docs/IMPLEMENTATION_PLAN.md` defines **Phase 5 as a single phase** (no numbered substeps in the plan). The **Step N** labels here are **project execution checkpoints** mapped to Phase 5 *Included Scope* / *Done-When* bullets (UX first, then screens, booking, payment, help/bookings as the phase exit signal).
 
@@ -639,6 +639,11 @@ Phase 5 / Step 11 (completed):
 - пустые секции скрыты; карточки и **Open** без изменений по смыслу
 - см. `docs/PHASE_5_STEP_11_NOTES.md`
 
+Phase 5 / Step 12 (completed):
+- **Booking detail:** контекстная подсказка по `facade_state` (active / confirmed / released); локализованный ref
+- **Payment screen:** intro для активного hold; 400 → «нельзя начать оплату»; 403 mock → дружелюбный текст; Pay скрыт при ошибке загрузки
+- см. `docs/PHASE_5_STEP_12_NOTES.md`
+
 Что ещё НЕ завершено:
 - реальный payment provider (PSP)
 - mock failure/cancel пути (вне этого среза)
@@ -659,6 +664,22 @@ Phase 5 / Step 11 (completed):
   - booking status confirmed
 - My bookings: секция **Confirmed bookings** сверху, затем **Active holds**, затем **History** (released/expired)
 - старые released/expired holds внизу в History
+
+
+CURRENT NEXT STEP
+
+Step 12 — payment edge cases and retry UX
+
+Уже подтверждено вручную:
+- success payment flow работает
+- My bookings разделён на Confirmed / Active holds / History
+
+Следующий шаг:
+- сделать booking detail и payment screen устойчивыми для edge cases:
+  - expired/released booking
+  - disabled mock payment
+  - retry path for active hold
+- не менять бизнес-логику, только presentation/UX hardening
 
 ---
 
@@ -891,7 +912,7 @@ This logic already exists in the temporary reservation creation slice and must b
 ---
 
 ## Next Safe Step
-Phase 5 / Step 11
+Phase 5 / Step 12
 
 **Plan alignment (`docs/IMPLEMENTATION_PLAN.md` Phase 5):** the phase exit signal is *“Mini App UX defined first, then screens, booking, payment, and help flow implemented”*. The next **Included Scope** items not yet satisfied after Step 4 are the **reserve action** and **payment** slices: *“Build reservation screen for seat count, boarding point, reservation timer, and reserve action”* and *“Build payment screen with amount, timer, and transition into payment scenario”*, matching *Done-When*: *“reserve seats, start payment”*. Step 4 completed only preparation UI; Step 5 implements **real temporary reservation creation** and **starting payment** in the Mini App by reusing existing Phase 3–4 service-layer flows (`TemporaryReservationService`, `PaymentEntryService`, reconciliation assumptions), not by duplicating rules in the UI.
 

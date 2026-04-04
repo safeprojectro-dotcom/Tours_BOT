@@ -30,6 +30,7 @@ from app.schemas.tour import BoardingPointRead
 from mini_app.api_client import MiniAppApiClient
 from mini_app.booking_grouping import partition_bookings_for_my_bookings_ui
 from mini_app.config import get_mini_app_settings
+from mini_app.presentation_notes import booking_detail_context_note
 from mini_app.ui_strings import hold_timer_hint as _hold_timer_hint_i18n
 from mini_app.ui_strings import booking_facade_labels, payment_status_label, shell
 
@@ -1128,6 +1129,8 @@ class PaymentEntryScreen:
         self.sync_shell_labels()
         if self.order_id is None:
             self._show_error("Missing order reference.")
+            self.pay_now_button.visible = False
+            self.bookings_after_pay_button.visible = False
             return
 
         self._set_loading(True)
@@ -1141,13 +1144,22 @@ class PaymentEntryScreen:
                 telegram_user_id=self.dev_telegram_user_id,
             )
         except httpx.HTTPStatusError as exc:
-            message = CatalogScreen._http_error_message(
-                exc,
-                default="Unable to start payment entry for this reservation.",
-            )
-            self._show_error(message)
+            lg_err = self.language_code
+            if exc.response is not None and exc.response.status_code == 400:
+                self._show_error(shell(lg_err, "payment_screen_unavailable_hold"))
+            else:
+                self._show_error(
+                    CatalogScreen._http_error_message(
+                        exc,
+                        default=shell(lg_err, "payment_screen_load_error_generic"),
+                    )
+                )
+            self.pay_now_button.visible = False
+            self.bookings_after_pay_button.visible = False
         except Exception:
-            self._show_error("Unable to start payment entry for this reservation.")
+            self._show_error(shell(self.language_code, "payment_screen_load_error_generic"))
+            self.pay_now_button.visible = False
+            self.bookings_after_pay_button.visible = False
         else:
             self._render_entry(entry)
         finally:
@@ -1159,6 +1171,7 @@ class PaymentEntryScreen:
         order = entry.order
         expires = order.reservation_expires_at
         lg = self.language_code
+        self._intro.value = shell(lg, "payment_intro_active_hold")
         expiry_line = (
             shell(lg, "line_pay_before", when=CatalogScreen._format_datetime(expires))
             if expires
@@ -1221,23 +1234,21 @@ class PaymentEntryScreen:
                 telegram_user_id=self.dev_telegram_user_id,
             )
         except httpx.HTTPStatusError as exc:
+            lg = self.language_code
             if exc.response is not None and exc.response.status_code == 403:
                 self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(
-                        "Mock payment completion is turned off on this server. "
-                        "Use the payment webhook or enable ENABLE_MOCK_PAYMENT_COMPLETION for staging."
-                    ),
+                    content=ft.Text(shell(lg, "payment_mock_disabled_user_message")),
                     action="OK",
                 )
                 self.page.snack_bar.open = True
             else:
                 message = CatalogScreen._http_error_message(
                     exc,
-                    default="Payment could not be confirmed. Try again or check booking status later.",
+                    default=shell(lg, "payment_confirm_error_generic"),
                 )
                 self._show_error(message)
         except Exception:
-            self._show_error("Payment could not be confirmed. Try again or check booking status later.")
+            self._show_error(shell(self.language_code, "payment_confirm_error_generic"))
         else:
             self._render_payment_success(recon)
         finally:
@@ -1249,6 +1260,8 @@ class PaymentEntryScreen:
         order = recon.order
         self._heading.value = shell(lg, "payment_success_title")
         self._intro.value = shell(lg, "payment_success_intro")
+        self.pay_now_button.visible = False
+        self.bookings_after_pay_button.visible = True
         self.body_column.controls = [
             ft.Container(
                 bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
@@ -1271,8 +1284,6 @@ class PaymentEntryScreen:
                 ),
             ),
         ]
-        self.pay_now_button.visible = False
-        self.bookings_after_pay_button.visible = True
 
     def _show_error(self, message: str) -> None:
         self.error_text.value = message
@@ -1568,6 +1579,7 @@ class BookingDetailScreen:
         )
         lg_detail = self.language_code
         bk_label, pay_label = booking_facade_labels(lg_detail, detail.facade_state.value)
+        context_note = booking_detail_context_note(self.language_code, detail.facade_state)
         self.body_column.controls = [
             ft.Container(
                 bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
@@ -1575,7 +1587,7 @@ class BookingDetailScreen:
                 padding=16,
                 content=ft.Column(
                     [
-                        ft.Text(f"Booking reference: #{order.id}", weight=ft.FontWeight.W_600),
+                        ft.Text(shell(lg_detail, "line_reservation_ref", id=str(order.id)), weight=ft.FontWeight.W_600),
                         ft.Text(tour.localized_content.title, size=18, weight=ft.FontWeight.BOLD),
                         ft.Text(
                             f"{CatalogScreen._format_datetime(tour.departure_datetime)} → "
@@ -1596,6 +1608,12 @@ class BookingDetailScreen:
                     ],
                     spacing=8,
                 ),
+            ),
+            ft.Container(
+                bgcolor=ft.Colors.SURFACE_CONTAINER_HIGH,
+                border_radius=12,
+                padding=12,
+                content=ft.Text(context_note, size=14, color=ft.Colors.ON_SURFACE_VARIANT),
             ),
         ]
         cta_row: list[ft.Control] = []
