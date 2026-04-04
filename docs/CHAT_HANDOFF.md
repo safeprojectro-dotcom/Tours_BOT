@@ -7,7 +7,7 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 5 (Mini App MVP) — **Phase 5 / Step 15 completed** (read-only ops queues: `GET /internal/ops/handoffs/open`, `GET /internal/ops/waitlist/active`, `OPS_QUEUE_TOKEN`, `OpsQueueReadService`; see `docs/PHASE_5_STEP_15_NOTES.md`). **Phase 5 / Step 14** (`docs/PHASE_5_STEP_14_NOTES.md`). **Phase 5 / Step 13** (`docs/PHASE_5_STEP_13_NOTES.md`). **Phase 5 / Step 12B** (`docs/PHASE_5_STEP_12B_NOTES.md`). **Step 12A** (`docs/PHASE_5_STEP_12A_NOTES.md`). **Step 12** (`docs/PHASE_5_STEP_12_NOTES.md`). Step 11: My bookings (`docs/PHASE_5_STEP_11_NOTES.md`). Step 10: mock payment (`docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry (`docs/PHASE_5_STEP_9_NOTES.md`).
+Phase 5 (Mini App MVP) — **Phase 5 / Step 16 completed** (handoff `PATCH /internal/ops/handoffs/{id}/claim|close`, `HandoffOpsActionService`, statuses `open` → `in_review` → `closed`; see `docs/PHASE_5_STEP_16_NOTES.md`). **Phase 5 / Step 15** (`docs/PHASE_5_STEP_15_NOTES.md`). **Phase 5 / Step 14** (`docs/PHASE_5_STEP_14_NOTES.md`). **Phase 5 / Step 13** (`docs/PHASE_5_STEP_13_NOTES.md`). **Phase 5 / Step 12B** (`docs/PHASE_5_STEP_12B_NOTES.md`). **Step 12A** (`docs/PHASE_5_STEP_12A_NOTES.md`). **Step 12** (`docs/PHASE_5_STEP_12_NOTES.md`). Step 11: My bookings (`docs/PHASE_5_STEP_11_NOTES.md`). Step 10: mock payment (`docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry (`docs/PHASE_5_STEP_9_NOTES.md`).
 
 `docs/IMPLEMENTATION_PLAN.md` defines **Phase 5 as a single phase** (no numbered substeps in the plan). The **Step N** labels here are **project execution checkpoints** mapped to Phase 5 *Included Scope* / *Done-When* bullets (UX first, then screens, booking, payment, help/bookings as the phase exit signal).
 
@@ -742,7 +742,10 @@ Phase 5 / Step 14 (completed):
 - см. `docs/PHASE_5_STEP_14_NOTES.md` — waitlist interest entry (sold-out open tours), API + Mini App + thin private-chat hint; auto-promotion / operator workflow — вне среза
 
 Phase 5 / Step 15 (completed):
-- см. `docs/PHASE_5_STEP_15_NOTES.md` — read-only ops JSON queues (`GET /internal/ops/handoffs/open`, `GET /internal/ops/waitlist/active`, `OPS_QUEUE_TOKEN`); handoff и waitlist раздельно; без мутаций и без full admin UI
+- см. `docs/PHASE_5_STEP_15_NOTES.md` — read-only ops JSON queues (`GET /internal/ops/handoffs/open`, `GET /internal/ops/waitlist/active`, `OPS_QUEUE_TOKEN`); handoff и waitlist раздельно; без full admin UI
+
+Phase 5 / Step 16 (completed):
+- см. `docs/PHASE_5_STEP_16_NOTES.md` — `PATCH .../handoffs/{id}/claim` и `.../close` под тем же `OPS_QUEUE_TOKEN`; waitlist по-прежнему только GET; без уведомлений и без изменения public flows
 
 NEXT STEP
 
@@ -979,7 +982,7 @@ This logic already exists in the temporary reservation creation slice and must b
 ---
 
 ## Next Safe Step
-Phase 5 / Step 15
+Phase 5 / Step 16
 
 **Plan alignment (`docs/IMPLEMENTATION_PLAN.md` Phase 5):** the phase exit signal is *“Mini App UX defined first, then screens, booking, payment, and help flow implemented”*. The next **Included Scope** items not yet satisfied after Step 4 are the **reserve action** and **payment** slices: *“Build reservation screen for seat count, boarding point, reservation timer, and reserve action”* and *“Build payment screen with amount, timer, and transition into payment scenario”*, matching *Done-When*: *“reserve seats, start payment”*. Step 4 completed only preparation UI; Step 5 implements **real temporary reservation creation** and **starting payment** in the Mini App by reusing existing Phase 3–4 service-layer flows (`TemporaryReservationService`, `PaymentEntryService`, reconciliation assumptions), not by duplicating rules in the UI.
 

@@ -1,5 +1,7 @@
 # Phase 5 / Step 15 — Minimal operator/admin queue visibility
 
+Handoff **mutations** (claim/close) are **Phase 5 / Step 16** — see `docs/PHASE_5_STEP_16_NOTES.md`.
+
 ## Goal
 
 Read-only visibility for operations: **open handoff requests** and **active waitlist interest rows** are visible via authenticated JSON endpoints, without building a full admin product or changing booking/payment/waitlist promotion logic.

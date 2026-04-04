@@ -50,3 +50,22 @@ class OpsWaitlistQueueRead(BaseModel):
         default="created_at_asc",
         description="Oldest active waitlist entries first.",
     )
+
+
+class OpsHandoffClaimRequest(BaseModel):
+    """Optional operator user id (must exist in `users`)."""
+
+    operator_id: int | None = Field(default=None, description="Assign this internal user as operator when set.")
+
+
+class OpsHandoffCloseRequest(BaseModel):
+    """Optional operator id recorded when closing (e.g. who resolved the case)."""
+
+    operator_id: int | None = Field(default=None, description="Set `assigned_operator_id` when closing if provided.")
+
+
+class OpsHandoffActionRead(BaseModel):
+    id: int
+    status: str
+    assigned_operator_id: int | None = None
+    updated_at: datetime

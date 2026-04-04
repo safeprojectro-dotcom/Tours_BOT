@@ -101,6 +101,10 @@ After changing **Language & settings**, shell labels (nav, titles, buttons, filt
 
 Staging/production ops can poll **read-only** JSON queues (shared secret `OPS_QUEUE_TOKEN`): `GET /internal/ops/handoffs/open` and `GET /internal/ops/waitlist/active`. This does not change user-facing bot or Mini App flows. See `docs/PHASE_5_STEP_15_NOTES.md`.
 
+## Handoff claim / close (Step 16)
+
+With the same `OPS_QUEUE_TOKEN`, ops can **`PATCH /internal/ops/handoffs/{id}/claim`** (open → `in_review`) and **`PATCH /internal/ops/handoffs/{id}/close`** (→ `closed`). Waitlist endpoints remain read-only. See `docs/PHASE_5_STEP_16_NOTES.md`.
+
 ## Out of scope for this step
 
 - New booking/payment rules, API contracts, DB changes, waitlist, handoff automation, admin, webhook transport, Mini App deploy model.
