@@ -1084,7 +1084,7 @@ class PaymentEntryScreen:
         )
         self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
         self.body_column = ft.Column(spacing=10)
-        self.pay_now_button = ft.ElevatedButton(shell(lg, "pay_now"), on_click=lambda _: self.page.run_task(self._pay_now_async()))
+        self.pay_now_button = ft.ElevatedButton(shell(lg, "pay_now"), on_click=lambda _: self.page.run_task(self._pay_now_async))
         self.bookings_after_pay_button = ft.ElevatedButton(
             shell(lg, "cta_back_to_bookings"),
             visible=False,
