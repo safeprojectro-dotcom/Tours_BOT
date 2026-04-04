@@ -18,6 +18,7 @@ from app.schemas.mini_app import (
     MiniAppReservationPreparationRead,
     MiniAppTourDetailRead,
 )
+from app.schemas.payment import PaymentReconciliationRead
 from app.schemas.prepared import (
     CatalogTourCardRead,
     OrderSummaryRead,
@@ -1049,6 +1050,7 @@ class PaymentEntryScreen:
         on_back: Callable[[str], None],
         on_help: Callable[[], None],
         on_open_settings: Callable[[], None],
+        on_open_bookings: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
@@ -1057,6 +1059,7 @@ class PaymentEntryScreen:
         self.on_back = on_back
         self.on_help = on_help
         self.on_open_settings = on_open_settings
+        self.on_open_bookings = on_open_bookings
         self.tour_code: str | None = None
         self.order_id: int | None = None
         self._last_entry: PaymentEntryRead | None = None
@@ -1081,7 +1084,12 @@ class PaymentEntryScreen:
         )
         self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
         self.body_column = ft.Column(spacing=10)
-        self.pay_now_button = ft.ElevatedButton(shell(lg, "pay_now"), on_click=self._on_pay_now)
+        self.pay_now_button = ft.ElevatedButton(shell(lg, "pay_now"), on_click=lambda _: self.page.run_task(self._pay_now_async()))
+        self.bookings_after_pay_button = ft.ElevatedButton(
+            shell(lg, "cta_back_to_bookings"),
+            visible=False,
+            on_click=lambda _: self.on_open_bookings(),
+        )
 
     def set_context(self, *, tour_code: str, order_id: int) -> None:
         self.tour_code = tour_code
@@ -1095,6 +1103,7 @@ class PaymentEntryScreen:
         self._heading.value = shell(lg, "payment_title")
         self._intro.value = shell(lg, "payment_intro")
         self.pay_now_button.text = shell(lg, "pay_now")
+        self.bookings_after_pay_button.text = shell(lg, "cta_back_to_bookings")
         if self.loading_row.controls:
             self.loading_row.controls[1].value = shell(lg, "starting_payment")
 
@@ -1110,6 +1119,7 @@ class PaymentEntryScreen:
             self._heading,
             self._intro,
             self.body_column,
+            ft.Row([self.pay_now_button, self.bookings_after_pay_button], alignment=ft.MainAxisAlignment.START, wrap=True),
         )
 
     async def load_payment_entry(self) -> None:
@@ -1187,26 +1197,80 @@ class PaymentEntryScreen:
                     spacing=8,
                 ),
             ),
-            ft.Row([self.pay_now_button], alignment=ft.MainAxisAlignment.START),
         ]
+        self.pay_now_button.visible = True
+        self.pay_now_button.disabled = False
+        self.bookings_after_pay_button.visible = False
 
-    def _on_pay_now(self, _: ft.ControlEvent) -> None:
+    async def _pay_now_async(self) -> None:
         entry = self._last_entry
-        if entry is None:
+        if entry is None or self.order_id is None:
             return
         if entry.payment_url:
             self.page.launch_url(entry.payment_url)
             return
-        self.page.snack_bar = ft.SnackBar(
-            content=ft.Text(
-                "Checkout is not available inside this Mini App yet. Keep your payment session reference; "
-                "when a provider URL is configured, Pay Now will open it. "
-                "Your booking is not paid until the server confirms payment."
-            ),
-            action="OK",
-        )
-        self.page.snack_bar.open = True
+
+        self._set_loading(True)
+        self.error_text.visible = False
         self.page.update()
+        try:
+            recon = await self.api_client.complete_mock_payment(
+                order_id=self.order_id,
+                telegram_user_id=self.dev_telegram_user_id,
+            )
+        except httpx.HTTPStatusError as exc:
+            if exc.response is not None and exc.response.status_code == 403:
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(
+                        "Mock payment completion is turned off on this server. "
+                        "Use the payment webhook or enable ENABLE_MOCK_PAYMENT_COMPLETION for staging."
+                    ),
+                    action="OK",
+                )
+                self.page.snack_bar.open = True
+            else:
+                message = CatalogScreen._http_error_message(
+                    exc,
+                    default="Payment could not be confirmed. Try again or check booking status later.",
+                )
+                self._show_error(message)
+        except Exception:
+            self._show_error("Payment could not be confirmed. Try again or check booking status later.")
+        else:
+            self._render_payment_success(recon)
+        finally:
+            self._set_loading(False)
+            self.page.update()
+
+    def _render_payment_success(self, recon: PaymentReconciliationRead) -> None:
+        lg = self.language_code
+        order = recon.order
+        self._heading.value = shell(lg, "payment_success_title")
+        self._intro.value = shell(lg, "payment_success_intro")
+        self.body_column.controls = [
+            ft.Container(
+                bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
+                border_radius=16,
+                padding=16,
+                content=ft.Column(
+                    [
+                        ft.Text(shell(lg, "line_reservation_ref", id=str(order.id)), weight=ft.FontWeight.W_600),
+                        ft.Text(
+                            shell(
+                                lg,
+                                "line_payment_status",
+                                status=_payment_status_user_label(order.payment_status, self.language_code),
+                            ),
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        ft.Text(shell(lg, "payment_success_booking_status"), weight=ft.FontWeight.W_500),
+                    ],
+                    spacing=8,
+                ),
+            ),
+        ]
+        self.pay_now_button.visible = False
+        self.bookings_after_pay_button.visible = True
 
     def _show_error(self, message: str) -> None:
         self.error_text.value = message
@@ -1798,6 +1862,7 @@ class MiniAppShell:
             on_back=self.open_reservation_success_from_payment,
             on_help=self.open_help,
             on_open_settings=self.open_settings,
+            on_open_bookings=self.open_bookings,
         )
         self.help_screen = HelpScreen(
             page,

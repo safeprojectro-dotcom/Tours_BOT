@@ -6,6 +6,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.schemas.mini_app import (
     MiniAppBookingDetailRead,
@@ -21,6 +22,7 @@ from app.schemas.mini_app import (
     MiniAppSettingsRead,
     MiniAppTourDetailRead,
 )
+from app.schemas.payment import PaymentReconciliationRead
 from app.schemas.prepared import OrderSummaryRead, PaymentEntryRead, ReservationPreparationSummaryRead
 from app.services.catalog import CatalogLookupService
 from app.services.mini_app_booking import MiniAppBookingService
@@ -28,6 +30,7 @@ from app.services.mini_app_bookings import MiniAppBookingsService
 from app.services.mini_app_catalog import MiniAppCatalogService
 from app.services.mini_app_help_settings import MiniAppHelpSettingsService
 from app.services.mini_app_reservation_preparation import MiniAppReservationPreparationService
+from app.services.mini_app_mock_payment import MiniAppMockPaymentCompletionService
 from app.services.mini_app_tour_detail import MiniAppTourDetailService
 
 router = APIRouter(prefix="/mini-app", tags=["mini-app"])
@@ -258,3 +261,29 @@ def start_payment_entry(
         )
     session.commit()
     return entry
+
+
+@router.post(
+    "/orders/{order_id}/mock-payment-complete",
+    response_model=PaymentReconciliationRead,
+)
+def complete_mock_payment(
+    order_id: int,
+    payload: MiniAppPaymentEntryRequest,
+    session: Session = Depends(get_db),
+) -> PaymentReconciliationRead:
+    if not get_settings().enable_mock_payment_completion:
+        raise HTTPException(status_code=403, detail="mock payment completion is disabled")
+    result = MiniAppMockPaymentCompletionService().complete_mock_payment_for_order(
+        session,
+        order_id=order_id,
+        telegram_user_id=payload.telegram_user_id,
+    )
+    if result is None:
+        session.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="mock payment could not be completed for this order",
+        )
+    session.commit()
+    return result

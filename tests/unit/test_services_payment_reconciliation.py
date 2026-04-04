@@ -57,6 +57,7 @@ class PaymentReconciliationServiceTests(FoundationDBTestCase):
         self.assertEqual(result.payment.status, PaymentStatus.PAID)
         self.assertEqual(result.order.payment_status, PaymentStatus.PAID)
         self.assertEqual(result.order.booking_status, BookingStatus.CONFIRMED)
+        self.assertIsNone(result.order.reservation_expires_at)
 
     def test_reconcile_provider_result_is_idempotent_for_duplicate_paid_result(self) -> None:
         user = self.create_user()

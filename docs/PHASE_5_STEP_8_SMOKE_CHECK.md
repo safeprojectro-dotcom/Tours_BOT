@@ -75,6 +75,10 @@ More detail: `docs/PHASE_5_STEP_8C_NOTES.md`.
 
 Expired unpaid holds are released in the database when you **open catalog, prepare, bookings, or related Mini App actions** (lazy expiry), so seats can return without relying only on manual reset. See `docs/PHASE_5_STEP_9_NOTES.md`.
 
+## Mock payment success (Step 10)
+
+With **`ENABLE_MOCK_PAYMENT_COMPLETION=true`** on the API, complete a hold through **payment entry**, then tap **Pay now** in the Mini App: the client calls **`POST /mini-app/orders/{id}/mock-payment-complete`** and should show **payment confirmed** + **Back to bookings**. **My bookings** / booking detail should show **confirmed** (not an active hold). Production should leave the flag **off** (endpoint returns **403**). Details: `docs/PHASE_5_STEP_10_NOTES.md`.
+
 ## Step 8B — UI language vs content
 
 After changing **Language & settings**, shell labels (nav, titles, buttons, filters) should follow the selected language where keys exist; tour paragraphs may still show fallback language from the API. See `docs/PHASE_5_STEP_8B_NOTES.md`.

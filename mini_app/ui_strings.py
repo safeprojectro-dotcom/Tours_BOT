@@ -81,6 +81,9 @@ _STR: dict[str, dict[str, str]] = {
         "line_payment_session_ref": "Payment session reference: {ref}",
         "payment_stub_notice": "Provider checkout inside this app is not connected yet. "
         "Pay Now explains the next step; nothing is shown as paid until reconciliation confirms it.",
+        "payment_success_title": "Payment confirmed",
+        "payment_success_intro": "The server recorded your payment. Your seats are confirmed for this departure.",
+        "payment_success_booking_status": "Booking status: confirmed.",
         "pay_now": "Pay now",
         "loading_bookings": "Loading bookings...",
         "my_bookings_title": "My bookings",
@@ -171,6 +174,9 @@ _STR: dict[str, dict[str, str]] = {
         "line_payment_session_ref": "Referinta sesiune plata: {ref}",
         "payment_stub_notice": "Plata prin provider in aceasta aplicatie nu e conectata inca. "
         "Plateste acum explica pasul urmator; plata nu e confirmata pana nu o confirma serverul.",
+        "payment_success_title": "Plata confirmata",
+        "payment_success_intro": "Serverul a inregistrat plata. Locurile tale sunt confirmate pentru aceasta plecare.",
+        "payment_success_booking_status": "Status rezervare: confirmata.",
         "pay_now": "Plateste acum",
         "loading_bookings": "Se incarca rezervarile...",
         "my_bookings_title": "Rezervarile mele",

@@ -113,6 +113,10 @@ class MiniAppSettingsRead(BaseModel):
     resolved_language: str = Field(
         description="Language the Mini App UI should use (active if set, else default, else first supported).",
     )
+    mock_payment_completion_enabled: bool = Field(
+        default=False,
+        description="When True, Mini App may call mock-payment-complete for mockpay (staging/local).",
+    )
 
 
 class MiniAppLanguagePreferenceRequest(BaseModel):

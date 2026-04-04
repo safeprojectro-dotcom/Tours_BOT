@@ -86,6 +86,8 @@ class PaymentReconciliationService:
                 and order.cancellation_status == CancellationStatus.ACTIVE
             ):
                 order_updates["booking_status"] = BookingStatus.CONFIRMED
+            if order.reservation_expires_at is not None:
+                order_updates["reservation_expires_at"] = None
             if order_updates:
                 order = self.order_repository.update(session, instance=order, data=order_updates)
                 order_changed = True

@@ -14,6 +14,7 @@ from app.schemas.mini_app import (
     MiniAppSettingsRead,
     MiniAppTourDetailRead,
 )
+from app.schemas.payment import PaymentReconciliationRead
 from app.schemas.prepared import OrderSummaryRead, PaymentEntryRead, ReservationPreparationSummaryRead
 
 
@@ -202,3 +203,15 @@ class MiniAppApiClient:
             response = await client.post(f"/mini-app/orders/{order_id}/payment-entry", json=body)
             response.raise_for_status()
             return PaymentEntryRead.model_validate(response.json())
+
+    async def complete_mock_payment(
+        self,
+        *,
+        order_id: int,
+        telegram_user_id: int,
+    ) -> PaymentReconciliationRead:
+        body = {"telegram_user_id": telegram_user_id}
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=15.0) as client:
+            response = await client.post(f"/mini-app/orders/{order_id}/mock-payment-complete", json=body)
+            response.raise_for_status()
+            return PaymentReconciliationRead.model_validate(response.json())

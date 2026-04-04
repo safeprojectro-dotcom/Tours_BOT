@@ -89,6 +89,7 @@ class MiniAppHelpSettingsService:
             mini_app_default_language=default_ui,
             active_language=active,
             resolved_language=resolved,
+            mock_payment_completion_enabled=settings.enable_mock_payment_completion,
         )
 
     def set_language_preference(

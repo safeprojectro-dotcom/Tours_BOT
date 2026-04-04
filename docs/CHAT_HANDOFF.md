@@ -7,7 +7,7 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 5 (Mini App MVP) — **Phase 5 / Step 9 completed**; **Step 9A:** optional hold TTL via `TEMP_RESERVATION_TTL_MINUTES` (see `docs/PHASE_5_STEP_9_NOTES.md`).
+Phase 5 (Mini App MVP) — **Phase 5 / Step 10 completed** (mock payment outcome + confirmed booking in Mini App; see `docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry + `TEMP_RESERVATION_TTL_MINUTES` remain as documented in `docs/PHASE_5_STEP_9_NOTES.md`.
 
 `docs/IMPLEMENTATION_PLAN.md` defines **Phase 5 as a single phase** (no numbered substeps in the plan). The **Step N** labels here are **project execution checkpoints** mapped to Phase 5 *Included Scope* / *Done-When* bullets (UX first, then screens, booking, payment, help/bookings as the phase exit signal).
 
@@ -586,6 +586,61 @@ Phase 5 (Mini App MVP) — **Phase 5 / Step 9 completed**; **Step 9A:** optional
   - status transitions in booking/payment lifecycle
   - consistent user-facing statuses in Mini App
 
+ТЕКУЩЕЕ СОСТОЯНИЕ ПОСЛЕ STEP 9 / 9A
+
+Инфраструктура и staging:
+- API backend работает на Railway
+- Telegram bot переведён на Railway webhook
+- Mini App UI работает как отдельный Railway service
+- PostgreSQL Railway используется как staging DB
+- TEST_BELGRADE_001 используется как staging test tour
+- reset_test_belgrade_tour_state.py очищает test tour и возвращает seats_available = seats_total
+
+Что подтверждено вручную:
+- /start, /tours, /bookings, /language, /help, /contact работают
+- Mini App открывается из Telegram
+- catalog / detail / prepare / booking / payment-entry работают
+- hold создаётся, payment entry создаётся
+- orders / payments появляются в Railway Postgres
+- seats_available уменьшается корректно
+- lazy expiry работает: истёкший hold освобождает место
+- статус истёкшего hold в БД выглядит как:
+  - payment_status = unpaid
+  - cancellation_status = cancelled_no_payment
+  - reservation_expires_at = null
+- активный hold выглядит как:
+  - payment_status = awaiting_payment
+  - cancellation_status = active
+  - есть reservation_expires_at
+- каталог / detail / prepare отражают текущее число доступных мест корректно
+
+Step 9:
+- введён lazy expiry без обязательного cron/worker
+- lazy expiry вызывается в catalog, prepare, detail, bookings, booking detail, reservation creation, payment entry
+- false sold out из-за старых awaiting_payment holds уменьшен
+
+Step 9A:
+- TTL временной брони configurable через env
+- переменная: TEMP_RESERVATION_TTL_MINUTES
+- default поведение сохранено:
+  - 6 часов, если до вылета <= 3 суток
+  - иначе 24 часа
+- на staging можно ставить TEMP_RESERVATION_TTL_MINUTES=15
+- settings кэшируются, после изменения env нужен restart API service
+
+Phase 5 / Step 10 (completed):
+- mock завершение оплаты: `ENABLE_MOCK_PAYMENT_COMPLETION` + `POST /mini-app/orders/{id}/mock-payment-complete` → тот же `PaymentReconciliationService`, что и webhook
+- при подтверждении оплаты сбрасывается `reservation_expires_at` на заказе
+- Mini App: Pay now вызывает mock-complete (если флаг включён); экран успеха + переход к My bookings
+- см. `docs/PHASE_5_STEP_10_NOTES.md`
+
+Что ещё НЕ завершено:
+- реальный payment provider (PSP)
+- mock failure/cancel пути (вне этого среза)
+
+Следующий шаг (вне текущего среза):
+- интеграция реального провайдера или расширение mock failure по необходимости
+
 ---
 
 ## Verified
@@ -817,7 +872,7 @@ This logic already exists in the temporary reservation creation slice and must b
 ---
 
 ## Next Safe Step
-Phase 5 / Step 9
+Phase 5 / Step 10
 
 **Plan alignment (`docs/IMPLEMENTATION_PLAN.md` Phase 5):** the phase exit signal is *“Mini App UX defined first, then screens, booking, payment, and help flow implemented”*. The next **Included Scope** items not yet satisfied after Step 4 are the **reserve action** and **payment** slices: *“Build reservation screen for seat count, boarding point, reservation timer, and reserve action”* and *“Build payment screen with amount, timer, and transition into payment scenario”*, matching *Done-When*: *“reserve seats, start payment”*. Step 4 completed only preparation UI; Step 5 implements **real temporary reservation creation** and **starting payment** in the Mini App by reusing existing Phase 3–4 service-layer flows (`TemporaryReservationService`, `PaymentEntryService`, reconciliation assumptions), not by duplicating rules in the UI.
 

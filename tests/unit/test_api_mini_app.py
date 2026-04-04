@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 from sqlalchemy import event
 
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
 from app.models.enums import TourStatus
@@ -393,6 +395,8 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         body = response.json()
         self.assertIn("en", body["supported_languages"])
         self.assertIn(body["resolved_language"], body["supported_languages"])
+        self.assertIn("mock_payment_completion_enabled", body)
+        self.assertFalse(body["mock_payment_completion_enabled"])
 
     def test_mini_app_settings_with_telegram_user_reflects_preferred_language(self) -> None:
         self.create_user(telegram_user_id=777_010, preferred_language="ro")
@@ -426,3 +430,64 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
             json={"telegram_user_id": 777_012, "language_code": "xx"},
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_mock_payment_complete_confirms_booking_when_enabled(self) -> None:
+        prev = os.environ.get("ENABLE_MOCK_PAYMENT_COMPLETION")
+        os.environ["ENABLE_MOCK_PAYMENT_COMPLETION"] = "true"
+        get_settings.cache_clear()
+        try:
+            tour = self.create_tour(
+                code="MINI-MOCK-PAY",
+                title_default="Mock Pay Tour",
+                departure_datetime=datetime(2026, 8, 10, 8, 0, tzinfo=UTC),
+                return_datetime=datetime(2026, 8, 11, 20, 0, tzinfo=UTC),
+                status=TourStatus.OPEN_FOR_SALE,
+                seats_available=4,
+                base_price="80.00",
+            )
+            self.create_translation(tour, language_code="en", title="Mock Pay Tour EN")
+            point = self.create_boarding_point(tour)
+            self.session.commit()
+
+            telegram_user_id = 88_500
+            reserve_response = self.client.post(
+                f"/mini-app/tours/{tour.code}/reservations",
+                params={"language_code": "en"},
+                json={
+                    "telegram_user_id": telegram_user_id,
+                    "seats_count": 2,
+                    "boarding_point_id": point.id,
+                },
+            )
+            self.assertEqual(reserve_response.status_code, 200)
+            order_id = reserve_response.json()["order"]["id"]
+
+            pay_response = self.client.post(
+                f"/mini-app/orders/{order_id}/payment-entry",
+                json={"telegram_user_id": telegram_user_id},
+            )
+            self.assertEqual(pay_response.status_code, 200)
+
+            done = self.client.post(
+                f"/mini-app/orders/{order_id}/mock-payment-complete",
+                json={"telegram_user_id": telegram_user_id},
+            )
+            self.assertEqual(done.status_code, 200)
+            payload = done.json()
+            self.assertTrue(payload["payment_confirmed"])
+            self.assertEqual(payload["order"]["booking_status"], "confirmed")
+            self.assertEqual(payload["order"]["payment_status"], "paid")
+            self.assertIsNone(payload["order"]["reservation_expires_at"])
+        finally:
+            if prev is None:
+                os.environ.pop("ENABLE_MOCK_PAYMENT_COMPLETION", None)
+            else:
+                os.environ["ENABLE_MOCK_PAYMENT_COMPLETION"] = prev
+            get_settings.cache_clear()
+
+    def test_mock_payment_complete_returns_403_when_disabled(self) -> None:
+        response = self.client.post(
+            "/mini-app/orders/1/mock-payment-complete",
+            json={"telegram_user_id": 1},
+        )
+        self.assertEqual(response.status_code, 403)

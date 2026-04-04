@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     mini_app_default_language: str = Field(default="en", alias="MINI_APP_DEFAULT_LANGUAGE")
     #: If set, temporary reservation hold length in minutes (staging). If unset, use legacy 6h / 24h rule.
     temp_reservation_ttl_minutes: int | None = Field(default=None, alias="TEMP_RESERVATION_TTL_MINUTES")
+    #: When True, Mini App may complete mockpay via POST /mini-app/orders/{id}/mock-payment-complete (staging/local).
+    enable_mock_payment_completion: bool = Field(default=False, alias="ENABLE_MOCK_PAYMENT_COMPLETION")
 
     model_config = SettingsConfigDict(
         env_file=".env",
