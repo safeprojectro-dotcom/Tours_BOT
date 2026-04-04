@@ -116,6 +116,8 @@ _STR: dict[str, dict[str, str]] = {
         "bookings_section_active_hint": "Temporary reservations — pay before the deadline to keep your seats.",
         "bookings_section_history_title": "History",
         "bookings_section_history_hint": "Released or expired holds without completed payment.",
+        "bookings_history_truncated_note": "{n} older past holds are hidden here to keep this list manageable. "
+        "They are not deleted — open a booking by reference from your records if needed.",
         "no_bookings": "No bookings yet. Browse the catalog to reserve a tour.",
         "booking_seats_amount": "{amount} · {n} seat(s)",
         "booking_open": "Open",
@@ -244,6 +246,8 @@ _STR: dict[str, dict[str, str]] = {
         "bookings_section_active_hint": "Rezervari temporare — plateste inainte de termen pentru locuri.",
         "bookings_section_history_title": "Istoric",
         "bookings_section_history_hint": "Hold-uri eliberate sau expirate fara plata finalizata.",
+        "bookings_history_truncated_note": "{n} rezervari vechi din istoric sunt ascunse aici pentru o lista mai clara. "
+        "Nu sunt sterse — poti deschide o rezervare dupa referinta daca ai nevoie.",
         "no_bookings": "Inca nu ai rezervari. Deschide catalogul.",
         "booking_seats_amount": "{amount} · {n} loc(uri)",
         "booking_open": "Deschide",

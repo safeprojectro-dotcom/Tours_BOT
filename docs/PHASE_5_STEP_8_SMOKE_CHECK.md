@@ -113,6 +113,10 @@ With the same token: **`PATCH /internal/ops/waitlist/{id}/claim`** (`active` →
 
 After ops claim, **`GET /mini-app/tours/{code}/waitlist-status`** still shows the user as having a waitlist request (`on_waitlist` for `active` and `in_review`, plus `waitlist_status`). Mini App copy distinguishes active vs in review vs closed. See `docs/PHASE_5_STEP_18_NOTES.md`.
 
+## My bookings history compaction (Step 19)
+
+Mini App **History** section shows at most **15** past holds (newest by order `updated_at` first) and a short note if more exist — presentation only, no data deletion. See `docs/PHASE_5_STEP_19_NOTES.md`.
+
 ## Out of scope for this step
 
 - New booking/payment rules, API contracts, DB changes, waitlist, handoff automation, admin, webhook transport, Mini App deploy model.

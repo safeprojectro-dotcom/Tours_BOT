@@ -1610,13 +1610,13 @@ class MyBookingsScreen:
                 ft.Text(shell(lg, "no_bookings"), color=ft.Colors.ON_SURFACE_VARIANT)
             )
             return
-        confirmed, active, history = partition_bookings_for_my_bookings_ui(data.items)
-        sections: list[tuple[str, str, list[MiniAppBookingListItemRead]]] = [
-            ("bookings_section_confirmed_title", "bookings_section_confirmed_hint", confirmed),
-            ("bookings_section_active_title", "bookings_section_active_hint", active),
-            ("bookings_section_history_title", "bookings_section_history_hint", history),
+        confirmed, active, history, history_omitted = partition_bookings_for_my_bookings_ui(data.items)
+        sections: list[tuple[str, str, list[MiniAppBookingListItemRead], bool]] = [
+            ("bookings_section_confirmed_title", "bookings_section_confirmed_hint", confirmed, False),
+            ("bookings_section_active_title", "bookings_section_active_hint", active, False),
+            ("bookings_section_history_title", "bookings_section_history_hint", history, True),
         ]
-        for title_key, hint_key, bucket in sections:
+        for title_key, hint_key, bucket, is_history in sections:
             if not bucket:
                 continue
             self.items_column.controls.append(
@@ -1630,6 +1630,14 @@ class MyBookingsScreen:
             )
             for item in bucket:
                 self.items_column.controls.append(self._booking_card(item))
+            if is_history and history_omitted > 0:
+                self.items_column.controls.append(
+                    ft.Text(
+                        shell(lg, "bookings_history_truncated_note", n=str(history_omitted)),
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    )
+                )
         self.support_banner_title.visible = True
         self.support_banner_body.visible = True
         self.support_banner_button.visible = True

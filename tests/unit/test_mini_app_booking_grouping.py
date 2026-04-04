@@ -20,6 +20,7 @@ def _minimal_item(
     facade_state: MiniAppBookingFacadeState,
     *,
     cta: MiniAppBookingPrimaryCta = MiniAppBookingPrimaryCta.BACK_TO_BOOKINGS,
+    updated_at: datetime | None = None,
 ) -> MiniAppBookingListItemRead:
     lc = LocalizedTourContentRead(title="Tour")
     tour = OrderTourSummaryRead(
@@ -29,7 +30,7 @@ def _minimal_item(
         return_datetime=datetime(2026, 6, 2, 20, 0, tzinfo=UTC),
         localized_content=lc,
     )
-    now = datetime.now(UTC)
+    now = updated_at or datetime.now(UTC)
     order = OrderRead(
         id=order_id,
         user_id=1,
@@ -69,16 +70,44 @@ class PartitionBookingsTests(unittest.TestCase):
             _minimal_item(5, MiniAppBookingFacadeState.IN_TRIP_PIPELINE),
             _minimal_item(6, MiniAppBookingFacadeState.OTHER),
         ]
-        c, a, h = partition_bookings_for_my_bookings_ui(items)
+        c, a, h, omitted = partition_bookings_for_my_bookings_ui(items)
+        self.assertEqual(omitted, 0)
         self.assertEqual([x.summary.order.id for x in c], [2, 5])
         self.assertEqual([x.summary.order.id for x in a], [3])
         self.assertEqual([x.summary.order.id for x in h], [1, 4, 6])
 
     def test_empty_input(self) -> None:
-        c, a, h = partition_bookings_for_my_bookings_ui([])
+        c, a, h, omitted = partition_bookings_for_my_bookings_ui([])
+        self.assertEqual(omitted, 0)
         self.assertEqual(c, [])
         self.assertEqual(a, [])
         self.assertEqual(h, [])
+
+    def test_history_sorted_newest_first_and_capped(self) -> None:
+        base = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+        items = [
+            _minimal_item(
+                i + 1,
+                MiniAppBookingFacadeState.EXPIRED_TEMPORARY_RESERVATION,
+                updated_at=base.replace(day=i + 1),
+            )
+            for i in range(18)
+        ]
+        c, a, h, omitted = partition_bookings_for_my_bookings_ui(items)
+        self.assertEqual(c, [])
+        self.assertEqual(a, [])
+        self.assertEqual(omitted, 3)
+        self.assertEqual(len(h), 15)
+        self.assertEqual([x.summary.order.id for x in h], list(range(18, 3, -1)))
+
+    def test_history_unlimited_when_max_is_none(self) -> None:
+        items = [
+            _minimal_item(i + 1, MiniAppBookingFacadeState.OTHER, updated_at=datetime(2026, 2, i + 1, tzinfo=UTC))
+            for i in range(20)
+        ]
+        c, a, h, omitted = partition_bookings_for_my_bookings_ui(items, history_max_items=None)
+        self.assertEqual(omitted, 0)
+        self.assertEqual(len(h), 20)
 
 
 if __name__ == "__main__":
