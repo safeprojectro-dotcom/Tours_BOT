@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.handoff import Handoff
+from app.models.order import Order
 from app.repositories.base import SQLAlchemyRepository
 
 
@@ -32,5 +33,16 @@ class HandoffRepository(SQLAlchemyRepository[Handoff]):
             select(Handoff)
             .where(Handoff.status == status)
             .order_by(Handoff.created_at.desc(), Handoff.id.desc())
+        )
+        return list(session.scalars(stmt).all())
+
+    def list_open_for_ops_queue(self, session: Session, *, limit: int = 500) -> list[Handoff]:
+        """Open handoffs, oldest first (FIFO-style triage). Eager-loads linked order and tour when present."""
+        stmt = (
+            select(Handoff)
+            .where(Handoff.status == "open")
+            .order_by(Handoff.created_at.asc(), Handoff.id.asc())
+            .limit(limit)
+            .options(selectinload(Handoff.order).selectinload(Order.tour))
         )
         return list(session.scalars(stmt).all())

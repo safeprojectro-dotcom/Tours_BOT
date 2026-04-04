@@ -97,6 +97,10 @@ On **My bookings**, the Mini App shows **Confirmed bookings** first, then **Acti
 
 After changing **Language & settings**, shell labels (nav, titles, buttons, filters) should follow the selected language where keys exist; tour paragraphs may still show fallback language from the API. See `docs/PHASE_5_STEP_8B_NOTES.md`.
 
+## Ops queue visibility (Step 15)
+
+Staging/production ops can poll **read-only** JSON queues (shared secret `OPS_QUEUE_TOKEN`): `GET /internal/ops/handoffs/open` and `GET /internal/ops/waitlist/active`. This does not change user-facing bot or Mini App flows. See `docs/PHASE_5_STEP_15_NOTES.md`.
+
 ## Out of scope for this step
 
 - New booking/payment rules, API contracts, DB changes, waitlist, handoff automation, admin, webhook transport, Mini App deploy model.

@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     temp_reservation_ttl_minutes: int | None = Field(default=None, alias="TEMP_RESERVATION_TTL_MINUTES")
     #: When True, Mini App may complete mockpay via POST /mini-app/orders/{id}/mock-payment-complete (staging/local).
     enable_mock_payment_completion: bool = Field(default=False, alias="ENABLE_MOCK_PAYMENT_COMPLETION")
+    #: Shared secret for read-only ops queue JSON API (`GET /internal/ops/...`). If unset, those routes stay disabled.
+    ops_queue_token: str | None = Field(default=None, alias="OPS_QUEUE_TOKEN")
 
     model_config = SettingsConfigDict(
         env_file=".env",

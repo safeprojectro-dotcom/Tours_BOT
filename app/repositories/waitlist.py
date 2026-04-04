@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.waitlist import WaitlistEntry
 from app.repositories.base import SQLAlchemyRepository
@@ -44,3 +44,14 @@ class WaitlistRepository(SQLAlchemyRepository[WaitlistEntry]):
             .limit(1)
         )
         return session.scalars(stmt).first()
+
+    def list_active_for_ops_queue(self, session: Session, *, limit: int = 500) -> list[WaitlistEntry]:
+        """Active waitlist rows only, oldest first (longest-waiting first). Eager-loads tour for labels."""
+        stmt = (
+            select(WaitlistEntry)
+            .where(WaitlistEntry.status == "active")
+            .order_by(WaitlistEntry.created_at.asc(), WaitlistEntry.id.asc())
+            .limit(limit)
+            .options(selectinload(WaitlistEntry.tour))
+        )
+        return list(session.scalars(stmt).all())
