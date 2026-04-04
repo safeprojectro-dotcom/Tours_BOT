@@ -10,6 +10,7 @@ from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
 from app.models.enums import TourStatus
+from app.models.waitlist import WaitlistEntry
 from app.repositories.user import UserRepository
 from tests.unit.base import FoundationDBTestCase
 
@@ -509,7 +510,15 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
             params={"telegram_user_id": 77_101},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"eligible": True, "on_waitlist": False})
+        self.assertEqual(
+            response.json(),
+            {
+                "eligible": True,
+                "on_waitlist": False,
+                "waitlist_status": None,
+                "waitlist_entry_id": None,
+            },
+        )
 
     def test_waitlist_status_not_eligible_when_seats_available(self) -> None:
         tour = self.create_tour(
@@ -528,7 +537,93 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
             params={"telegram_user_id": 77_102},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"eligible": False, "on_waitlist": False})
+        self.assertEqual(
+            response.json(),
+            {
+                "eligible": False,
+                "on_waitlist": False,
+                "waitlist_status": None,
+                "waitlist_entry_id": None,
+            },
+        )
+
+    def test_waitlist_status_active_row(self) -> None:
+        tour = self.create_tour(
+            code="WAITLIST-STATUS-ACT",
+            title_default="Waitlist Active",
+            departure_datetime=datetime(2026, 9, 10, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 9, 11, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=0,
+            base_price="50.00",
+        )
+        self.create_boarding_point(tour)
+        user = self.create_user(telegram_user_id=77_110)
+        w = WaitlistEntry(user_id=user.id, tour_id=tour.id, seats_count=2, status="active")
+        self.session.add(w)
+        self.session.commit()
+        response = self.client.get(
+            f"/mini-app/tours/{tour.code}/waitlist-status",
+            params={"telegram_user_id": 77_110},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["eligible"])
+        self.assertTrue(body["on_waitlist"])
+        self.assertEqual(body["waitlist_status"], "active")
+        self.assertEqual(body["waitlist_entry_id"], w.id)
+
+    def test_waitlist_status_in_review(self) -> None:
+        tour = self.create_tour(
+            code="WAITLIST-STATUS-REV",
+            title_default="Waitlist In Review",
+            departure_datetime=datetime(2026, 9, 11, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 9, 12, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=0,
+            base_price="50.00",
+        )
+        self.create_boarding_point(tour)
+        user = self.create_user(telegram_user_id=77_111)
+        w = WaitlistEntry(user_id=user.id, tour_id=tour.id, seats_count=1, status="in_review")
+        self.session.add(w)
+        self.session.commit()
+        response = self.client.get(
+            f"/mini-app/tours/{tour.code}/waitlist-status",
+            params={"telegram_user_id": 77_111},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["eligible"])
+        self.assertTrue(body["on_waitlist"])
+        self.assertEqual(body["waitlist_status"], "in_review")
+        self.assertEqual(body["waitlist_entry_id"], w.id)
+
+    def test_waitlist_status_closed(self) -> None:
+        tour = self.create_tour(
+            code="WAITLIST-STATUS-CL",
+            title_default="Waitlist Closed",
+            departure_datetime=datetime(2026, 9, 12, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 9, 13, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=0,
+            base_price="50.00",
+        )
+        self.create_boarding_point(tour)
+        user = self.create_user(telegram_user_id=77_112)
+        w = WaitlistEntry(user_id=user.id, tour_id=tour.id, seats_count=1, status="closed")
+        self.session.add(w)
+        self.session.commit()
+        response = self.client.get(
+            f"/mini-app/tours/{tour.code}/waitlist-status",
+            params={"telegram_user_id": 77_112},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["eligible"])
+        self.assertFalse(body["on_waitlist"])
+        self.assertEqual(body["waitlist_status"], "closed")
+        self.assertEqual(body["waitlist_entry_id"], w.id)
 
     def test_waitlist_join_created_then_already_exists(self) -> None:
         tour = self.create_tour(
@@ -560,6 +655,30 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         body2 = second.json()
         self.assertEqual(body2["outcome"], "already_exists")
         self.assertEqual(body2["waitlist_entry_id"], body1["waitlist_entry_id"])
+
+    def test_waitlist_join_already_exists_when_in_review(self) -> None:
+        tour = self.create_tour(
+            code="WAITLIST-JOIN-REV",
+            title_default="Waitlist Join Rev",
+            departure_datetime=datetime(2026, 9, 13, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 9, 14, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=0,
+            base_price="50.00",
+        )
+        self.create_boarding_point(tour)
+        user = self.create_user(telegram_user_id=77_113)
+        w = WaitlistEntry(user_id=user.id, tour_id=tour.id, seats_count=1, status="in_review")
+        self.session.add(w)
+        self.session.commit()
+        response = self.client.post(
+            f"/mini-app/tours/{tour.code}/waitlist",
+            json={"telegram_user_id": 77_113, "seats_count": 1},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["outcome"], "already_exists")
+        self.assertEqual(body["waitlist_entry_id"], w.id)
 
     def test_waitlist_join_not_eligible_when_seats_available(self) -> None:
         tour = self.create_tour(

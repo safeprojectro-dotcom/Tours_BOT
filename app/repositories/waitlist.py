@@ -45,6 +45,44 @@ class WaitlistRepository(SQLAlchemyRepository[WaitlistEntry]):
         )
         return session.scalars(stmt).first()
 
+    def list_entries_for_user_tour(
+        self,
+        session: Session,
+        *,
+        user_id: int,
+        tour_id: int,
+    ) -> list[WaitlistEntry]:
+        """Rows for this user+tour with status in active / in_review / closed (excludes legacy e.g. cancelled)."""
+        stmt = (
+            select(WaitlistEntry)
+            .where(
+                WaitlistEntry.user_id == user_id,
+                WaitlistEntry.tour_id == tour_id,
+                WaitlistEntry.status.in_(("active", "in_review", "closed")),
+            )
+            .order_by(WaitlistEntry.id.desc())
+        )
+        return list(session.scalars(stmt).all())
+
+    def get_pending_entry(
+        self,
+        session: Session,
+        *,
+        user_id: int,
+        tour_id: int,
+    ) -> WaitlistEntry | None:
+        """Active or in_review row — user should not create a duplicate join while ops is handling."""
+        stmt = (
+            select(WaitlistEntry)
+            .where(
+                WaitlistEntry.user_id == user_id,
+                WaitlistEntry.tour_id == tour_id,
+                WaitlistEntry.status.in_(("active", "in_review")),
+            )
+            .limit(1)
+        )
+        return session.scalars(stmt).first()
+
     def list_active_for_ops_queue(self, session: Session, *, limit: int = 500) -> list[WaitlistEntry]:
         """Active waitlist rows only, oldest first (longest-waiting first). Eager-loads tour for labels."""
         stmt = (

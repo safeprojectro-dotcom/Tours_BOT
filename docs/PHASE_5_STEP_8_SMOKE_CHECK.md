@@ -109,6 +109,10 @@ With the same `OPS_QUEUE_TOKEN`, ops can **`PATCH /internal/ops/handoffs/{id}/cl
 
 With the same token: **`PATCH /internal/ops/waitlist/{id}/claim`** (`active` → `in_review`) and **`PATCH /internal/ops/waitlist/{id}/close`** (→ `closed`). No booking or promotion side effects. See `docs/PHASE_5_STEP_17_NOTES.md`.
 
+## Waitlist user visibility (Step 18)
+
+After ops claim, **`GET /mini-app/tours/{code}/waitlist-status`** still shows the user as having a waitlist request (`on_waitlist` for `active` and `in_review`, plus `waitlist_status`). Mini App copy distinguishes active vs in review vs closed. See `docs/PHASE_5_STEP_18_NOTES.md`.
+
 ## Out of scope for this step
 
 - New booking/payment rules, API contracts, DB changes, waitlist, handoff automation, admin, webhook transport, Mini App deploy model.

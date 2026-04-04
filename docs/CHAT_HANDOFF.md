@@ -7,7 +7,7 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 5 (Mini App MVP) — **Phase 5 / Step 17 completed** (waitlist `PATCH /internal/ops/waitlist/{id}/claim|close`, `WaitlistOpsActionService`, `active` → `in_review` → `closed`, без operator column; see `docs/PHASE_5_STEP_17_NOTES.md`). **Phase 5 / Step 16** (`docs/PHASE_5_STEP_16_NOTES.md`). **Phase 5 / Step 15** (`docs/PHASE_5_STEP_15_NOTES.md`). **Phase 5 / Step 14** (`docs/PHASE_5_STEP_14_NOTES.md`). **Phase 5 / Step 13** (`docs/PHASE_5_STEP_13_NOTES.md`). **Phase 5 / Step 12B** (`docs/PHASE_5_STEP_12B_NOTES.md`). **Step 12A** (`docs/PHASE_5_STEP_12A_NOTES.md`). **Step 12** (`docs/PHASE_5_STEP_12_NOTES.md`). Step 11: My bookings (`docs/PHASE_5_STEP_11_NOTES.md`). Step 10: mock payment (`docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry (`docs/PHASE_5_STEP_9_NOTES.md`).
+Phase 5 (Mini App MVP) — **Phase 5 / Step 18 completed** (waitlist-status API + Mini App: `waitlist_status` / `on_waitlist` for `active`+`in_review`; UI strings en/ro; see `docs/PHASE_5_STEP_18_NOTES.md`). **Phase 5 / Step 17** (`docs/PHASE_5_STEP_17_NOTES.md`). **Phase 5 / Step 16** (`docs/PHASE_5_STEP_16_NOTES.md`). **Phase 5 / Step 15** (`docs/PHASE_5_STEP_15_NOTES.md`). **Phase 5 / Step 14** (`docs/PHASE_5_STEP_14_NOTES.md`). **Phase 5 / Step 13** (`docs/PHASE_5_STEP_13_NOTES.md`). **Phase 5 / Step 12B** (`docs/PHASE_5_STEP_12B_NOTES.md`). **Step 12A** (`docs/PHASE_5_STEP_12A_NOTES.md`). **Step 12** (`docs/PHASE_5_STEP_12_NOTES.md`). Step 11: My bookings (`docs/PHASE_5_STEP_11_NOTES.md`). Step 10: mock payment (`docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry (`docs/PHASE_5_STEP_9_NOTES.md`).
 
 `docs/IMPLEMENTATION_PLAN.md` defines **Phase 5 as a single phase** (no numbered substeps in the plan). The **Step N** labels here are **project execution checkpoints** mapped to Phase 5 *Included Scope* / *Done-When* bullets (UX first, then screens, booking, payment, help/bookings as the phase exit signal).
 
@@ -750,10 +750,42 @@ Phase 5 / Step 16 (completed):
 Phase 5 / Step 17 (completed):
 - см. `docs/PHASE_5_STEP_17_NOTES.md` — `PATCH .../waitlist/{id}/claim|close`, только смена `status` (нет `assigned_operator_id` на waitlist); `GET .../waitlist/active` по-прежнему только `active`
 
+Phase 5 / Step 18 (completed):
+- см. `docs/PHASE_5_STEP_18_NOTES.md` — `GET .../waitlist-status` расширен (`waitlist_status`, `waitlist_entry_id`, `on_waitlist` для active+in_review); Mini App копия en/ro; join не дублирует pending
+
 NEXT STEP
 
 (Define next checkpoint: e.g. handoff/waitlist notifications, Mini App auth/init-data, Phase 6 admin panel, or catalog polish — per `docs/IMPLEMENTATION_PLAN.md` and product priority.)
 
+Step 17 completed — minimal waitlist operator actions
+
+Implemented:
+- PATCH /internal/ops/waitlist/{id}/claim
+- PATCH /internal/ops/waitlist/{id}/close
+- waitlist lifecycle: active -> in_review -> closed
+- active queue now shows only actionable waitlist entries
+
+Notes:
+- no operator assignment on waitlist entries
+- no auto-promotion to booking
+- no notifications
+- MiniAppWaitlistService still treats only active as "on waitlist"
+
+
+NEXT STEP
+
+Step 18 — waitlist user visibility polish
+
+Причина:
+- ops lifecycle для waitlist уже есть
+- после claim waitlist entry больше не active, и пользователь сейчас может потерять её из UI
+- нужен честный user-facing статус waitlist без превращения её в booking
+
+Цель:
+- показывать active waitlist
+- показывать in_review waitlist как всё ещё существующую заявку
+- не показывать closed как действующую
+- не обещать место и не путать с confirmed booking
 ---
 
 ## Verified
@@ -985,7 +1017,7 @@ This logic already exists in the temporary reservation creation slice and must b
 ---
 
 ## Next Safe Step
-Phase 5 / Step 16
+Phase 5 / Step 18
 
 **Plan alignment (`docs/IMPLEMENTATION_PLAN.md` Phase 5):** the phase exit signal is *“Mini App UX defined first, then screens, booking, payment, and help flow implemented”*. The next **Included Scope** items not yet satisfied after Step 4 are the **reserve action** and **payment** slices: *“Build reservation screen for seat count, boarding point, reservation timer, and reserve action”* and *“Build payment screen with amount, timer, and transition into payment scenario”*, matching *Done-When*: *“reserve seats, start payment”*. Step 4 completed only preparation UI; Step 5 implements **real temporary reservation creation** and **starting payment** in the Mini App by reusing existing Phase 3–4 service-layer flows (`TemporaryReservationService`, `PaymentEntryService`, reconciliation assumptions), not by duplicating rules in the UI.
 

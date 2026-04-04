@@ -38,9 +38,9 @@ There is **no** `assigned_operator_id` on `waitlist` — only status changes.
 
 `GET /internal/ops/waitlist/active` remains **only** `status == active`. After claim or close, the row no longer appears there.
 
-## Mini App note (unchanged code)
+## Mini App user visibility
 
-`MiniAppWaitlistService.get_active_entry` still selects **`active` only**. After ops **claim** (`in_review`), the user is treated as **not** on the waitlist in that API until product defines broader semantics (out of scope for Step 17).
+User-facing waitlist status for **`active` / `in_review` / `closed`** is handled in **Phase 5 / Step 18** (`docs/PHASE_5_STEP_18_NOTES.md`).
 
 ## Manual checklist
 

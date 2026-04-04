@@ -188,12 +188,17 @@ def get_waitlist_status(
     telegram_user_id: int = Query(gt=0),
     session: Session = Depends(get_db),
 ) -> MiniAppWaitlistStatusRead:
-    eligible, on_waitlist = MiniAppWaitlistService().get_status(
+    eligible, on_waitlist, waitlist_status, entry_id = MiniAppWaitlistService().get_status(
         session,
         tour_code=tour_code,
         telegram_user_id=telegram_user_id,
     )
-    return MiniAppWaitlistStatusRead(eligible=eligible, on_waitlist=on_waitlist)
+    return MiniAppWaitlistStatusRead(
+        eligible=eligible,
+        on_waitlist=on_waitlist,
+        waitlist_status=waitlist_status,
+        waitlist_entry_id=entry_id,
+    )
 
 
 @router.post("/tours/{tour_code}/waitlist", response_model=MiniAppWaitlistJoinResponse)

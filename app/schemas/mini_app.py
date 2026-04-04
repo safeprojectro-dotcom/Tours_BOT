@@ -162,4 +162,11 @@ class MiniAppWaitlistJoinResponse(BaseModel):
 
 class MiniAppWaitlistStatusRead(BaseModel):
     eligible: bool = Field(description="Tour is sold out but open for sale — waitlist is offered.")
-    on_waitlist: bool = Field(description="User already has an active waitlist row for this tour.")
+    on_waitlist: bool = Field(
+        description="True when the user's waitlist row is active or in_review (interest still open).",
+    )
+    waitlist_status: str | None = Field(
+        default=None,
+        description="active | in_review | closed for the user's current row, if any.",
+    )
+    waitlist_entry_id: int | None = Field(default=None, description="Primary key of the surfaced waitlist row.")

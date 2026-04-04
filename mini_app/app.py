@@ -585,13 +585,53 @@ class TourDetailScreen:
                 ],
                 alignment=ft.MainAxisAlignment.START,
             )
-        if waitlist_status is not None and waitlist_status.on_waitlist:
+        ws = waitlist_status
+        st = ws.waitlist_status if ws is not None else None
+        if ws is not None and ws.on_waitlist:
+            if st == "active":
+                return ft.Container(
+                    padding=ft.padding.only(top=4),
+                    content=ft.Column(
+                        [
+                            ft.Text(shell(lg, "waitlist_active_title"), weight=ft.FontWeight.W_600),
+                            ft.Text(shell(lg, "waitlist_active_body"), color=ft.Colors.ON_SURFACE_VARIANT),
+                        ],
+                        spacing=4,
+                    ),
+                )
+            if st == "in_review":
+                return ft.Container(
+                    padding=ft.padding.only(top=4),
+                    content=ft.Column(
+                        [
+                            ft.Text(shell(lg, "waitlist_in_review_title"), weight=ft.FontWeight.W_600),
+                            ft.Text(shell(lg, "waitlist_in_review_body"), color=ft.Colors.ON_SURFACE_VARIANT),
+                        ],
+                        spacing=4,
+                    ),
+                )
             return ft.Container(
                 padding=ft.padding.only(top=4),
                 content=ft.Text(
                     shell(lg, "waitlist_status_on"),
                     color=ft.Colors.ON_SURFACE_VARIANT,
                 ),
+            )
+        if st == "closed":
+            return ft.Column(
+                [
+                    ft.Text(shell(lg, "waitlist_closed_body"), color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Row(
+                        [
+                            ft.ElevatedButton(
+                                shell(lg, "waitlist_join_cta"),
+                                on_click=lambda _: self.page.run_task(self._join_waitlist_async),
+                            )
+                        ],
+                        alignment=ft.MainAxisAlignment.START,
+                    ),
+                ],
+                spacing=8,
             )
         return ft.Column(
             [
