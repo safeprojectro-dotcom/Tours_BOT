@@ -66,6 +66,7 @@ from app.bot.transient_messages import (
     answer_and_register_filter_step,
     answer_and_register_language_prompt,
     register_catalog_bundle,
+    send_or_edit_home_catalog_pair,
 )
 from app.core.config import get_settings
 from app.db.session import SessionLocal
@@ -128,7 +129,11 @@ async def handle_start(
             )
             return
 
-    await _send_catalog_overview(message, language_code=user.preferred_language)
+    await _send_catalog_overview(
+        message,
+        language_code=user.preferred_language,
+        prefer_edit=True,
+    )
 
 
 @router.message(Command("language"))
@@ -156,7 +161,11 @@ async def handle_tours_command(message: Message, state: FSMContext) -> None:
         return
 
     await state.clear()
-    await _send_catalog_overview(message, language_code=language_code)
+    await _send_catalog_overview(
+        message,
+        language_code=language_code,
+        prefer_edit=True,
+    )
 
 
 @router.message(Command("help"))
@@ -896,7 +905,12 @@ async def handle_destination_preference_message(message: Message, state: FSMCont
     )
 
 
-async def _send_catalog_overview(message: Message, *, language_code: str) -> None:
+async def _send_catalog_overview(
+    message: Message,
+    *,
+    language_code: str,
+    prefer_edit: bool = False,
+) -> None:
     settings = get_settings()
     browse_service = PrivateTourBrowseService()
     with SessionLocal() as session:
@@ -905,22 +919,21 @@ async def _send_catalog_overview(message: Message, *, language_code: str) -> Non
             language_code=language_code,
         )
 
-    sent_w = await message.answer(
-        format_welcome(language_code),
-        reply_markup=build_private_home_keyboard(
+    await send_or_edit_home_catalog_pair(
+        message,
+        welcome_text=format_welcome(language_code),
+        welcome_markup=build_private_home_keyboard(
             language_code=language_code,
             mini_app_url=settings.telegram_mini_app_url,
         ),
-    )
-    sent_c = await message.answer(
-        format_catalog_message(language_code, cards),
-        reply_markup=build_catalog_keyboard(
+        catalog_text=format_catalog_message(language_code, cards),
+        catalog_markup=build_catalog_keyboard(
             cards,
             language_code=language_code,
             mini_app_url=settings.telegram_mini_app_url,
         ),
+        prefer_edit=prefer_edit,
     )
-    await register_catalog_bundle(message.bot, message.chat.id, sent_w.message_id, sent_c.message_id)
 
 
 async def _send_filtered_catalog_overview(

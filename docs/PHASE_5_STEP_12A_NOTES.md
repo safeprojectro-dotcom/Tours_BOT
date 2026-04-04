@@ -18,7 +18,7 @@
 |----------|------|
 | `LANGUAGE_PROMPT` | Language picker (single active message per chat). |
 | `FILTER_STEP` | One slot for date / destination / budget step prompts (each new step replaces the previous). |
-| `CATALOG_WELCOME` + `CATALOG_LIST` | Home/browse pair: welcome + tour list; `register_catalog_bundle` also clears stale language picker and filter prompts when a new catalog is shown. |
+| `HOME_MESSAGE` + `CATALOG_MESSAGE` | Home/browse pair: welcome + tour list; `register_catalog_bundle` also clears stale language picker and filter prompts when a new catalog is shown. (Step 12B: `/start` and `/tours` may **edit** these instead of sending new messages — see `docs/PHASE_5_STEP_12B_NOTES.md`.) |
 
 ## Files
 

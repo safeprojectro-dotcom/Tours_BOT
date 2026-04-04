@@ -7,7 +7,7 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 5 (Mini App MVP) — **Phase 5 / Step 12A completed** (Telegram private chat message hygiene: transient language picker, filter prompts, catalog pair; in-memory best-effort deletes; see `docs/PHASE_5_STEP_12A_NOTES.md`). **Phase 5 / Step 12 completed** (payment edge / retry UX: `docs/PHASE_5_STEP_12_NOTES.md`). Step 11: My bookings (`docs/PHASE_5_STEP_11_NOTES.md`). Step 10: mock payment (`docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry (`docs/PHASE_5_STEP_9_NOTES.md`).
+Phase 5 (Mini App MVP) — **Phase 5 / Step 12B completed** (editable/reusable home + catalog for `/start` and `/tours`; edit-or-fallback; see `docs/PHASE_5_STEP_12B_NOTES.md`). **Phase 5 / Step 12A** (`docs/PHASE_5_STEP_12A_NOTES.md`). **Phase 5 / Step 12** (payment edge / retry UX: `docs/PHASE_5_STEP_12_NOTES.md`). Step 11: My bookings (`docs/PHASE_5_STEP_11_NOTES.md`). Step 10: mock payment (`docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry (`docs/PHASE_5_STEP_9_NOTES.md`).
 
 `docs/IMPLEMENTATION_PLAN.md` defines **Phase 5 as a single phase** (no numbered substeps in the plan). The **Step N** labels here are **project execution checkpoints** mapped to Phase 5 *Included Scope* / *Done-When* bullets (UX first, then screens, booking, payment, help/bookings as the phase exit signal).
 
@@ -648,6 +648,11 @@ Phase 5 / Step 12A (completed):
 - **Telegram private chat:** best-effort удаление предыдущих служебных сообщений в категориях language picker, filter prompts, catalog welcome+list
 - см. `docs/PHASE_5_STEP_12A_NOTES.md`
 
+Phase 5 / Step 12B (completed):
+- **`/start`** и **`/tours`**: при наличии пары `HOME_MESSAGE` + `CATALOG_MESSAGE` сначала **`edit_message_text`** (оба сообщения); при ошибке — delete + два новых `answer` + `register_catalog_bundle`
+- остальные пути каталога (callback browse, фильтры) по-прежнему **send+register** без edit
+- см. `docs/PHASE_5_STEP_12B_NOTES.md`
+
 Что ещё НЕ завершено:
 - реальный payment provider (PSP)
 - mock failure/cancel пути (вне этого среза)
@@ -704,6 +709,9 @@ Phase 5 / Step 12A (completed):
 
 Следующий шаг (вне этого среза):
 - реальный payment provider (PSP), расширение mock failure при необходимости
+
+Phase 5 / Step 12B (completed):
+- `/start` и `/tours` обновляют пару home+catalog через **edit**, иначе **delete+send**; см. `docs/PHASE_5_STEP_12B_NOTES.md`
 
 ---
 
