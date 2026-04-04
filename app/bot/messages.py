@@ -30,15 +30,10 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "Tap Help inside the Mini App for detailed topics and “Log support request” on payment or booking screens.",
         "bookings_command_reply": "Reservation and payment status live in the Mini App.\n\n"
         "Use the buttons below to open the Mini App or go straight to My bookings.",
-        "contact_command_reply": "I can record a support request for the operations team. "
-        "This does not assign an operator in real time and does not guarantee an instant reply.\n\n"
-        "Describe your issue in your next message if you want, or open Help in the Mini App and use “Log support request” on payment or booking screens.",
-        "human_command_reply": "You asked for a person. I will record a human-support signal for the team. "
-        "It is not a live chat and no operator is assigned automatically.\n\n"
-        "Briefly describe your case in your next message if you want (payment issue, discount, pickup, complaint, etc.).",
-        "handoff_request_recorded": "Support signal recorded (reference {ref}). "
-        "The team may review it through normal channels; this is not confirmation that someone is already handling your chat.",
-        "handoff_request_failed": "I could not record a support signal right now. Please try again later or describe what you need in this chat.",
+        "contact_command_reply": "Need help with a booking or payment? I can record a support request for the team and return a reference number.",
+        "human_command_reply": "If you need human review, I can record a support request for the team and return a reference number.",
+        "handoff_request_recorded": "Support request recorded. Reference: {ref}",
+        "handoff_request_failed": "Could not record the support request right now. Please try again later.",
         "catalog_empty": "There are no open tours to show right now. Please try again later.",
         "catalog_intro": "Here are up to 3 open tours you can review now:",
         "tour_missing": "I could not find that tour in the current catalog.",
@@ -111,15 +106,10 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "Apasa Help in Mini App pentru detalii si „Inregistreaza cerere suport” la plata sau pe rezervare.",
         "bookings_command_reply": "Statusul rezervarii si al platii este in Mini App.\n\n"
         "Foloseste butoanele de mai jos pentru Mini App sau direct Rezervarile mele.",
-        "contact_command_reply": "Pot inregistra o cerere de suport pentru echipa operationala. "
-        "Nu inseamna ca un operator este alocat in timp real si nu garanteaza raspuns instant.\n\n"
-        "Descrie problema in mesajul urmator daca vrei, sau deschide Help in Mini App si foloseste „Inregistreaza cerere suport” la plata sau pe rezervare.",
-        "human_command_reply": "Ai cerut un om. Inregistrez un semnal de eskalare catre echipa. "
-        "Nu este chat live si niciun operator nu este assign-at automat.\n\n"
-        "Descrie pe scurt cazul in mesajul urmator daca vrei (plata, reducere, imbarcare, reclamatie, etc.).",
-        "handoff_request_recorded": "Semnal de suport inregistrat (referinta {ref}). "
-        "Echipa il poate revizui prin canalele obisnuite; nu inseamna ca cineva lucreaza deja la conversatia ta.",
-        "handoff_request_failed": "Nu am putut inregistra semnalul de suport acum. Incearca mai tarziu sau descrie ce ai nevoie in acest chat.",
+        "contact_command_reply": "Ai nevoie de ajutor cu o rezervare sau o plată? Pot înregistra o cerere de suport pentru echipă și îți pot da un număr de referință.",
+        "human_command_reply": "Dacă ai nevoie de analiză umană, pot înregistra o cerere de suport pentru echipă și îți pot da un număr de referință.",
+        "handoff_request_recorded": "Cererea de suport a fost înregistrată. Referință: {ref}",
+        "handoff_request_failed": "Cererea de suport nu a putut fi înregistrată acum. Încearcă din nou mai târziu.",
         "catalog_empty": "Momentan nu exista tururi deschise pentru vanzare. Te rog incearca mai tarziu.",
         "catalog_intro": "Iata pana la 3 tururi deschise pe care le poti vedea acum:",
         "tour_missing": "Nu am gasit acel tur in catalogul curent.",
@@ -238,6 +228,10 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "payment_entry_note": "Vasha rezervatsiya vse eshche vremennaya. Zavershite oplatu do istecheniya broni.",
         "payment_verification_note": "Oplata ne schitaetsya podtverzhdennoy, poka sistema ee ne proverit.",
         "payment_entry_failed": "Ne udalos zapustit shag oplaty, potomu chto eta rezervatsiya bolshe ne validna dlya oplaty.",
+        "contact_command_reply": "Нужна помощь с бронированием или оплатой? Я могу зарегистрировать запрос в поддержку для команды и вернуть вам номер обращения.",
+        "human_command_reply": "Если вам нужна проверка человеком, я могу зарегистрировать запрос в поддержку для команды и вернуть номер обращения.",
+        "handoff_request_recorded": "Запрос в поддержку зарегистрирован. Номер: {ref}",
+        "handoff_request_failed": "Сейчас не удалось зарегистрировать запрос в поддержку. Попробуйте позже.",
     },
     "sr": {
         "language_prompt": "Mogu da nastavim na vasem jeziku. Izaberite jezik:",
@@ -300,6 +294,10 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "payment_entry_note": "Vasa rezervacija je jos uvek privremena. Zavrsite placanje pre isteka rezervacije.",
         "payment_verification_note": "Placanje nije potvrdjeno dok ga sistem ne proveri.",
         "payment_entry_failed": "Nisam mogao da pokrenem korak placanja jer ova rezervacija vise nije validna za placanje.",
+        "contact_command_reply": "Treba vam pomoć oko rezervacije ili plaćanja? Mogu evidentirati zahtev za podršku za tim i vratiti vam referentni broj.",
+        "human_command_reply": "Ako vam je potrebna ljudska provera, mogu evidentirati zahtev za podršku za tim i vratiti referentni broj.",
+        "handoff_request_recorded": "Zahtev za podršku je evidentiran. Referenca: {ref}",
+        "handoff_request_failed": "Zahtev za podršku trenutno nije moguće evidentirati. Pokušajte ponovo kasnije.",
     },
     "hu": {
         "language_prompt": "Folytathatom az on altal valasztott nyelven. Valasszon nyelvet:",
@@ -362,6 +360,10 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "payment_entry_note": "A foglalas tovabbra is ideiglenes. Fejezze be a fizetest, mielott a foglalas lejar.",
         "payment_verification_note": "A fizetes csak akkor tekintheto megerositettnek, ha a rendszer ellenorizte.",
         "payment_entry_failed": "Nem tudtam elinditani a fizetesi lepest, mert ez a foglalas mar nem ervenyes fizetesre.",
+        "contact_command_reply": "Segítségre van szüksége foglalással vagy fizetéssel kapcsolatban? Rögzíthetek egy támogatási kérelmet a csapat számára, és adok egy hivatkozási számot.",
+        "human_command_reply": "Ha emberi felülvizsgálatra van szüksége, rögzíthetek egy támogatási kérelmet a csapat számára, és adok egy hivatkozási számot.",
+        "handoff_request_recorded": "A támogatási kérelem rögzítve. Azonosító: {ref}",
+        "handoff_request_failed": "A támogatási kérelmet most nem sikerült rögzíteni. Kérjük, próbálja újra később.",
     },
     "it": {
         "language_prompt": "Posso continuare nella lingua che preferisci. Scegli una lingua:",
@@ -424,6 +426,10 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "payment_entry_note": "La tua prenotazione e ancora temporanea. Completa il pagamento prima della scadenza della prenotazione.",
         "payment_verification_note": "Il pagamento non e confermato finche il sistema non lo verifica.",
         "payment_entry_failed": "Non ho potuto avviare il passaggio di pagamento perche questa prenotazione non e piu valida per il pagamento.",
+        "contact_command_reply": "Hai bisogno di aiuto con una prenotazione o un pagamento? Posso registrare una richiesta di supporto per il team e restituirti un numero di riferimento.",
+        "human_command_reply": "Se ti serve una verifica umana, posso registrare una richiesta di supporto per il team e restituirti un numero di riferimento.",
+        "handoff_request_recorded": "Richiesta di supporto registrata. Riferimento: {ref}",
+        "handoff_request_failed": "Non è stato possibile registrare la richiesta di supporto in questo momento. Riprova più tardi.",
     },
     "de": {
         "language_prompt": "Ich kann in Ihrer bevorzugten Sprache weitermachen. Bitte waehlen Sie eine Sprache:",
@@ -486,6 +492,10 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "payment_entry_note": "Ihre Reservierung ist weiterhin temporaer. Bitte schliessen Sie die Zahlung ab, bevor die Reservierung ablaeuft.",
         "payment_verification_note": "Die Zahlung ist erst bestaetigt, wenn das System sie verifiziert.",
         "payment_entry_failed": "Ich konnte den Zahlungsschritt nicht starten, weil diese Reservierung nicht mehr fuer die Zahlung gueltig ist.",
+        "contact_command_reply": "Brauchen Sie Hilfe bei einer Buchung oder Zahlung? Ich kann eine Support-Anfrage fuer das Team erfassen und Ihnen eine Referenznummer geben.",
+        "human_command_reply": "Wenn Sie eine menschliche Pruefung brauchen, kann ich eine Support-Anfrage fuer das Team erfassen und Ihnen eine Referenznummer geben.",
+        "handoff_request_recorded": "Support-Anfrage wurde erfasst. Referenz: {ref}",
+        "handoff_request_failed": "Die Support-Anfrage konnte im Moment nicht erfasst werden. Bitte versuchen Sie es spaeter erneut.",
     },
 }
 

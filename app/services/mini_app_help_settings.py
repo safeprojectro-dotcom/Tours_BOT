@@ -49,19 +49,19 @@ def _build_help_en() -> MiniAppHelpRead:
                 bullets=[
                     "This screen explains how the app works — it is not a live chat with an operator.",
                     "For payment problems, discounts, custom pickup, complaints, or anything risky, a human may need to review your case.",
-                    "On Payment, Booking detail, or My bookings, use “Log support request” when you see it — that stores a support signal for the team (no instant reply guaranteed).",
+                    "On Payment, Booking detail, or My bookings, tap Log support request when you see it — this stores a request for the team to review later (same idea as the Need help? banner on My bookings).",
                 ],
             ),
         ],
         operator_notice=(
             "Live operator chat from this Mini App is not implemented. "
-            "The “Log support request” action creates an internal queue record only; it does not assign an operator in real time. "
-            "Use the main Telegram bot chat for written follow-up and /contact or /human when you need help."
+            "Log support request only adds an internal queue record; it does not connect you to someone in real time. "
+            "Use the Telegram bot chat for follow-up and /contact or /human when you need help."
         ),
         when_to_contact_support=(
-            "Use “Log support request” from a booking or payment screen when something is wrong, "
-            "or write in the Telegram bot chat with /contact or /human for complex cases. "
-            "The team responds through normal operational channels when available."
+            "Use Log support request from a booking or payment screen, or the Need help? section on My bookings, when something is wrong; "
+            "or write in the Telegram bot with /contact or /human for complex cases. "
+            "The team may respond through normal channels when available."
         ),
     )
 
@@ -94,19 +94,19 @@ def _build_help_ro() -> MiniAppHelpRead:
                 bullets=[
                     "Acest ecran explica cum functioneaza aplicatia — nu este chat live cu operator.",
                     "Pentru probleme de plata, reduceri, imbarcare speciala, reclamatii sau cazuri riscante, poate fi nevoie de om.",
-                    "La Plata, Detalii rezervare sau Rezervarile mele, foloseste „Inregistreaza cerere suport” cand apare — creeaza un semnal pentru echipa (fara raspuns instant garantat).",
+                    "La Plata, Detalii rezervare sau Rezervarile mele, apasa „Trimite cerere de suport” cand apare — la fel ca si bannerul Ai nevoie de ajutor?; creeaza o cerere pentru echipa, fara chat live.",
                 ],
             ),
         ],
         operator_notice=(
             "Chat live cu operator din Mini App nu este implementat. "
-            "Actiunea „Inregistreaza cerere suport” creeaza doar o inregistrare interna in coada; nu assign-uieste un operator in timp real. "
-            "Foloseste chat-ul principal cu botul Telegram pentru mesaje scrise si comenzile /contact sau /human."
+            "„Trimite cerere de suport” adauga doar o inregistrare interna; nu te conecteaza la cineva in timp real. "
+            "Foloseste chat-ul cu botul Telegram pentru mesaje si comenzile /contact sau /human."
         ),
         when_to_contact_support=(
-            "Foloseste „Inregistreaza cerere suport” de pe ecranul de plata sau rezervare cand ceva nu merge, "
+            "Foloseste Trimite cerere de suport de pe ecranul de plata sau rezervare, sau sectiunea Ai nevoie de ajutor? la Rezervarile mele; "
             "sau scrie in botul Telegram cu /contact sau /human pentru cazuri complexe. "
-            "Echipa raspunde prin canalele operationale obisnuite cand este posibil."
+            "Echipa poate raspunde prin canale obisnuite cand este posibil."
         ),
     )
 

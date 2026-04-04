@@ -1094,13 +1094,13 @@ class PaymentEntryScreen:
             on_click=lambda _: self.on_open_bookings(),
         )
         self.support_note = ft.Text(
-            shell(lg, "support_note_payment"),
+            shell(lg, "payment_support_body"),
             size=13,
             color=ft.Colors.ON_SURFACE_VARIANT,
             visible=False,
         )
         self.support_log_button = ft.OutlinedButton(
-            shell(lg, "support_log_request"),
+            shell(lg, "support_cta_log_request"),
             visible=False,
             on_click=lambda _: self.page.run_task(self._log_support_payment_async),
         )
@@ -1120,8 +1120,8 @@ class PaymentEntryScreen:
         self.bookings_after_pay_button.text = shell(lg, "cta_back_to_bookings")
         if self.loading_row.controls:
             self.loading_row.controls[1].value = shell(lg, "starting_payment")
-        self.support_note.value = shell(lg, "support_note_payment")
-        self.support_log_button.text = shell(lg, "support_log_request")
+        self.support_note.value = shell(lg, "payment_support_body")
+        self.support_log_button.text = shell(lg, "support_cta_log_request")
 
     def build(self) -> ft.Control:
         return scrollable_page(
@@ -1195,7 +1195,7 @@ class PaymentEntryScreen:
             )
         except Exception:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(shell(lg, "support_snackbar_fail")),
+                content=ft.Text(shell(lg, "support_request_error")),
                 action="OK",
             )
             self.page.snack_bar.open = True
@@ -1203,12 +1203,12 @@ class PaymentEntryScreen:
             return
         if r.recorded and r.handoff_id is not None:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(shell(lg, "support_snackbar_ok", ref=str(r.handoff_id))),
+                content=ft.Text(shell(lg, "support_request_success", ref=str(r.handoff_id))),
                 action="OK",
             )
         else:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(shell(lg, "support_snackbar_fail")),
+                content=ft.Text(shell(lg, "support_request_error")),
                 action="OK",
             )
         self.page.snack_bar.open = True
@@ -1384,14 +1384,20 @@ class MyBookingsScreen:
         )
         self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
         self.items_column = ft.Column(spacing=12)
-        self.support_banner_note = ft.Text(
-            shell(lg, "support_banner_my_bookings"),
+        self.support_banner_title = ft.Text(
+            shell(lg, "support_banner_title"),
+            size=16,
+            weight=ft.FontWeight.W_600,
+            visible=False,
+        )
+        self.support_banner_body = ft.Text(
+            shell(lg, "support_banner_body"),
             size=13,
             color=ft.Colors.ON_SURFACE_VARIANT,
             visible=False,
         )
         self.support_banner_button = ft.OutlinedButton(
-            shell(lg, "support_log_request"),
+            shell(lg, "support_cta_log_request"),
             visible=False,
             on_click=lambda _: self.page.run_task(self._log_support_my_bookings_async),
         )
@@ -1405,8 +1411,9 @@ class MyBookingsScreen:
         self.page_subtitle.value = shell(lg, "my_bookings_subtitle")
         if self.loading_row.controls:
             self.loading_row.controls[1].value = shell(lg, "loading_bookings")
-        self.support_banner_note.value = shell(lg, "support_banner_my_bookings")
-        self.support_banner_button.text = shell(lg, "support_log_request")
+        self.support_banner_title.value = shell(lg, "support_banner_title")
+        self.support_banner_body.value = shell(lg, "support_banner_body")
+        self.support_banner_button.text = shell(lg, "support_cta_log_request")
 
     def build(self) -> ft.Control:
         return scrollable_page(
@@ -1420,7 +1427,8 @@ class MyBookingsScreen:
             self.loading_row,
             self.error_text,
             self.items_column,
-            self.support_banner_note,
+            self.support_banner_title,
+            self.support_banner_body,
             self.support_banner_button,
         )
 
@@ -1448,7 +1456,8 @@ class MyBookingsScreen:
 
     def _render(self, data: MiniAppBookingsListRead | None) -> None:
         self.items_column.controls.clear()
-        self.support_banner_note.visible = False
+        self.support_banner_title.visible = False
+        self.support_banner_body.visible = False
         self.support_banner_button.visible = False
         if data is None:
             return
@@ -1478,7 +1487,8 @@ class MyBookingsScreen:
             )
             for item in bucket:
                 self.items_column.controls.append(self._booking_card(item))
-        self.support_banner_note.visible = True
+        self.support_banner_title.visible = True
+        self.support_banner_body.visible = True
         self.support_banner_button.visible = True
 
     async def _log_support_my_bookings_async(self) -> None:
@@ -1491,7 +1501,7 @@ class MyBookingsScreen:
             )
         except Exception:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(shell(lg, "support_snackbar_fail")),
+                content=ft.Text(shell(lg, "support_request_error")),
                 action="OK",
             )
             self.page.snack_bar.open = True
@@ -1499,12 +1509,12 @@ class MyBookingsScreen:
             return
         if r.recorded and r.handoff_id is not None:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(shell(lg, "support_snackbar_ok", ref=str(r.handoff_id))),
+                content=ft.Text(shell(lg, "support_request_success", ref=str(r.handoff_id))),
                 action="OK",
             )
         else:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(shell(lg, "support_snackbar_fail")),
+                content=ft.Text(shell(lg, "support_request_error")),
                 action="OK",
             )
         self.page.snack_bar.open = True
@@ -1600,13 +1610,13 @@ class BookingDetailScreen:
         self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
         self.body_column = ft.Column(spacing=12)
         self.support_note = ft.Text(
-            shell(lg, "support_note_booking_detail"),
+            shell(lg, "booking_support_body"),
             size=13,
             color=ft.Colors.ON_SURFACE_VARIANT,
             visible=False,
         )
         self.support_log_button = ft.OutlinedButton(
-            shell(lg, "support_log_request"),
+            shell(lg, "support_cta_log_request"),
             visible=False,
             on_click=lambda _: self.page.run_task(self._log_support_booking_async),
         )
@@ -1622,8 +1632,8 @@ class BookingDetailScreen:
         self.page_title.value = shell(lg, "booking_details_title")
         if self.loading_row.controls:
             self.loading_row.controls[1].value = shell(lg, "loading_booking_detail")
-        self.support_note.value = shell(lg, "support_note_booking_detail")
-        self.support_log_button.text = shell(lg, "support_log_request")
+        self.support_note.value = shell(lg, "booking_support_body")
+        self.support_log_button.text = shell(lg, "support_cta_log_request")
 
     def build(self) -> ft.Control:
         return scrollable_page(
@@ -1772,7 +1782,7 @@ class BookingDetailScreen:
             )
         except Exception:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(shell(lg, "support_snackbar_fail")),
+                content=ft.Text(shell(lg, "support_request_error")),
                 action="OK",
             )
             self.page.snack_bar.open = True
@@ -1780,12 +1790,12 @@ class BookingDetailScreen:
             return
         if r.recorded and r.handoff_id is not None:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(shell(lg, "support_snackbar_ok", ref=str(r.handoff_id))),
+                content=ft.Text(shell(lg, "support_request_success", ref=str(r.handoff_id))),
                 action="OK",
             )
         else:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(shell(lg, "support_snackbar_fail")),
+                content=ft.Text(shell(lg, "support_request_error")),
                 action="OK",
             )
         self.page.snack_bar.open = True

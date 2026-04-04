@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Callable
 
-# Keys: English + Romanian where provided; other language codes fall back to English.
+# Keys per language; partial tables merge with English (see shell()).
 _STR: dict[str, dict[str, str]] = {
     "en": {
         "catalog_title": "Tours catalog",
@@ -139,12 +139,13 @@ _STR: dict[str, dict[str, str]] = {
         "facade_trip_payment": "Your trip — see details below.",
         "facade_other_booking": "Booking update",
         "facade_other_payment": "See booking details below.",
-        "support_log_request": "Log support request",
-        "support_snackbar_ok": "Support signal saved (ref {ref}). No instant reply guaranteed.",
-        "support_snackbar_fail": "Could not save a support signal. Open the Telegram bot and use /contact or /human.",
-        "support_note_payment": "Payment or checkout problem? Log a support signal — the team may review it (not live chat).",
-        "support_note_booking_detail": "Need help with this booking? Log a signal, then describe your case in the bot chat if you can.",
-        "support_banner_my_bookings": "Issue with a hold or payment? Log a support signal here or write /human in the bot chat.",
+        "support_banner_title": "Need help?",
+        "support_banner_body": "Need help with a booking or payment? Log a support request and, if needed, describe the issue in the bot chat.",
+        "support_cta_log_request": "Log support request",
+        "booking_support_body": "Need help with this booking? Log a support request and, if needed, describe your case in the bot chat.",
+        "payment_support_body": "Payment or checkout problem? Log a support request — the team may review it later. This is not a live chat.",
+        "support_request_success": "Support request recorded. Reference: {ref}",
+        "support_request_error": "Could not record the support request right now. Please try again later.",
     },
     "ro": {
         "catalog_title": "Catalog tururi",
@@ -250,12 +251,58 @@ _STR: dict[str, dict[str, str]] = {
         "facade_trip_payment": "Calatoria ta — vezi detaliile.",
         "facade_other_booking": "Actualizare rezervare",
         "facade_other_payment": "Vezi detaliile rezervarii.",
-        "support_log_request": "Inregistreaza cerere suport",
-        "support_snackbar_ok": "Semnal salvat (ref {ref}). Fara raspuns instant garantat.",
-        "support_snackbar_fail": "Nu s-a putut salva semnalul. Deschide botul Telegram cu /contact sau /human.",
-        "support_note_payment": "Problema la plata sau checkout? Inregistreaza un semnal — echipa poate revizui (nu chat live).",
-        "support_note_booking_detail": "Ai nevoie de ajutor pentru aceasta rezervare? Inregistreaza un semnal, apoi descrie in bot daca poti.",
-        "support_banner_my_bookings": "Problema la un hold sau la plata? Inregistreaza aici sau scrie /human in bot.",
+        "support_banner_title": "Ai nevoie de ajutor?",
+        "support_banner_body": "Ai nevoie de ajutor cu o rezervare sau o plată? Trimite o cerere de suport și, dacă este nevoie, descrie problema și în chatul botului.",
+        "support_cta_log_request": "Trimite cerere de suport",
+        "booking_support_body": "Ai nevoie de ajutor cu această rezervare? Trimite o cerere de suport și, dacă este nevoie, descrie cazul și în chatul botului.",
+        "payment_support_body": "Problemă la plată sau la checkout? Trimite o cerere de suport — echipa o poate analiza ulterior. Acesta nu este un chat live.",
+        "support_request_success": "Cererea de suport a fost înregistrată. Referință: {ref}",
+        "support_request_error": "Cererea de suport nu a putut fi înregistrată acum. Încearcă din nou mai târziu.",
+    },
+    "ru": {
+        "support_banner_title": "Нужна помощь?",
+        "support_banner_body": "Нужна помощь с бронированием или оплатой? Отправьте запрос в поддержку и, при необходимости, опишите проблему в чате бота.",
+        "support_cta_log_request": "Отправить запрос в поддержку",
+        "booking_support_body": "Нужна помощь по этому бронированию? Отправьте запрос в поддержку и, при необходимости, опишите ситуацию в чате бота.",
+        "payment_support_body": "Проблема с оплатой или checkout? Отправьте запрос в поддержку — команда сможет проверить его позже. Это не онлайн-чат.",
+        "support_request_success": "Запрос в поддержку зарегистрирован. Номер: {ref}",
+        "support_request_error": "Сейчас не удалось зарегистрировать запрос в поддержку. Попробуйте позже.",
+    },
+    "sr": {
+        "support_banner_title": "Treba vam pomoć?",
+        "support_banner_body": "Treba vam pomoć oko rezervacije ili plaćanja? Pošaljite zahtev za podršku i, ako je potrebno, opišite problem i u četu bota.",
+        "support_cta_log_request": "Pošalji zahtev za podršku",
+        "booking_support_body": "Treba vam pomoć oko ove rezervacije? Pošaljite zahtev za podršku i, ako je potrebno, opišite slučaj i u četu bota.",
+        "payment_support_body": "Imate problem sa plaćanjem ili checkout-om? Pošaljite zahtev za podršku — tim ga može pregledati kasnije. Ovo nije live chat.",
+        "support_request_success": "Zahtev za podršku je evidentiran. Referenca: {ref}",
+        "support_request_error": "Zahtev za podršku trenutno nije moguće evidentirati. Pokušajte ponovo kasnije.",
+    },
+    "hu": {
+        "support_banner_title": "Segítségre van szüksége?",
+        "support_banner_body": "Segítségre van szüksége foglalással vagy fizetéssel kapcsolatban? Küldjön támogatási kérelmet, és ha szükséges, írja le a problémát a bot chatben is.",
+        "support_cta_log_request": "Támogatási kérelem küldése",
+        "booking_support_body": "Segítségre van szüksége ezzel a foglalással kapcsolatban? Küldjön támogatási kérelmet, és ha szükséges, írja le az esetet a bot chatben is.",
+        "payment_support_body": "Fizetési vagy checkout probléma van? Küldjön támogatási kérelmet — a csapat később átnézheti. Ez nem élő chat.",
+        "support_request_success": "A támogatási kérelem rögzítve. Azonosító: {ref}",
+        "support_request_error": "A támogatási kérelmet most nem sikerült rögzíteni. Kérjük, próbálja újra később.",
+    },
+    "it": {
+        "support_banner_title": "Hai bisogno di aiuto?",
+        "support_banner_body": "Hai bisogno di aiuto con una prenotazione o un pagamento? Invia una richiesta di supporto e, se necessario, descrivi il problema anche nella chat del bot.",
+        "support_cta_log_request": "Invia richiesta di supporto",
+        "booking_support_body": "Hai bisogno di aiuto per questa prenotazione? Invia una richiesta di supporto e, se necessario, descrivi il caso anche nella chat del bot.",
+        "payment_support_body": "Hai un problema con il pagamento o il checkout? Invia una richiesta di supporto — il team potrà esaminarla in seguito. Questa non è una chat live.",
+        "support_request_success": "Richiesta di supporto registrata. Riferimento: {ref}",
+        "support_request_error": "Non è stato possibile registrare la richiesta di supporto in questo momento. Riprova più tardi.",
+    },
+    "de": {
+        "support_banner_title": "Brauchen Sie Hilfe?",
+        "support_banner_body": "Brauchen Sie Hilfe bei einer Buchung oder Zahlung? Senden Sie eine Support-Anfrage und beschreiben Sie das Problem bei Bedarf auch im Bot-Chat.",
+        "support_cta_log_request": "Support-Anfrage senden",
+        "booking_support_body": "Brauchen Sie Hilfe bei dieser Buchung? Senden Sie eine Support-Anfrage und beschreiben Sie Ihren Fall bei Bedarf auch im Bot-Chat.",
+        "payment_support_body": "Gibt es ein Problem mit der Zahlung oder dem Checkout? Senden Sie eine Support-Anfrage — das Team kann sie später prüfen. Dies ist kein Live-Chat.",
+        "support_request_success": "Support-Anfrage wurde erfasst. Referenz: {ref}",
+        "support_request_error": "Die Support-Anfrage konnte im Moment nicht erfasst werden. Bitte versuchen Sie es später erneut.",
     },
 }
 
