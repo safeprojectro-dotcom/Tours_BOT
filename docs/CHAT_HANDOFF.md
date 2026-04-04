@@ -7,7 +7,7 @@ Tours_BOT
 Project is continuing in a new chat from the latest approved checkpoint.
 
 ## Current Phase
-Phase 5 (Mini App MVP) — **Phase 5 / Step 12 completed** (payment edge / retry UX: booking detail notes, payment screen copy, 400/403 handling; see `docs/PHASE_5_STEP_12_NOTES.md`). Step 11: My bookings sections (`docs/PHASE_5_STEP_11_NOTES.md`). Step 10: mock payment (`docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry (`docs/PHASE_5_STEP_9_NOTES.md`).
+Phase 5 (Mini App MVP) — **Phase 5 / Step 12A completed** (Telegram private chat message hygiene: transient language picker, filter prompts, catalog pair; in-memory best-effort deletes; see `docs/PHASE_5_STEP_12A_NOTES.md`). **Phase 5 / Step 12 completed** (payment edge / retry UX: `docs/PHASE_5_STEP_12_NOTES.md`). Step 11: My bookings (`docs/PHASE_5_STEP_11_NOTES.md`). Step 10: mock payment (`docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry (`docs/PHASE_5_STEP_9_NOTES.md`).
 
 `docs/IMPLEMENTATION_PLAN.md` defines **Phase 5 as a single phase** (no numbered substeps in the plan). The **Step N** labels here are **project execution checkpoints** mapped to Phase 5 *Included Scope* / *Done-When* bullets (UX first, then screens, booking, payment, help/bookings as the phase exit signal).
 
@@ -644,6 +644,10 @@ Phase 5 / Step 12 (completed):
 - **Payment screen:** intro для активного hold; 400 → «нельзя начать оплату»; 403 mock → дружелюбный текст; Pay скрыт при ошибке загрузки
 - см. `docs/PHASE_5_STEP_12_NOTES.md`
 
+Phase 5 / Step 12A (completed):
+- **Telegram private chat:** best-effort удаление предыдущих служебных сообщений в категориях language picker, filter prompts, catalog welcome+list
+- см. `docs/PHASE_5_STEP_12A_NOTES.md`
+
 Что ещё НЕ завершено:
 - реальный payment provider (PSP)
 - mock failure/cancel пути (вне этого среза)
@@ -680,6 +684,26 @@ Step 12 — payment edge cases and retry UX
   - disabled mock payment
   - retry path for active hold
 - не менять бизнес-логику, только presentation/UX hardening
+
+ПОСЛЕ STEP 12
+
+Mini App payment UX усилен для edge cases:
+- booking detail теперь показывает контекстную подсказку по facade_state
+- active hold: объяснение про оплату до дедлайна
+- confirmed: объяснение, что бронь оплачена и подтверждена
+- released/expired: объяснение, что hold уже не активен и нужно начать заново из каталога
+- payment-entry 400: понятный экран недоступного hold, без кнопки оплаты
+- mock payment disabled (403): пользовательский snackbar вместо техничной ошибки
+- success path Step 10 не менялся
+
+Phase 5 / Step 12A (completed):
+- private chat: **language picker**, **filter step prompts** (date / destination / budget — один слот), пара **welcome + список туров**; предыдущие служебные сообщения этих типов удаляются best-effort перед новой отправкой
+- хранение только в памяти процесса (`app/bot/transient_messages.py`), без БД
+- финальные/якорные сообщения (оплата, временная бронь, help и т.д.) не затрагиваются
+- см. `docs/PHASE_5_STEP_12A_NOTES.md`
+
+Следующий шаг (вне этого среза):
+- реальный payment provider (PSP), расширение mock failure при необходимости
 
 ---
 

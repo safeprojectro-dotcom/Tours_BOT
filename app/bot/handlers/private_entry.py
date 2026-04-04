@@ -62,6 +62,11 @@ from app.bot.services import (
     TelegramUserContextService,
 )
 from app.bot.state import PrivateEntryState
+from app.bot.transient_messages import (
+    answer_and_register_filter_step,
+    answer_and_register_language_prompt,
+    register_catalog_bundle,
+)
 from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.services.order_summary import OrderSummaryService
@@ -99,7 +104,8 @@ async def handle_start(
 
         if user.preferred_language is None:
             await state.set_state(PrivateEntryState.choosing_language)
-            await message.answer(
+            await answer_and_register_language_prompt(
+                message,
                 translate(settings.telegram_default_language, "language_prompt"),
                 reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
             )
@@ -129,7 +135,8 @@ async def handle_start(
 async def handle_language_command(message: Message, state: FSMContext) -> None:
     settings = get_settings()
     await state.set_state(PrivateEntryState.choosing_language)
-    await message.answer(
+    await answer_and_register_language_prompt(
+        message,
         translate(settings.telegram_default_language, "language_prompt"),
         reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
     )
@@ -141,7 +148,8 @@ async def handle_tours_command(message: Message, state: FSMContext) -> None:
     if language_code is None:
         settings = get_settings()
         await state.set_state(PrivateEntryState.choosing_language)
-        await message.answer(
+        await answer_and_register_language_prompt(
+            message,
             translate(settings.telegram_default_language, "language_prompt"),
             reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
         )
@@ -201,7 +209,8 @@ async def handle_change_language(callback: CallbackQuery, state: FSMContext) -> 
     if callback.message is None:
         return
 
-    await callback.message.answer(
+    await answer_and_register_language_prompt(
+        callback.message,
         translate(settings.telegram_default_language, "language_prompt"),
         reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
     )
@@ -217,7 +226,8 @@ async def handle_browse_tours(callback: CallbackQuery, state: FSMContext) -> Non
     if language_code is None:
         settings = get_settings()
         await state.set_state(PrivateEntryState.choosing_language)
-        await callback.message.answer(
+        await answer_and_register_language_prompt(
+            callback.message,
             translate(settings.telegram_default_language, "language_prompt"),
             reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
         )
@@ -237,14 +247,16 @@ async def handle_filter_by_date(callback: CallbackQuery, state: FSMContext) -> N
     if language_code is None:
         settings = get_settings()
         await state.set_state(PrivateEntryState.choosing_language)
-        await callback.message.answer(
+        await answer_and_register_language_prompt(
+            callback.message,
             translate(settings.telegram_default_language, "language_prompt"),
             reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
         )
         return
 
     await state.clear()
-    await callback.message.answer(
+    await answer_and_register_filter_step(
+        callback.message,
         translate(language_code, "date_prompt"),
         reply_markup=build_date_filter_keyboard(language_code),
     )
@@ -260,14 +272,16 @@ async def handle_filter_by_destination(callback: CallbackQuery, state: FSMContex
     if language_code is None:
         settings = get_settings()
         await state.set_state(PrivateEntryState.choosing_language)
-        await callback.message.answer(
+        await answer_and_register_language_prompt(
+            callback.message,
             translate(settings.telegram_default_language, "language_prompt"),
             reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
         )
         return
 
     await state.set_state(PrivateEntryState.entering_destination_preference)
-    await callback.message.answer(
+    await answer_and_register_filter_step(
+        callback.message,
         translate(language_code, "destination_prompt"),
         reply_markup=build_destination_prompt_keyboard(language_code),
     )
@@ -283,7 +297,8 @@ async def handle_filter_by_budget(callback: CallbackQuery, state: FSMContext) ->
     if language_code is None:
         settings = get_settings()
         await state.set_state(PrivateEntryState.choosing_language)
-        await callback.message.answer(
+        await answer_and_register_language_prompt(
+            callback.message,
             translate(settings.telegram_default_language, "language_prompt"),
             reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
         )
@@ -298,7 +313,8 @@ async def handle_filter_by_budget(callback: CallbackQuery, state: FSMContext) ->
 
     await state.clear()
     if currency is None:
-        await callback.message.answer(
+        await answer_and_register_filter_step(
+            callback.message,
             translate(language_code, "budget_not_available"),
             reply_markup=build_private_home_keyboard(
                 language_code=language_code,
@@ -307,7 +323,8 @@ async def handle_filter_by_budget(callback: CallbackQuery, state: FSMContext) ->
         )
         return
 
-    await callback.message.answer(
+    await answer_and_register_filter_step(
+        callback.message,
         translate(language_code, "budget_prompt"),
         reply_markup=build_budget_filter_keyboard(
             language_code=language_code,
@@ -327,7 +344,8 @@ async def handle_cancel_destination_input(callback: CallbackQuery, state: FSMCon
     if language_code is None:
         settings = get_settings()
         await state.set_state(PrivateEntryState.choosing_language)
-        await callback.message.answer(
+        await answer_and_register_language_prompt(
+            callback.message,
             translate(settings.telegram_default_language, "language_prompt"),
             reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
         )
@@ -348,7 +366,8 @@ async def handle_date_filter_selected(callback: CallbackQuery, state: FSMContext
         settings = get_settings()
         await state.set_state(PrivateEntryState.choosing_language)
         await callback.answer()
-        await callback.message.answer(
+        await answer_and_register_language_prompt(
+            callback.message,
             translate(settings.telegram_default_language, "language_prompt"),
             reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
         )
@@ -382,7 +401,8 @@ async def handle_budget_filter_selected(callback: CallbackQuery, state: FSMConte
         settings = get_settings()
         await state.set_state(PrivateEntryState.choosing_language)
         await callback.answer()
-        await callback.message.answer(
+        await answer_and_register_language_prompt(
+            callback.message,
             translate(settings.telegram_default_language, "language_prompt"),
             reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
         )
@@ -404,7 +424,8 @@ async def handle_budget_filter_selected(callback: CallbackQuery, state: FSMConte
 
     if currency is None:
         await state.clear()
-        await callback.message.answer(
+        await answer_and_register_filter_step(
+            callback.message,
             translate(language_code, "budget_not_available"),
             reply_markup=build_private_home_keyboard(
                 language_code=language_code,
@@ -479,7 +500,8 @@ async def handle_prepare_reservation(callback: CallbackQuery, state: FSMContext)
         settings = get_settings()
         await state.set_state(PrivateEntryState.choosing_language)
         await callback.answer()
-        await callback.message.answer(
+        await answer_and_register_language_prompt(
+            callback.message,
             translate(settings.telegram_default_language, "language_prompt"),
             reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
         )
@@ -511,7 +533,8 @@ async def handle_preparation_seat_count(callback: CallbackQuery, state: FSMConte
         settings = get_settings()
         await state.set_state(PrivateEntryState.choosing_language)
         await callback.answer()
-        await callback.message.answer(
+        await answer_and_register_language_prompt(
+            callback.message,
             translate(settings.telegram_default_language, "language_prompt"),
             reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
         )
@@ -551,7 +574,8 @@ async def handle_preparation_boarding_point(callback: CallbackQuery, state: FSMC
         settings = get_settings()
         await state.set_state(PrivateEntryState.choosing_language)
         await callback.answer()
-        await callback.message.answer(
+        await answer_and_register_language_prompt(
+            callback.message,
             translate(settings.telegram_default_language, "language_prompt"),
             reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
         )
@@ -636,7 +660,8 @@ async def handle_create_temporary_reservation(callback: CallbackQuery, state: FS
     if language_code is None or callback.from_user is None:
         settings = get_settings()
         await state.set_state(PrivateEntryState.choosing_language)
-        await callback.message.answer(
+        await answer_and_register_language_prompt(
+            callback.message,
             translate(settings.telegram_default_language, "language_prompt"),
             reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
         )
@@ -713,7 +738,8 @@ async def handle_start_payment_entry(callback: CallbackQuery, state: FSMContext)
     if language_code is None or callback.from_user is None:
         settings = get_settings()
         await state.set_state(PrivateEntryState.choosing_language)
-        await callback.message.answer(
+        await answer_and_register_language_prompt(
+            callback.message,
             translate(settings.telegram_default_language, "language_prompt"),
             reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
         )
@@ -776,7 +802,8 @@ async def handle_tour_detail(callback: CallbackQuery, state: FSMContext) -> None
         settings = get_settings()
         await state.set_state(PrivateEntryState.choosing_language)
         await callback.answer()
-        await callback.message.answer(
+        await answer_and_register_language_prompt(
+            callback.message,
             translate(settings.telegram_default_language, "language_prompt"),
             reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
         )
@@ -829,7 +856,8 @@ async def handle_tour_detail(callback: CallbackQuery, state: FSMContext) -> None
 @router.message(PrivateEntryState.choosing_language, NotSlashCommandFilter())
 async def handle_language_state_message(message: Message) -> None:
     settings = get_settings()
-    await message.answer(
+    await answer_and_register_language_prompt(
+        message,
         translate(settings.telegram_default_language, "language_prompt"),
         reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
     )
@@ -841,7 +869,8 @@ async def handle_destination_preference_message(message: Message, state: FSMCont
     if language_code is None:
         settings = get_settings()
         await state.set_state(PrivateEntryState.choosing_language)
-        await message.answer(
+        await answer_and_register_language_prompt(
+            message,
             translate(settings.telegram_default_language, "language_prompt"),
             reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
         )
@@ -851,7 +880,8 @@ async def handle_destination_preference_message(message: Message, state: FSMCont
     browse_service = PrivateTourBrowseService()
     filters = browse_service.build_destination_filters(query)
     if filters is None:
-        await message.answer(
+        await answer_and_register_filter_step(
+            message,
             translate(language_code, "destination_empty"),
             reply_markup=build_destination_prompt_keyboard(language_code),
         )
@@ -875,14 +905,14 @@ async def _send_catalog_overview(message: Message, *, language_code: str) -> Non
             language_code=language_code,
         )
 
-    await message.answer(
+    sent_w = await message.answer(
         format_welcome(language_code),
         reply_markup=build_private_home_keyboard(
             language_code=language_code,
             mini_app_url=settings.telegram_mini_app_url,
         ),
     )
-    await message.answer(
+    sent_c = await message.answer(
         format_catalog_message(language_code, cards),
         reply_markup=build_catalog_keyboard(
             cards,
@@ -890,6 +920,7 @@ async def _send_catalog_overview(message: Message, *, language_code: str) -> Non
             mini_app_url=settings.telegram_mini_app_url,
         ),
     )
+    await register_catalog_bundle(message.bot, message.chat.id, sent_w.message_id, sent_c.message_id)
 
 
 async def _send_filtered_catalog_overview(
@@ -908,14 +939,14 @@ async def _send_filtered_catalog_overview(
             filters=filters,
         )
 
-    await message.answer(
+    sent_w = await message.answer(
         format_welcome(language_code),
         reply_markup=build_private_home_keyboard(
             language_code=language_code,
             mini_app_url=settings.telegram_mini_app_url,
         ),
     )
-    await message.answer(
+    sent_c = await message.answer(
         format_filtered_catalog_message(
             language_code,
             cards,
@@ -927,6 +958,7 @@ async def _send_filtered_catalog_overview(
             mini_app_url=settings.telegram_mini_app_url,
         ),
     )
+    await register_catalog_bundle(message.bot, message.chat.id, sent_w.message_id, sent_c.message_id)
 
 
 async def _send_seat_count_prompt(
