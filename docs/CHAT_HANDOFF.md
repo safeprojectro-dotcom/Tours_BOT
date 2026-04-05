@@ -4,28 +4,28 @@
 Tours_BOT
 
 ## Current Status
-The project is ready to continue from the **latest approved checkpoint**: **Phase 6 / Step 15 completed** in code — **`POST /admin/tours/{tour_id}/archive`** and **`POST /admin/tours/{tour_id}/unarchive`**; narrow **`TourStatus`** mapping (archive: **draft / open_for_sale / collecting_group / guaranteed** → **`sales_closed`**; unarchive: **`sales_closed` → `open_for_sale`**; idempotent **archive** when already **`sales_closed`**, idempotent **unarchive** when already **`open_for_sale`**); **400** when transition unsafe. **No** new migration. Public booking/payment/waitlist/handoff flows and **public catalog / Mini App** were **not** changed (Mini App catalog already lists only **`open_for_sale`**).
+The project is ready to continue from the **latest approved checkpoint**: **Phase 6 / Step 16 completed** — **read-only** admin **order/payment correction visibility** on **`GET /admin/orders/{order_id}`** (**no** new routes; **no** schema migration). **`lifecycle_kind`** and **`lifecycle_summary`** remain the **primary** admin-facing meaning. **Secondary** read-only fields (conservative; from persisted order + payment rows): **`payment_correction_hint`**, **`needs_manual_review`**, **`payment_records_count`**, **`latest_payment_status`**, **`latest_payment_provider`**, **`latest_payment_created_at`**, **`has_multiple_payment_entries`**, **`has_paid_entry`**, **`has_awaiting_payment_entry`**. Logic: **`app/services/admin_order_payment_visibility.py`**. **No** order/payment mutations; **no** reconciliation or webhook changes; **no** public catalog / Mini App changes; public booking/payment/waitlist/handoff flows **unchanged**.
 
-**Phase 6 / Steps 1–15** (already completed): **`ADMIN_API_TOKEN`**; admin reads/filters/details; **`POST /admin/tours`**; **`POST`** **`/admin/tours/{tour_id}/archive`** **/** **`unarchive`**; **`PUT /admin/tours/{tour_id}/cover`**; **`PATCH /admin/tours/{tour_id}`**; **`POST` / `PATCH` / `DELETE`** boarding points; **`PUT` / `DELETE`** tour and boarding **translations**.
+**Phase 6 / Steps 1–16** (completed): **`ADMIN_API_TOKEN`**; admin overview, lists/filters, tour and order detail; order detail includes Step 16 correction fields; tour create, cover, patch, archive/unarchive; boarding CRUD; tour and boarding translations.
 
-Earlier: **Phase 5 (Mini App MVP) accepted** for MVP/staging; **Phase 5 / Step 20** documentation consolidation / acceptance (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`). No open Phase 5 MVP blockers for the agreed scope.
+Earlier: **Phase 5 (Mini App MVP) accepted** for MVP/staging; **Phase 5 / Step 20** documentation consolidation (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`). No Phase 5 MVP blockers for the agreed scope.
 
-**Next work:** **Phase 6 / Step 16** — **first narrow admin order/payment correction visibility** slice — see **Next Safe Step**.
+**Next work:** **Phase 6 / Step 17** — **first narrow admin order/payment actions preview slice** (read-oriented; **no** state-changing actions in that step) — see **Next Safe Step**.
 
 ### Operational note (production — Step 6 schema recovery)
 After Step 6 backend shipped to Railway **before** production Postgres had applied Alembic revision **`20260405_04`**, the missing column **`tours.cover_media_reference`** caused **`ProgrammingError` / `UndefinedColumn`** and **500**s on routes that load tours (e.g. **`/mini-app/catalog`**, **`/mini-app/bookings`**). Root cause was **schema mismatch**, not Mini App UI logic. **Recovery completed:** migrations applied against the Railway DB (using the **public** Postgres URL and a local driver URL such as **`postgresql+psycopg://...`** where internal hostnames are not resolvable), backend **redeployed**, **`/health`**, catalog, and bookings smoke-checked. **Going forward:** any schema-changing step must include **migration apply → redeploy → smoke** for affected endpoints. Details: **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` section 17**.
 
 ## Current Phase
 
-**Current phase (forward work):** **Phase 6 — Admin Panel MVP** — **Phase 6 / Steps 1–15 completed.**
+**Current phase (forward work):** **Phase 6 — Admin Panel MVP** — **Phase 6 / Steps 1–16 completed.**
 
-**Latest approved checkpoint:** **Phase 6 / Step 15** — **narrow archive/unarchive:** agreed mapping **archive → `sales_closed`**, **unarchive → `open_for_sale`** (no new enum member); **`POST /admin/tours/{tour_id}/archive`**, **`POST /admin/tours/{tour_id}/unarchive`**. **Admin management surface now includes:** **create** core tour; **set/replace** one **`cover_media_reference`**; **patch** core tour fields; **archive/unarchive** tour; **create/update/delete** one boarding point; **upsert/delete** one tour translation; **upsert/delete** one boarding point translation. **Still not implemented:** **hard-delete** tour, **full** tour status editor, **bulk** ops, **publication** workflow, **full** admin SPA, **public** catalog / Mini App **behavior changes from admin** in this step. Still **no** **`tour_id` reassignment** for boarding points, **no** full route/itinerary editor. **Overview**, **tours/orders lists** (filters), **tour + order detail** unchanged in role. Order rows use **`lifecycle_kind` / `lifecycle_summary`** where applicable; raw order semantics: `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` (**section 1a**).
+**Latest approved checkpoint:** **Phase 6 / Step 16** — **`GET /admin/orders/{order_id}`** exposes the correction-oriented read-only fields listed under **Current Status**; **`lifecycle_kind` / `lifecycle_summary`** stay primary; hints are **secondary**. Prior admin **writes** (tours, boarding, translations, archive) unchanged. **Still not implemented:** **hard-delete** tour, **full** tour status editor, **bulk** ops, **publication**, **full** admin SPA, **admin order/payment mutations** (execute refunds, forced status, etc.). **Next scheduled slice (Step 17)** is **preview-only** guidance — not mutations. Still **no** **`tour_id` reassignment**, **no** route/itinerary editor.
 
-**Earlier checkpoints:** Phase 6 / Steps 1–7 (foundation through core tour patch); Phase 6 / Steps 8–10 (boarding create / patch / delete); Phase 6 / Steps 11–12 (tour translation upsert/delete); Phase 6 / Steps 13–14 (boarding point translation upsert/delete); Phase 6 / Step 15 (tour archive/unarchive); Phase 5 accepted + Step 20 docs (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
+**Earlier checkpoints:** Phase 6 / Steps 1–7 (foundation through core tour patch); Phase 6 / Steps 8–10 (boarding create / patch / delete); Phase 6 / Steps 11–12 (tour translation upsert/delete); Phase 6 / Steps 13–14 (boarding point translation upsert/delete); Phase 6 / Step 15 (tour archive/unarchive); Phase 6 / Step 16 (order detail payment correction visibility); Phase 5 accepted + Step 20 docs (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
 
 **Phase 5 (closed for MVP):** Execution checkpoints **Steps 4–19** are summarized in `docs/PHASE_5_ACCEPTANCE_SUMMARY.md` and per-step notes under `docs/PHASE_5_STEP_*_NOTES.md`; **Step 20** was documentation/consolidation only (no intended production-code churn for acceptance).
 
-**Next safe direction:** **Phase 6 / Step 16** — **admin order/payment correction visibility** (narrow, read-oriented first) — see **Next Safe Step** below.
+**Next safe direction:** **Phase 6 / Step 17** — **admin order/payment actions preview** (read-oriented) — see **Next Safe Step** below.
 
 **Optional follow-ups** (not Phase 5 blockers; prioritize with product): Telegram Web App init-data validation for Mini App APIs, real payment provider (PSP), broader handoff/waitlist customer notifications.
 
@@ -621,6 +621,14 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
   - **Scope respected:** public flows unchanged
   - **Prompt archive:** `docs/CURSOR_PROMPT_PHASE_6_STEP_15.md` (historical)
 
+- Phase 6 / Step 16 completed
+  - **Endpoint:** **`GET /admin/orders/{order_id}`** — extended **`AdminOrderDetailRead`** with **`payment_correction_hint`**, **`needs_manual_review`**, **`payment_records_count`**, **`latest_payment_status`**, **`latest_payment_provider`**, **`latest_payment_created_at`**, **`has_multiple_payment_entries`**, **`has_paid_entry`**, **`has_awaiting_payment_entry`**
+  - **Service:** `compute_payment_correction_visibility` in **`app/services/admin_order_payment_visibility.py`**; **`AdminReadService.get_order_detail`** loads all payment rows once for count + capped list
+  - **Explicitly not in this step:** order/payment **mutations**, reconciliation **changes**, webhooks, public API changes
+  - **Tests:** `tests/unit/test_api_admin.py` (existing detail + multiple payments + mismatch cases)
+  - **Scope respected:** public flows unchanged
+  - **Prompt archive:** `docs/CURSOR_PROMPT_PHASE_6_STEP_16.md` (historical)
+
 ---
 
 ## Verified
@@ -699,7 +707,7 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
 
 ### Ready
 - **bot layer** — Telegram private chat; thin handlers; service-driven
-- **api layer** — FastAPI; public routes + Mini App routes + payments webhooks + **internal ops** JSON endpoints + **admin API** (`/admin/*`, `ADMIN_API_TOKEN`: overview, tours/orders **lists** with **optional read-only filters**, **tour + order detail** incl. **`cover_media_reference`**, **`POST /admin/tours`** create **core** tours, **`POST /admin/tours/{tour_id}/archive`** and **`POST /admin/tours/{tour_id}/unarchive`**, **`PUT /admin/tours/{tour_id}/cover`** for **one** media reference string, **`PATCH /admin/tours/{tour_id}`** for **core** field updates only, **`POST` / `PATCH` / `DELETE`** boarding points, **`PUT` / `DELETE`** **`/admin/tours/{tour_id}/translations/{language_code}`** for **tour** translations, **`PUT` / `DELETE`** **`/admin/boarding-points/{boarding_point_id}/translations/{language_code}`** for **boarding** translations)
+- **api layer** — FastAPI; public routes + Mini App routes + payments webhooks + **internal ops** JSON endpoints + **admin API** (`/admin/*`, `ADMIN_API_TOKEN`: overview, tours/orders **lists** with **optional read-only filters**, **`GET /admin/orders/{order_id}`** order detail with **payment correction visibility** fields, **tour + order detail** incl. **`cover_media_reference`**, **`POST /admin/tours`** create **core** tours, **`POST /admin/tours/{tour_id}/archive`** and **`POST /admin/tours/{tour_id}/unarchive`**, **`PUT /admin/tours/{tour_id}/cover`** for **one** media reference string, **`PATCH /admin/tours/{tour_id}`** for **core** field updates only, **`POST` / `PATCH` / `DELETE`** boarding points, **`PUT` / `DELETE`** **`/admin/tours/{tour_id}/translations/{language_code}`** for **tour** translations, **`PUT` / `DELETE`** **`/admin/boarding-points/{boarding_point_id}/translations/{language_code}`** for **boarding** translations)
 - **services layer** — business rules and orchestration
 - **repositories layer** — persistence-oriented data access
 - **mini_app** — Flet Mini App UI (separate deploy surface in staging); **MVP accepted** for agreed scope (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`); **no business logic in the frontend** — UI calls APIs only
@@ -713,29 +721,32 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
 - **Mini App / any web UI**: presentation only — no duplicated booking/payment rules in the client
 
 ### Not Implemented Yet
-- **Phase 6 / Step 16 (next):** narrow **order/payment correction visibility** — see **Next Safe Step**
-- **Later (Phase 6+, schedule):** translation **bulk**, **publication**, media **upload/delivery**, tour **hard-delete**, admin **order mutations** — per **`docs/IMPLEMENTATION_PLAN.md`**
+- **Phase 6 / Step 17 (next):** first narrow **admin order/payment actions preview** slice — read-oriented operator guidance (exact shape TBD); **not** executing refunds, captures, or order/payment POST/PATCH
+- **Later (explicit schedule):** **admin order/payment mutations** only with product-defined safety rules and **without** bypassing **`payment reconciliation`**; translation **bulk**, **publication**, media **upload/delivery**, tour **hard-delete** — per **`docs/IMPLEMENTATION_PLAN.md`**
 - **Phase 7–9:** group assistant, handoff at scale, content assistant, analytics — per `docs/IMPLEMENTATION_PLAN.md`
 
 ## Next Safe Step
 
-**Phase 6 / Step 16 — first narrow admin order/payment correction visibility slice**.
+**Phase 6 / Step 17 — first narrow admin order/payment actions preview slice.**
 
 ### Goal
-Extend **read-only** (or **narrowly additive**) admin **visibility** so operators can see **payment/order** context needed for **corrections** (exact fields and endpoints to finalize in implementation — e.g. linked **payment** rows summary, reconciliation hints, or **read-only** exports). **Prefer visibility first** before any **order/payment mutation** slice. **`ADMIN_API_TOKEN`**-gated; **no** bypass of **`payment reconciliation`** as the paid-state authority; **no** change to public booking or Mini App contracts unless explicitly owned by the slice.
+Build on Step 16 correction visibility with **read-only** “what to check / suggested next steps” (or similar **preview** semantics) so operators can triage orders **before** any mutation slice. **No** endpoints that change order, payment, handoff, or webhook behavior in this step.
 
-### Safe scope for this step
-- **One** narrow increment: **visibility / projection** only, unless the plan explicitly allows a single safe read model extension
-- **Not** in this step: arbitrary **status** edits on orders, refund execution, handoff inbox redesign
+### Safe scope
+- **Additive read-only** fields and/or a small companion **GET** if strictly necessary — **no** new mutating routes for order/payment state
+- Interpretation stays in the **service** layer; **payment reconciliation** remains the paid-state authority
 
-### Must not expand yet
-- **Bulk** tour/translation ops, **publication**, **full** SPA, **hard-delete** tour
+### Not in this step
+- Refunds, capture/cancel against the provider, arbitrary order status edits, reconciliation rewrites, public or Mini App contract changes
 
-**Completed step references:** `docs/CURSOR_PROMPT_PHASE_6_STEP_1.md` … `docs/CURSOR_PROMPT_PHASE_6_STEP_15.md` (historical).  
+### Must not expand without a dedicated step
+- **Bulk** tour/translation ops, **publication**, **full** SPA, **public** booking contract changes
+
+**Completed step references:** `docs/CURSOR_PROMPT_PHASE_6_STEP_1.md` … `docs/CURSOR_PROMPT_PHASE_6_STEP_16.md` (historical).  
 **Plan:** `docs/IMPLEMENTATION_PLAN.md` (Phase 6)
 
 ## Recommended Next Prompt
-Implement **Phase 6 / Step 16** (order/payment **correction visibility**) using `docs/CHAT_HANDOFF.md` (**Next Safe Step**), `docs/IMPLEMENTATION_PLAN.md`, `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` (especially **section 1a**), `docs/TECH_SPEC_TOURS_BOT.md`, and `docs/TESTING_STRATEGY.md`. Add `docs/CURSOR_PROMPT_PHASE_6_STEP_16.md` when starting — **do not** use Phase 5 “next step” prompts for new work.
+Implement **Phase 6 / Step 17** (**admin order/payment actions preview** — read-oriented) using `docs/CHAT_HANDOFF.md` (**Next Safe Step**), `docs/IMPLEMENTATION_PLAN.md`, `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` (especially **section 1a**), `docs/TECH_SPEC_TOURS_BOT.md`, and `docs/TESTING_STRATEGY.md`. Add `docs/CURSOR_PROMPT_PHASE_6_STEP_17.md` when starting — **do not** use Phase 5 “next step” prompts for new work.
 
 ---
 
@@ -830,14 +841,6 @@ This logic already exists in the temporary reservation creation slice and must b
 - channel-specific dispatch envelope preparation for `telegram_private`
 - real `telegram_private` notification delivery
 - deterministic dispatch key generation for prepared dispatches
-- due reminder selection for active reservations approaching expiry
-- first payment-pending reminder worker slice
-- payment-pending reminder delivery and outbox slices
-- notification outbox persistence / pending entry tracking
-- notification outbox processing, recovery, and retry execution
-- predeparture reminder selection and outbox enqueue groundwork
-- departure-day reminder selection and outbox enqueue groundwork
-- post-trip reminder selection and outbox enqueue groundwork
 
 ### Not yet implemented
 - group delivery
@@ -848,26 +851,24 @@ This logic already exists in the temporary reservation creation slice and must b
 ---
 
 ## New Chat Startup Prompt
+
 Start this task as a continuation of the current project state, but in a fresh chat.
 
-Use the following as the source of truth for continuity:
+Use the following as source of truth for continuity:
 - project rules
 - current codebase
 - docs/TECH_SPEC_TOURS_BOT.md
 - docs/IMPLEMENTATION_PLAN.md
+- docs/CHAT_HANDOFF.md (latest approved checkpoint and **Next Safe Step**)
+- docs/OPEN_QUESTIONS_AND_TECH_DEBT.md
 - docs/TESTING_STRATEGY.md
 - docs/AI_ASSISTANT_SPEC.md
 - docs/AI_DIALOG_FLOWS.md
-- docs/CHAT_HANDOFF.md
 
-Important continuity rules:
+Continuity rules:
 - preserve the existing architecture and phase sequence
 - do not repeat already completed work
 - do not reintroduce previously postponed logic
-- continue from the last approved checkpoint in docs/CHAT_HANDOFF.md
+- continue from the last approved checkpoint in `docs/CHAT_HANDOFF.md` (**Phase 6 / Step 16** complete; forward work: **Phase 6 / Step 17** per **Next Safe Step**)
 
-Before doing anything:
-1. summarize the current project state
-2. list what is already completed
-3. identify the exact next safe step
-4. list what must NOT be changed yet
+Forward **Phase 6** work only — do not use legacy Phase 5 “next step” prompts for new implementation slices.

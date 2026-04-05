@@ -361,6 +361,42 @@ class AdminOrderDetailRead(BaseModel):
     reservation_expires_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    payment_correction_hint: str | None = Field(
+        default=None,
+        description="Secondary, conservative hint when payment rows vs order.payment_status look inconsistent.",
+    )
+    needs_manual_review: bool = Field(
+        default=False,
+        description="True when heuristics suggest operator review (multiple entries or status mismatch).",
+    )
+    payment_records_count: int = Field(
+        default=0,
+        description="Total payment rows for this order (not capped by list preview).",
+    )
+    latest_payment_status: PaymentStatus | None = Field(
+        default=None,
+        description="Status on the newest payment row by created_at (if any).",
+    )
+    latest_payment_provider: str | None = Field(
+        default=None,
+        description="Provider on the newest payment row (if any).",
+    )
+    latest_payment_created_at: datetime | None = Field(
+        default=None,
+        description="created_at on the newest payment row (if any).",
+    )
+    has_multiple_payment_entries: bool = Field(
+        default=False,
+        description="True if more than one payment row exists.",
+    )
+    has_paid_entry: bool = Field(
+        default=False,
+        description="True if any payment row has status paid.",
+    )
+    has_awaiting_payment_entry: bool = Field(
+        default=False,
+        description="True if any payment row has status awaiting_payment.",
+    )
     payments: list[AdminPaymentSummaryItem] = Field(
         default_factory=list,
         description="Recent payment rows (newest first), capped for read-only visibility.",

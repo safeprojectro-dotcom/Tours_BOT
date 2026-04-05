@@ -146,8 +146,97 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(body["tour"]["code"], "ADM-DETAIL-1")
         self.assertEqual(body["boarding_point"]["city"], point.city)
         self.assertEqual(len(body["payments"]), 1)
+        self.assertEqual(body["payment_records_count"], 1)
+        self.assertFalse(body["needs_manual_review"])
+        self.assertFalse(body["has_multiple_payment_entries"])
+        self.assertFalse(body["has_paid_entry"])
+        self.assertFalse(body["has_awaiting_payment_entry"])
+        self.assertIsNone(body["payment_correction_hint"])
+        self.assertEqual(body["latest_payment_status"], "unpaid")
+        self.assertEqual(body["latest_payment_provider"], "mockpay")
+        self.assertIsNotNone(body["latest_payment_created_at"])
         self.assertEqual(len(body["handoffs"]), 1)
         self.assertEqual(body["handoffs"][0]["status"], "open")
+
+    def test_order_detail_payment_correction_multiple_payment_entries(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-PAY-MULTI",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 6, 1, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+        )
+        self.create_payment(order, status=PaymentStatus.UNPAID, external_payment_id="ext-a")
+        self.create_payment(order, status=PaymentStatus.AWAITING_PAYMENT, external_payment_id="ext-b")
+        self.session.commit()
+
+        r = self.client.get(f"/admin/orders/{order.id}", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["payment_records_count"], 2)
+        self.assertTrue(body["has_multiple_payment_entries"])
+        self.assertTrue(body["needs_manual_review"])
+        self.assertIsNotNone(body["payment_correction_hint"])
+        self.assertIn("Multiple payment entries", body["payment_correction_hint"])
+
+    def test_order_detail_payment_correction_order_paid_without_paid_row(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-PAY-NOPAIDROW",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 6, 2, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+        )
+        self.create_payment(order, status=PaymentStatus.UNPAID)
+        self.session.commit()
+
+        r = self.client.get(f"/admin/orders/{order.id}", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertTrue(body["needs_manual_review"])
+        self.assertIn("paid but no payment row has status paid", body["payment_correction_hint"])
+
+    def test_order_detail_payment_correction_paid_row_order_unpaid(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-PAY-MISMATCH",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 6, 3, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.UNPAID,
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.commit()
+
+        r = self.client.get(f"/admin/orders/{order.id}", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertTrue(body["needs_manual_review"])
+        self.assertTrue(body["has_paid_entry"])
+        self.assertIn("paid payment row exists while order payment_status is not paid", body["payment_correction_hint"])
 
     def test_tour_detail_not_found(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}

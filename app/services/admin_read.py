@@ -35,6 +35,7 @@ from app.services.admin_order_lifecycle import (
     describe_order_admin_lifecycle,
     sql_predicate_for_lifecycle_kind,
 )
+from app.services.admin_order_payment_visibility import compute_payment_correction_visibility
 
 
 class AdminReadService:
@@ -131,7 +132,9 @@ class AdminReadService:
             return None
 
         kind, summary = describe_order_admin_lifecycle(order)
-        pay_rows = self._payments.list_by_order(session, order_id=order.id)[: self._MAX_PAYMENT_ROWS]
+        all_payments = self._payments.list_by_order(session, order_id=order.id)
+        correction = compute_payment_correction_visibility(order, all_payments)
+        pay_rows = all_payments[: self._MAX_PAYMENT_ROWS]
         payments = [
             AdminPaymentSummaryItem(
                 id=p.id,
@@ -194,6 +197,15 @@ class AdminReadService:
             reservation_expires_at=order.reservation_expires_at,
             created_at=order.created_at,
             updated_at=order.updated_at,
+            payment_correction_hint=correction.payment_correction_hint,
+            needs_manual_review=correction.needs_manual_review,
+            payment_records_count=correction.payment_records_count,
+            latest_payment_status=correction.latest_payment_status,
+            latest_payment_provider=correction.latest_payment_provider,
+            latest_payment_created_at=correction.latest_payment_created_at,
+            has_multiple_payment_entries=correction.has_multiple_payment_entries,
+            has_paid_entry=correction.has_paid_entry,
+            has_awaiting_payment_entry=correction.has_awaiting_payment_entry,
             payments=payments,
             handoffs=handoffs,
         )

@@ -42,6 +42,7 @@ open
 
 ### Current decision
 - **Phase 6 / Step 1** admin **list** endpoints (`GET /admin/orders`, etc.) expose orders with **`lifecycle_kind`** / **`lifecycle_summary`** (see `app/services/admin_order_lifecycle.py`) so operators are less likely to misread **expired unpaid holds** as active reservations when scanning lists.
+- **Phase 6 / Step 16** extends **`GET /admin/orders/{order_id}`** with **read-only** **payment correction visibility** fields (hints, counts, latest payment metadata; see `app/services/admin_order_payment_visibility.py`). **`lifecycle_kind` / `lifecycle_summary`** remain **primary**; hints are **secondary** and conservative from persisted order + payment rows only. Step 16 is **intentionally** non-mutating; **actual** admin payment/order **actions** (refunds, forced status, manual reconciliation commands) stay **postponed** until product defines safety rules and an explicit implementation slice.
 - **Database fields are unchanged:** the combination described in **section 1** (`booking_status` may remain `reserved` after expiry, etc.) still exists at persistence layer.
 
 ### Why core debt remains open
@@ -54,7 +55,7 @@ open
 - before **analytics / dashboards** depend directly on raw status combinations without a documented projection layer
 
 ### Status
-open (read-side **partially mitigated** for Phase 6 Step 1 list API; **section 1** remains open for semantics and non-projected consumers)
+open (read-side **partially mitigated** for Phase 6 Step 1 list API and Step 16 order-detail hints; **section 1** remains open for semantics and non-projected consumers)
 
 ---
 
