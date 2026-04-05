@@ -157,6 +157,9 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertIsNotNone(body["latest_payment_created_at"])
         self.assertEqual(len(body["handoffs"]), 1)
         self.assertEqual(body["handoffs"][0]["status"], "open")
+        self.assertEqual(body["suggested_admin_action"], "handoff_follow_up")
+        self.assertIn("review_open_handoff", body["allowed_admin_actions"])
+        self.assertIn("handoff", body["payment_action_preview"].lower())
 
     def test_order_detail_payment_correction_multiple_payment_entries(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}
@@ -186,6 +189,8 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertTrue(body["needs_manual_review"])
         self.assertIsNotNone(body["payment_correction_hint"])
         self.assertIn("Multiple payment entries", body["payment_correction_hint"])
+        self.assertEqual(body["suggested_admin_action"], "manual_review")
+        self.assertIn("review_payment_records", body["allowed_admin_actions"])
 
     def test_order_detail_payment_correction_order_paid_without_paid_row(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}
@@ -211,6 +216,7 @@ class AdminRouteTests(FoundationDBTestCase):
         body = r.json()
         self.assertTrue(body["needs_manual_review"])
         self.assertIn("paid but no payment row has status paid", body["payment_correction_hint"])
+        self.assertEqual(body["suggested_admin_action"], "manual_review")
 
     def test_order_detail_payment_correction_paid_row_order_unpaid(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}
@@ -237,6 +243,66 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertTrue(body["needs_manual_review"])
         self.assertTrue(body["has_paid_entry"])
         self.assertIn("paid payment row exists while order payment_status is not paid", body["payment_correction_hint"])
+        self.assertEqual(body["suggested_admin_action"], "manual_review")
+
+    def test_order_detail_action_preview_confirmed_paid_clean(self) -> None:
+        """No ambiguity, no open handoff — preview stays none / routine."""
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-ACTION-CLEAN",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 7, 1, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.commit()
+
+        r = self.client.get(f"/admin/orders/{order.id}", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["lifecycle_kind"], "confirmed_paid")
+        self.assertFalse(body["needs_manual_review"])
+        self.assertEqual(body["suggested_admin_action"], "none")
+        self.assertEqual(body["allowed_admin_actions"], [])
+        self.assertIn("No payment follow-up", body["payment_action_preview"])
+
+    def test_order_detail_action_preview_active_hold_await_payment(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-ACTION-HOLD",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 7, 2, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=datetime(2026, 7, 1, 12, 0, 0, tzinfo=UTC),
+        )
+        self.create_payment(order, status=PaymentStatus.AWAITING_PAYMENT)
+        self.session.commit()
+
+        r = self.client.get(f"/admin/orders/{order.id}", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["lifecycle_kind"], "active_temporary_hold")
+        self.assertFalse(body["needs_manual_review"])
+        self.assertEqual(body["suggested_admin_action"], "await_customer_payment")
+        self.assertIn("monitor_reservation_deadline", body["allowed_admin_actions"])
 
     def test_tour_detail_not_found(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}

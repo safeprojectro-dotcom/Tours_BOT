@@ -35,6 +35,7 @@ from app.services.admin_order_lifecycle import (
     describe_order_admin_lifecycle,
     sql_predicate_for_lifecycle_kind,
 )
+from app.services.admin_order_action_preview import compute_admin_action_preview
 from app.services.admin_order_payment_visibility import compute_payment_correction_visibility
 
 
@@ -134,6 +135,12 @@ class AdminReadService:
         kind, summary = describe_order_admin_lifecycle(order)
         all_payments = self._payments.list_by_order(session, order_id=order.id)
         correction = compute_payment_correction_visibility(order, all_payments)
+        open_handoff_count = sum(1 for h in order.handoffs if h.status == "open")
+        action_preview = compute_admin_action_preview(
+            lifecycle_kind=kind,
+            correction=correction,
+            open_handoff_count=open_handoff_count,
+        )
         pay_rows = all_payments[: self._MAX_PAYMENT_ROWS]
         payments = [
             AdminPaymentSummaryItem(
@@ -206,6 +213,9 @@ class AdminReadService:
             has_multiple_payment_entries=correction.has_multiple_payment_entries,
             has_paid_entry=correction.has_paid_entry,
             has_awaiting_payment_entry=correction.has_awaiting_payment_entry,
+            suggested_admin_action=action_preview.suggested_admin_action.value,
+            allowed_admin_actions=list(action_preview.allowed_admin_actions),
+            payment_action_preview=action_preview.payment_action_preview,
             payments=payments,
             handoffs=handoffs,
         )

@@ -397,6 +397,20 @@ class AdminOrderDetailRead(BaseModel):
         default=False,
         description="True if any payment row has status awaiting_payment.",
     )
+    suggested_admin_action: str = Field(
+        description=(
+            "Secondary preview only: none | manual_review | handoff_follow_up | "
+            "await_customer_payment. Not a permission or executed action."
+        ),
+    )
+    allowed_admin_actions: list[str] = Field(
+        default_factory=list,
+        description="Read-only labels for conceivable follow-ups; not enforced capabilities.",
+    )
+    payment_action_preview: str | None = Field(
+        default=None,
+        description="One-line orientation for payment/order follow-up; does not perform work.",
+    )
     payments: list[AdminPaymentSummaryItem] = Field(
         default_factory=list,
         description="Recent payment rows (newest first), capped for read-only visibility.",
