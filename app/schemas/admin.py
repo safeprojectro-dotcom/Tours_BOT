@@ -343,6 +343,12 @@ class AdminHandoffSummaryItem(BaseModel):
     updated_at: datetime
 
 
+class AdminHandoffAssignBody(BaseModel):
+    """Phase 6 / Step 21 — assign handoff to one operator user id (narrow)."""
+
+    assigned_operator_id: int = Field(..., description="Existing users.id for the operator/admin actor.")
+
+
 class AdminHandoffRead(BaseModel):
     """Admin queue visibility for one handoff row (read-only; Phase 6 / Step 18)."""
 

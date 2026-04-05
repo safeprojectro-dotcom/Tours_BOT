@@ -602,6 +602,204 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(err["detail"]["code"], "handoff_close_not_allowed")
         self.assertEqual(err["detail"]["current_status"], "open")
 
+    def test_handoff_assign_requires_auth(self) -> None:
+        r = self.client.post("/admin/handoffs/1/assign", json={"assigned_operator_id": 1})
+        self.assertEqual(r.status_code, 401)
+
+    def test_handoff_assign_success_open(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        operator = self.create_user(telegram_user_id=900_001)
+        tour = self.create_tour(
+            code="ADM-HO-ASGN-OP",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 9, 7, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(customer, tour, point)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=order.id,
+            reason="Assign me",
+            priority="normal",
+            status="open",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/handoffs/{h.id}/assign",
+            headers=headers,
+            json={"assigned_operator_id": operator.id},
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["id"], h.id)
+        self.assertEqual(body["assigned_operator_id"], operator.id)
+        self.assertTrue(body["needs_attention"])
+        self.assertIn("age_bucket", body)
+
+    def test_handoff_assign_success_in_review(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        operator = self.create_user(telegram_user_id=900_002)
+        tour = self.create_tour(
+            code="ADM-HO-ASGN-IR",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 9, 8, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(customer, tour, point)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=order.id,
+            reason="In review",
+            priority="normal",
+            status="in_review",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/handoffs/{h.id}/assign",
+            headers=headers,
+            json={"assigned_operator_id": operator.id},
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["assigned_operator_id"], operator.id)
+
+    def test_handoff_assign_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.post(
+            "/admin/handoffs/999999/assign",
+            headers=headers,
+            json={"assigned_operator_id": 1},
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_handoff_assign_rejects_closed(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        operator = self.create_user(telegram_user_id=900_003)
+        tour = self.create_tour(
+            code="ADM-HO-ASGN-CL",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 9, 9, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(customer, tour, point)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=order.id,
+            reason="Closed",
+            priority="normal",
+            status="closed",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/handoffs/{h.id}/assign",
+            headers=headers,
+            json={"assigned_operator_id": operator.id},
+        )
+        self.assertEqual(r.status_code, 400)
+        err = r.json()
+        self.assertEqual(err["detail"]["code"], "handoff_assign_not_allowed")
+        self.assertEqual(err["detail"]["current_status"], "closed")
+
+    def test_handoff_assign_idempotent_same_operator(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        operator = self.create_user(telegram_user_id=900_004)
+        tour = self.create_tour(
+            code="ADM-HO-ASGN-ID",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 9, 10, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(customer, tour, point)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=order.id,
+            reason="Same op",
+            priority="normal",
+            status="open",
+            assigned_operator_id=operator.id,
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/handoffs/{h.id}/assign",
+            headers=headers,
+            json={"assigned_operator_id": operator.id},
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["assigned_operator_id"], operator.id)
+
+    def test_handoff_assign_rejects_reassign_different_operator(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        op_a = self.create_user(telegram_user_id=900_005)
+        op_b = self.create_user(telegram_user_id=900_006)
+        tour = self.create_tour(
+            code="ADM-HO-ASGN-RS",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 9, 11, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(customer, tour, point)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=order.id,
+            reason="Taken",
+            priority="normal",
+            status="open",
+            assigned_operator_id=op_a.id,
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/handoffs/{h.id}/assign",
+            headers=headers,
+            json={"assigned_operator_id": op_b.id},
+        )
+        self.assertEqual(r.status_code, 400)
+        err = r.json()
+        self.assertEqual(err["detail"]["code"], "handoff_reassign_not_allowed")
+        self.assertEqual(err["detail"]["current_assigned_operator_id"], op_a.id)
+        self.assertEqual(err["detail"]["requested_operator_id"], op_b.id)
+
+    def test_handoff_assign_invalid_operator(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        tour = self.create_tour(
+            code="ADM-HO-ASGN-BADOP",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 9, 12, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(customer, tour, point)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=order.id,
+            reason="Bad op",
+            priority="normal",
+            status="open",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/handoffs/{h.id}/assign",
+            headers=headers,
+            json={"assigned_operator_id": 999_999},
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["detail"]["code"], "handoff_assign_operator_not_found")
+
     def test_tour_detail_not_found(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}
         r = self.client.get("/admin/tours/999999", headers=headers)

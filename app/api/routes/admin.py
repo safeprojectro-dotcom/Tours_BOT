@@ -12,6 +12,7 @@ from app.schemas.admin import (
     AdminBoardingPointCreate,
     AdminBoardingPointTranslationUpsert,
     AdminBoardingPointUpdate,
+    AdminHandoffAssignBody,
     AdminHandoffListRead,
     AdminHandoffRead,
     AdminOrderDetailRead,
@@ -25,9 +26,12 @@ from app.schemas.admin import (
     AdminTourTranslationUpsert,
 )
 from app.services.admin_handoff_write import (
+    AdminHandoffAssignStateError,
     AdminHandoffCloseStateError,
+    AdminHandoffInvalidOperatorError,
     AdminHandoffMarkInReviewStateError,
     AdminHandoffNotFoundError,
+    AdminHandoffReassignNotAllowedError,
     AdminHandoffWriteService,
 )
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
@@ -418,6 +422,49 @@ def post_admin_handoff_close(
             detail={
                 "code": "handoff_close_not_allowed",
                 "current_status": exc.current_status,
+            },
+        ) from None
+    db.commit()
+    detail = AdminReadService().get_handoff_detail(db, handoff_id=handoff_id)
+    if detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Handoff not found.")
+    return detail
+
+
+@router.post("/handoffs/{handoff_id}/assign", response_model=AdminHandoffRead)
+def post_admin_handoff_assign(
+    handoff_id: int,
+    body: AdminHandoffAssignBody,
+    db: Session = Depends(get_db),
+) -> AdminHandoffRead:
+    try:
+        AdminHandoffWriteService().assign_handoff(
+            db,
+            handoff_id=handoff_id,
+            assigned_operator_id=body.assigned_operator_id,
+        )
+    except AdminHandoffNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Handoff not found.") from None
+    except AdminHandoffAssignStateError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "handoff_assign_not_allowed",
+                "current_status": exc.current_status,
+            },
+        ) from None
+    except AdminHandoffInvalidOperatorError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "handoff_assign_operator_not_found"},
+        ) from None
+    except AdminHandoffReassignNotAllowedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "handoff_reassign_not_allowed",
+                "current_assigned_operator_id": exc.current_assigned_operator_id,
+                "requested_operator_id": exc.requested_operator_id,
             },
         ) from None
     db.commit()

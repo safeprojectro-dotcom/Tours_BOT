@@ -4,34 +4,35 @@
 Tours_BOT
 
 ## Current Status
-The project is ready to continue from the **latest approved checkpoint**: **Phase 6 / Step 20 completed** — admin handoff **status** surface now includes **`POST /admin/handoffs/{handoff_id}/mark-in-review`** (Step **19**) and **`POST /admin/handoffs/{handoff_id}/close`** (Step **20**); implementation in **`app/services/admin_handoff_write.py`**.
+The project is ready to continue from the **latest approved checkpoint**: **Phase 6 / Step 21 completed** — admin handoff **write** surface now includes **`POST /admin/handoffs/{handoff_id}/mark-in-review`** (Step **19**), **`POST /admin/handoffs/{handoff_id}/close`** (Step **20**), and **`POST /admin/handoffs/{handoff_id}/assign`** (Step **21**); implementation in **`app/services/admin_handoff_write.py`**.
 
 **Agreed narrow semantics (combined):**
 - **`mark-in-review`:** **`open` → `in_review`**; **`in_review` → idempotent success** (no extra write); **`closed` → 400**; missing handoff → **404**.
 - **`close`:** **`in_review` → `closed`**; **`closed` → idempotent success**; **`open` → 400** (`handoff_close_not_allowed`); **any other unexpected status → same client error shape** (narrow safe rejection); missing handoff → **404**. Admin **`close`** is intentionally **not** a shortcut from **`open`** — operators are expected to use **`mark-in-review`** first.
+- **`assign`** (Step **21**): body **`{ "assigned_operator_id": <users.id> }`**. Only **`open`** or **`in_review`**; **`closed` → 400** (`handoff_assign_not_allowed`). Operator user must exist (**`handoff_assign_operator_not_found`**). **First** set of **`assigned_operator_id`** from **`null`**, or **idempotent** repeat with the **same** id — **reassigning to a different operator when one is already set** → **400** (`handoff_reassign_not_allowed`) — no unassign/reopen in this slice.
 
-**Step 18** read API: **`GET /admin/handoffs`**, **`GET /admin/handoffs/{handoff_id}`** (**`is_open`**, **`needs_attention`**, **`age_bucket`**). **Still not implemented:** handoff **claim/assign**, **reopen**, **operator workflow engine**, **notifications** from admin handoff actions, **public** customer handoff flow changes, **broader** admin order/payment **mutations**, **full** admin SPA — see **Next Safe Step**. **No** public catalog / Mini App changes in Steps **19–20**.
+**Step 18** read API: **`GET /admin/handoffs`**, **`GET /admin/handoffs/{handoff_id}`** (**`is_open`**, **`needs_attention`**, **`age_bucket`**, **`assigned_operator_id`**). **Still not implemented:** handoff **reopen**, full **operator workflow engine**, **notifications** from admin handoff actions, **public** customer handoff flow changes, **first narrow** admin **order/payment** **mutations** (see **Next Safe Step**), **full** admin SPA.
 
-**Phase 6 / Steps 1–20** (completed): **`ADMIN_API_TOKEN`**; tours, boarding, translations, archive/unarchive; orders **16–17** (read + preview); handoff **queue read** + **two** narrow status mutations.
+**Phase 6 / Steps 1–21** (completed): **`ADMIN_API_TOKEN`**; tours, boarding, translations, archive/unarchive; orders **16–17** (read + preview); handoff **queue read** + **status mutations** + **assign**.
 
 Earlier: **Phase 5 (Mini App MVP) accepted** for MVP/staging; **Phase 5 / Step 20** was docs-only consolidation (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
 
-**Next work:** **Phase 6 / Step 21** — see **Next Safe Step**.
+**Next work:** **Phase 6 / Step 22** — see **Next Safe Step**.
 
 ### Operational note (production — Step 6 schema recovery)
 After Step 6 backend shipped to Railway **before** production Postgres had applied Alembic revision **`20260405_04`**, the missing column **`tours.cover_media_reference`** caused **`ProgrammingError` / `UndefinedColumn`** and **500**s on routes that load tours (e.g. **`/mini-app/catalog`**, **`/mini-app/bookings`**). Root cause was **schema mismatch**, not Mini App UI logic. **Recovery completed:** migrations applied against the Railway DB (using the **public** Postgres URL and a local driver URL such as **`postgresql+psycopg://...`** where internal hostnames are not resolvable), backend **redeployed**, **`/health`**, catalog, and bookings smoke-checked. **Going forward:** any schema-changing step must include **migration apply → redeploy → smoke** for affected endpoints. Details: **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` section 17**.
 
 ## Current Phase
 
-**Current phase (forward work):** **Phase 6 — Admin Panel MVP**. **Completed through Phase 6 / Step 20**; **next implementation checkpoint: Phase 6 / Step 21** (see **Next Safe Step**).
+**Current phase (forward work):** **Phase 6 — Admin Panel MVP**. **Completed through Phase 6 / Step 21**; **next implementation checkpoint: Phase 6 / Step 22** (see **Next Safe Step**).
 
-**Latest approved checkpoint:** **Phase 6 / Step 20** — admin handoff **`close`** (see **Current Status** for combined **`mark-in-review` + `close`** semantics). **Step 18** handoff list/detail and **Steps 16–17** order detail meaning unchanged. **Still not via `/admin/*`:** handoff **claim/assign**, **reopen**, **notifications** from admin handoff actions, **broader** **admin order/payment mutations**, **full** admin SPA, **publication**, **bulk** ops, **hard-delete** tour. Internal **ops** JSON stays **separate** from **`/admin/*`**. Still **no** **`tour_id` reassignment**, **no** route/itinerary editor.
+**Latest approved checkpoint:** **Phase 6 / Step 21** — **`POST /admin/handoffs/{handoff_id}/assign`** (see **Current Status** for **`mark-in-review` + `close` + `assign`**). **Step 18** handoff list/detail and **Steps 16–17** order detail meaning unchanged. **Still not via `/admin/*`:** handoff **reopen**, **notifications** from admin handoff actions, **narrow** admin **order/payment mutations** (next: Step **22**), **full** admin SPA, **publication**, **bulk** ops, **hard-delete** tour. Internal **ops** JSON stays **separate** from **`/admin/*`**. Still **no** **`tour_id` reassignment**, **no** route/itinerary editor.
 
-**Earlier checkpoints:** Phase 6 / Steps 1–7 (foundation through core tour patch); Phase 6 / Steps 8–10 (boarding create / patch / delete); Phase 6 / Steps 11–12 (tour translation upsert/delete); Phase 6 / Steps 13–14 (boarding point translation upsert/delete); Phase 6 / Step 15 (tour archive/unarchive); Phase 6 / Step 16 (order detail payment correction visibility); Phase 6 / Step 17 (order detail action preview); Phase 6 / Step 18 (admin handoff queue read API); Phase 6 / Step 19 (admin handoff mark-in-review); Phase 6 / Step 20 (admin handoff close-only); Phase 5 accepted + Phase 5 Step 20 docs (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
+**Earlier checkpoints:** Phase 6 / Steps 1–7 (foundation through core tour patch); Phase 6 / Steps 8–10 (boarding create / patch / delete); Phase 6 / Steps 11–12 (tour translation upsert/delete); Phase 6 / Steps 13–14 (boarding point translation upsert/delete); Phase 6 / Step 15 (tour archive/unarchive); Phase 6 / Step 16 (order detail payment correction visibility); Phase 6 / Step 17 (order detail action preview); Phase 6 / Step 18 (admin handoff queue read API); Phase 6 / Step 19 (admin handoff mark-in-review); Phase 6 / Step 20 (admin handoff close-only); Phase 6 / Step 21 (admin handoff assign); Phase 5 accepted + Phase 5 Step 20 docs (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
 
 **Phase 5 (closed for MVP):** Execution checkpoints **Steps 4–19** are summarized in `docs/PHASE_5_ACCEPTANCE_SUMMARY.md` and per-step notes under `docs/PHASE_5_STEP_*_NOTES.md`; **Phase 5 / Step 20** was documentation/consolidation only (no intended production-code churn for acceptance).
 
-**Forward:** implement **Phase 6 / Step 21** only as defined in **Next Safe Step** — do **not** use legacy Phase 5 “next step” prompts for new code.
+**Forward:** implement **Phase 6 / Step 22** only as defined in **Next Safe Step** — do **not** use legacy Phase 5 “next step” prompts for new code.
 
 **Optional follow-ups** (not Phase 5 blockers; prioritize with product): Telegram Web App init-data validation for Mini App APIs, real payment provider (PSP), broader handoff/waitlist customer notifications.
 
@@ -670,6 +671,15 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
   - **Scope respected:** public flows unchanged
   - **Prompt archive:** `docs/CURSOR_PROMPT_PHASE_6_STEP_20.md` (historical)
 
+- Phase 6 / Step 21 completed
+  - **Route:** **`POST /admin/handoffs/{handoff_id}/assign`** + body **`AdminHandoffAssignBody`** → **`AdminHandoffRead`**
+  - **Semantics:** **`open` / `in_review`** only; **`closed` → 400**; operator **`users.id`** must exist; first assign or idempotent same id; **reassign to a different operator when already set → 400** (`handoff_reassign_not_allowed`); uses existing **`assigned_operator_id`**
+  - **Service:** **`AdminHandoffWriteService.assign_handoff`** in **`app/services/admin_handoff_write.py`**; **no** notifications, **no** order/payment mutations, **no** reopen/unassign
+  - **Explicitly not in this step:** reopen, unassign, broad workflow, public flow changes
+  - **Tests:** `tests/unit/test_api_admin.py` (auth, success open/in_review, 404, closed → 400, idempotent, reassign rejected, bad operator id)
+  - **Scope respected:** public flows unchanged
+  - **Prompt archive:** `docs/CURSOR_PROMPT_PHASE_6_STEP_21.md` (historical)
+
 ---
 
 ## Verified
@@ -748,12 +758,12 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
 
 ### Ready
 - **bot layer** — Telegram private chat; thin handlers; service-driven
-- **api layer** — FastAPI; public routes + Mini App routes + payments webhooks + **internal ops** JSON endpoints + **admin API** (`/admin/*`, `ADMIN_API_TOKEN`: overview, tours/orders **lists** with **optional read-only filters**, **`GET /admin/handoffs`** and **`GET /admin/handoffs/{handoff_id}`** handoff queue visibility, **`POST /admin/handoffs/{handoff_id}/mark-in-review`** (Step **19**), **`POST /admin/handoffs/{handoff_id}/close`** (Step **20**), **`GET /admin/orders/{order_id}`** order detail with **Step 16** correction + **Step 17** action-preview fields, **tour + order detail** incl. **`cover_media_reference`**, **`POST /admin/tours`** create **core** tours, **`POST /admin/tours/{tour_id}/archive`** and **`POST /admin/tours/{tour_id}/unarchive`**, **`PUT /admin/tours/{tour_id}/cover`** for **one** media reference string, **`PATCH /admin/tours/{tour_id}`** for **core** field updates only, **`POST` / `PATCH` / `DELETE`** boarding points, **`PUT` / `DELETE`** **`/admin/tours/{tour_id}/translations/{language_code}`** for **tour** translations, **`PUT` / `DELETE`** **`/admin/boarding-points/{boarding_point_id}/translations/{language_code}`** for **boarding** translations)
+- **api layer** — FastAPI; public routes + Mini App routes + payments webhooks + **internal ops** JSON endpoints + **admin API** (`/admin/*`, `ADMIN_API_TOKEN`: overview, tours/orders **lists** with **optional read-only filters**, **`GET /admin/handoffs`** and **`GET /admin/handoffs/{handoff_id}`** handoff queue visibility, **`POST /admin/handoffs/{handoff_id}/mark-in-review`** (Step **19**), **`POST /admin/handoffs/{handoff_id}/close`** (Step **20**), **`POST /admin/handoffs/{handoff_id}/assign`** (Step **21**), **`GET /admin/orders/{order_id}`** order detail with **Step 16** correction + **Step 17** action-preview fields, **tour + order detail** incl. **`cover_media_reference`**, **`POST /admin/tours`** create **core** tours, **`POST /admin/tours/{tour_id}/archive`** and **`POST /admin/tours/{tour_id}/unarchive`**, **`PUT /admin/tours/{tour_id}/cover`** for **one** media reference string, **`PATCH /admin/tours/{tour_id}`** for **core** field updates only, **`POST` / `PATCH` / `DELETE`** boarding points, **`PUT` / `DELETE`** **`/admin/tours/{tour_id}/translations/{language_code}`** for **tour** translations, **`PUT` / `DELETE`** **`/admin/boarding-points/{boarding_point_id}/translations/{language_code}`** for **boarding** translations)
 - **services layer** — business rules and orchestration
 - **repositories layer** — persistence-oriented data access
 - **mini_app** — Flet Mini App UI (separate deploy surface in staging); **MVP accepted** for agreed scope (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`); **no business logic in the frontend** — UI calls APIs only
 - **booking/payment core** — temporary reservations, payment entry, idempotent reconciliation, lazy expiry, staging mock payment completion path when enabled
-- **waitlist / handoff (MVP)** — customer interest/support entry; **internal ops** JSON retains separate claim/close-style actions; **`/admin/*`** has queue **read** (Step **18**) + narrow **`mark-in-review` / `close`** (Steps **19–20**) only — **not** claim/assign, **not** a full operator inbox or customer notification suite
+- **waitlist / handoff (MVP)** — customer interest/support entry; **internal ops** JSON retains separate tooling; **`/admin/*`** has queue **read** (Step **18**) + narrow **`mark-in-review` / `close` / `assign`** (Steps **19–21**) — assignment is **narrow** (no reassign-to-other-operator once set, no unassign here); **not** a full operator inbox or customer notification suite
 
 ### Architecture boundaries (non-negotiable)
 - **PostgreSQL-first** for MVP-critical behavior; do not treat SQLite as source of truth for booking/payment paths
@@ -762,28 +772,28 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
 - **Mini App / any web UI**: presentation only — no duplicated booking/payment rules in the client
 
 ### Not Implemented Yet
-- **Next (Step 21):** first narrow **admin** handoff **claim/assign** — see **Next Safe Step** (aligns with **`docs/IMPLEMENTATION_PLAN.md`** Phase 6 handoff **assignment** direction; still **not** full workflow).
-- **Still postponed:** **reopen**, **notifications** from admin handoff actions, full **operator workflow engine**, **public** handoff UX changes, **broader** **admin order/payment mutations** (must respect **`payment reconciliation`**), **full** admin SPA, **publication**, **bulk** ops — per plan / product.
+- **Next (Step 22):** first narrow **admin order/payment mutation** slice — see **Next Safe Step** (must **not** bypass **`payment reconciliation`**; product + safety rules first).
+- **Still postponed:** handoff **reopen** / **unassign** / full **queue engine**, **notifications** from admin handoff actions, **public** handoff UX changes, **full** admin SPA, **publication**, **bulk** ops — per plan / product.
 - **Phase 7–9:** group assistant, handoff at scale, content assistant, analytics — per `docs/IMPLEMENTATION_PLAN.md`
 
 ## Next Safe Step
 
-**Phase 6 / Step 21 — first narrow admin handoff claim/assign slice.**
+**Phase 6 / Step 22 — first narrow admin order/payment mutation slice.**
 
 ### Goal
-Add the **smallest** **`ADMIN_API_TOKEN`**-gated way to record **assignment / ownership** (or an equivalent minimal operator identity field) on a handoff row, so the queue is actionable beyond pure status — **without** building a full operator engine, **without** customer notifications, **without** changing **`open` / `in_review` / `closed`** rules from Steps **19–20**. Exact schema and route shape are **TBD** in the Step 21 implementation prompt; keep **one** narrow write path.
+After Steps **16–17** (read-only correction visibility + action **preview**), add the **smallest** **`ADMIN_API_TOKEN`**-gated **mutating** capability that product approves (e.g. one explicit correction path) — **always** routed through **service** rules and existing **`payment reconciliation`** for any paid-state impact; **no** duplicated reconciliation in routes.
 
 ### Safe scope boundaries
-- **Service-layer** rules + **thin** route(s); repositories stay persistence-oriented; **no** public API or Mini App changes unless the step explicitly lists them.
+- **One** focused mutating route (or minimal pair) with **clear** validation; **thin** routes; **no** public booking contract change unless the step explicitly lists it.
 
-### Explicitly not in Step 21
-- **Reopen**, **notifications**, **order/payment mutations**, **reconciliation** changes, **full** SPA, **multi-tenant** RBAC beyond the agreed token model.
+### Explicitly not in Step 22
+- Handoff **reopen**, admin **notification** side effects, **full** SPA, **refund** product unless explicitly in scope, **reconciliation** rewrite.
 
-**Completed step references:** `docs/CURSOR_PROMPT_PHASE_6_STEP_1.md` … `docs/CURSOR_PROMPT_PHASE_6_STEP_20.md` (historical).  
-**Plan:** `docs/IMPLEMENTATION_PLAN.md` (Phase 6 — handoff list / **assignment** / resolve, taken as **narrow slices**).
+**Completed step references:** `docs/CURSOR_PROMPT_PHASE_6_STEP_1.md` … `docs/CURSOR_PROMPT_PHASE_6_STEP_21.md` (historical).  
+**Plan:** `docs/IMPLEMENTATION_PLAN.md` (Phase 6 — order oversight / restricted updates, taken as **narrow slices**).
 
 ## Recommended Next Prompt
-Implement **Phase 6 / Step 21** (**first narrow admin handoff claim/assign**) using **`docs/CHAT_HANDOFF.md`** (**Next Safe Step**), `docs/IMPLEMENTATION_PLAN.md`, `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, `docs/TECH_SPEC_TOURS_BOT.md`, and `docs/TESTING_STRATEGY.md`. Add **`docs/CURSOR_PROMPT_PHASE_6_STEP_21.md`** when starting — **do not** use legacy Phase 5 “next step” prompts for new work.
+Implement **Phase 6 / Step 22** (**first narrow admin order/payment mutation**) using **`docs/CHAT_HANDOFF.md`** (**Next Safe Step**), `docs/IMPLEMENTATION_PLAN.md`, `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, `docs/TECH_SPEC_TOURS_BOT.md`, and `docs/TESTING_STRATEGY.md`. Add **`docs/CURSOR_PROMPT_PHASE_6_STEP_22.md`** when starting — **do not** use legacy Phase 5 “next step” prompts for new work.
 
 ---
 
@@ -906,6 +916,6 @@ Continuity rules:
 - preserve the existing architecture and phase sequence
 - do not repeat already completed work
 - do not reintroduce previously postponed logic
-- continue from the last approved checkpoint in `docs/CHAT_HANDOFF.md` (**Phase 6 / Step 20** complete; forward work: **Phase 6 / Step 21** per **Next Safe Step**)
+- continue from the last approved checkpoint in `docs/CHAT_HANDOFF.md` (**Phase 6 / Step 21** complete; forward work: **Phase 6 / Step 22** per **Next Safe Step**)
 
 Forward **Phase 6** work only — do not use legacy Phase 5 “next step” prompts for new implementation slices.

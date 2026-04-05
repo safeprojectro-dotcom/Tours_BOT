@@ -1,10 +1,11 @@
-"""Narrow admin mutations on handoffs (Phase 6 / Steps 19–20) — no notifications, no order/payment changes."""
+"""Narrow admin mutations on handoffs (Phase 6 / Steps 19–21) — no notifications, no order/payment changes."""
 
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
 from app.models.handoff import Handoff
+from app.models.user import User
 from app.repositories.handoff import HandoffRepository
 from app.services.handoff_ops_actions import (
     HANDOFF_STATUS_CLOSED,
@@ -31,8 +32,27 @@ class AdminHandoffCloseStateError(Exception):
         self.current_status = current_status
 
 
+class AdminHandoffAssignStateError(Exception):
+    """assign not allowed from current status (narrow Step 21: non-closed only)."""
+
+    def __init__(self, *, current_status: str) -> None:
+        self.current_status = current_status
+
+
+class AdminHandoffInvalidOperatorError(Exception):
+    """assigned_operator_id does not reference an existing user."""
+
+
+class AdminHandoffReassignNotAllowedError(Exception):
+    """Narrow rule: cannot change operator once assigned; idempotent only for same id."""
+
+    def __init__(self, *, current_assigned_operator_id: int, requested_operator_id: int) -> None:
+        self.current_assigned_operator_id = current_assigned_operator_id
+        self.requested_operator_id = requested_operator_id
+
+
 class AdminHandoffWriteService:
-    """Minimal status transitions for `/admin/handoffs/*`; does not assign operators."""
+    """Minimal status transitions + narrow assignment for `/admin/handoffs/*`."""
 
     def __init__(self, *, handoff_repository: HandoffRepository | None = None) -> None:
         self._handoffs = handoff_repository or HandoffRepository()
@@ -68,3 +88,39 @@ class AdminHandoffWriteService:
         if row.status == HANDOFF_STATUS_OPEN:
             raise AdminHandoffCloseStateError(current_status=row.status)
         raise AdminHandoffCloseStateError(current_status=row.status)
+
+    def assign_handoff(
+        self,
+        session: Session,
+        *,
+        handoff_id: int,
+        assigned_operator_id: int,
+    ) -> Handoff:
+        """
+        Step 21: set assigned_operator_id on non-closed handoffs only.
+        open / in_review only; closed -> error.
+        Operator user must exist. First assignment (None -> id) or idempotent same id OK.
+        If already assigned to a different operator -> error (no broad reassign / unassign in this slice).
+        """
+        row = self._handoffs.get(session, handoff_id)
+        if row is None:
+            raise AdminHandoffNotFoundError
+        if row.status == HANDOFF_STATUS_CLOSED:
+            raise AdminHandoffAssignStateError(current_status=row.status)
+        if row.status not in (HANDOFF_STATUS_OPEN, HANDOFF_STATUS_IN_REVIEW):
+            raise AdminHandoffAssignStateError(current_status=row.status)
+        if session.get(User, assigned_operator_id) is None:
+            raise AdminHandoffInvalidOperatorError
+        current = row.assigned_operator_id
+        if current is not None and current != assigned_operator_id:
+            raise AdminHandoffReassignNotAllowedError(
+                current_assigned_operator_id=current,
+                requested_operator_id=assigned_operator_id,
+            )
+        if current == assigned_operator_id:
+            return row
+        return self._handoffs.update(
+            session,
+            instance=row,
+            data={"assigned_operator_id": assigned_operator_id},
+        )
