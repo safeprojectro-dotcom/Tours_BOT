@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.models.enums import TourStatus
 from app.models.tour import BoardingPoint, Tour
 from app.repositories.order import OrderRepository
 from app.repositories.tour import (
@@ -55,6 +56,21 @@ class AdminTourTranslationNotFoundError(Exception):
 
 class AdminBoardingPointTranslationNotFoundError(Exception):
     """No boarding point translation row for this boarding point and language."""
+
+
+# Phase 6 / Step 15 — narrow archive/unarchive (no new enum member).
+# Reuse SALES_CLOSED as the admin "archived" bucket: Mini App catalog lists only OPEN_FOR_SALE,
+# so moving here hides the tour from public catalog without hard delete.
+# Unarchive restores a single return path: OPEN_FOR_SALE (sale-ready).
+_TOUR_ARCHIVE_SOURCE_STATUSES: frozenset[TourStatus] = frozenset(
+    {
+        TourStatus.DRAFT,
+        TourStatus.OPEN_FOR_SALE,
+        TourStatus.COLLECTING_GROUP,
+        TourStatus.GUARANTEED,
+    },
+)
+_TOUR_ARCHIVED_STATUS = TourStatus.SALES_CLOSED
 
 
 class AdminTourWriteService:
@@ -401,3 +417,53 @@ class AdminTourWriteService:
         )
         if not deleted:
             raise AdminBoardingPointTranslationNotFoundError()
+
+    def archive_tour(self, session: Session, *, tour_id: int) -> AdminTourDetailRead:
+        """Set `status` to SALES_CLOSED when allowed; idempotent if already archived."""
+        tour = session.get(Tour, tour_id)
+        if tour is None:
+            raise AdminTourNotFoundError()
+
+        if tour.status == _TOUR_ARCHIVED_STATUS:
+            detail = self._read.get_tour_detail(session, tour_id=tour_id)
+            assert detail is not None
+            return detail
+
+        if tour.status not in _TOUR_ARCHIVE_SOURCE_STATUSES:
+            raise AdminTourCreateValidationError(
+                "Cannot archive tour from the current status.",
+            )
+
+        self._tours.update_core_fields(
+            session,
+            tour_id=tour_id,
+            fields={"status": _TOUR_ARCHIVED_STATUS},
+        )
+        detail = self._read.get_tour_detail(session, tour_id=tour_id)
+        assert detail is not None
+        return detail
+
+    def unarchive_tour(self, session: Session, *, tour_id: int) -> AdminTourDetailRead:
+        """Restore from SALES_CLOSED to OPEN_FOR_SALE; idempotent if already open for sale."""
+        tour = session.get(Tour, tour_id)
+        if tour is None:
+            raise AdminTourNotFoundError()
+
+        if tour.status == TourStatus.OPEN_FOR_SALE:
+            detail = self._read.get_tour_detail(session, tour_id=tour_id)
+            assert detail is not None
+            return detail
+
+        if tour.status != _TOUR_ARCHIVED_STATUS:
+            raise AdminTourCreateValidationError(
+                "Tour is not archived (expected sales_closed status).",
+            )
+
+        self._tours.update_core_fields(
+            session,
+            tour_id=tour_id,
+            fields={"status": TourStatus.OPEN_FOR_SALE},
+        )
+        detail = self._read.get_tour_detail(session, tour_id=tour_id)
+        assert detail is not None
+        return detail

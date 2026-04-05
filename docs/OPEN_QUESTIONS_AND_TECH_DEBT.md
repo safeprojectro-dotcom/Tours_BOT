@@ -106,6 +106,21 @@ open (per-language **upsert/delete** done for tours and boarding points; **bulk*
 
 ---
 
+## 1e. Admin tour archive / unarchive — narrow POST endpoints vs full status editor
+
+### Current decision
+- **Phase 6 / Step 15** adds **`POST /admin/tours/{tour_id}/archive`** and **`POST /admin/tours/{tour_id}/unarchive`** only (returns **`AdminTourDetailRead`**). **`sales_closed`** is reused as the **admin “archived”** bucket (no new enum member); **unarchive** sets **`open_for_sale`** only. **Archive** allowed from **draft**, **open_for_sale**, **collecting_group**, **guaranteed**; **not** from in-progress / completed / cancelled / postponed (see service). Idempotent **archive** when already **`sales_closed`**; idempotent **unarchive** when already **`open_for_sale`**.
+- **Hard delete**, arbitrary **TourStatus** workflow UI, and **public** catalog semantics beyond existing **`OPEN_FOR_SALE`** scopes remain **out of scope** for this slice.
+
+### Revisit trigger
+- before admin needs **audit** fields, **batch** archive, or **status** rules that collide with operational **`sales_closed`** meaning
+- before **public catalog** or **customer-facing** semantics assume **`sales_closed`** means only “admin archived” (vs operational “sales ended”)
+
+### Status
+open (narrow **two-endpoint** slice; **not** a full lifecycle editor)
+
+---
+
 ## 2. Temporary bot FSM storage uses MemoryStorage
 
 ### Current decision

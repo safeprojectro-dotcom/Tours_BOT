@@ -537,6 +537,75 @@ class AdminRouteTests(FoundationDBTestCase):
         )
         self.assertEqual(r2.status_code, 422)
 
+    def test_post_admin_tour_archive_requires_auth(self) -> None:
+        r = self.client.post("/admin/tours/1/archive")
+        self.assertEqual(r.status_code, 401)
+
+    def test_post_admin_tour_archive_success(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-ARCH-1", status=TourStatus.OPEN_FOR_SALE)
+        self.session.commit()
+        r = self.client.post(f"/admin/tours/{tour.id}/archive", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["status"], "sales_closed")
+
+    def test_post_admin_tour_archive_idempotent_when_already_archived(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-ARCH-IDEM", status=TourStatus.SALES_CLOSED)
+        self.session.commit()
+        r1 = self.client.post(f"/admin/tours/{tour.id}/archive", headers=headers)
+        r2 = self.client.post(f"/admin/tours/{tour.id}/archive", headers=headers)
+        self.assertEqual(r1.status_code, 200)
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(r1.json()["status"], "sales_closed")
+        self.assertEqual(r2.json()["status"], "sales_closed")
+
+    def test_post_admin_tour_archive_rejects_in_progress(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-ARCH-BAD", status=TourStatus.IN_PROGRESS)
+        self.session.commit()
+        r = self.client.post(f"/admin/tours/{tour.id}/archive", headers=headers)
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("status", r.json()["detail"].lower())
+
+    def test_post_admin_tour_archive_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.post("/admin/tours/999999/archive", headers=headers)
+        self.assertEqual(r.status_code, 404)
+
+    def test_post_admin_tour_unarchive_requires_auth(self) -> None:
+        r = self.client.post("/admin/tours/1/unarchive")
+        self.assertEqual(r.status_code, 401)
+
+    def test_post_admin_tour_unarchive_success(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-UNARCH-1", status=TourStatus.SALES_CLOSED)
+        self.session.commit()
+        r = self.client.post(f"/admin/tours/{tour.id}/unarchive", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["status"], "open_for_sale")
+
+    def test_post_admin_tour_unarchive_idempotent_when_open_for_sale(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-UNARCH-IDEM", status=TourStatus.OPEN_FOR_SALE)
+        self.session.commit()
+        r = self.client.post(f"/admin/tours/{tour.id}/unarchive", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["status"], "open_for_sale")
+
+    def test_post_admin_tour_unarchive_rejects_when_not_archived(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-UNARCH-DRAFT", status=TourStatus.DRAFT)
+        self.session.commit()
+        r = self.client.post(f"/admin/tours/{tour.id}/unarchive", headers=headers)
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("archived", r.json()["detail"].lower())
+
+    def test_post_admin_tour_unarchive_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.post("/admin/tours/999999/unarchive", headers=headers)
+        self.assertEqual(r.status_code, 404)
+
     def test_post_admin_boarding_point_requires_auth(self) -> None:
         r = self.client.post(
             "/admin/tours/1/boarding-points",

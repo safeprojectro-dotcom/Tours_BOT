@@ -97,6 +97,36 @@ def patch_admin_tour_core(
     return detail
 
 
+@router.post("/tours/{tour_id}/archive", response_model=AdminTourDetailRead)
+def post_admin_tour_archive(
+    tour_id: int,
+    db: Session = Depends(get_db),
+) -> AdminTourDetailRead:
+    try:
+        detail = AdminTourWriteService().archive_tour(db, tour_id=tour_id)
+    except AdminTourNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour not found.") from None
+    except AdminTourCreateValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return detail
+
+
+@router.post("/tours/{tour_id}/unarchive", response_model=AdminTourDetailRead)
+def post_admin_tour_unarchive(
+    tour_id: int,
+    db: Session = Depends(get_db),
+) -> AdminTourDetailRead:
+    try:
+        detail = AdminTourWriteService().unarchive_tour(db, tour_id=tour_id)
+    except AdminTourNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour not found.") from None
+    except AdminTourCreateValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return detail
+
+
 @router.put("/tours/{tour_id}/translations/{language_code}", response_model=AdminTourDetailRead)
 def put_admin_tour_translation(
     tour_id: int,
