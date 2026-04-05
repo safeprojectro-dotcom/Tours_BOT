@@ -24,6 +24,11 @@ from app.schemas.admin import (
     AdminTourListRead,
     AdminTourTranslationUpsert,
 )
+from app.services.admin_handoff_write import (
+    AdminHandoffMarkInReviewStateError,
+    AdminHandoffNotFoundError,
+    AdminHandoffWriteService,
+)
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
 from app.services.admin_read import AdminReadService
 from app.services.admin_tour_write import (
@@ -367,6 +372,30 @@ def get_admin_handoff_detail(
     handoff_id: int,
     db: Session = Depends(get_db),
 ) -> AdminHandoffRead:
+    detail = AdminReadService().get_handoff_detail(db, handoff_id=handoff_id)
+    if detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Handoff not found.")
+    return detail
+
+
+@router.post("/handoffs/{handoff_id}/mark-in-review", response_model=AdminHandoffRead)
+def post_admin_handoff_mark_in_review(
+    handoff_id: int,
+    db: Session = Depends(get_db),
+) -> AdminHandoffRead:
+    try:
+        AdminHandoffWriteService().mark_in_review(db, handoff_id=handoff_id)
+    except AdminHandoffNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Handoff not found.") from None
+    except AdminHandoffMarkInReviewStateError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "handoff_mark_in_review_not_allowed",
+                "current_status": exc.current_status,
+            },
+        ) from None
+    db.commit()
     detail = AdminReadService().get_handoff_detail(db, handoff_id=handoff_id)
     if detail is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Handoff not found.")
