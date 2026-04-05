@@ -74,6 +74,21 @@ open (reference string can be set; **upload/delivery** not done)
 
 ---
 
+## 1c. Admin boarding points — narrow create/update vs full lifecycle
+
+### Current decision
+- **Phase 6 / Steps 8–9** add **`POST /admin/tours/{tour_id}/boarding-points`** (create) and **`PATCH /admin/boarding-points/{boarding_point_id}`** (partial update: `city`, `address`, `time`, `notes`); **no** `tour_id` reassignment.
+- **Boarding point delete**, **per-point translations**, **full route/itinerary** editing, and **tour-level** delete/archive remain **intentionally postponed** until scheduled (see `docs/CHAT_HANDOFF.md` **Next Safe Step**).
+
+### Revisit trigger
+- before admin treats **boarding management** as **complete** without delete/reorder/translation workflows
+- before **customer-facing** catalog or booking flows need structural changes tied to boarding CRUD
+
+### Status
+open (create + patch only; **delete** and broader surface **not done**)
+
+---
+
 ## 2. Temporary bot FSM storage uses MemoryStorage
 
 ### Current decision
@@ -497,3 +512,25 @@ open (informational snapshot)
 
 ### Status
 open
+
+---
+
+## 18. Admin `PATCH` `seats_total` vs order-level occupancy
+
+### Current decision
+- **Phase 6 / Step 7** — **PATCH /admin/tours/{tour_id}** — may update **`seats_total`** using a **conservative** rule: treat **committed seats** as `seats_total - seats_available`, require any new total **≥** that value, and set **`seats_available`** to `new_total - committed_seats`. This keeps ORM/check constraints coherent **without** summing live **`orders.seats_count`**.
+- **Richer validation** (reconcile **`seats_total`** with actual reservations/orders, or block edits when orders exist) remains **postponed** until explicitly scheduled.
+
+### Why accepted now
+- Avoids unsafe automatic seat math and keeps the admin slice narrow.
+- Order-accurate occupancy rules belong with booking domain work, not a minimal PATCH slice.
+
+### Risk later
+- Admin could theoretically set totals that are **inconsistent** with sum of order rows if historical data drifted — unlikely if **`seats_available`** was maintained by existing booking flows.
+
+### Revisit trigger
+- before admin tools are used to **reshape** capacity on tours with **many** active bookings
+- before **analytics** or **ops** rely on **`seats_*`** alone without order-level checks
+
+### Status
+open (narrow rule shipped; **order-sum validation** not implemented)

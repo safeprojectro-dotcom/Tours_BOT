@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime, time as time_type
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourStatus
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
@@ -52,6 +52,92 @@ class AdminTourCreate(BaseModel):
         if not s:
             raise ValueError("must not be empty or whitespace-only")
         return s
+
+
+class AdminTourCoreUpdate(BaseModel):
+    """
+    Partial update of core `Tour` columns (same family as create). Forbidden: `code`, `cover_media_reference`
+    (use `PUT /admin/tours/{tour_id}/cover` for cover).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    title_default: str | None = Field(default=None, min_length=1, max_length=255)
+    short_description_default: str | None = None
+    full_description_default: str | None = None
+    duration_days: int | None = Field(default=None, ge=1)
+    departure_datetime: datetime | None = None
+    return_datetime: datetime | None = None
+    base_price: Decimal | None = Field(default=None, ge=0)
+    currency: str | None = Field(default=None, min_length=1, max_length=8)
+    seats_total: int | None = Field(default=None, ge=0)
+    sales_deadline: datetime | None = None
+    status: TourStatus | None = None
+    guaranteed_flag: bool | None = None
+
+    @field_validator("currency")
+    @classmethod
+    def strip_currency(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        if not s:
+            raise ValueError("currency must not be empty or whitespace-only")
+        return s
+
+
+class AdminBoardingPointCreate(BaseModel):
+    """Create one boarding stop for a tour (admin-only)."""
+
+    city: str = Field(min_length=1, max_length=255)
+    address: str = Field(min_length=1, max_length=255)
+    time: time_type
+    notes: str | None = None
+
+    @field_validator("city", "address")
+    @classmethod
+    def strip_required_non_blank(cls, v: str) -> str:
+        s = v.strip()
+        if not s:
+            raise ValueError("must not be empty or whitespace-only")
+        return s
+
+    @field_validator("notes")
+    @classmethod
+    def empty_notes_to_none(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s if s else None
+
+
+class AdminBoardingPointUpdate(BaseModel):
+    """Partial update of core `BoardingPoint` columns only; no `tour_id` (no reassignment in this slice)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    city: str | None = Field(default=None, min_length=1, max_length=255)
+    address: str | None = Field(default=None, min_length=1, max_length=255)
+    time: time_type | None = None
+    notes: str | None = None
+
+    @field_validator("city", "address")
+    @classmethod
+    def strip_required_when_set(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        if not s:
+            raise ValueError("must not be empty or whitespace-only")
+        return s
+
+    @field_validator("notes")
+    @classmethod
+    def empty_notes_to_none(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s if s else None
 
 
 class AdminTourCoverSet(BaseModel):
@@ -113,7 +199,7 @@ class AdminBoardingPointSummary(BaseModel):
     id: int
     city: str
     address: str
-    time: time
+    time: time_type
     notes: str | None = None
 
 

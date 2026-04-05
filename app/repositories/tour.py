@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import time as time_type
+from typing import Any, Mapping
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -19,6 +22,24 @@ class TourRepository(SQLAlchemyRepository[Tour]):
     def get_for_update(self, session: Session, *, tour_id: int) -> Tour | None:
         stmt = select(Tour).where(Tour.id == tour_id).with_for_update()
         return session.scalar(stmt)
+
+    def update_core_fields(
+        self,
+        session: Session,
+        *,
+        tour_id: int,
+        fields: Mapping[str, Any],
+    ) -> Tour | None:
+        """Apply allowed core column updates; caller supplies validated mapping including seats if changed."""
+        tour = session.get(Tour, tour_id)
+        if tour is None:
+            return None
+        for key, value in fields.items():
+            setattr(tour, key, value)
+        session.add(tour)
+        session.flush()
+        session.refresh(tour)
+        return tour
 
     def set_cover_media_reference(
         self,
@@ -115,6 +136,27 @@ class BoardingPointRepository(SQLAlchemyRepository[BoardingPoint]):
     def __init__(self) -> None:
         super().__init__(BoardingPoint)
 
+    def create_for_tour(
+        self,
+        session: Session,
+        *,
+        tour_id: int,
+        city: str,
+        address: str,
+        boarding_time: time_type,
+        notes: str | None,
+    ) -> BoardingPoint:
+        return self.create(
+            session,
+            data={
+                "tour_id": tour_id,
+                "city": city,
+                "address": address,
+                "time": boarding_time,
+                "notes": notes,
+            },
+        )
+
     def list_by_tour(self, session: Session, *, tour_id: int) -> list[BoardingPoint]:
         stmt = (
             select(BoardingPoint)
@@ -122,3 +164,20 @@ class BoardingPointRepository(SQLAlchemyRepository[BoardingPoint]):
             .order_by(BoardingPoint.time, BoardingPoint.id)
         )
         return list(session.scalars(stmt).all())
+
+    def update_core_fields(
+        self,
+        session: Session,
+        *,
+        boarding_point_id: int,
+        fields: Mapping[str, Any],
+    ) -> BoardingPoint | None:
+        bp = session.get(BoardingPoint, boarding_point_id)
+        if bp is None:
+            return None
+        for key, value in fields.items():
+            setattr(bp, key, value)
+        session.add(bp)
+        session.flush()
+        session.refresh(bp)
+        return bp

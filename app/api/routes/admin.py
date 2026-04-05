@@ -9,9 +9,12 @@ from app.api.admin_auth import require_admin_api_token
 from app.db.session import get_db
 from app.models.enums import TourStatus
 from app.schemas.admin import (
+    AdminBoardingPointCreate,
+    AdminBoardingPointUpdate,
     AdminOrderDetailRead,
     AdminOrderListRead,
     AdminOverviewRead,
+    AdminTourCoreUpdate,
     AdminTourCoverSet,
     AdminTourCreate,
     AdminTourDetailRead,
@@ -20,6 +23,7 @@ from app.schemas.admin import (
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
 from app.services.admin_read import AdminReadService
 from app.services.admin_tour_write import (
+    AdminBoardingPointNotFoundError,
     AdminTourCreateValidationError,
     AdminTourDuplicateCodeError,
     AdminTourNotFoundError,
@@ -68,6 +72,63 @@ def put_admin_tour_cover(
         detail = AdminTourWriteService().set_tour_cover(db, tour_id=tour_id, payload=payload)
     except AdminTourNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour not found.") from None
+    db.commit()
+    return detail
+
+
+@router.patch("/tours/{tour_id}", response_model=AdminTourDetailRead)
+def patch_admin_tour_core(
+    tour_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminTourCoreUpdate = Body(...),
+) -> AdminTourDetailRead:
+    try:
+        detail = AdminTourWriteService().update_tour_core(db, tour_id=tour_id, payload=payload)
+    except AdminTourNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour not found.") from None
+    except AdminTourCreateValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return detail
+
+
+@router.post(
+    "/tours/{tour_id}/boarding-points",
+    response_model=AdminTourDetailRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def post_admin_tour_boarding_point(
+    tour_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminBoardingPointCreate = Body(...),
+) -> AdminTourDetailRead:
+    try:
+        detail = AdminTourWriteService().add_boarding_point(db, tour_id=tour_id, payload=payload)
+    except AdminTourNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour not found.") from None
+    db.commit()
+    return detail
+
+
+@router.patch("/boarding-points/{boarding_point_id}", response_model=AdminTourDetailRead)
+def patch_admin_boarding_point(
+    boarding_point_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminBoardingPointUpdate = Body(...),
+) -> AdminTourDetailRead:
+    try:
+        detail = AdminTourWriteService().update_boarding_point(
+            db,
+            boarding_point_id=boarding_point_id,
+            payload=payload,
+        )
+    except AdminBoardingPointNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Boarding point not found.",
+        ) from None
+    except AdminTourCreateValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     db.commit()
     return detail
 

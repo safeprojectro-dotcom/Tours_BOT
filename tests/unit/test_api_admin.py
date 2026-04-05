@@ -441,3 +441,228 @@ class AdminRouteTests(FoundationDBTestCase):
             json={"cover_media_reference": "   "},
         )
         self.assertEqual(r.status_code, 422)
+
+    def test_patch_admin_tour_core_requires_auth(self) -> None:
+        r = self.client.patch("/admin/tours/1", json={"title_default": "X"})
+        self.assertEqual(r.status_code, 401)
+
+    def test_patch_admin_tour_core_success(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-PATCH-1", title_default="Old title")
+        self.session.commit()
+        r = self.client.patch(
+            f"/admin/tours/{tour.id}",
+            headers=headers,
+            json={"title_default": "New title", "guaranteed_flag": True},
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["title_default"], "New title")
+        self.assertTrue(body["guaranteed_flag"])
+
+    def test_patch_admin_tour_core_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.patch(
+            "/admin/tours/999999",
+            headers=headers,
+            json={"title_default": "X"},
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_patch_admin_tour_core_no_fields_400(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-PATCH-EMPTY")
+        self.session.commit()
+        r = self.client.patch(f"/admin/tours/{tour.id}", headers=headers, json={})
+        self.assertEqual(r.status_code, 400)
+
+    def test_patch_admin_tour_core_validation_dates(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(
+            code="ADM-PATCH-DATES",
+            departure_datetime=datetime(2026, 5, 1, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 5, 3, 18, 0, tzinfo=UTC),
+        )
+        self.session.commit()
+        r = self.client.patch(
+            f"/admin/tours/{tour.id}",
+            headers=headers,
+            json={
+                "departure_datetime": "2026-05-10T08:00:00+00:00",
+                "return_datetime": "2026-05-10T07:00:00+00:00",
+            },
+        )
+        self.assertEqual(r.status_code, 400)
+
+    def test_patch_admin_tour_core_seats_total_conservative(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(
+            code="ADM-PATCH-SEATS",
+            seats_total=40,
+            seats_available=12,
+        )
+        self.session.commit()
+        r_bad = self.client.patch(
+            f"/admin/tours/{tour.id}",
+            headers=headers,
+            json={"seats_total": 27},
+        )
+        self.assertEqual(r_bad.status_code, 400)
+        self.assertIn("allocated", r_bad.json()["detail"].lower())
+
+        r_ok = self.client.patch(
+            f"/admin/tours/{tour.id}",
+            headers=headers,
+            json={"seats_total": 50},
+        )
+        self.assertEqual(r_ok.status_code, 200)
+        b = r_ok.json()
+        self.assertEqual(b["seats_total"], 50)
+        self.assertEqual(b["seats_available"], 22)
+
+    def test_patch_admin_tour_core_rejects_code_and_cover_fields(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-PATCH-FORBID")
+        self.session.commit()
+        r1 = self.client.patch(
+            f"/admin/tours/{tour.id}",
+            headers=headers,
+            json={"code": "OTHER"},
+        )
+        self.assertEqual(r1.status_code, 422)
+        r2 = self.client.patch(
+            f"/admin/tours/{tour.id}",
+            headers=headers,
+            json={"cover_media_reference": "https://x/y.jpg"},
+        )
+        self.assertEqual(r2.status_code, 422)
+
+    def test_post_admin_boarding_point_requires_auth(self) -> None:
+        r = self.client.post(
+            "/admin/tours/1/boarding-points",
+            json={"city": "X", "address": "Y", "time": "06:00:00"},
+        )
+        self.assertEqual(r.status_code, 401)
+
+    def test_post_admin_boarding_point_success(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-BP-OK")
+        self.session.commit()
+        r = self.client.post(
+            f"/admin/tours/{tour.id}/boarding-points",
+            headers=headers,
+            json={
+                "city": " Arad ",
+                "address": " Central Station ",
+                "time": "07:30:00",
+                "notes": "  Gate 2  ",
+            },
+        )
+        self.assertEqual(r.status_code, 201)
+        body = r.json()
+        self.assertEqual(len(body["boarding_points"]), 1)
+        bp = body["boarding_points"][0]
+        self.assertEqual(bp["city"], "Arad")
+        self.assertEqual(bp["address"], "Central Station")
+        self.assertEqual(bp["time"], "07:30:00")
+        self.assertEqual(bp["notes"], "Gate 2")
+
+    def test_post_admin_boarding_point_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.post(
+            "/admin/tours/999999/boarding-points",
+            headers=headers,
+            json={"city": "X", "address": "Y", "time": "06:00:00"},
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_post_admin_boarding_point_blank_city_422(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-BP-BLANK-CITY")
+        self.session.commit()
+        r = self.client.post(
+            f"/admin/tours/{tour.id}/boarding-points",
+            headers=headers,
+            json={"city": "   ", "address": "Somewhere", "time": "06:00:00"},
+        )
+        self.assertEqual(r.status_code, 422)
+
+    def test_post_admin_boarding_point_blank_address_422(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-BP-BLANK-ADDR")
+        self.session.commit()
+        r = self.client.post(
+            f"/admin/tours/{tour.id}/boarding-points",
+            headers=headers,
+            json={"city": "Timisoara", "address": "  ", "time": "06:00:00"},
+        )
+        self.assertEqual(r.status_code, 422)
+
+    def test_patch_admin_boarding_point_requires_auth(self) -> None:
+        r = self.client.patch("/admin/boarding-points/1", json={"city": "X"})
+        self.assertEqual(r.status_code, 401)
+
+    def test_patch_admin_boarding_point_success(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-BP-PATCH-OK")
+        bp = self.create_boarding_point(tour, city="OldCity", address="OldAddr", notes="keep")
+        self.session.commit()
+        r = self.client.patch(
+            f"/admin/boarding-points/{bp.id}",
+            headers=headers,
+            json={"city": " NewCity ", "time": "08:15:00", "notes": None},
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["id"], tour.id)
+        by_id = {p["id"]: p for p in body["boarding_points"]}
+        self.assertEqual(by_id[bp.id]["city"], "NewCity")
+        self.assertEqual(by_id[bp.id]["address"], "OldAddr")
+        self.assertEqual(by_id[bp.id]["time"], "08:15:00")
+        self.assertIsNone(by_id[bp.id]["notes"])
+
+    def test_patch_admin_boarding_point_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.patch(
+            "/admin/boarding-points/999999",
+            headers=headers,
+            json={"city": "X"},
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_patch_admin_boarding_point_blank_city_422(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-BP-PATCH-BLANK")
+        bp = self.create_boarding_point(tour)
+        self.session.commit()
+        r = self.client.patch(
+            f"/admin/boarding-points/{bp.id}",
+            headers=headers,
+            json={"city": "   ", "address": "Y"},
+        )
+        self.assertEqual(r.status_code, 422)
+
+    def test_patch_admin_boarding_point_no_fields_400(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-BP-PATCH-EMPTY")
+        bp = self.create_boarding_point(tour)
+        self.session.commit()
+        r = self.client.patch(
+            f"/admin/boarding-points/{bp.id}",
+            headers=headers,
+            json={},
+        )
+        self.assertEqual(r.status_code, 400)
+
+    def test_patch_admin_boarding_point_rejects_tour_id_in_body(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour_a = self.create_tour(code="ADM-BP-PATCH-A")
+        tour_b = self.create_tour(code="ADM-BP-PATCH-B")
+        bp = self.create_boarding_point(tour_a)
+        self.session.commit()
+        r = self.client.patch(
+            f"/admin/boarding-points/{bp.id}",
+            headers=headers,
+            json={"city": "X", "tour_id": tour_b.id},
+        )
+        self.assertEqual(r.status_code, 422)

@@ -4,28 +4,28 @@
 Tours_BOT
 
 ## Current Status
-The project is ready to continue from the **latest approved checkpoint**: **Phase 6 / Step 6 completed** in code — narrow **cover / media reference** attach for an existing tour via **`PUT /admin/tours/{tour_id}/cover`** (exactly one **`cover_media_reference`** string per tour: URL or storage key; **no** binary upload subsystem, **no** gallery/media library). **`AdminTourDetailRead`** exposes the stored reference. **Step 5** remains: **`POST /admin/tours`** for **core** tour create only. Public booking/payment/waitlist/handoff flows and **public catalog / Mini App** surfaces were **not** changed for cover delivery in this step.
+The project is ready to continue from the **latest approved checkpoint**: **Phase 6 / Step 9 completed** in code — **`PATCH /admin/boarding-points/{boarding_point_id}`** for **partial** updates of **`city`**, **`address`**, **`time`**, **`notes`** only (`AdminBoardingPointUpdate`); **`tour_id` reassignment** is **not** in scope; response shape matches other narrow tour writes (**`AdminTourDetailRead`**). Public booking/payment/waitlist/handoff flows and **public catalog / Mini App** were **not** changed.
 
-**Phase 6 / Steps 1–6** (already completed): **`ADMIN_API_TOKEN`**; admin reads/filters/details; **`POST /admin/tours`** (create core tour); **`PUT /admin/tours/{tour_id}/cover`** (set/replace cover reference).
+**Phase 6 / Steps 1–9** (already completed): **`ADMIN_API_TOKEN`**; admin reads/filters/details; **`POST /admin/tours`**; **`PUT /admin/tours/{tour_id}/cover`**; **`PATCH /admin/tours/{tour_id}`**; **`POST /admin/tours/{tour_id}/boarding-points`** (create one boarding point); **`PATCH /admin/boarding-points/{boarding_point_id}`** (patch one boarding point).
 
 Earlier: **Phase 5 (Mini App MVP) accepted** for MVP/staging; **Phase 5 / Step 20** documentation consolidation / acceptance (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`). No open Phase 5 MVP blockers for the agreed scope.
 
-**Next work:** **Phase 6 / Step 7** — first **narrow** **PATCH** of **core tour fields** only (see **Next Safe Step**).
+**Next work:** **Phase 6 / Step 10** — first **narrow** **boarding point delete-only** slice (see **Next Safe Step**).
 
 ### Operational note (production — Step 6 schema recovery)
 After Step 6 backend shipped to Railway **before** production Postgres had applied Alembic revision **`20260405_04`**, the missing column **`tours.cover_media_reference`** caused **`ProgrammingError` / `UndefinedColumn`** and **500**s on routes that load tours (e.g. **`/mini-app/catalog`**, **`/mini-app/bookings`**). Root cause was **schema mismatch**, not Mini App UI logic. **Recovery completed:** migrations applied against the Railway DB (using the **public** Postgres URL and a local driver URL such as **`postgresql+psycopg://...`** where internal hostnames are not resolvable), backend **redeployed**, **`/health`**, catalog, and bookings smoke-checked. **Going forward:** any schema-changing step must include **migration apply → redeploy → smoke** for affected endpoints. Details: **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` section 17**.
 
 ## Current Phase
 
-**Current phase (forward work):** **Phase 6 — Admin Panel MVP** — **Phase 6 / Steps 1–6 completed.**
+**Current phase (forward work):** **Phase 6 — Admin Panel MVP** — **Phase 6 / Steps 1–9 completed.**
 
-**Latest approved checkpoint:** **Phase 6 / Step 6** — **`PUT /admin/tours/{tour_id}/cover`**; admin tour **writes** now include **create core tour** (**Step 5**) and **set/replace one `cover_media_reference`** (**Step 6**), still **without** real upload infrastructure, **without** gallery management, **without** public catalog/Mini App changes for this handoff. Earlier steps still provide **overview**, **tours/orders lists** (optional filters), **tour + order detail**. Order rows still use **`lifecycle_kind` / `lifecycle_summary`** where applicable; raw order semantics remain as in `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` (see **section 1a**).
+**Latest approved checkpoint:** **Phase 6 / Step 9** — admin **tour / boarding** write surface now includes: **create core tour** (**Step 5**), **set/replace one `cover_media_reference`** (**Step 6**), **patch core tour fields** (**Step 7**), **create one boarding point** (**Step 8**), **patch one boarding point** (**Step 9**). Still **no** **`code`** change via PATCH, **no** cover via PATCH, **no** boarding **delete**, **no** boarding **translations**, **no** **`tour_id` reassignment** for boarding points, **no** full route/itinerary management, **no** public catalog/Mini App churn. Earlier steps still provide **overview**, **tours/orders lists** (optional filters), **tour + order detail**. Order rows still use **`lifecycle_kind` / `lifecycle_summary`** where applicable; raw order semantics remain as in `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` (see **section 1a**).
 
-**Earlier checkpoints:** Phase 6 / Steps 1–5 (foundation through tour create); Phase 5 accepted + Step 20 docs (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
+**Earlier checkpoints:** Phase 6 / Steps 1–7 (foundation through core tour patch); Phase 6 / Steps 8–9 (boarding create + patch); Phase 5 accepted + Step 20 docs (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
 
 **Phase 5 (closed for MVP):** Execution checkpoints **Steps 4–19** are summarized in `docs/PHASE_5_ACCEPTANCE_SUMMARY.md` and per-step notes under `docs/PHASE_5_STEP_*_NOTES.md`; **Step 20** was documentation/consolidation only (no intended production-code churn for acceptance).
 
-**Next safe direction:** **Phase 6 / Step 7** — **narrow PATCH** for **core tour fields** only (**backend-first**; **no** translations/boarding wave) — see **Next Safe Step** below.
+**Next safe direction:** **Phase 6 / Step 10** — **narrow boarding point delete-only** slice (**backend-first**) — see **Next Safe Step** below.
 
 **Optional follow-ups** (not Phase 5 blockers; prioritize with product): Telegram Web App init-data validation for Mini App APIs, real payment provider (PSP), broader handoff/waitlist customer notifications.
 
@@ -547,6 +547,31 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
   - **Scope respected:** public booking/payment/waitlist/handoff flows unchanged
   - **Prompt archive:** `docs/CURSOR_PROMPT_PHASE_6_STEP_6.md` (historical)
 
+- Phase 6 / Step 7 completed
+  - **Route:** **`PATCH /admin/tours/{tour_id}`** — **`AdminTourCoreUpdate`** (partial core fields only; **`extra='forbid'`** for `code` / `cover_media_reference` / unknown keys)
+  - **Write service:** `AdminTourWriteService.update_tour_core`; date/`sales_deadline` validation; **conservative `seats_total`** rule (see **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** **section 18**)
+  - **Repository:** `TourRepository.update_core_fields`
+  - **Explicitly not in this step:** **`code`** mutation, cover via PATCH, **delete/archive**, translations CRUD, boarding CRUD, public catalog/Mini App changes, full tour-management platform
+  - **Tests:** `tests/unit/test_api_admin.py` (auth, success, 404, validation, seats rule, forbidden extra fields)
+  - **Scope respected:** public flows unchanged
+  - **Prompt archive:** `docs/CURSOR_PROMPT_PHASE_6_STEP_7.md` (historical)
+
+- Phase 6 / Step 8 completed
+  - **Route:** **`POST /admin/tours/{tour_id}/boarding-points`** — **`AdminBoardingPointCreate`** → **`AdminTourDetailRead`**
+  - **Write service:** `AdminTourWriteService.add_boarding_point`; **Repository:** `BoardingPointRepository.create_for_tour`
+  - **Explicitly not in this step:** boarding **update/delete**, **translations**, **`tour_id` reassignment**, public catalog/Mini App changes
+  - **Tests:** `tests/unit/test_api_admin.py` (auth, success, tour 404, blank fields)
+  - **Scope respected:** public flows unchanged
+  - **Prompt archive:** `docs/CURSOR_PROMPT_PHASE_6_STEP_8.md` (historical)
+
+- Phase 6 / Step 9 completed
+  - **Route:** **`PATCH /admin/boarding-points/{boarding_point_id}`** — **`AdminBoardingPointUpdate`** → **`AdminTourDetailRead`**
+  - **Write service:** `AdminTourWriteService.update_boarding_point`; **Repository:** `BoardingPointRepository.update_core_fields`
+  - **Explicitly not in this step:** boarding **delete**, **translations**, **`tour_id` reassignment**, full route/itinerary, public catalog/Mini App changes
+  - **Tests:** `tests/unit/test_api_admin.py` (auth, success, 404, validation, empty body, **`tour_id` in body rejected**)
+  - **Scope respected:** public flows unchanged
+  - **Prompt archive:** `docs/CURSOR_PROMPT_PHASE_6_STEP_9.md` (historical)
+
 ---
 
 ## Verified
@@ -625,7 +650,7 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
 
 ### Ready
 - **bot layer** — Telegram private chat; thin handlers; service-driven
-- **api layer** — FastAPI; public routes + Mini App routes + payments webhooks + **internal ops** JSON endpoints + **admin API** (`/admin/*`, `ADMIN_API_TOKEN`: overview, tours/orders **lists** with **optional read-only filters**, **tour + order detail** incl. **`cover_media_reference`**, **`POST /admin/tours`** create-only for **core** tours, **`PUT /admin/tours/{tour_id}/cover`** for **one** media reference string)
+- **api layer** — FastAPI; public routes + Mini App routes + payments webhooks + **internal ops** JSON endpoints + **admin API** (`/admin/*`, `ADMIN_API_TOKEN`: overview, tours/orders **lists** with **optional read-only filters**, **tour + order detail** incl. **`cover_media_reference`**, **`POST /admin/tours`** create **core** tours, **`PUT /admin/tours/{tour_id}/cover`** for **one** media reference string, **`PATCH /admin/tours/{tour_id}`** for **core** field updates only, **`POST /admin/tours/{tour_id}/boarding-points`** create **one** boarding point, **`PATCH /admin/boarding-points/{boarding_point_id}`** partial boarding updates only)
 - **services layer** — business rules and orchestration
 - **repositories layer** — persistence-oriented data access
 - **mini_app** — Flet Mini App UI (separate deploy surface in staging); **MVP accepted** for agreed scope (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`); **no business logic in the frontend** — UI calls APIs only
@@ -639,32 +664,31 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
 - **Mini App / any web UI**: presentation only — no duplicated booking/payment rules in the client
 
 ### Not Implemented Yet
-- **Phase 6 / Step 7 (next):** narrow **`PATCH`** (or equivalent **one-endpoint** update) for **core `Tour` fields** only — same family as create, **no** translations/boarding CRUD wave — see **Next Safe Step**
-- **Phase 6 (later):** translations/boarding CRUD, real **media upload** / public cover **delivery**, further admin writes — schedule explicitly — per plan
+- **Phase 6 / Step 10 (next):** narrow **boarding point delete-only** — **no** translations, **no** order mutations — see **Next Safe Step**
+- **Phase 6 (later):** tour **translations** CRUD, boarding **translations**, real **media upload** / public cover **delivery**, tour **delete/archive**, further admin writes — schedule explicitly — per plan
 - **Phase 6+:** admin payment operations, content/publication workflows, role-based admin UX as per plan
 - **Phase 7–9:** group assistant, full handoff lifecycle at scale, content assistant, analytics/readiness — per `docs/IMPLEMENTATION_PLAN.md`
 
 ## Next Safe Step
 
-**Phase 6 / Step 7 — narrow update of core tour fields only (admin)**.
+**Phase 6 / Step 10 — first narrow boarding point delete-only slice**.
 
 ### Goal
-After **create** (**Step 5**) and **cover reference** (**Step 6**), add the **first** intentional **edit** path for the **same core fields** operators already set at create time (subset aligned with **`AdminTourCreate`** / `Tour` — finalize field list in implementation). **`ADMIN_API_TOKEN`**-gated; validation in the **service layer**; routes thin; **no** new endpoints for translations or boarding in this slice.
+**Create** and **patch** boarding points already exist (**Steps 8–9**). The **smallest** next operational increment is **delete** for a single boarding point (exact shape to finalize in implementation — e.g. **`DELETE /admin/boarding-points/{boarding_point_id}`** or equivalently scoped). **`ADMIN_API_TOKEN`**-gated; validation and referential safety in **service layer** (e.g. block or define behavior if orders reference the point — align with schema/TECH_SPEC when implementing); **no** public catalog/Mini App contract changes.
 
 ### Safe scope for this step
-- **one** update endpoint (e.g. **`PATCH /admin/tours/{tour_id}`**) or a single **`PUT`** with a constrained body — **core tour columns only**
-- explicit rules for fields that must not change casually if business risk (e.g. **`code`**, **`seats_*`** — align with product; may exclude or guard)
-- focused tests: auth, success, 404, validation, conflict cases as needed
+- **one** delete mutation for **boarding points** only; **no** translations CRUD, **no** tour reassignment, **no** order/payment mutations
+- persistence via existing `BoardingPoint` model / repository patterns; focused tests (auth, happy path, not-found, guardrails as agreed in code)
 
 ### Must not expand yet
-- translations CRUD, boarding-points CRUD, gallery/upload platform, **full** tour lifecycle delete/archive
-- order/payment/refund/handoff **mutations**; public catalog / Mini App behavior changes unless a **TECH_SPEC**-minimal read of `cover_media_reference` is already scheduled separately
+- full **translations** CRUD, **tour delete/archive**, full route/itinerary management, gallery/upload platform, **full** admin SPA
+- broad refactors of reservation/boarding selection in **customer** flows unless explicitly required for data integrity (prefer keeping customer paths stable)
 
-**Completed step references:** `docs/CURSOR_PROMPT_PHASE_6_STEP_1.md` … `docs/CURSOR_PROMPT_PHASE_6_STEP_6.md` (historical).  
+**Completed step references:** `docs/CURSOR_PROMPT_PHASE_6_STEP_1.md` … `docs/CURSOR_PROMPT_PHASE_6_STEP_9.md` (historical).  
 **Plan:** `docs/IMPLEMENTATION_PLAN.md` (Phase 6)
 
 ## Recommended Next Prompt
-Implement **Phase 6 / Step 7** using `docs/CHAT_HANDOFF.md` (**Next Safe Step**), `docs/TECH_SPEC_TOURS_BOT.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, and `docs/TESTING_STRATEGY.md`. Add a frozen `docs/CURSOR_PROMPT_PHASE_6_STEP_7.md` if you want a durable prompt artifact — **do not** re-use Phase 5 “next step” prompts for new work.
+Implement **Phase 6 / Step 10** using `docs/CHAT_HANDOFF.md` (**Next Safe Step**), `docs/TECH_SPEC_TOURS_BOT.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, and `docs/TESTING_STRATEGY.md`. Add a frozen `docs/CURSOR_PROMPT_PHASE_6_STEP_10.md` if you want a durable prompt artifact — **do not** re-use Phase 5 “next step” prompts for new work.
 
 ---
 
