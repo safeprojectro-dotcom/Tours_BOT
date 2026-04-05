@@ -1,8 +1,8 @@
-"""Read-only admin API (protected by ADMIN_API_TOKEN)."""
+"""Admin API: read surfaces + narrow writes (protected by ADMIN_API_TOKEN)."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.admin_auth import require_admin_api_token
@@ -12,11 +12,17 @@ from app.schemas.admin import (
     AdminOrderDetailRead,
     AdminOrderListRead,
     AdminOverviewRead,
+    AdminTourCreate,
     AdminTourDetailRead,
     AdminTourListRead,
 )
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
 from app.services.admin_read import AdminReadService
+from app.services.admin_tour_write import (
+    AdminTourCreateValidationError,
+    AdminTourDuplicateCodeError,
+    AdminTourWriteService,
+)
 
 router = APIRouter(
     prefix="/admin",
@@ -30,6 +36,24 @@ def get_admin_overview(
     db: Session = Depends(get_db),
 ) -> AdminOverviewRead:
     return AdminReadService().overview(db)
+
+
+@router.post("/tours", response_model=AdminTourDetailRead, status_code=status.HTTP_201_CREATED)
+def create_admin_tour(
+    db: Session = Depends(get_db),
+    payload: AdminTourCreate = Body(...),
+) -> AdminTourDetailRead:
+    try:
+        detail = AdminTourWriteService().create_tour(db, payload=payload)
+    except AdminTourDuplicateCodeError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Tour code already exists.",
+        ) from None
+    except AdminTourCreateValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return detail
 
 
 @router.get("/tours", response_model=AdminTourListRead)

@@ -58,6 +58,21 @@ open (read-side **partially mitigated** for Phase 6 Step 1 list API; **section 1
 
 ---
 
+## 1b. Admin tour core create vs cover / media attachment
+
+### Current decision
+- **Phase 6 / Step 5** adds **`POST /admin/tours`** for **core** `Tour` fields only — **no** cover image, upload pipeline, or media asset management in that step.
+- **`docs/TECH_SPEC_TOURS_BOT.md`** expects operators to attach photos/cover for tours; that capability remains **intentionally postponed** to the next narrow admin slice (see `docs/CHAT_HANDOFF.md` **Next Safe Step**).
+
+### Revisit trigger
+- before admin **tour management** is treated as **MVP-complete** for operators
+- when implementing the **cover/media** attachment slice
+
+### Status
+open (core create exists; media attachment not started)
+
+---
+
 ## 2. Temporary bot FSM storage uses MemoryStorage
 
 ### Current decision

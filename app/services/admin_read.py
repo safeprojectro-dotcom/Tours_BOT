@@ -88,6 +88,7 @@ class AdminReadService:
             code=tour.code,
             title_default=tour.title_default,
             short_description_default=tour.short_description_default,
+            full_description_default=tour.full_description_default,
             duration_days=tour.duration_days,
             departure_datetime=tour.departure_datetime,
             return_datetime=tour.return_datetime,

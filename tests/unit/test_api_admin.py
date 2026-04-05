@@ -314,3 +314,71 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(r1.status_code, 401)
         r2 = self.client.get("/admin/orders", params={"lifecycle_kind": "other"})
         self.assertEqual(r2.status_code, 401)
+
+    def _admin_tour_create_payload(self, *, code: str) -> dict:
+        return {
+            "code": code,
+            "title_default": "Admin created tour",
+            "short_description_default": "Short",
+            "full_description_default": "Full body",
+            "duration_days": 2,
+            "departure_datetime": "2026-11-10T08:00:00+00:00",
+            "return_datetime": "2026-11-12T20:00:00+00:00",
+            "base_price": "149.00",
+            "currency": "EUR",
+            "seats_total": 33,
+            "sales_deadline": "2026-11-08T23:59:59+00:00",
+            "status": "draft",
+            "guaranteed_flag": False,
+        }
+
+    def test_post_admin_tour_requires_auth(self) -> None:
+        r = self.client.post("/admin/tours", json=self._admin_tour_create_payload(code="ADM-POST-NO-AUTH"))
+        self.assertEqual(r.status_code, 401)
+
+    def test_post_admin_tour_success_and_seats_available(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        code = "ADM-POST-OK-1"
+        r = self.client.post(
+            "/admin/tours",
+            headers=headers,
+            json=self._admin_tour_create_payload(code=code),
+        )
+        self.assertEqual(r.status_code, 201)
+        body = r.json()
+        self.assertEqual(body["code"], code)
+        self.assertEqual(body["seats_total"], 33)
+        self.assertEqual(body["seats_available"], 33)
+        self.assertEqual(body["title_default"], "Admin created tour")
+        self.assertEqual(body["short_description_default"], "Short")
+        self.assertEqual(body["full_description_default"], "Full body")
+        self.assertEqual(body["status"], "draft")
+        self.assertEqual(body["orders_count"], 0)
+        self.assertEqual(len(body["translations"]), 0)
+        self.assertEqual(len(body["boarding_points"]), 0)
+
+    def test_post_admin_tour_duplicate_code(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        code = "ADM-POST-DUP"
+        payload = self._admin_tour_create_payload(code=code)
+        r1 = self.client.post("/admin/tours", headers=headers, json=payload)
+        self.assertEqual(r1.status_code, 201)
+        r2 = self.client.post("/admin/tours", headers=headers, json=payload)
+        self.assertEqual(r2.status_code, 409)
+        self.assertIn("already exists", r2.json()["detail"].lower())
+
+    def test_post_admin_tour_validation_return_not_after_departure(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        p = self._admin_tour_create_payload(code="ADM-POST-BAD-DATES")
+        p["return_datetime"] = p["departure_datetime"]
+        r = self.client.post("/admin/tours", headers=headers, json=p)
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("departure", r.json()["detail"].lower())
+
+    def test_post_admin_tour_validation_sales_deadline_not_before_departure(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        p = self._admin_tour_create_payload(code="ADM-POST-BAD-SALES")
+        p["sales_deadline"] = "2026-11-10T10:00:00+00:00"
+        r = self.client.post("/admin/tours", headers=headers, json=p)
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("sales_deadline", r.json()["detail"].lower())

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, time
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourStatus
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
@@ -26,6 +26,32 @@ class AdminTourListItem(BaseModel):
 class AdminTourListRead(BaseModel):
     items: list[AdminTourListItem]
     total_returned: int
+
+
+class AdminTourCreate(BaseModel):
+    """Admin-only create payload for core `Tour` fields (no translations / boarding in this step)."""
+
+    code: str = Field(min_length=1, max_length=64)
+    title_default: str = Field(min_length=1, max_length=255)
+    short_description_default: str | None = None
+    full_description_default: str | None = None
+    duration_days: int = Field(ge=1)
+    departure_datetime: datetime
+    return_datetime: datetime
+    base_price: Decimal = Field(ge=0)
+    currency: str = Field(min_length=1, max_length=8)
+    seats_total: int = Field(ge=0)
+    sales_deadline: datetime | None = None
+    status: TourStatus
+    guaranteed_flag: bool = False
+
+    @field_validator("code", "currency")
+    @classmethod
+    def strip_ws(cls, v: str) -> str:
+        s = v.strip()
+        if not s:
+            raise ValueError("must not be empty or whitespace-only")
+        return s
 
 
 class AdminTranslationSummaryItem(BaseModel):
@@ -84,6 +110,7 @@ class AdminTourDetailRead(BaseModel):
     code: str
     title_default: str
     short_description_default: str | None = None
+    full_description_default: str | None = None
     duration_days: int
     departure_datetime: datetime
     return_datetime: datetime
