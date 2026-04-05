@@ -468,3 +468,32 @@ Do **not** duplicate long analysis here — keep single source of truth in numbe
 
 ### Status
 open (informational snapshot)
+
+---
+
+## 17. Production schema vs deployed code (Railway / Alembic operational risk)
+
+### Current decision / current lesson
+- **Production schema may lag behind deployed code** when Alembic migrations are **not** applied before or alongside a release that already uses new ORM columns. Example (resolved): Phase 6 / Step 6 added `tours.cover_media_reference` in code while production Postgres had not yet run the migration → `sqlalchemy.exc.ProgrammingError` / `psycopg.errors.UndefinedColumn`, breaking any path that loads `Tour` (e.g. **`/mini-app/catalog`**, **`/mini-app/bookings`**) until the schema matched.
+- **`railway shell`** (or shell on the platform) does not by itself fix **local** migration runs: internal DB hostnames such as **`*.railway.internal`** are **not resolvable** from a developer machine, so “run Alembic from my laptop against prod” typically requires the **public** Railway Postgres URL (or another supported access path).
+
+### Why accepted now
+- Release automation may not yet run **`alembic upgrade head`** on every deploy.
+- Teams often validate app code first and treat DB migration as a follow-up — acceptable only until a repeatable release gate exists.
+
+### Risk later
+- Repeat **500**s on catalog, bookings, or admin routes after any deploy that ships ORM/model changes without matching DDL.
+- Incidents look like “Mini App bugs” but are **pure schema drift**.
+
+### Revisit trigger
+- **Before** the next schema-changing deploy (new column/table/enum).
+- Before a **release checklist** is considered complete without an explicit **migration + smoke** step.
+- Before **production rollout automation** is treated as stable without DB migration in the path.
+
+### Recovery path (documented pattern; not a substitute for automation)
+- Confirm drift: e.g. `alembic current` vs `heads` against the target DB.
+- Apply migrations using a **reachable** DB URL (often Railway **public** Postgres URL) and a driver-explicit SQLAlchemy URL such as **`postgresql+psycopg://...`** for local Alembic.
+- **Redeploy** the backend service after migration; smoke **`/health`**, **`/mini-app/catalog`**, **`/mini-app/bookings`** (and any other routes touching changed models).
+
+### Status
+open

@@ -12,6 +12,9 @@ Earlier: **Phase 5 (Mini App MVP) accepted** for MVP/staging; **Phase 5 / Step 2
 
 **Next work:** **Phase 6 / Step 7** — first **narrow** **PATCH** of **core tour fields** only (see **Next Safe Step**).
 
+### Operational note (production — Step 6 schema recovery)
+After Step 6 backend shipped to Railway **before** production Postgres had applied Alembic revision **`20260405_04`**, the missing column **`tours.cover_media_reference`** caused **`ProgrammingError` / `UndefinedColumn`** and **500**s on routes that load tours (e.g. **`/mini-app/catalog`**, **`/mini-app/bookings`**). Root cause was **schema mismatch**, not Mini App UI logic. **Recovery completed:** migrations applied against the Railway DB (using the **public** Postgres URL and a local driver URL such as **`postgresql+psycopg://...`** where internal hostnames are not resolvable), backend **redeployed**, **`/health`**, catalog, and bookings smoke-checked. **Going forward:** any schema-changing step must include **migration apply → redeploy → smoke** for affected endpoints. Details: **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` section 17**.
+
 ## Current Phase
 
 **Current phase (forward work):** **Phase 6 — Admin Panel MVP** — **Phase 6 / Steps 1–6 completed.**
