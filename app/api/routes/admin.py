@@ -1,13 +1,13 @@
-"""Read-only admin API (Phase 6 Step 1 — protected by ADMIN_API_TOKEN)."""
+"""Read-only admin API (protected by ADMIN_API_TOKEN)."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.admin_auth import require_admin_api_token
 from app.db.session import get_db
-from app.schemas.admin import AdminOrderListRead, AdminOverviewRead, AdminTourListRead
+from app.schemas.admin import AdminOrderDetailRead, AdminOrderListRead, AdminOverviewRead, AdminTourListRead
 from app.services.admin_read import AdminReadService
 
 router = APIRouter(
@@ -40,3 +40,14 @@ def list_admin_orders(
     offset: int = Query(default=0, ge=0, le=100_000),
 ) -> AdminOrderListRead:
     return AdminReadService().list_orders(db, limit=limit, offset=offset)
+
+
+@router.get("/orders/{order_id}", response_model=AdminOrderDetailRead)
+def get_admin_order_detail(
+    order_id: int,
+    db: Session = Depends(get_db),
+) -> AdminOrderDetailRead:
+    detail = AdminReadService().get_order_detail(db, order_id=order_id)
+    if detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.")
+    return detail

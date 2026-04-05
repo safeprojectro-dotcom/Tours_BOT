@@ -19,6 +19,19 @@ class OrderRepository(SQLAlchemyRepository[Order]):
         stmt = select(Order).where(Order.id == order_id).with_for_update()
         return session.scalar(stmt)
 
+    def get_by_id_for_admin_detail(self, session: Session, *, order_id: int) -> Order | None:
+        """Single order for admin read-only detail; eager-loads display relations (no payments — loaded separately)."""
+        stmt = (
+            select(Order)
+            .where(Order.id == order_id)
+            .options(
+                selectinload(Order.tour),
+                selectinload(Order.boarding_point),
+                selectinload(Order.handoffs),
+            )
+        )
+        return session.scalar(stmt)
+
     def list_recent_for_admin(
         self,
         session: Session,

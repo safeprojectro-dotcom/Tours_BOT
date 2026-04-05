@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import TourStatus
+from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourStatus
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
 
 
@@ -44,6 +44,77 @@ class AdminOrderListItem(BaseModel):
 class AdminOrderListRead(BaseModel):
     items: list[AdminOrderListItem]
     total_returned: int
+
+
+class AdminOrderPersistenceSnapshot(BaseModel):
+    """Persisted enum fields for audit. Prefer `lifecycle_kind` / `lifecycle_summary` for operational meaning."""
+
+    booking_status: BookingStatus
+    payment_status: PaymentStatus
+    cancellation_status: CancellationStatus
+
+
+class AdminTourSummary(BaseModel):
+    id: int
+    code: str
+    title_default: str
+    departure_datetime: datetime
+    status: TourStatus
+
+
+class AdminBoardingPointSummary(BaseModel):
+    id: int
+    city: str
+    address: str
+    time: time
+    notes: str | None = None
+
+
+class AdminPaymentSummaryItem(BaseModel):
+    id: int
+    provider: str
+    external_payment_id: str | None
+    amount: Decimal
+    currency: str
+    status: PaymentStatus
+    created_at: datetime
+
+
+class AdminHandoffSummaryItem(BaseModel):
+    id: int
+    status: str
+    reason: str
+    priority: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class AdminOrderDetailRead(BaseModel):
+    id: int
+    user_id: int
+    lifecycle_kind: AdminOrderLifecycleKind
+    lifecycle_summary: str = Field(
+        description="Primary admin-facing interpretation of order state (see OPEN_QUESTIONS_AND_TECH_DEBT).",
+    )
+    persistence_snapshot: AdminOrderPersistenceSnapshot
+    tour: AdminTourSummary
+    boarding_point: AdminBoardingPointSummary
+    seats_count: int
+    total_amount: Decimal
+    currency: str
+    source_channel: str | None
+    assigned_operator_id: int | None
+    reservation_expires_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    payments: list[AdminPaymentSummaryItem] = Field(
+        default_factory=list,
+        description="Recent payment rows (newest first), capped for read-only visibility.",
+    )
+    handoffs: list[AdminHandoffSummaryItem] = Field(
+        default_factory=list,
+        description="Handoff rows linked to this order (newest activity first).",
+    )
 
 
 class AdminOverviewRead(BaseModel):

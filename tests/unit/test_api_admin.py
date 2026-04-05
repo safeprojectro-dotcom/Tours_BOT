@@ -12,6 +12,7 @@ from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
 from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourStatus
+from app.models.handoff import Handoff
 from tests.unit.base import FoundationDBTestCase
 
 
@@ -94,3 +95,56 @@ class AdminRouteTests(FoundationDBTestCase):
         row = odata["items"][0]
         self.assertEqual(row["lifecycle_kind"], "expired_unpaid_hold")
         self.assertIn("Not an active reservation", row["lifecycle_summary"])
+
+    def test_order_detail_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.get("/admin/orders/999999", headers=headers)
+        self.assertEqual(r.status_code, 404)
+
+    def test_order_detail_requires_auth(self) -> None:
+        r = self.client.get("/admin/orders/1")
+        self.assertEqual(r.status_code, 401)
+
+    def test_order_detail_expired_unpaid_hold_projection(self) -> None:
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-DETAIL-1",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 5, 10, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.UNPAID,
+            cancellation_status=CancellationStatus.CANCELLED_NO_PAYMENT,
+            reservation_expires_at=None,
+        )
+        self.create_payment(order, status=PaymentStatus.UNPAID)
+        self.session.add(
+            Handoff(
+                user_id=user.id,
+                order_id=order.id,
+                reason="Question",
+                priority="normal",
+                status="open",
+            )
+        )
+        self.session.commit()
+
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.get(f"/admin/orders/{order.id}", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["lifecycle_kind"], "expired_unpaid_hold")
+        self.assertIn("Not an active reservation", body["lifecycle_summary"])
+        self.assertEqual(body["persistence_snapshot"]["booking_status"], "reserved")
+        self.assertEqual(body["persistence_snapshot"]["payment_status"], "unpaid")
+        self.assertEqual(body["persistence_snapshot"]["cancellation_status"], "cancelled_no_payment")
+        self.assertEqual(body["tour"]["code"], "ADM-DETAIL-1")
+        self.assertEqual(body["boarding_point"]["city"], point.city)
+        self.assertEqual(len(body["payments"]), 1)
+        self.assertEqual(len(body["handoffs"]), 1)
+        self.assertEqual(body["handoffs"][0]["status"], "open")

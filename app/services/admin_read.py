@@ -11,13 +11,20 @@ from app.models.order import Order
 from app.models.tour import Tour
 from app.models.waitlist import WaitlistEntry
 from app.repositories.order import OrderRepository
+from app.repositories.payment import PaymentRepository
 from app.repositories.tour import TourRepository
 from app.schemas.admin import (
+    AdminBoardingPointSummary,
+    AdminHandoffSummaryItem,
+    AdminOrderDetailRead,
     AdminOrderListItem,
     AdminOrderListRead,
+    AdminOrderPersistenceSnapshot,
     AdminOverviewRead,
+    AdminPaymentSummaryItem,
     AdminTourListItem,
     AdminTourListRead,
+    AdminTourSummary,
 )
 from app.services.admin_order_lifecycle import describe_order_admin_lifecycle
 
@@ -28,9 +35,88 @@ class AdminReadService:
         *,
         tour_repository: TourRepository | None = None,
         order_repository: OrderRepository | None = None,
+        payment_repository: PaymentRepository | None = None,
     ) -> None:
         self._tours = tour_repository or TourRepository()
         self._orders = order_repository or OrderRepository()
+        self._payments = payment_repository or PaymentRepository()
+
+    _MAX_PAYMENT_ROWS = 10
+
+    def get_order_detail(self, session: Session, *, order_id: int) -> AdminOrderDetailRead | None:
+        order = self._orders.get_by_id_for_admin_detail(session, order_id=order_id)
+        if order is None:
+            return None
+        if order.tour is None or order.boarding_point is None:
+            return None
+
+        kind, summary = describe_order_admin_lifecycle(order)
+        pay_rows = self._payments.list_by_order(session, order_id=order.id)[: self._MAX_PAYMENT_ROWS]
+        payments = [
+            AdminPaymentSummaryItem(
+                id=p.id,
+                provider=p.provider,
+                external_payment_id=p.external_payment_id,
+                amount=p.amount,
+                currency=p.currency,
+                status=p.status,
+                created_at=p.created_at,
+            )
+            for p in pay_rows
+        ]
+        handoffs_sorted = sorted(
+            order.handoffs,
+            key=lambda h: (h.updated_at, h.id),
+            reverse=True,
+        )
+        handoffs = [
+            AdminHandoffSummaryItem(
+                id=h.id,
+                status=h.status,
+                reason=h.reason,
+                priority=h.priority,
+                created_at=h.created_at,
+                updated_at=h.updated_at,
+            )
+            for h in handoffs_sorted
+        ]
+        t = order.tour
+        bp = order.boarding_point
+        return AdminOrderDetailRead(
+            id=order.id,
+            user_id=order.user_id,
+            lifecycle_kind=kind,
+            lifecycle_summary=summary,
+            persistence_snapshot=AdminOrderPersistenceSnapshot(
+                booking_status=order.booking_status,
+                payment_status=order.payment_status,
+                cancellation_status=order.cancellation_status,
+            ),
+            tour=AdminTourSummary(
+                id=t.id,
+                code=t.code,
+                title_default=t.title_default,
+                departure_datetime=t.departure_datetime,
+                status=t.status,
+            ),
+            boarding_point=AdminBoardingPointSummary(
+                id=bp.id,
+                city=bp.city,
+                address=bp.address,
+                time=bp.time,
+                notes=bp.notes,
+            ),
+            seats_count=order.seats_count,
+            total_amount=order.total_amount,
+            currency=order.currency,
+            source_channel=order.source_channel,
+            assigned_operator_id=order.assigned_operator_id,
+            reservation_expires_at=order.reservation_expires_at,
+            created_at=order.created_at,
+            updated_at=order.updated_at,
+            payments=payments,
+            handoffs=handoffs,
+        )
 
     def overview(self, session: Session) -> AdminOverviewRead:
         settings = get_settings()
