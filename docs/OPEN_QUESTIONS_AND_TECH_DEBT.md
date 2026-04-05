@@ -74,18 +74,33 @@ open (reference string can be set; **upload/delivery** not done)
 
 ---
 
-## 1c. Admin boarding points — narrow create/update vs full lifecycle
+## 1c. Admin boarding points — narrow create/update/delete vs full lifecycle
 
 ### Current decision
-- **Phase 6 / Steps 8–9** add **`POST /admin/tours/{tour_id}/boarding-points`** (create) and **`PATCH /admin/boarding-points/{boarding_point_id}`** (partial update: `city`, `address`, `time`, `notes`); **no** `tour_id` reassignment.
-- **Boarding point delete**, **per-point translations**, **full route/itinerary** editing, and **tour-level** delete/archive remain **intentionally postponed** until scheduled (see `docs/CHAT_HANDOFF.md` **Next Safe Step**).
+- **Phase 6 / Steps 8–10** add **`POST`**, **`PATCH`**, and **`DELETE /admin/boarding-points/{boarding_point_id}`** for core boarding fields; delete is blocked when **orders** reference the point (see implementation).
+- **Per-point translations**, **full route/itinerary** editing, and **tour-level** delete/archive remain **intentionally postponed** until scheduled (see `docs/CHAT_HANDOFF.md` **Not Implemented Yet**).
 
 ### Revisit trigger
-- before admin treats **boarding management** as **complete** without delete/reorder/translation workflows
-- before **customer-facing** catalog or booking flows need structural changes tied to boarding CRUD
+- before admin treats **boarding management** as **complete** without reorder/translation workflows
+- before **customer-facing** catalog or booking flows need structural changes tied to boarding CRUD beyond current slices
 
 ### Status
-open (create + patch only; **delete** and broader surface **not done**)
+open (CRUD **without** boarding translations / itinerary editor; **delete** exists for unused points)
+
+---
+
+## 1d. Admin tour translations — upsert vs delete/bulk/boarding parity
+
+### Current decision
+- **Phase 6 / Step 11** adds **`PUT /admin/tours/{tour_id}/translations/{language_code}`** for **one-language** create/merge-update (`AdminTourTranslationUpsert`); allowlist matches **`telegram_supported_language_codes`**.
+- **Single-language translation delete**, **bulk** import/export, and **boarding-point** translations remain **intentionally postponed** until scheduled (see `docs/CHAT_HANDOFF.md` **Next Safe Step**).
+
+### Revisit trigger
+- before admin **content parity** across languages is treated as **complete** without delete or bulk tooling
+- before **customer-facing** catalog needs structural changes tied to translation CRUD beyond upsert
+
+### Status
+open (upsert only; **delete** / **bulk** / **boarding** translations **not done**)
 
 ---
 
