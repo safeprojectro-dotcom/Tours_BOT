@@ -4,12 +4,27 @@
 Tours_BOT
 
 ## Current Status
-Project is continuing in a new chat from the latest approved checkpoint.
+The project is ready to continue from the **latest approved checkpoint**: **Phase 6 / Step 1 completed** in code — minimal **protected read-only admin API** (`ADMIN_API_TOKEN`, `GET /admin/overview`, `GET /admin/tours`, `GET /admin/orders`) with safe **lifecycle** projection for orders (`lifecycle_kind` / `lifecycle_summary`). Public booking/payment/waitlist/handoff flows were **not** changed for this step.
+
+Earlier: **Phase 5 (Mini App MVP) accepted** for MVP/staging; **Phase 5 / Step 20** documentation consolidation / acceptance (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`). No open Phase 5 MVP blockers for the agreed scope.
+
+**Phase 6 / Step 2 has not started yet** (next narrow slice is read-only admin **detail** — see **Next Safe Step**).
 
 ## Current Phase
-Phase 5 (Mini App MVP) — **Phase 5 / Step 19 completed** (My bookings **History** presentation cap + sort in `mini_app/booking_grouping.py`; archive ≠ delete; see `docs/PHASE_5_STEP_19_NOTES.md`). **Phase 5 / Step 18** (`docs/PHASE_5_STEP_18_NOTES.md`). **Phase 5 / Step 17** (`docs/PHASE_5_STEP_17_NOTES.md`). **Phase 5 / Step 16** (`docs/PHASE_5_STEP_16_NOTES.md`). **Phase 5 / Step 15** (`docs/PHASE_5_STEP_15_NOTES.md`). **Phase 5 / Step 14** (`docs/PHASE_5_STEP_14_NOTES.md`). **Phase 5 / Step 13** (`docs/PHASE_5_STEP_13_NOTES.md`). **Phase 5 / Step 12B** (`docs/PHASE_5_STEP_12B_NOTES.md`). **Step 12A** (`docs/PHASE_5_STEP_12A_NOTES.md`). **Step 12** (`docs/PHASE_5_STEP_12_NOTES.md`). Step 11: My bookings (`docs/PHASE_5_STEP_11_NOTES.md`). Step 10: mock payment (`docs/PHASE_5_STEP_10_NOTES.md`). Step 9 / 9A: lazy expiry (`docs/PHASE_5_STEP_9_NOTES.md`).
 
-`docs/IMPLEMENTATION_PLAN.md` defines **Phase 5 as a single phase** (no numbered substeps in the plan). The **Step N** labels here are **project execution checkpoints** mapped to Phase 5 *Included Scope* / *Done-When* bullets (UX first, then screens, booking, payment, help/bookings as the phase exit signal).
+**Current phase (forward work):** **Phase 6 — Admin Panel MVP** — **Phase 6 / Step 1 completed; Phase 6 / Step 2 not started yet.**
+
+**Latest approved checkpoint:** **Phase 6 / Step 1** — protected admin foundation + read-only admin lists/overview; access via **`ADMIN_API_TOKEN`** (Bearer or `X-Admin-Token`). Underlying reservation/order **raw DB semantics** remain as documented in `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`; list views use explicit projection to reduce ambiguity.
+
+**Earlier checkpoint:** Phase 5 accepted for MVP/staging **and** Phase 5 / Step 20 documentation consolidation / acceptance pass completed (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
+
+**Phase 5 (closed for MVP):** Execution checkpoints **Steps 4–19** are summarized in `docs/PHASE_5_ACCEPTANCE_SUMMARY.md` and per-step notes under `docs/PHASE_5_STEP_*_NOTES.md`; **Step 20** was documentation/consolidation only (no intended production-code churn for acceptance).
+
+**Next safe direction:** **Phase 6 / Step 2** — read-only admin **resource detail** (single tour / single order) reusing the same safety rules for status presentation — see **Next Safe Step** below.
+
+**Optional follow-ups** (not Phase 5 blockers; prioritize with product): Telegram Web App init-data validation for Mini App APIs, real payment provider (PSP), broader handoff/waitlist customer notifications.
+
+`docs/IMPLEMENTATION_PLAN.md` lists phases 1–9; **Step N** labels in **this** file are **project checkpoints** (not substeps inside the plan table).
 
 ## Completed Steps
 
@@ -446,319 +461,43 @@ Phase 5 (Mini App MVP) — **Phase 5 / Step 19 completed** (My bookings **Histor
 - result:
   - all listed tests passed
 
-Фаза: Phase 5 / Step 8
-Шаг: связка private chat и Mini App в одном staging-сценарии
-Сделано: welcome/CTA обновлены, Mini App и My bookings подняты наверх, добавлены /help /bookings /contact, тексты бота и Mini App согласованы, добавлен smoke-checklist
-Не трогали: booking/payment rules, API, DB schema, waitlist, handoff, webhook, deploy model
-Замечание: один тест падает из-за seeded TEST_BELGRADE_001 в БД, не из-за логики Step 8
+### Phase 5 — extended execution (Steps 8–20, historical)
 
-ТЕКУЩЕЕ СОСТОЯНИЕ STAGING ПОСЛЕ STEP 8A
+These steps are **closed** for the Phase 5 MVP acceptance narrative; detail lives in `docs/PHASE_5_ACCEPTANCE_SUMMARY.md` and `docs/PHASE_5_STEP_*_NOTES.md`. This subsection records **durable facts** and a **compact map** (not a live “next step” checklist).
 
-Инфраструктура:
-- API backend работает на Railway
-- Telegram bot работает через Railway webhook, локальный polling больше не нужен для обычной работы
-- Mini App UI вынесен в отдельный Railway service и открывается из Telegram
-- PostgreSQL на Railway подключен и используется
-- Миграции применены
-- TEST_BELGRADE_001 seeded в staging
+**Staging / ops facts (still relevant):**
+- Typical hosted layout: **API backend** + **Telegram bot (webhook)** + **Mini App UI** as separate processes/services; **PostgreSQL** is the staging DB; `TEST_BELGRADE_001` is a staging-oriented test tour.
+- **Data hygiene:** accumulated staging holds/orders can make a tour look sold out; `reset_test_belgrade_tour_state.py` resets the test tour and related artifacts when needed before smoke tests.
+- **Lazy expiry** (Step 9): expiry can run without relying on a dedicated cron for several paths; configurable override **`TEMP_RESERVATION_TTL_MINUTES`** (defaults preserve the 6h/24h rule family documented elsewhere).
+- **Mock payment completion** (Step 10): `ENABLE_MOCK_PAYMENT_COMPLETION` + `POST /mini-app/orders/{id}/mock-payment-complete` funnels through the same **`PaymentReconciliationService`** path as webhooks.
+- **Expired hold DB shape** (admin/read-model caution): expired unpaid holds may combine **`booking_status=reserved`** with **`payment_status=unpaid`**, **`cancellation_status=cancelled_no_payment`**, **`reservation_expires_at=null`** — see `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` for interpretation risk.
 
-Что уже работает:
-- /start, /tours, /bookings, /language, /help, /contact в боте открываются
-- кнопка "Deschide Mini App" открывает Mini App
-- mobile catalog scroll уже исправлен на главной странице каталога
-- View details на мобильном теперь достижим
-- webhook flow стабилен, апдейты обрабатываются на Railway
+**Compact step map (pointers):**
+- **Step 8–8C:** private chat ↔ Mini App staging alignment; scroll/shell i18n iterations; smoke checklist — see early step notes / commit history.
+- **Step 9–9A:** lazy expiry + configurable TTL — notes above.
+- **Step 10:** mock payment completion — `docs/PHASE_5_STEP_10_NOTES.md`.
+- **Step 11:** My bookings sections — `docs/PHASE_5_STEP_11_NOTES.md`.
+- **Step 12:** booking detail + payment UX hardening — `docs/PHASE_5_STEP_12_NOTES.md`.
+- **Step 12A / 12B:** private chat message cleanup + `/start` `/tours` edit/replace behavior — `docs/PHASE_5_STEP_12A_NOTES.md`, `docs/PHASE_5_STEP_12B_NOTES.md`.
+- **Step 13:** support/handoff entry — `docs/PHASE_5_STEP_13_NOTES.md`.
+- **Step 14:** waitlist interest entry — `docs/PHASE_5_STEP_14_NOTES.md`.
+- **Step 15–17:** internal ops JSON queues + claim/close — `docs/PHASE_5_STEP_15_NOTES.md` … `docs/PHASE_5_STEP_17_NOTES.md`.
+- **Step 18:** waitlist status visibility — `docs/PHASE_5_STEP_18_NOTES.md`.
+- **Step 19:** My bookings history compaction — `docs/PHASE_5_STEP_19_NOTES.md`.
+- **Step 20:** documentation-only acceptance/consolidation — `docs/PHASE_5_ACCEPTANCE_SUMMARY.md`.
 
-Что выявлено после утреннего smoke-test:
-1. Scroll исправлен только на catalog screen; другие Mini App screens ещё не унифицированы:
-   - detail page требует scroll
-   - prepare page требует scroll
-   - booking details / payment / help / settings тоже надо проверить на единый scroll layout
-2. UI-shell Mini App не переведён полностью на выбранный язык:
-   - сам tour content может fallback-иться на EN, это допустимо
-   - но labels/buttons/navigation shell должны переводиться
-3. TEST_BELGRADE_001 часто уходит в sold out / seats_available=0 из-за накопленных staging orders/holds/payments
-   - из-за этого prepare выдаёт "tour is not available for reservation preparation"
-4. В DB есть несколько orders/payments по test tour, но My bookings показывает только одну запись
-   - вероятная причина: фильтрация по current user_id или по статусу
-   - это нужно явно проверить и задокументировать
+**Still not done (product/ops; not Phase 5 MVP acceptance blockers):** real PSP integration, richer mock failure/cancel paths, production Telegram Web App init-data validation for Mini App APIs, full operator inbox/notifications — track via `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`.
 
-Что нельзя потерять:
-- Не менять booking/payment business rules
-- Не менять DB schema / migrations
-- Не ломать webhook / Railway deploy model
-- Не убирать отдельный Mini App UI service
-- Все fixes должны быть staging-safe и обратимыми
-
-Следующий правильный шаг:
-- Step 8B stabilization:
-  1) общий scroll pattern для всех Mini App pages
-  2) перевод Mini App UI-shell
-  3) audit/reset test-tour availability
-  4) audit why My bookings shows only one record
-
-РЕШЕНИЕ ПОСЛЕ STEP 8B
-
-Текущее решение:
-- Сейчас НЕ меняем reservation/payment business logic.
-- Сначала восстанавливаем чистый staging-state для TEST_BELGRADE_001, потому что основной smoke-flow стал невоспроизводим из-за накопленных test orders/payments/holds.
-- Проблема prepare сейчас трактуется как data hygiene issue staging, а не как доказанный дефект Mini App UI.
-- My bookings vs many orders in DB трактуется как expected current-user filtering, если не доказано обратное.
-
-Что делать сейчас:
-1. Починить / стабилизировать reset TEST_BELGRADE_001
-2. Вернуть тур в состояние:
-   - status = open_for_sale
-   - seats_available = seats_total
-   - без активных test orders/payments/holds для этого тура
-3. Повторно прогнать smoke:
-   - catalog
-   - detail
-   - prepare
-   - one hold creation
-   - my bookings
-   - payment page
-
-Что делать позже отдельным этапом:
-- review reservation lifecycle как бизнес-логики:
-  - hold TTL
-  - auto-release expired holds
-  - anti-false-sold-out behavior
-  - правила отображения expired/released bookings
-Это уже заложено в архитектуре (temporary reservation / payment entry / expiry), но будет рассматриваться позже как отдельный продуктовый этап, а не в рамках текущего UI stabilization.
-
-ТЕКУЩЕЕ СОСТОЯНИЕ ПОСЛЕ STEP 8A / 8B / 8C
-
-Инфраструктура:
-- API backend работает на Railway
-- Telegram bot переведён на Railway webhook
-- Mini App UI вынесен в отдельный Railway service и открывается из Telegram
-- PostgreSQL Railway подключен и используется как staging DB
-- Миграции применены
-- TEST_BELGRADE_001 seeded и обслуживается как staging-only test tour
-
-Что подтверждено вручную:
-- /start, /tours, /bookings, /language, /help, /contact работают
-- кнопка "Deschide Mini App" открывает реальный Mini App UI
-- catalog screen на mobile скроллится
-- detail screen скроллится
-- View details работает
-- Prepare reservation работает после очистки staging data
-- создаётся temporary reservation / hold
-- создаётся payment entry
-- запись появляется в Railway Postgres:
-  - orders
-  - payments
-- seats_available уменьшается корректно
-- My bookings показывает бронирование текущего пользователя
-
-Что было важно выяснить:
-- проблема "tour is not available for reservation preparation" была вызвана не поломкой Mini App, а загрязнёнными staging test-data
-- проблема "в БД много orders, а в My bookings одна запись" трактуется как expected current-user filtering
-- Mini App shell переводится, но контент тура может fallback-иться по backend rules
-
-Что сделано для staging hygiene:
-- reset_test_belgrade_tour_state.py теперь реально очищает TEST_BELGRADE_001 в Railway staging DB
-- reset удаляет связанные orders/payments/notification artifacts по test tour
-- после reset:
-  - status = open_for_sale
-  - seats_available = seats_total
-  - prepare снова доступен
-- перед повторным full smoke staging tour при необходимости нужно reset-ить
-
-Технический инцидент:
-- mini_app/ui_layout.py не был закоммичен в git и из-за этого Mini_App_UI падал на Railway
-- scrollable_page перенесён в mini_app/app.py
-- отдельный import mini_app.ui_layout больше не использовать без явного коммита файла
-
-Что НЕ трогали:
-- booking/payment core business rules
-- DB schema / migrations
-- webhook model
-- Railway split API / Mini App UI
-
-Следующий шаг:
-- Step 9: reservation/payment lifecycle stabilization
-- focus:
-  - hold TTL
-  - expiry / auto-release
-  - release of seats back to sale
-  - status transitions in booking/payment lifecycle
-  - consistent user-facing statuses in Mini App
-
-ТЕКУЩЕЕ СОСТОЯНИЕ ПОСЛЕ STEP 9 / 9A
-
-Инфраструктура и staging:
-- API backend работает на Railway
-- Telegram bot переведён на Railway webhook
-- Mini App UI работает как отдельный Railway service
-- PostgreSQL Railway используется как staging DB
-- TEST_BELGRADE_001 используется как staging test tour
-- reset_test_belgrade_tour_state.py очищает test tour и возвращает seats_available = seats_total
-
-Что подтверждено вручную:
-- /start, /tours, /bookings, /language, /help, /contact работают
-- Mini App открывается из Telegram
-- catalog / detail / prepare / booking / payment-entry работают
-- hold создаётся, payment entry создаётся
-- orders / payments появляются в Railway Postgres
-- seats_available уменьшается корректно
-- lazy expiry работает: истёкший hold освобождает место
-- статус истёкшего hold в БД выглядит как:
-  - payment_status = unpaid
-  - cancellation_status = cancelled_no_payment
-  - reservation_expires_at = null
-- активный hold выглядит как:
-  - payment_status = awaiting_payment
-  - cancellation_status = active
-  - есть reservation_expires_at
-- каталог / detail / prepare отражают текущее число доступных мест корректно
-
-Step 9:
-- введён lazy expiry без обязательного cron/worker
-- lazy expiry вызывается в catalog, prepare, detail, bookings, booking detail, reservation creation, payment entry
-- false sold out из-за старых awaiting_payment holds уменьшен
-
-Step 9A:
-- TTL временной брони configurable через env
-- переменная: TEMP_RESERVATION_TTL_MINUTES
-- default поведение сохранено:
-  - 6 часов, если до вылета <= 3 суток
-  - иначе 24 часа
-- на staging можно ставить TEMP_RESERVATION_TTL_MINUTES=15
-- settings кэшируются, после изменения env нужен restart API service
-
-Phase 5 / Step 10 (completed):
-- mock завершение оплаты: `ENABLE_MOCK_PAYMENT_COMPLETION` + `POST /mini-app/orders/{id}/mock-payment-complete` → тот же `PaymentReconciliationService`, что и webhook
-- при подтверждении оплаты сбрасывается `reservation_expires_at` на заказе
-- Mini App: Pay now вызывает mock-complete (если флаг включён); экран успеха + переход к My bookings
-- см. `docs/PHASE_5_STEP_10_NOTES.md`
-
-Phase 5 / Step 11 (completed):
-- Mini App **My bookings**: три секции (заголовки + подсказки) — **Confirmed bookings**, **Active holds**, **History**; группировка только по `facade_state` из API, без смены бэкенда
-- пустые секции скрыты; карточки и **Open** без изменений по смыслу
-- см. `docs/PHASE_5_STEP_11_NOTES.md`
-
-Phase 5 / Step 12 (completed):
-- **Booking detail:** контекстная подсказка по `facade_state` (active / confirmed / released); локализованный ref
-- **Payment screen:** intro для активного hold; 400 → «нельзя начать оплату»; 403 mock → дружелюбный текст; Pay скрыт при ошибке загрузки
-- см. `docs/PHASE_5_STEP_12_NOTES.md`
-
-Phase 5 / Step 12A (completed):
-- **Telegram private chat:** best-effort удаление предыдущих служебных сообщений в категориях language picker, filter prompts, catalog welcome+list
-- см. `docs/PHASE_5_STEP_12A_NOTES.md`
-
-Phase 5 / Step 12B (completed):
-- **`/start`** и **`/tours`**: при наличии пары `HOME_MESSAGE` + `CATALOG_MESSAGE` сначала **`edit_message_text`** (оба сообщения); при ошибке — delete + два новых `answer` + `register_catalog_bundle`
-- остальные пути каталога (callback browse, фильтры) по-прежнему **send+register** без edit
-- см. `docs/PHASE_5_STEP_12B_NOTES.md`
-
-Phase 5 / Step 13 (completed):
-- запись в **`handoffs`** через **`HandoffEntryService`**: private **`/contact`**, **`/human`**; Mini App **`POST /mini-app/support-request`** с опциональным `order_id` и `screen_hint`
-- тексты честные: нет обещания live operator / мгновенного ответа; help в Mini App **en/ro** через `GET /mini-app/help?language_code=`
-- CTA на экранах **Payment**, **Booking detail**, **My bookings**
-- см. `docs/PHASE_5_STEP_13_NOTES.md`
-
-Что ещё НЕ завершено:
-- реальный payment provider (PSP)
-- mock failure/cancel пути (вне этого среза)
-
-Следующий шаг (вне текущего среза):
-- интеграция реального провайдера или расширение mock failure по необходимости
-
-ПОСЛЕ STEP 10 SMOKE CONFIRMED
-
-Проверено вручную на staging:
-- ENABLE_MOCK_PAYMENT_COMPLETION=true в API service
-- кнопка Pay now теперь приводит к mock completion
-- payment status в payments переходит в paid
-- Mini App показывает экран успеха:
-  - Plata confirmata / Payment confirmed
-  - booking reference
-  - payment status paid
-  - booking status confirmed
-- My bookings: секция **Confirmed bookings** сверху, затем **Active holds**, затем **History** (released/expired)
-- старые released/expired holds внизу в History
-
-
-CURRENT NEXT STEP
-
-Step 12 — payment edge cases and retry UX
-
-Уже подтверждено вручную:
-- success payment flow работает
-- My bookings разделён на Confirmed / Active holds / History
-
-Следующий шаг:
-- сделать booking detail и payment screen устойчивыми для edge cases:
-  - expired/released booking
-  - disabled mock payment
-  - retry path for active hold
-- не менять бизнес-логику, только presentation/UX hardening
-
-ПОСЛЕ STEP 12
-
-Mini App payment UX усилен для edge cases:
-- booking detail теперь показывает контекстную подсказку по facade_state
-- active hold: объяснение про оплату до дедлайна
-- confirmed: объяснение, что бронь оплачена и подтверждена
-- released/expired: объяснение, что hold уже не активен и нужно начать заново из каталога
-- payment-entry 400: понятный экран недоступного hold, без кнопки оплаты
-- mock payment disabled (403): пользовательский snackbar вместо техничной ошибки
-- success path Step 10 не менялся
-
-Phase 5 / Step 12A (completed):
-- private chat: **language picker**, **filter step prompts** (date / destination / budget — один слот), пара **welcome + список туров**; предыдущие служебные сообщения этих типов удаляются best-effort перед новой отправкой
-- хранение только в памяти процесса (`app/bot/transient_messages.py`), без БД
-- финальные/якорные сообщения (оплата, временная бронь, help и т.д.) не затрагиваются
-- см. `docs/PHASE_5_STEP_12A_NOTES.md`
-
-Следующий шаг (вне этого среза):
-- реальный payment provider (PSP), расширение mock failure при необходимости
-
-Phase 5 / Step 12B (completed):
-- `/start` и `/tours` обновляют пару home+catalog через **edit**, иначе **delete+send**; см. `docs/PHASE_5_STEP_12B_NOTES.md`
-
-ПОСЛЕ STEP 12B
-
-Telegram private chat теперь использует reusable/editable service messages для:
-/start
-/tours
-
-Политика:
-- HOME_MESSAGE и CATALOG_MESSAGE переиспользуются через edit_message_text
-- если edit невозможен, используется fallback delete+send+register
-- cleanup из Step 12A для language/filter prompts сохраняется
-- важные итоговые сообщения (оплата, брони, help/contact и т.п.) не удаляются и не редактируются
-
-Результат:
-- private chat стал заметно чище
-- повторные /start и /tours не должны плодить длинную ленту служебных блоков
-
-Phase 5 / Step 13 (completed):
-- см. `docs/PHASE_5_STEP_13_NOTES.md` — minimal запись handoff + честные тексты; operator lifecycle / уведомления — вне среза
-
-Phase 5 / Step 14 (completed):
-- см. `docs/PHASE_5_STEP_14_NOTES.md` — waitlist interest entry (sold-out open tours), API + Mini App + thin private-chat hint; auto-promotion / operator workflow — вне среза
-
-Phase 5 / Step 15 (completed):
-- см. `docs/PHASE_5_STEP_15_NOTES.md` — read-only ops JSON queues (`GET /internal/ops/handoffs/open`, `GET /internal/ops/waitlist/active`, `OPS_QUEUE_TOKEN`); handoff и waitlist раздельно; без full admin UI
-
-Phase 5 / Step 16 (completed):
-- см. `docs/PHASE_5_STEP_16_NOTES.md` — `PATCH .../handoffs/{id}/claim` и `.../close` под тем же `OPS_QUEUE_TOKEN`; без уведомлений и без изменения public flows
-
-Phase 5 / Step 17 (completed):
-- см. `docs/PHASE_5_STEP_17_NOTES.md` — `PATCH .../waitlist/{id}/claim|close`, только смена `status` (нет `assigned_operator_id` на waitlist); `GET .../waitlist/active` по-прежнему только `active`
-
-Phase 5 / Step 18 (completed):
-- см. `docs/PHASE_5_STEP_18_NOTES.md` — `GET .../waitlist-status` расширен (`waitlist_status`, `waitlist_entry_id`, `on_waitlist` для active+in_review); Mini App копия en/ro; join не дублирует pending
-
-Phase 5 / Step 19 (completed):
-- см. `docs/PHASE_5_STEP_19_NOTES.md` — компактация секции **History** в My bookings (последние 15 по `order.updated_at`, подсказка en/ro); ops-очереди без изменений (по-прежнему только actionable)
-
-NEXT STEP
-
-(Define next checkpoint: e.g. handoff/waitlist notifications, Mini App auth/init-data, Phase 6 admin panel, or catalog polish — per `docs/IMPLEMENTATION_PLAN.md` and product priority.)
+### Phase 6
+- Phase 6 / Step 1 completed
+  - **Config:** `ADMIN_API_TOKEN` in `app/core/config.py`; documented in `.env.example`
+  - **Auth dependency:** `app/api/admin_auth.py` — `require_admin_api_token` (Bearer or `X-Admin-Token`; same ergonomics as ops queue)
+  - **Routes:** `app/api/routes/admin.py` — `GET /admin/overview`, `GET /admin/tours`, `GET /admin/orders` (wired in `app/api/router.py`)
+  - **Read-side:** `app/services/admin_read.py`, `app/services/admin_order_lifecycle.py` — orders expose **`lifecycle_kind`** / **`lifecycle_summary`** instead of relying on raw enums alone for ambiguous expired holds
+  - **Repositories:** `TourRepository.list_by_departure_desc`, `OrderRepository.list_recent_for_admin` (read-only lists)
+  - **Tests:** `tests/unit/test_api_admin.py`, `tests/unit/test_services_admin_order_lifecycle.py`
+  - **Scope respected:** no public Mini App / bot / customer API behavior changes; no booking/payment/waitlist/handoff workflow changes
+  - **Historical prompt:** `docs/CURSOR_PROMPT_PHASE_6_STEP_1.md` (implementation for this step is done; use **Next Safe Step** for new work)
 
 ---
 
@@ -809,7 +548,7 @@ NEXT STEP
 - post-trip reminder tests pass
 - post-trip reminder outbox tests pass
 - `python -m unittest discover -s tests/unit -v` currently passes
-- latest known status: full unit suite passed at Phase 5 / Step 4 checkpoint (update count on next run)
+- re-run and refresh this line after major phases; last intentional full-unit note was kept current through Phase 5 MVP acceptance work
 - previous `psycopg ResourceWarning` no longer appears in full suite output
 
 ### Latest Payment/Webhook Checkpoint
@@ -837,48 +576,52 @@ NEXT STEP
 ## Current Architecture State
 
 ### Ready
-- models
-- migrations
-- repositories
-- Pydantic schemas
-- read services
-- preparation services
-- private bot foundation
-- multilingual private entry foundation
-- guided private browsing flow
-- reservation-preparation flow
-- temporary reservation creation flow
-- payment entry flow
-- payment reconciliation core service
-- payment webhook/API delivery slice
-- reservation expiry worker
-- notification preparation foundation
-- notification dispatch foundation
-- `telegram_private` notification delivery slice
-- payment-pending reminder worker slice
-- payment-pending reminder delivery slice
-- notification outbox persistence foundation
-- payment-pending reminder outbox slice
-- notification outbox processing slice
-- notification outbox recovery slice
-- notification outbox retry execution slice
-- predeparture reminder groundwork
-- predeparture reminder outbox slice
-- departure-day reminder groundwork
-- departure-day reminder outbox slice
-- post-trip reminder groundwork
-- post-trip reminder outbox slice
-- clean DB-backed unit test harness
+- **bot layer** — Telegram private chat; thin handlers; service-driven
+- **api layer** — FastAPI; public routes + Mini App routes + payments webhooks + **internal ops** JSON endpoints + **admin read API** (`/admin/*`, `ADMIN_API_TOKEN`; read-only lists/overview in Phase 6 Step 1)
+- **services layer** — business rules and orchestration
+- **repositories layer** — persistence-oriented data access
+- **mini_app** — Flet Mini App UI (separate deploy surface in staging); **MVP accepted** for agreed scope (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`); **no business logic in the frontend** — UI calls APIs only
+- **booking/payment core** — temporary reservations, payment entry, idempotent reconciliation, lazy expiry, staging mock payment completion path when enabled
+- **waitlist / handoff (MVP)** — interest entry, support request, read-only ops visibility + narrow claim/close actions; not a full operator inbox or customer notification suite
+
+### Architecture boundaries (non-negotiable)
+- **PostgreSQL-first** for MVP-critical behavior; do not treat SQLite as source of truth for booking/payment paths
+- **Service layer** owns business logic; **repositories** stay persistence-oriented; **route layer** stays thin (verify/parse/delegate)
+- **Payment reconciliation** remains the single place for confirmed paid-state transitions on orders
+- **Mini App / any web UI**: presentation only — no duplicated booking/payment rules in the client
 
 ### Not Implemented Yet
-- broader reminder workers and scheduling/orchestration
-- refund workflow
-- waitlist actions/workflow
-- handoff lifecycle workflow
-- Telegram group behavior
-- Mini App: real reservation creation, payment UI, my bookings, auth/init, help/operator flows (Phase 5 remaining scope per `docs/IMPLEMENTATION_PLAN.md`)
-- admin workflows
-- content publication workflows
+- **Phase 6 / Step 2:** read-only admin **detail** endpoints (single tour / single order) with the same **lifecycle / safe projection** rules; still **no** CRUD, **no** mutations
+- **Phase 6 (later slices):** first narrow CRUD or admin mutations only when explicitly scheduled (tours/translations/boarding points; order/payment operations) — per plan
+- **Phase 6+:** admin payment operations, content/publication workflows, role-based admin UX as per plan
+- **Phase 7–9:** group assistant, full handoff lifecycle at scale, content assistant, analytics/readiness — per `docs/IMPLEMENTATION_PLAN.md`
+
+## Next Safe Step
+
+**Phase 6 / Step 2 — not started yet** (backend-first; **read-only detail** only).
+
+### Goal
+**Read-only admin detail visibility** — one tour and one order by id (or stable public identifier), with **richer** read payload than list views **without** introducing mutations, **without** full CRUD, and **without** changing public booking/payment/waitlist/handoff flows.
+
+### Safe scope for this step
+- `GET /admin/tours/{tour_id}` (or `{tour_code}` — pick one convention and stay consistent) — aggregate safe read fields from existing services/repositories
+- `GET /admin/orders/{order_id}` — include **`lifecycle_kind` / `lifecycle_summary`** (and only as much raw enum detail as needed without reintroducing list-view ambiguity)
+- optional **minimal** related context (e.g. tour title/code on order detail) if cheap and read-only
+- reuse **`ADMIN_API_TOKEN`**; keep router thin; new logic in admin read services
+- focused tests: auth gate + response shape + **expired unpaid hold** projection on detail
+
+### Must not expand yet
+- CRUD create/update/delete for tours, translations, boarding points
+- admin order/payment **mutations** or admin payment operations
+- big SPA / full admin UI
+- changes to public Mini App, bot, or customer-facing APIs except unavoidable wiring imports
+- content/publication workflows; broader Phase 6–9 scope
+
+**Completed step reference:** `docs/CURSOR_PROMPT_PHASE_6_STEP_1.md` (Phase 6 Step 1 — done).  
+**Plan:** `docs/IMPLEMENTATION_PLAN.md` (Phase 6)
+
+## Recommended Next Prompt
+Implement **Phase 6 / Step 2** using `docs/CHAT_HANDOFF.md` (**Next Safe Step**), `docs/TECH_SPEC_TOURS_BOT.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, and `docs/TESTING_STRATEGY.md`. Add a dedicated `docs/CURSOR_PROMPT_PHASE_6_STEP_2.md` when you want a frozen prompt artifact — **do not** re-use Phase 5 “next step” prompts for new work.
 
 ---
 
@@ -919,13 +662,13 @@ NEXT STEP
 - continue-to-payment entry for temporary reservations
 
 ### Bot constraints
-- no waitlist actions yet
-- no handoff actions yet
-- no group logic yet
+- **waitlist:** interest entry exists for sold-out open tours (MVP); no group-chat waitlist UX
+- **handoff:** support/contact entry exists; full operator inbox and customer notifications are **not** implemented
+- **group chat:** not in scope for current MVP slices
 
-### Mini App constraints (latest checkpoint)
-- catalog, filters, read-only tour detail, reservation **preparation** UI only
-- no real reservation creation or payment flow in the Mini App yet (next Phase 5 work per implementation plan)
+### Mini App (Phase 5 MVP — accepted)
+- End-to-end staging-realistic flow: catalog → detail → preparation → **temporary reservation** → **payment entry** → optional **mock completion** → **My bookings** (with documented limits); see `docs/PHASE_5_ACCEPTANCE_SUMMARY.md`
+- Production **Telegram Web App init-data** validation for API identity remains a **follow-up**, not a blocker for this handoff narrative
 
 ---
 
@@ -987,52 +730,6 @@ This logic already exists in the temporary reservation creation slice and must b
 - Mini App delivery
 - waitlist notifications
 - handoff notifications
-
----
-
-## Next Safe Step
-Phase 5 / Step 19
-
-**Plan alignment (`docs/IMPLEMENTATION_PLAN.md` Phase 5):** the phase exit signal is *“Mini App UX defined first, then screens, booking, payment, and help flow implemented”*. The next **Included Scope** items not yet satisfied after Step 4 are the **reserve action** and **payment** slices: *“Build reservation screen for seat count, boarding point, reservation timer, and reserve action”* and *“Build payment screen with amount, timer, and transition into payment scenario”*, matching *Done-When*: *“reserve seats, start payment”*. Step 4 completed only preparation UI; Step 5 implements **real temporary reservation creation** and **starting payment** in the Mini App by reusing existing Phase 3–4 service-layer flows (`TemporaryReservationService`, `PaymentEntryService`, reconciliation assumptions), not by duplicating rules in the UI.
-
-### Goal
-Deliver the Mini App **reserve** action and **start payment** flow on top of the existing foundation (catalog, filters, tour detail, reservation preparation UI), until a user can create a temporary reservation and enter the payment step consistent with the private bot behavior.
-
-### Safe scope for next step
-- wire Mini App to create a **temporary reservation** (order) using existing reservation creation services and validations
-- wire Mini App to **continue to payment** / payment entry for that reservation using existing payment-entry behavior
-- surface **reservation timer** and amount/expiry in UI where the plan expects them for reservation and payment screens
-- add only **minimal** Mini App API endpoints if needed; keep business rules in services
-- add focused tests for new endpoints or adapters, not for re-proving Phase 3–4 core logic
-
-### Must not expand yet (unless `IMPLEMENTATION_PLAN.md` / spec explicitly pulls them in)
-- waitlist workflow
-- handoff/operator workflow
-- **Mini App auth/init with Telegram context** (listed in Phase 5 scope; keep postponed until explicitly scheduled—do not block reserve/payment on it if the narrow slice can use the same assumptions as current dev Mini App)
-- my bookings / booking status screen (plan *Done-When* also mentions *“later view booking status”*—can be a follow-up checkpoint if reserve+pay is large)
-- unrelated admin, group, or content work
-
-## Recommended Next Prompt
-Use this in the new chat:
-
-Using `docs/TECH_SPEC_TOURS_BOT.md`, `docs/IMPLEMENTATION_PLAN.md` (Phase 5 *Included Scope* and *Done-When*), `docs/TESTING_STRATEGY.md`, `docs/AI_ASSISTANT_SPEC.md`, `docs/AI_DIALOG_FLOWS.md`, `docs/CHAT_HANDOFF.md`, `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, and `docs/MINI_APP_UX.md`, implement **Phase 5 / Step 5**: Mini App **temporary reservation creation** and **payment start** on top of the existing Mini App foundation (catalog, filters, read-only tour detail, reservation preparation UI).
-
-Goal:
-Match the implementation plan’s next booking/payment slices: **reserve action** + **payment screen entry** (amount, timer, transition into payment scenario), reusing `TemporaryReservationService`, `PaymentEntryService`, and existing payment/reconciliation assumptions—no duplicated business rules in Flet.
-
-Requirements:
-- keep scope narrow: no waitlist, no handoff, no Mini App auth/init expansion unless strictly required for a minimal integration stub
-- add minimal API/adapter layer only; services own mutations
-- mobile-first; align with `docs/MINI_APP_UX.md`
-- add tests for new Mini App-specific glue (routes/adapters), not a rewrite of Phase 3–4 tests
-
-Before writing code:
-1. summarize current state and what Phase 5 Steps 1–4 already delivered
-2. quote how this maps to `IMPLEMENTATION_PLAN.md` Phase 5 bullets
-3. list files/endpoints/UI to add or extend
-4. list what remains postponed (my bookings, auth/init, help, etc.)
-
-Then generate the code and tests.
 
 ---
 

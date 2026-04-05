@@ -38,6 +38,26 @@ open
 
 ---
 
+## 1a. Admin read API vs raw reservation/order semantics
+
+### Current decision
+- **Phase 6 / Step 1** admin **list** endpoints (`GET /admin/orders`, etc.) expose orders with **`lifecycle_kind`** / **`lifecycle_summary`** (see `app/services/admin_order_lifecycle.py`) so operators are less likely to misread **expired unpaid holds** as active reservations when scanning lists.
+- **Database fields are unchanged:** the combination described in **section 1** (`booking_status` may remain `reserved` after expiry, etc.) still exists at persistence layer.
+
+### Why core debt remains open
+- Raw status **semantics** in section 1 are still the source of truth for storage and workers; projection only helps **read** surfaces that use it.
+- **Admin mutations**, **reporting**, **analytics**, or dashboards that filter on raw enums **without** the same projection rules can still misinterpret state.
+
+### Revisit trigger
+- before **admin mutation** flows (status changes, cancellations, manual fixes)
+- before **richer admin reporting** or exports that aggregate by raw status
+- before **analytics / dashboards** depend directly on raw status combinations without a documented projection layer
+
+### Status
+open (read-side **partially mitigated** for Phase 6 Step 1 list API; **section 1** remains open for semantics and non-projected consumers)
+
+---
+
 ## 2. Temporary bot FSM storage uses MemoryStorage
 
 ### Current decision
@@ -411,3 +431,24 @@ Reminder/notification infrastructure is still postponed.
 
 ### Status
 open
+
+---
+
+## 16. Phase 5 Mini App MVP closure — residual debt (non-blocking)
+
+**Added:** Phase 5 / Step 20 consolidation. Phase 5 is **accepted** per `docs/PHASE_5_ACCEPTANCE_SUMMARY.md`. The items below are **not** reopened as blockers; they stay on the backlog for later phases.
+
+| Topic | Where tracked |
+|-------|----------------|
+| Production Telegram Web App init-data / Mini App API auth | This summary + acceptance doc; replaces dev `MINI_APP_DEV_TELEGRAM_USER_ID` when prioritized |
+| Real payment provider (mock/staging paths today) | Section 3 |
+| Bot `MemoryStorage` | Section 2 |
+| Expiry/booking status semantics for admin/analytics | Section 1 |
+| Waitlist auto-promotion and customer notifications | Product / later phase |
+| Handoff operator inbox and customer notifications | Phase 6–7 scope |
+| Full shell i18n for all languages | Phase 5 used en/ro priority + English fallback |
+
+Do **not** duplicate long analysis here — keep single source of truth in numbered sections above and in `docs/PHASE_5_ACCEPTANCE_SUMMARY.md`.
+
+### Status
+open (informational snapshot)

@@ -37,6 +37,22 @@ class TourRepository(SQLAlchemyRepository[Tour]):
         )
         return list(session.scalars(stmt).all())
 
+    def list_by_departure_desc(
+        self,
+        session: Session,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[Tour]:
+        """Recent/upcoming tours for admin read-only lists (newest departure first)."""
+        stmt = (
+            select(Tour)
+            .order_by(Tour.departure_datetime.desc(), Tour.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        return list(session.scalars(stmt).all())
+
 
 class TourTranslationRepository(SQLAlchemyRepository[TourTranslation]):
     def __init__(self) -> None:

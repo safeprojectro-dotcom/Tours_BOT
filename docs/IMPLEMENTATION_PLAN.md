@@ -32,7 +32,7 @@ Prepare a production-realistic, operationally complete MVP implementation plan f
 | 2 | Data Model And Booking Core | planned | Phase 1 | PostgreSQL schema, migrations, booking engine, concurrency safety, waitlist base |
 | 3 | Private Bot Sales Flow | planned | Phases 1-2 | Telegram private delivery, BotFather setup assumptions, deep links, language routing, reservation guidance |
 | 4 | Payment And Background Automation | planned | Phases 2-3 | Payment adapter, webhook safety, expiry/reminder workers, Railway staging verification |
-| 5 | Mini App MVP | planned | Phases 2-4 | Mini App UX defined first, then screens, booking, payment, and help flow implemented |
+| 5 | Mini App MVP | accepted (MVP) | Phases 2-4 | See [docs/PHASE_5_ACCEPTANCE_SUMMARY.md](docs/PHASE_5_ACCEPTANCE_SUMMARY.md) |
 | 6 | Admin Panel MVP | planned | Phases 2-5 | Admin manages tours, translations, orders, handoffs, audit visibility, approval lifecycle |
 | 7 | Group Assistant And Operator Handoff | planned | Phases 3-6 | Group delivery rules, anti-spam, CTA routing, operator takeover and return |
 | 8 | Content Assistant And Publication | planned | Phases 5-6 | AI-constrained content drafts, approval-before-publish, source-of-truth enforcement, audit trail |
@@ -665,7 +665,7 @@ Define the Mini App UX explicitly before full implementation, then deliver the F
 
 ### Status
 
-planned
+**MVP accepted** — see [docs/PHASE_5_ACCEPTANCE_SUMMARY.md](docs/PHASE_5_ACCEPTANCE_SUMMARY.md) for mapping to this phase’s Included Scope and Done-When criteria, deferred items (e.g. production Telegram Web App init-data), and non-blocking debt.
 
 ## Phase 6
 

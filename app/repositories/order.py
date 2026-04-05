@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus
 from app.models.order import Order
@@ -18,6 +18,23 @@ class OrderRepository(SQLAlchemyRepository[Order]):
     def get_for_update(self, session: Session, *, order_id: int) -> Order | None:
         stmt = select(Order).where(Order.id == order_id).with_for_update()
         return session.scalar(stmt)
+
+    def list_recent_for_admin(
+        self,
+        session: Session,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[Order]:
+        """Recent orders for admin read-only lists (newest first); loads tour for display code."""
+        stmt = (
+            select(Order)
+            .options(selectinload(Order.tour))
+            .order_by(Order.created_at.desc(), Order.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        return list(session.scalars(stmt).all())
 
     def list_by_user(self, session: Session, *, user_id: int, limit: int = 100, offset: int = 0) -> list[Order]:
         stmt = (

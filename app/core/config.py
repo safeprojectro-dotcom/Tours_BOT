@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     enable_mock_payment_completion: bool = Field(default=False, alias="ENABLE_MOCK_PAYMENT_COMPLETION")
     #: Shared secret for read-only ops queue JSON API (`GET /internal/ops/...`). If unset, those routes stay disabled.
     ops_queue_token: str | None = Field(default=None, alias="OPS_QUEUE_TOKEN")
+    #: Shared secret for read-only admin API (`GET /admin/...`). If unset, admin routes stay disabled.
+    admin_api_token: str | None = Field(default=None, alias="ADMIN_API_TOKEN")
 
     model_config = SettingsConfigDict(
         env_file=".env",
