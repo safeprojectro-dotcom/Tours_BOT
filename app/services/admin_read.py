@@ -11,12 +11,15 @@ from app.models.handoff import Handoff
 from app.models.order import Order
 from app.models.tour import Tour
 from app.models.waitlist import WaitlistEntry
+from app.repositories.handoff import HandoffRepository
 from app.repositories.order import OrderRepository
 from app.repositories.payment import PaymentRepository
 from app.repositories.tour import TourRepository
 from app.schemas.admin import (
     AdminBoardingPointSummary,
     AdminBoardingPointTranslationItem,
+    AdminHandoffListRead,
+    AdminHandoffRead,
     AdminHandoffSummaryItem,
     AdminOrderDetailRead,
     AdminOrderListItem,
@@ -35,6 +38,7 @@ from app.services.admin_order_lifecycle import (
     describe_order_admin_lifecycle,
     sql_predicate_for_lifecycle_kind,
 )
+from app.services.admin_handoff_queue import compute_handoff_queue_fields
 from app.services.admin_order_action_preview import compute_admin_action_preview
 from app.services.admin_order_payment_visibility import compute_payment_correction_visibility
 
@@ -46,10 +50,12 @@ class AdminReadService:
         tour_repository: TourRepository | None = None,
         order_repository: OrderRepository | None = None,
         payment_repository: PaymentRepository | None = None,
+        handoff_repository: HandoffRepository | None = None,
     ) -> None:
         self._tours = tour_repository or TourRepository()
         self._orders = order_repository or OrderRepository()
         self._payments = payment_repository or PaymentRepository()
+        self._handoffs = handoff_repository or HandoffRepository()
 
     _MAX_PAYMENT_ROWS = 10
 
@@ -219,6 +225,51 @@ class AdminReadService:
             payments=payments,
             handoffs=handoffs,
         )
+
+    def _handoff_to_read(self, h: Handoff) -> AdminHandoffRead:
+        tour_id = tour_code = tour_title = None
+        if h.order_id is not None and h.order is not None and h.order.tour is not None:
+            t = h.order.tour
+            tour_id, tour_code, tour_title = t.id, t.code, t.title_default
+        is_open, needs_attention, age_bucket = compute_handoff_queue_fields(
+            status=h.status,
+            created_at=h.created_at,
+        )
+        return AdminHandoffRead(
+            id=h.id,
+            status=h.status,
+            reason=h.reason,
+            priority=h.priority,
+            created_at=h.created_at,
+            updated_at=h.updated_at,
+            user_id=h.user_id,
+            order_id=h.order_id,
+            assigned_operator_id=h.assigned_operator_id,
+            tour_id=tour_id,
+            tour_code=tour_code,
+            tour_title_default=tour_title,
+            is_open=is_open,
+            needs_attention=needs_attention,
+            age_bucket=age_bucket,
+        )
+
+    def list_handoffs(
+        self,
+        session: Session,
+        *,
+        limit: int,
+        offset: int,
+        status: str | None = None,
+    ) -> AdminHandoffListRead:
+        rows = self._handoffs.list_for_admin(session, limit=limit, offset=offset, status=status)
+        items = [self._handoff_to_read(h) for h in rows]
+        return AdminHandoffListRead(items=items, total_returned=len(items))
+
+    def get_handoff_detail(self, session: Session, *, handoff_id: int) -> AdminHandoffRead | None:
+        h = self._handoffs.get_by_id_for_admin_detail(session, handoff_id=handoff_id)
+        if h is None:
+            return None
+        return self._handoff_to_read(h)
 
     def overview(self, session: Session) -> AdminOverviewRead:
         settings = get_settings()

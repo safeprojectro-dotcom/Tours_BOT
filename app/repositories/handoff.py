@@ -46,3 +46,26 @@ class HandoffRepository(SQLAlchemyRepository[Handoff]):
             .options(selectinload(Handoff.order).selectinload(Order.tour))
         )
         return list(session.scalars(stmt).all())
+
+    def list_for_admin(
+        self,
+        session: Session,
+        *,
+        limit: int,
+        offset: int,
+        status: str | None = None,
+    ) -> list[Handoff]:
+        """Recent activity first; optional status filter. Loads order+tour for list summaries."""
+        stmt = select(Handoff).options(selectinload(Handoff.order).selectinload(Order.tour))
+        if status is not None:
+            stmt = stmt.where(Handoff.status == status)
+        stmt = stmt.order_by(Handoff.updated_at.desc(), Handoff.id.desc()).offset(offset).limit(limit)
+        return list(session.scalars(stmt).all())
+
+    def get_by_id_for_admin_detail(self, session: Session, *, handoff_id: int) -> Handoff | None:
+        stmt = (
+            select(Handoff)
+            .where(Handoff.id == handoff_id)
+            .options(selectinload(Handoff.order).selectinload(Order.tour))
+        )
+        return session.scalars(stmt).first()

@@ -343,6 +343,35 @@ class AdminHandoffSummaryItem(BaseModel):
     updated_at: datetime
 
 
+class AdminHandoffRead(BaseModel):
+    """Admin queue visibility for one handoff row (read-only; Phase 6 / Step 18)."""
+
+    id: int
+    status: str
+    reason: str
+    priority: str
+    created_at: datetime
+    updated_at: datetime
+    user_id: int
+    order_id: int | None = None
+    assigned_operator_id: int | None = None
+    tour_id: int | None = Field(default=None, description="From linked order.tour when order exists.")
+    tour_code: str | None = None
+    tour_title_default: str | None = None
+    is_open: bool = Field(description="True when status is open.")
+    needs_attention: bool = Field(
+        description="True when status is open or in_review (may need operator follow-up).",
+    )
+    age_bucket: str = Field(
+        description="within_1h | within_24h | older — coarse age from created_at (server clock).",
+    )
+
+
+class AdminHandoffListRead(BaseModel):
+    items: list[AdminHandoffRead]
+    total_returned: int
+
+
 class AdminOrderDetailRead(BaseModel):
     id: int
     user_id: int

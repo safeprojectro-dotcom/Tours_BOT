@@ -304,6 +304,129 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(body["suggested_admin_action"], "await_customer_payment")
         self.assertIn("monitor_reservation_deadline", body["allowed_admin_actions"])
 
+    def test_handoffs_list_requires_auth(self) -> None:
+        r = self.client.get("/admin/handoffs")
+        self.assertEqual(r.status_code, 401)
+
+    def test_handoffs_detail_requires_auth(self) -> None:
+        r = self.client.get("/admin/handoffs/1")
+        self.assertEqual(r.status_code, 401)
+
+    def test_handoffs_list_success_open_and_tour(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-HO-1",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 8, 1, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(user, tour, point)
+        h = Handoff(
+            user_id=user.id,
+            order_id=order.id,
+            reason="Need help",
+            priority="high",
+            status="open",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.get("/admin/handoffs", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertGreaterEqual(body["total_returned"], 1)
+        row = next(x for x in body["items"] if x["id"] == h.id)
+        self.assertEqual(row["status"], "open")
+        self.assertTrue(row["is_open"])
+        self.assertTrue(row["needs_attention"])
+        self.assertEqual(row["order_id"], order.id)
+        self.assertEqual(row["tour_id"], tour.id)
+        self.assertEqual(row["tour_code"], "ADM-HO-1")
+        self.assertIn(row["age_bucket"], ("within_1h", "within_24h", "older"))
+
+    def test_handoffs_list_no_order_stable_shape(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        h = Handoff(
+            user_id=user.id,
+            order_id=None,
+            reason="General inquiry",
+            priority="low",
+            status="open",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.get("/admin/handoffs", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        row = next(x for x in r.json()["items"] if x["id"] == h.id)
+        self.assertIsNone(row["order_id"])
+        self.assertIsNone(row["tour_id"])
+        self.assertIsNone(row["tour_code"])
+        self.assertTrue(row["is_open"])
+
+    def test_handoffs_list_filter_closed(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-HO-CLOSED",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 8, 2, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(user, tour, point)
+        closed = Handoff(
+            user_id=user.id,
+            order_id=order.id,
+            reason="Resolved",
+            priority="normal",
+            status="closed",
+        )
+        self.session.add(closed)
+        self.session.commit()
+
+        r_closed = self.client.get("/admin/handoffs", headers=headers, params={"status": "closed"})
+        self.assertEqual(r_closed.status_code, 200)
+        ids_closed = {x["id"] for x in r_closed.json()["items"]}
+        self.assertIn(closed.id, ids_closed)
+        row = next(x for x in r_closed.json()["items"] if x["id"] == closed.id)
+        self.assertFalse(row["is_open"])
+        self.assertFalse(row["needs_attention"])
+
+    def test_handoff_detail_success(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-HO-DET",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 8, 3, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(user, tour, point)
+        h = Handoff(
+            user_id=user.id,
+            order_id=order.id,
+            reason="Detail test",
+            priority="normal",
+            status="in_review",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.get(f"/admin/handoffs/{h.id}", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["id"], h.id)
+        self.assertEqual(body["status"], "in_review")
+        self.assertTrue(body["needs_attention"])
+        self.assertFalse(body["is_open"])
+
+    def test_handoff_detail_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.get("/admin/handoffs/999999", headers=headers)
+        self.assertEqual(r.status_code, 404)
+
     def test_tour_detail_not_found(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}
         r = self.client.get("/admin/tours/999999", headers=headers)

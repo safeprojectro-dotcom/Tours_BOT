@@ -12,6 +12,8 @@ from app.schemas.admin import (
     AdminBoardingPointCreate,
     AdminBoardingPointTranslationUpsert,
     AdminBoardingPointUpdate,
+    AdminHandoffListRead,
+    AdminHandoffRead,
     AdminOrderDetailRead,
     AdminOrderListRead,
     AdminOverviewRead,
@@ -344,4 +346,28 @@ def get_admin_order_detail(
     detail = AdminReadService().get_order_detail(db, order_id=order_id)
     if detail is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.")
+    return detail
+
+
+@router.get("/handoffs", response_model=AdminHandoffListRead)
+def list_admin_handoffs(
+    db: Session = Depends(get_db),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0, le=100_000),
+    status: str | None = Query(
+        default=None,
+        description="Filter by handoff status (e.g. open, in_review, closed). Omit for all.",
+    ),
+) -> AdminHandoffListRead:
+    return AdminReadService().list_handoffs(db, limit=limit, offset=offset, status=status)
+
+
+@router.get("/handoffs/{handoff_id}", response_model=AdminHandoffRead)
+def get_admin_handoff_detail(
+    handoff_id: int,
+    db: Session = Depends(get_db),
+) -> AdminHandoffRead:
+    detail = AdminReadService().get_handoff_detail(db, handoff_id=handoff_id)
+    if detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Handoff not found.")
     return detail
