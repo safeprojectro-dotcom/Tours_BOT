@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.enums import TourStatus
 from app.models.tour import BoardingPoint, Tour, TourTranslation
@@ -18,6 +18,18 @@ class TourRepository(SQLAlchemyRepository[Tour]):
 
     def get_for_update(self, session: Session, *, tour_id: int) -> Tour | None:
         stmt = select(Tour).where(Tour.id == tour_id).with_for_update()
+        return session.scalar(stmt)
+
+    def get_by_id_for_admin_detail(self, session: Session, *, tour_id: int) -> Tour | None:
+        """Single tour for admin read-only detail; eager-loads translations and boarding points."""
+        stmt = (
+            select(Tour)
+            .where(Tour.id == tour_id)
+            .options(
+                selectinload(Tour.translations),
+                selectinload(Tour.boarding_points),
+            )
+        )
         return session.scalar(stmt)
 
     def list_by_status(

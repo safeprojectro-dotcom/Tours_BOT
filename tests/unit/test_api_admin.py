@@ -148,3 +148,39 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(len(body["payments"]), 1)
         self.assertEqual(len(body["handoffs"]), 1)
         self.assertEqual(body["handoffs"][0]["status"], "open")
+
+    def test_tour_detail_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.get("/admin/tours/999999", headers=headers)
+        self.assertEqual(r.status_code, 404)
+
+    def test_tour_detail_requires_auth(self) -> None:
+        r = self.client.get("/admin/tours/1")
+        self.assertEqual(r.status_code, 401)
+
+    def test_tour_detail_includes_translation_boarding_orders_count(self) -> None:
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-TOUR-DETAIL",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 7, 1, 7, 0, tzinfo=UTC),
+        )
+        self.create_translation(tour, language_code="ro", title="Tură RO")
+        bp1 = self.create_boarding_point(tour, city="CityA")
+        self.create_boarding_point(tour, city="CityB")
+        point_for_order = bp1
+        self.create_order(user, tour, point_for_order)
+        self.session.commit()
+
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.get(f"/admin/tours/{tour.id}", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["code"], "ADM-TOUR-DETAIL")
+        self.assertEqual(body["orders_count"], 1)
+        self.assertEqual(len(body["translations"]), 1)
+        self.assertEqual(body["translations"][0]["language_code"], "ro")
+        self.assertEqual(body["translations"][0]["title"], "Tură RO")
+        self.assertEqual(len(body["boarding_points"]), 2)
+        cities = {x["city"] for x in body["boarding_points"]}
+        self.assertEqual(cities, {"CityA", "CityB"})

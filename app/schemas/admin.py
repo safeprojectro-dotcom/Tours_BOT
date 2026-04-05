@@ -28,6 +28,13 @@ class AdminTourListRead(BaseModel):
     total_returned: int
 
 
+class AdminTranslationSummaryItem(BaseModel):
+    """Read-only snippet per language (no full long-form content in admin detail MVP)."""
+
+    language_code: str
+    title: str
+
+
 class AdminOrderListItem(BaseModel):
     id: int
     user_id: int
@@ -68,6 +75,38 @@ class AdminBoardingPointSummary(BaseModel):
     address: str
     time: time
     notes: str | None = None
+
+
+class AdminTourDetailRead(BaseModel):
+    """Read-only operational view of a tour; not an edit form."""
+
+    id: int
+    code: str
+    title_default: str
+    short_description_default: str | None = None
+    duration_days: int
+    departure_datetime: datetime
+    return_datetime: datetime
+    base_price: Decimal
+    currency: str
+    seats_total: int
+    seats_available: int
+    sales_deadline: datetime | None
+    status: TourStatus
+    guaranteed_flag: bool
+    created_at: datetime
+    updated_at: datetime
+    translations: list[AdminTranslationSummaryItem] = Field(
+        default_factory=list,
+        description="Per-language titles (read-only summary).",
+    )
+    boarding_points: list[AdminBoardingPointSummary] = Field(
+        default_factory=list,
+        description="Boarding stops for this tour (read-only).",
+    )
+    orders_count: int = Field(
+        description="Total order rows linked to this tour (visibility metric, not business interpretation).",
+    )
 
 
 class AdminPaymentSummaryItem(BaseModel):

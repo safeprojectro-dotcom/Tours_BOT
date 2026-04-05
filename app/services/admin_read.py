@@ -22,9 +22,11 @@ from app.schemas.admin import (
     AdminOrderPersistenceSnapshot,
     AdminOverviewRead,
     AdminPaymentSummaryItem,
+    AdminTourDetailRead,
     AdminTourListItem,
     AdminTourListRead,
     AdminTourSummary,
+    AdminTranslationSummaryItem,
 )
 from app.services.admin_order_lifecycle import describe_order_admin_lifecycle
 
@@ -42,6 +44,61 @@ class AdminReadService:
         self._payments = payment_repository or PaymentRepository()
 
     _MAX_PAYMENT_ROWS = 10
+
+    def get_tour_detail(self, session: Session, *, tour_id: int) -> AdminTourDetailRead | None:
+        tour = self._tours.get_by_id_for_admin_detail(session, tour_id=tour_id)
+        if tour is None:
+            return None
+
+        orders_count = (
+            session.scalar(select(func.count()).select_from(Order).where(Order.tour_id == tour.id)) or 0
+        )
+
+        translations_sorted = sorted(
+            tour.translations,
+            key=lambda tr: (tr.language_code, tr.id),
+        )
+        translations = [
+            AdminTranslationSummaryItem(language_code=tr.language_code, title=tr.title)
+            for tr in translations_sorted
+        ]
+
+        boarding_sorted = sorted(
+            tour.boarding_points,
+            key=lambda bp: (bp.time, bp.id),
+        )
+        boarding_points = [
+            AdminBoardingPointSummary(
+                id=bp.id,
+                city=bp.city,
+                address=bp.address,
+                time=bp.time,
+                notes=bp.notes,
+            )
+            for bp in boarding_sorted
+        ]
+
+        return AdminTourDetailRead(
+            id=tour.id,
+            code=tour.code,
+            title_default=tour.title_default,
+            short_description_default=tour.short_description_default,
+            duration_days=tour.duration_days,
+            departure_datetime=tour.departure_datetime,
+            return_datetime=tour.return_datetime,
+            base_price=tour.base_price,
+            currency=tour.currency,
+            seats_total=tour.seats_total,
+            seats_available=tour.seats_available,
+            sales_deadline=tour.sales_deadline,
+            status=tour.status,
+            guaranteed_flag=tour.guaranteed_flag,
+            created_at=tour.created_at,
+            updated_at=tour.updated_at,
+            translations=translations,
+            boarding_points=boarding_points,
+            orders_count=int(orders_count),
+        )
 
     def get_order_detail(self, session: Session, *, order_id: int) -> AdminOrderDetailRead | None:
         order = self._orders.get_by_id_for_admin_detail(session, order_id=order_id)

@@ -7,7 +7,13 @@ from sqlalchemy.orm import Session
 
 from app.api.admin_auth import require_admin_api_token
 from app.db.session import get_db
-from app.schemas.admin import AdminOrderDetailRead, AdminOrderListRead, AdminOverviewRead, AdminTourListRead
+from app.schemas.admin import (
+    AdminOrderDetailRead,
+    AdminOrderListRead,
+    AdminOverviewRead,
+    AdminTourDetailRead,
+    AdminTourListRead,
+)
 from app.services.admin_read import AdminReadService
 
 router = APIRouter(
@@ -31,6 +37,17 @@ def list_admin_tours(
     offset: int = Query(default=0, ge=0, le=100_000),
 ) -> AdminTourListRead:
     return AdminReadService().list_tours(db, limit=limit, offset=offset)
+
+
+@router.get("/tours/{tour_id}", response_model=AdminTourDetailRead)
+def get_admin_tour_detail(
+    tour_id: int,
+    db: Session = Depends(get_db),
+) -> AdminTourDetailRead:
+    detail = AdminReadService().get_tour_detail(db, tour_id=tour_id)
+    if detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour not found.")
+    return detail
 
 
 @router.get("/orders", response_model=AdminOrderListRead)
