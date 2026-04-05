@@ -16,6 +16,7 @@ from app.repositories.payment import PaymentRepository
 from app.repositories.tour import TourRepository
 from app.schemas.admin import (
     AdminBoardingPointSummary,
+    AdminBoardingPointTranslationItem,
     AdminHandoffSummaryItem,
     AdminOrderDetailRead,
     AdminOrderListItem,
@@ -72,16 +73,31 @@ class AdminReadService:
             tour.boarding_points,
             key=lambda bp: (bp.time, bp.id),
         )
-        boarding_points = [
-            AdminBoardingPointSummary(
-                id=bp.id,
-                city=bp.city,
-                address=bp.address,
-                time=bp.time,
-                notes=bp.notes,
+        boarding_points: list[AdminBoardingPointSummary] = []
+        for bp in boarding_sorted:
+            tr_sorted = sorted(
+                bp.translations,
+                key=lambda t: (t.language_code, t.id),
             )
-            for bp in boarding_sorted
-        ]
+            bp_tr = [
+                AdminBoardingPointTranslationItem(
+                    language_code=t.language_code,
+                    city=t.city,
+                    address=t.address,
+                    notes=t.notes,
+                )
+                for t in tr_sorted
+            ]
+            boarding_points.append(
+                AdminBoardingPointSummary(
+                    id=bp.id,
+                    city=bp.city,
+                    address=bp.address,
+                    time=bp.time,
+                    notes=bp.notes,
+                    translations=bp_tr,
+                )
+            )
 
         return AdminTourDetailRead(
             id=tour.id,

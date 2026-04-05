@@ -10,11 +10,13 @@ from app.models.tour import BoardingPoint, Tour
 from app.repositories.order import OrderRepository
 from app.repositories.tour import (
     BoardingPointRepository,
+    BoardingPointTranslationRepository,
     TourRepository,
     TourTranslationRepository,
 )
 from app.schemas.admin import (
     AdminBoardingPointCreate,
+    AdminBoardingPointTranslationUpsert,
     AdminBoardingPointUpdate,
     AdminTourCoreUpdate,
     AdminTourCoverSet,
@@ -57,12 +59,14 @@ class AdminTourWriteService:
         *,
         tour_repository: TourRepository | None = None,
         boarding_point_repository: BoardingPointRepository | None = None,
+        boarding_point_translation_repository: BoardingPointTranslationRepository | None = None,
         tour_translation_repository: TourTranslationRepository | None = None,
         order_repository: OrderRepository | None = None,
         read_service: AdminReadService | None = None,
     ) -> None:
         self._tours = tour_repository or TourRepository()
         self._boarding_points = boarding_point_repository or BoardingPointRepository()
+        self._bp_translations = boarding_point_translation_repository or BoardingPointTranslationRepository()
         self._translations = tour_translation_repository or TourTranslationRepository()
         self._orders = order_repository or OrderRepository()
         self._read = read_service or AdminReadService()
@@ -313,3 +317,59 @@ class AdminTourWriteService:
         deleted = self._translations.delete_for_tour_language(session, tour_id=tour_id, language_code=lc)
         if not deleted:
             raise AdminTourTranslationNotFoundError()
+
+    def upsert_boarding_point_translation(
+        self,
+        session: Session,
+        *,
+        boarding_point_id: int,
+        language_code: str,
+        payload: AdminBoardingPointTranslationUpsert,
+    ) -> AdminTourDetailRead:
+        """Create or merge-update localized city/address/notes for one boarding point; does not change core `time` or tour link."""
+        lc = language_code.strip().lower()
+        allowed = get_settings().telegram_supported_language_codes
+        if lc not in allowed:
+            raise AdminTourCreateValidationError("Unsupported language code.")
+
+        bp = session.get(BoardingPoint, boarding_point_id)
+        if bp is None:
+            raise AdminBoardingPointNotFoundError()
+
+        updates = payload.model_dump(exclude_unset=True)
+        if not updates:
+            raise AdminTourCreateValidationError("No fields to update.")
+
+        existing = self._bp_translations.get_by_boarding_point_and_language(
+            session,
+            boarding_point_id=boarding_point_id,
+            language_code=lc,
+        )
+
+        if existing is None:
+            if "city" not in updates or "address" not in updates:
+                raise AdminTourCreateValidationError(
+                    "city and address are required when creating a boarding point translation.",
+                )
+            data = {
+                "boarding_point_id": boarding_point_id,
+                "language_code": lc,
+                "city": updates["city"],
+                "address": updates["address"],
+                "notes": updates.get("notes"),
+            }
+            self._bp_translations.create(session, data=data)
+        else:
+            for key in ("city", "address"):
+                if key in updates and updates[key] is None:
+                    raise AdminTourCreateValidationError(f"{key} cannot be cleared.")
+            self._bp_translations.update_fields_for_boarding_point_language(
+                session,
+                boarding_point_id=boarding_point_id,
+                language_code=lc,
+                fields=updates,
+            )
+
+        detail = self._read.get_tour_detail(session, tour_id=bp.tour_id)
+        assert detail is not None
+        return detail

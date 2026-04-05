@@ -7,12 +7,13 @@ from app.models.message import Message
 from app.models.notification_outbox import NotificationOutbox
 from app.models.order import Order
 from app.models.payment import Payment
-from app.models.tour import BoardingPoint, Tour, TourTranslation
+from app.models.tour import BoardingPoint, BoardingPointTranslation, Tour, TourTranslation
 from app.models.user import User
 from app.models.waitlist import WaitlistEntry
 
 __all__ = [
     "BoardingPoint",
+    "BoardingPointTranslation",
     "ContentItem",
     "Handoff",
     "KnowledgeBaseEntry",

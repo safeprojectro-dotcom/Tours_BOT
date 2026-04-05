@@ -180,6 +180,37 @@ class AdminTourTranslationUpsert(BaseModel):
         return s if s else None
 
 
+class AdminBoardingPointTranslationUpsert(BaseModel):
+    """
+    Create or merge-update one `BoardingPointTranslation` row for `language_code` in the path.
+    On **create**, `city` and `address` must be in the JSON body. Core boarding `time` is not mutable here.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    city: str | None = Field(default=None, max_length=255)
+    address: str | None = Field(default=None, max_length=255)
+    notes: str | None = None
+
+    @field_validator("city", "address")
+    @classmethod
+    def strip_required_when_set(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        if not s:
+            raise ValueError("must not be empty or whitespace-only when provided")
+        return s
+
+    @field_validator("notes")
+    @classmethod
+    def optional_notes(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s if s else None
+
+
 class AdminTourCoverSet(BaseModel):
     """Set a single cover/media reference (URL or storage key) — no upload in this slice."""
 
@@ -235,12 +266,25 @@ class AdminTourSummary(BaseModel):
     status: TourStatus
 
 
+class AdminBoardingPointTranslationItem(BaseModel):
+    """Per-language text overrides for a boarding stop (city/address/notes only)."""
+
+    language_code: str
+    city: str
+    address: str
+    notes: str | None = None
+
+
 class AdminBoardingPointSummary(BaseModel):
     id: int
     city: str
     address: str
     time: time_type
     notes: str | None = None
+    translations: list[AdminBoardingPointTranslationItem] = Field(
+        default_factory=list,
+        description="Optional per-language overrides; core `time` stays on the boarding point row.",
+    )
 
 
 class AdminTourDetailRead(BaseModel):

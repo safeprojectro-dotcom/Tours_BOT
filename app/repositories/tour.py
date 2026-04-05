@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.enums import TourStatus
-from app.models.tour import BoardingPoint, Tour, TourTranslation
+from app.models.tour import BoardingPoint, BoardingPointTranslation, Tour, TourTranslation
 from app.repositories.base import SQLAlchemyRepository
 
 
@@ -65,7 +65,7 @@ class TourRepository(SQLAlchemyRepository[Tour]):
             .where(Tour.id == tour_id)
             .options(
                 selectinload(Tour.translations),
-                selectinload(Tour.boarding_points),
+                selectinload(Tour.boarding_points).selectinload(BoardingPoint.translations),
             )
         )
         return session.scalar(stmt)
@@ -161,6 +161,46 @@ class TourTranslationRepository(SQLAlchemyRepository[TourTranslation]):
             return False
         self.delete(session, instance=tr)
         return True
+
+
+class BoardingPointTranslationRepository(SQLAlchemyRepository[BoardingPointTranslation]):
+    def __init__(self) -> None:
+        super().__init__(BoardingPointTranslation)
+
+    def get_by_boarding_point_and_language(
+        self,
+        session: Session,
+        *,
+        boarding_point_id: int,
+        language_code: str,
+    ) -> BoardingPointTranslation | None:
+        stmt = select(BoardingPointTranslation).where(
+            BoardingPointTranslation.boarding_point_id == boarding_point_id,
+            BoardingPointTranslation.language_code == language_code,
+        )
+        return session.scalar(stmt)
+
+    def update_fields_for_boarding_point_language(
+        self,
+        session: Session,
+        *,
+        boarding_point_id: int,
+        language_code: str,
+        fields: Mapping[str, Any],
+    ) -> BoardingPointTranslation | None:
+        row = self.get_by_boarding_point_and_language(
+            session,
+            boarding_point_id=boarding_point_id,
+            language_code=language_code,
+        )
+        if row is None:
+            return None
+        for key, value in fields.items():
+            setattr(row, key, value)
+        session.add(row)
+        session.flush()
+        session.refresh(row)
+        return row
 
 
 class BoardingPointRepository(SQLAlchemyRepository[BoardingPoint]):

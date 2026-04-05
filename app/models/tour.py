@@ -92,3 +92,27 @@ class BoardingPoint(Base):
 
     tour: Mapped["Tour"] = relationship(back_populates="boarding_points")
     orders: Mapped[list["Order"]] = relationship(back_populates="boarding_point")
+    translations: Mapped[list["BoardingPointTranslation"]] = relationship(
+        back_populates="boarding_point",
+        cascade="all, delete-orphan",
+    )
+
+
+class BoardingPointTranslation(Base):
+    __tablename__ = "boarding_point_translations"
+    __table_args__ = (
+        UniqueConstraint("boarding_point_id", "language_code", name="uq_boarding_point_translation_language"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    boarding_point_id: Mapped[int] = mapped_column(
+        ForeignKey("boarding_points.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    language_code: Mapped[str] = mapped_column(String(16), nullable=False)
+    city: Mapped[str] = mapped_column(String(255), nullable=False)
+    address: Mapped[str] = mapped_column(String(255), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    boarding_point: Mapped["BoardingPoint"] = relationship(back_populates="translations")
