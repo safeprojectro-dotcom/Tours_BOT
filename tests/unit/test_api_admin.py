@@ -514,6 +514,94 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(err["detail"]["code"], "handoff_mark_in_review_not_allowed")
         self.assertEqual(err["detail"]["current_status"], "closed")
 
+    def test_handoff_close_requires_auth(self) -> None:
+        r = self.client.post("/admin/handoffs/1/close")
+        self.assertEqual(r.status_code, 401)
+
+    def test_handoff_close_success_in_review_to_closed(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-HO-CLOSE-IR",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 9, 4, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(user, tour, point)
+        h = Handoff(
+            user_id=user.id,
+            order_id=order.id,
+            reason="Close me",
+            priority="normal",
+            status="in_review",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(f"/admin/handoffs/{h.id}/close", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["id"], h.id)
+        self.assertEqual(body["status"], "closed")
+        self.assertFalse(body["is_open"])
+        self.assertIn("needs_attention", body)
+        self.assertIn("age_bucket", body)
+
+    def test_handoff_close_idempotent_closed(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-HO-CLOSE-IDEM",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 9, 5, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(user, tour, point)
+        h = Handoff(
+            user_id=user.id,
+            order_id=order.id,
+            reason="Already closed",
+            priority="normal",
+            status="closed",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(f"/admin/handoffs/{h.id}/close", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["status"], "closed")
+
+    def test_handoff_close_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.post("/admin/handoffs/999999/close", headers=headers)
+        self.assertEqual(r.status_code, 404)
+
+    def test_handoff_close_rejects_open(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-HO-CLOSE-OP",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 9, 6, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(user, tour, point)
+        h = Handoff(
+            user_id=user.id,
+            order_id=order.id,
+            reason="Still open",
+            priority="normal",
+            status="open",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(f"/admin/handoffs/{h.id}/close", headers=headers)
+        self.assertEqual(r.status_code, 400)
+        err = r.json()
+        self.assertEqual(err["detail"]["code"], "handoff_close_not_allowed")
+        self.assertEqual(err["detail"]["current_status"], "open")
+
     def test_tour_detail_not_found(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}
         r = self.client.get("/admin/tours/999999", headers=headers)

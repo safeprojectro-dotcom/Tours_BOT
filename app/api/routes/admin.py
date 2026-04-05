@@ -25,6 +25,7 @@ from app.schemas.admin import (
     AdminTourTranslationUpsert,
 )
 from app.services.admin_handoff_write import (
+    AdminHandoffCloseStateError,
     AdminHandoffMarkInReviewStateError,
     AdminHandoffNotFoundError,
     AdminHandoffWriteService,
@@ -392,6 +393,30 @@ def post_admin_handoff_mark_in_review(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "code": "handoff_mark_in_review_not_allowed",
+                "current_status": exc.current_status,
+            },
+        ) from None
+    db.commit()
+    detail = AdminReadService().get_handoff_detail(db, handoff_id=handoff_id)
+    if detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Handoff not found.")
+    return detail
+
+
+@router.post("/handoffs/{handoff_id}/close", response_model=AdminHandoffRead)
+def post_admin_handoff_close(
+    handoff_id: int,
+    db: Session = Depends(get_db),
+) -> AdminHandoffRead:
+    try:
+        AdminHandoffWriteService().close_handoff(db, handoff_id=handoff_id)
+    except AdminHandoffNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Handoff not found.") from None
+    except AdminHandoffCloseStateError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "handoff_close_not_allowed",
                 "current_status": exc.current_status,
             },
         ) from None

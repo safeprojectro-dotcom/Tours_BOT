@@ -1,4 +1,4 @@
-"""Narrow admin mutations on handoffs (Phase 6 / Step 19) — no notifications, no order/payment changes."""
+"""Narrow admin mutations on handoffs (Phase 6 / Steps 19–20) — no notifications, no order/payment changes."""
 
 from __future__ import annotations
 
@@ -19,6 +19,13 @@ class AdminHandoffNotFoundError(Exception):
 
 class AdminHandoffMarkInReviewStateError(Exception):
     """mark-in-review not allowed from current status."""
+
+    def __init__(self, *, current_status: str) -> None:
+        self.current_status = current_status
+
+
+class AdminHandoffCloseStateError(Exception):
+    """close not allowed from current status (narrow Step 20: only from in_review)."""
 
     def __init__(self, *, current_status: str) -> None:
         self.current_status = current_status
@@ -45,3 +52,19 @@ class AdminHandoffWriteService:
         if row.status == HANDOFF_STATUS_OPEN:
             return self._handoffs.update(session, instance=row, data={"status": HANDOFF_STATUS_IN_REVIEW})
         raise AdminHandoffMarkInReviewStateError(current_status=row.status)
+
+    def close_handoff(self, session: Session, *, handoff_id: int) -> Handoff:
+        """
+        Step 20 narrow rule: in_review -> closed; already closed -> idempotent (no write).
+        open -> error (use mark-in-review first). Complements Step 19 without a broad state machine.
+        """
+        row = self._handoffs.get(session, handoff_id)
+        if row is None:
+            raise AdminHandoffNotFoundError
+        if row.status == HANDOFF_STATUS_CLOSED:
+            return row
+        if row.status == HANDOFF_STATUS_IN_REVIEW:
+            return self._handoffs.update(session, instance=row, data={"status": HANDOFF_STATUS_CLOSED})
+        if row.status == HANDOFF_STATUS_OPEN:
+            raise AdminHandoffCloseStateError(current_status=row.status)
+        raise AdminHandoffCloseStateError(current_status=row.status)
