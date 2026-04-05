@@ -140,6 +140,46 @@ class AdminBoardingPointUpdate(BaseModel):
         return s if s else None
 
 
+class AdminTourTranslationUpsert(BaseModel):
+    """
+    Create or merge-update one `TourTranslation` row for `language_code` in the path.
+    On **create**, `title` must be included in the JSON body. On **update**, send only fields to change.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = Field(default=None, max_length=255)
+    short_description: str | None = None
+    full_description: str | None = None
+    program_text: str | None = None
+    included_text: str | None = None
+    excluded_text: str | None = None
+
+    @field_validator("title")
+    @classmethod
+    def title_non_blank_if_present(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        if not s:
+            raise ValueError("title must not be empty or whitespace-only when provided")
+        return s
+
+    @field_validator(
+        "short_description",
+        "full_description",
+        "program_text",
+        "included_text",
+        "excluded_text",
+    )
+    @classmethod
+    def optional_long_text(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s if s else None
+
+
 class AdminTourCoverSet(BaseModel):
     """Set a single cover/media reference (URL or storage key) — no upload in this slice."""
 

@@ -5,9 +5,14 @@ from __future__ import annotations
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.tour import BoardingPoint, Tour
 from app.repositories.order import OrderRepository
-from app.repositories.tour import BoardingPointRepository, TourRepository
+from app.repositories.tour import (
+    BoardingPointRepository,
+    TourRepository,
+    TourTranslationRepository,
+)
 from app.schemas.admin import (
     AdminBoardingPointCreate,
     AdminBoardingPointUpdate,
@@ -15,6 +20,7 @@ from app.schemas.admin import (
     AdminTourCoverSet,
     AdminTourCreate,
     AdminTourDetailRead,
+    AdminTourTranslationUpsert,
 )
 from app.services.admin_read import AdminReadService
 
@@ -47,11 +53,13 @@ class AdminTourWriteService:
         *,
         tour_repository: TourRepository | None = None,
         boarding_point_repository: BoardingPointRepository | None = None,
+        tour_translation_repository: TourTranslationRepository | None = None,
         order_repository: OrderRepository | None = None,
         read_service: AdminReadService | None = None,
     ) -> None:
         self._tours = tour_repository or TourRepository()
         self._boarding_points = boarding_point_repository or BoardingPointRepository()
+        self._translations = tour_translation_repository or TourTranslationRepository()
         self._orders = order_repository or OrderRepository()
         self._read = read_service or AdminReadService()
 
@@ -229,3 +237,55 @@ class AdminTourWriteService:
             raise AdminBoardingPointInUseError()
 
         self._boarding_points.delete(session, instance=bp)
+
+    def upsert_tour_translation(
+        self,
+        session: Session,
+        *,
+        tour_id: int,
+        language_code: str,
+        payload: AdminTourTranslationUpsert,
+    ) -> AdminTourDetailRead:
+        """Create or merge-update a single `TourTranslation` for one supported language; returns refreshed admin tour detail."""
+        lc = language_code.strip().lower()
+        allowed = get_settings().telegram_supported_language_codes
+        if lc not in allowed:
+            raise AdminTourCreateValidationError("Unsupported language code.")
+
+        tour = session.get(Tour, tour_id)
+        if tour is None:
+            raise AdminTourNotFoundError()
+
+        updates = payload.model_dump(exclude_unset=True)
+        if not updates:
+            raise AdminTourCreateValidationError("No fields to update.")
+
+        existing = self._translations.get_by_tour_and_language(session, tour_id=tour_id, language_code=lc)
+
+        if existing is None:
+            if "title" not in updates:
+                raise AdminTourCreateValidationError("title is required when creating a tour translation.")
+            data = {
+                "tour_id": tour_id,
+                "language_code": lc,
+                "title": updates["title"],
+                "short_description": updates.get("short_description"),
+                "full_description": updates.get("full_description"),
+                "program_text": updates.get("program_text"),
+                "included_text": updates.get("included_text"),
+                "excluded_text": updates.get("excluded_text"),
+            }
+            self._translations.create(session, data=data)
+        else:
+            if "title" in updates and updates["title"] is None:
+                raise AdminTourCreateValidationError("title cannot be cleared.")
+            self._translations.update_fields_for_tour_language(
+                session,
+                tour_id=tour_id,
+                language_code=lc,
+                fields=updates,
+            )
+
+        detail = self._read.get_tour_detail(session, tour_id=tour_id)
+        assert detail is not None
+        return detail

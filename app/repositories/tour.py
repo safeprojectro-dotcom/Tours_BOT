@@ -131,6 +131,24 @@ class TourTranslationRepository(SQLAlchemyRepository[TourTranslation]):
         )
         return session.scalar(stmt)
 
+    def update_fields_for_tour_language(
+        self,
+        session: Session,
+        *,
+        tour_id: int,
+        language_code: str,
+        fields: Mapping[str, Any],
+    ) -> TourTranslation | None:
+        tr = self.get_by_tour_and_language(session, tour_id=tour_id, language_code=language_code)
+        if tr is None:
+            return None
+        for key, value in fields.items():
+            setattr(tr, key, value)
+        session.add(tr)
+        session.flush()
+        session.refresh(tr)
+        return tr
+
 
 class BoardingPointRepository(SQLAlchemyRepository[BoardingPoint]):
     def __init__(self) -> None:

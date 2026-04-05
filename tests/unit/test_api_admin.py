@@ -710,3 +710,110 @@ class AdminRouteTests(FoundationDBTestCase):
         r = self.client.delete(f"/admin/boarding-points/{bp.id}", headers=headers)
         self.assertEqual(r.status_code, 409)
         self.assertIn("reference", r.json()["detail"].lower())
+
+    def test_put_admin_tour_translation_requires_auth(self) -> None:
+        r = self.client.put(
+            "/admin/tours/1/translations/ro",
+            json={"title": "T"},
+        )
+        self.assertEqual(r.status_code, 401)
+
+    def test_put_admin_tour_translation_create_success(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-TR-CREATE")
+        self.session.commit()
+        r = self.client.put(
+            f"/admin/tours/{tour.id}/translations/ro",
+            headers=headers,
+            json={
+                "title": " Excursie RO ",
+                "short_description": "Scurt",
+                "full_description": "Lung",
+            },
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["id"], tour.id)
+        trs = {t["language_code"]: t["title"] for t in body["translations"]}
+        self.assertEqual(trs.get("ro"), "Excursie RO")
+
+    def test_put_admin_tour_translation_update_success(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-TR-UPD")
+        self.create_translation(tour, language_code="ro", title="Old")
+        self.session.commit()
+        r = self.client.put(
+            f"/admin/tours/{tour.id}/translations/ro",
+            headers=headers,
+            json={"title": "New RO Title"},
+        )
+        self.assertEqual(r.status_code, 200)
+        trs = {t["language_code"]: t["title"] for t in r.json()["translations"]}
+        self.assertEqual(trs.get("ro"), "New RO Title")
+
+    def test_put_admin_tour_translation_path_language_normalized(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-TR-NORM")
+        self.session.commit()
+        r = self.client.put(
+            f"/admin/tours/{tour.id}/translations/DE",
+            headers=headers,
+            json={"title": "DE Titel"},
+        )
+        self.assertEqual(r.status_code, 200)
+        codes = {t["language_code"] for t in r.json()["translations"]}
+        self.assertIn("de", codes)
+
+    def test_put_admin_tour_translation_not_found_tour(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.put(
+            "/admin/tours/999999/translations/ro",
+            headers=headers,
+            json={"title": "X"},
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_put_admin_tour_translation_unsupported_language(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-TR-BAD-LANG")
+        self.session.commit()
+        r = self.client.put(
+            f"/admin/tours/{tour.id}/translations/xx",
+            headers=headers,
+            json={"title": "Nope"},
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("language", r.json()["detail"].lower())
+
+    def test_put_admin_tour_translation_empty_body_400(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-TR-EMPTY")
+        self.session.commit()
+        r = self.client.put(
+            f"/admin/tours/{tour.id}/translations/ro",
+            headers=headers,
+            json={},
+        )
+        self.assertEqual(r.status_code, 400)
+
+    def test_put_admin_tour_translation_create_without_title_400(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-TR-NO-TITLE")
+        self.session.commit()
+        r = self.client.put(
+            f"/admin/tours/{tour.id}/translations/ro",
+            headers=headers,
+            json={"short_description": "Only short"},
+        )
+        self.assertEqual(r.status_code, 400)
+
+    def test_put_admin_tour_translation_blank_title_422(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-TR-BLANK-TITLE")
+        self.session.commit()
+        r = self.client.put(
+            f"/admin/tours/{tour.id}/translations/ro",
+            headers=headers,
+            json={"title": "   "},
+        )
+        self.assertEqual(r.status_code, 422)
