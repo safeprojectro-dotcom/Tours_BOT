@@ -99,6 +99,7 @@ class AdminReadService:
             sales_deadline=tour.sales_deadline,
             status=tour.status,
             guaranteed_flag=tour.guaranteed_flag,
+            cover_media_reference=tour.cover_media_reference,
             created_at=tour.created_at,
             updated_at=tour.updated_at,
             translations=translations,

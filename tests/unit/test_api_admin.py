@@ -356,6 +356,7 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(body["orders_count"], 0)
         self.assertEqual(len(body["translations"]), 0)
         self.assertEqual(len(body["boarding_points"]), 0)
+        self.assertIsNone(body.get("cover_media_reference"))
 
     def test_post_admin_tour_duplicate_code(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}
@@ -382,3 +383,61 @@ class AdminRouteTests(FoundationDBTestCase):
         r = self.client.post("/admin/tours", headers=headers, json=p)
         self.assertEqual(r.status_code, 400)
         self.assertIn("sales_deadline", r.json()["detail"].lower())
+
+    def test_put_admin_tour_cover_requires_auth(self) -> None:
+        r = self.client.put(
+            "/admin/tours/1/cover",
+            json={"cover_media_reference": "https://cdn.example/cover.jpg"},
+        )
+        self.assertEqual(r.status_code, 401)
+
+    def test_put_admin_tour_cover_success_and_get_detail(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        cr = self.client.post(
+            "/admin/tours",
+            headers=headers,
+            json=self._admin_tour_create_payload(code="ADM-COVER-OK"),
+        )
+        self.assertEqual(cr.status_code, 201)
+        tour_id = cr.json()["id"]
+        ref1 = "https://storage.example/bucket/tours/1/cover.webp"
+        r1 = self.client.put(
+            f"/admin/tours/{tour_id}/cover",
+            headers=headers,
+            json={"cover_media_reference": ref1},
+        )
+        self.assertEqual(r1.status_code, 200)
+        self.assertEqual(r1.json()["cover_media_reference"], ref1)
+
+        ref2 = "s3://my-bucket/keys/tour-cover-2.png"
+        r2 = self.client.put(
+            f"/admin/tours/{tour_id}/cover",
+            headers=headers,
+            json={"cover_media_reference": f"  {ref2}  "},
+        )
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(r2.json()["cover_media_reference"], ref2)
+
+        g = self.client.get(f"/admin/tours/{tour_id}", headers=headers)
+        self.assertEqual(g.status_code, 200)
+        self.assertEqual(g.json()["cover_media_reference"], ref2)
+
+    def test_put_admin_tour_cover_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.put(
+            "/admin/tours/999999/cover",
+            headers=headers,
+            json={"cover_media_reference": "https://example.com/x.jpg"},
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_put_admin_tour_cover_rejects_blank(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-COVER-BLANK")
+        self.session.commit()
+        r = self.client.put(
+            f"/admin/tours/{tour.id}/cover",
+            headers=headers,
+            json={"cover_media_reference": "   "},
+        )
+        self.assertEqual(r.status_code, 422)

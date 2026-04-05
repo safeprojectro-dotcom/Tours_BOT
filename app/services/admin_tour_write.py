@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.repositories.tour import TourRepository
-from app.schemas.admin import AdminTourCreate, AdminTourDetailRead
+from app.schemas.admin import AdminTourCoverSet, AdminTourCreate, AdminTourDetailRead
 from app.services.admin_read import AdminReadService
 
 
@@ -18,6 +18,10 @@ class AdminTourCreateValidationError(Exception):
 
 class AdminTourDuplicateCodeError(Exception):
     """Another tour already uses this code (or unique constraint race)."""
+
+
+class AdminTourNotFoundError(Exception):
+    """No tour row for the given id."""
 
 
 class AdminTourWriteService:
@@ -67,5 +71,25 @@ class AdminTourWriteService:
             raise AdminTourDuplicateCodeError() from exc
 
         detail = self._read.get_tour_detail(session, tour_id=tour.id)
+        assert detail is not None
+        return detail
+
+    def set_tour_cover(
+        self,
+        session: Session,
+        *,
+        tour_id: int,
+        payload: AdminTourCoverSet,
+    ) -> AdminTourDetailRead:
+        ref = payload.cover_media_reference
+        updated = self._tours.set_cover_media_reference(
+            session,
+            tour_id=tour_id,
+            cover_media_reference=ref,
+        )
+        if updated is None:
+            raise AdminTourNotFoundError()
+
+        detail = self._read.get_tour_detail(session, tour_id=tour_id)
         assert detail is not None
         return detail

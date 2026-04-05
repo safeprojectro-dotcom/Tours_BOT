@@ -12,6 +12,7 @@ from app.schemas.admin import (
     AdminOrderDetailRead,
     AdminOrderListRead,
     AdminOverviewRead,
+    AdminTourCoverSet,
     AdminTourCreate,
     AdminTourDetailRead,
     AdminTourListRead,
@@ -21,6 +22,7 @@ from app.services.admin_read import AdminReadService
 from app.services.admin_tour_write import (
     AdminTourCreateValidationError,
     AdminTourDuplicateCodeError,
+    AdminTourNotFoundError,
     AdminTourWriteService,
 )
 
@@ -52,6 +54,20 @@ def create_admin_tour(
         ) from None
     except AdminTourCreateValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return detail
+
+
+@router.put("/tours/{tour_id}/cover", response_model=AdminTourDetailRead)
+def put_admin_tour_cover(
+    tour_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminTourCoverSet = Body(...),
+) -> AdminTourDetailRead:
+    try:
+        detail = AdminTourWriteService().set_tour_cover(db, tour_id=tour_id, payload=payload)
+    except AdminTourNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour not found.") from None
     db.commit()
     return detail
 

@@ -20,6 +20,23 @@ class TourRepository(SQLAlchemyRepository[Tour]):
         stmt = select(Tour).where(Tour.id == tour_id).with_for_update()
         return session.scalar(stmt)
 
+    def set_cover_media_reference(
+        self,
+        session: Session,
+        *,
+        tour_id: int,
+        cover_media_reference: str,
+    ) -> Tour | None:
+        """Persist a single cover/media reference; returns None if tour id missing."""
+        tour = session.get(Tour, tour_id)
+        if tour is None:
+            return None
+        tour.cover_media_reference = cover_media_reference
+        session.add(tour)
+        session.flush()
+        session.refresh(tour)
+        return tour
+
     def get_by_id_for_admin_detail(self, session: Session, *, tour_id: int) -> Tour | None:
         """Single tour for admin read-only detail; eager-loads translations and boarding points."""
         stmt = (

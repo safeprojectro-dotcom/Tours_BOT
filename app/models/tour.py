@@ -40,6 +40,7 @@ class Tour(TimestampMixin, Base):
         default=TourStatus.DRAFT,
     )
     guaranteed_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    cover_media_reference: Mapped[str | None] = mapped_column(String(1024), nullable=True)
 
     translations: Mapped[list["TourTranslation"]] = relationship(
         back_populates="tour",

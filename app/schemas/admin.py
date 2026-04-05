@@ -54,6 +54,20 @@ class AdminTourCreate(BaseModel):
         return s
 
 
+class AdminTourCoverSet(BaseModel):
+    """Set a single cover/media reference (URL or storage key) — no upload in this slice."""
+
+    cover_media_reference: str = Field(min_length=1, max_length=1024)
+
+    @field_validator("cover_media_reference")
+    @classmethod
+    def strip_non_blank(cls, v: str) -> str:
+        s = v.strip()
+        if not s:
+            raise ValueError("cover_media_reference must not be empty or whitespace-only")
+        return s
+
+
 class AdminTranslationSummaryItem(BaseModel):
     """Read-only snippet per language (no full long-form content in admin detail MVP)."""
 
@@ -121,6 +135,10 @@ class AdminTourDetailRead(BaseModel):
     sales_deadline: datetime | None
     status: TourStatus
     guaranteed_flag: bool
+    cover_media_reference: str | None = Field(
+        default=None,
+        description="Single cover image/media reference (URL or storage key); not an upload endpoint.",
+    )
     created_at: datetime
     updated_at: datetime
     translations: list[AdminTranslationSummaryItem] = Field(

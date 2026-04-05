@@ -61,15 +61,16 @@ open (read-side **partially mitigated** for Phase 6 Step 1 list API; **section 1
 ## 1b. Admin tour core create vs cover / media attachment
 
 ### Current decision
-- **Phase 6 / Step 5** adds **`POST /admin/tours`** for **core** `Tour` fields only — **no** cover image, upload pipeline, or media asset management in that step.
-- **`docs/TECH_SPEC_TOURS_BOT.md`** expects operators to attach photos/cover for tours; that capability remains **intentionally postponed** to the next narrow admin slice (see `docs/CHAT_HANDOFF.md` **Next Safe Step**).
+- **Phase 6 / Step 5** adds **`POST /admin/tours`** for **core** `Tour` fields only — **no** binary upload in that step.
+- **Phase 6 / Step 6** adds **`PUT /admin/tours/{tour_id}/cover`** to persist **one** optional **`cover_media_reference`** string (URL or storage key) per tour — **not** a file upload endpoint and **not** a media library.
+- **Real** upload subsystem, CDN/object-store integration, and **customer-facing** cover delivery via catalog/Mini App remain **intentionally postponed** until explicitly scheduled (see `docs/CHAT_HANDOFF.md` **Not Implemented Yet** / forward steps).
 
 ### Revisit trigger
-- before admin **tour management** is treated as **MVP-complete** for operators
-- when implementing the **cover/media** attachment slice
+- before admin **tour management** or **end-to-end media handling** is treated as **MVP-complete**
+- before production reliance on **binary upload** or **public** cover URLs without a documented storage/delivery strategy
 
 ### Status
-open (core create exists; media attachment not started)
+open (reference string can be set; **upload/delivery** not done)
 
 ---
 
