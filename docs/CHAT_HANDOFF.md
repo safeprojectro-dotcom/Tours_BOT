@@ -4,28 +4,28 @@
 Tours_BOT
 
 ## Current Status
-The project is ready to continue from the **latest approved checkpoint**: **Phase 6 / Step 13 completed** in code — **`PUT /admin/boarding-points/{boarding_point_id}/translations/{language_code}`** for **create or merge-update** of **one** **`BoardingPointTranslation`** per request (`AdminBoardingPointTranslationUpsert`); supported languages from **`telegram_supported_language_codes`**; response **`AdminTourDetailRead`**; Alembic revision **`20260405_05`** adds **`boarding_point_translations`**. Public booking/payment/waitlist/handoff flows and **public catalog / Mini App** were **not** changed.
+The project is ready to continue from the **latest approved checkpoint**: **Phase 6 / Step 14 completed** in code — **`DELETE /admin/boarding-points/{boarding_point_id}/translations/{language_code}`** removes **one** **`BoardingPointTranslation`** row (**204 No Content**); language allowlist and normalization aligned with **PUT** boarding translations; **404** if boarding point or translation row is missing. Public booking/payment/waitlist/handoff flows and **public catalog / Mini App** were **not** changed.
 
-**Phase 6 / Steps 1–13** (already completed): **`ADMIN_API_TOKEN`**; admin reads/filters/details; **`POST /admin/tours`**; **`PUT /admin/tours/{tour_id}/cover`**; **`PATCH /admin/tours/{tour_id}`**; **`POST` / `PATCH` / `DELETE`** boarding points; **`PUT` / `DELETE`** **`/admin/tours/{tour_id}/translations/{language_code}`**; **`PUT /admin/boarding-points/{boarding_point_id}/translations/{language_code}`** (single-language **boarding** translation upsert).
+**Phase 6 / Steps 1–14** (already completed): **`ADMIN_API_TOKEN`**; admin reads/filters/details; **`POST /admin/tours`**; **`PUT /admin/tours/{tour_id}/cover`**; **`PATCH /admin/tours/{tour_id}`**; **`POST` / `PATCH` / `DELETE`** boarding points; **`PUT` / `DELETE`** **`/admin/tours/{tour_id}/translations/{language_code}`**; **`PUT` / `DELETE`** **`/admin/boarding-points/{boarding_point_id}/translations/{language_code}`**.
 
 Earlier: **Phase 5 (Mini App MVP) accepted** for MVP/staging; **Phase 5 / Step 20** documentation consolidation / acceptance (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`). No open Phase 5 MVP blockers for the agreed scope.
 
-**Next work:** **Phase 6 / Step 14** — first **narrow** **boarding point translation delete-only** slice (see **Next Safe Step**).
+**Next work:** **Phase 6 / Step 15** — **narrow tour archive / unarchive status** slice — see **Next Safe Step**.
 
 ### Operational note (production — Step 6 schema recovery)
 After Step 6 backend shipped to Railway **before** production Postgres had applied Alembic revision **`20260405_04`**, the missing column **`tours.cover_media_reference`** caused **`ProgrammingError` / `UndefinedColumn`** and **500**s on routes that load tours (e.g. **`/mini-app/catalog`**, **`/mini-app/bookings`**). Root cause was **schema mismatch**, not Mini App UI logic. **Recovery completed:** migrations applied against the Railway DB (using the **public** Postgres URL and a local driver URL such as **`postgresql+psycopg://...`** where internal hostnames are not resolvable), backend **redeployed**, **`/health`**, catalog, and bookings smoke-checked. **Going forward:** any schema-changing step must include **migration apply → redeploy → smoke** for affected endpoints. Details: **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` section 17**.
 
 ## Current Phase
 
-**Current phase (forward work):** **Phase 6 — Admin Panel MVP** — **Phase 6 / Steps 1–13 completed.**
+**Current phase (forward work):** **Phase 6 — Admin Panel MVP** — **Phase 6 / Steps 1–14 completed.**
 
-**Latest approved checkpoint:** **Phase 6 / Step 13** — admin **tour / boarding / translation** write surface now includes: **create core tour** (**Step 5**), **set/replace one `cover_media_reference`** (**Step 6**), **patch core tour fields** (**Step 7**), **create / patch / delete one boarding point** (**Steps 8–10**), **upsert / delete tour translations by language** (**Steps 11–12**), **upsert one boarding point translation by language** (**Step 13**, migration **`20260405_05`**). Still **no** **`code`** change via PATCH, **no** cover via PATCH, **no** **boarding point translation delete**, **no** bulk translation ops, **no** **`tour_id` reassignment** for boarding points, **no** publication workflow, **no** full route/itinerary platform, **no** public catalog/Mini App churn. Earlier steps still provide **overview**, **tours/orders lists** (optional filters), **tour + order detail**. Order rows still use **`lifecycle_kind` / `lifecycle_summary`** where applicable; raw order semantics remain as in `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` (see **section 1a**).
+**Latest approved checkpoint:** **Phase 6 / Step 14** — admin **tour / boarding / translation** surface now includes: **create core tour**; **set/replace one `cover_media_reference`**; **patch core tour fields** (not `code`/cover); **create / update / delete one boarding point**; **upsert / delete one tour translation** per language; **upsert / delete one boarding point translation** per language (**Step 14:** **`DELETE /admin/boarding-points/{boarding_point_id}/translations/{language_code}`**, **204**). **Still not implemented:** **bulk** translation management, **publication** workflow, **full** admin SPA, **broader** admin order/payment/handoff mutations, **public** catalog / Mini App **changes driven by this admin track**. Still **no** **`tour_id` reassignment** for boarding points, **no** full route/itinerary editor. Earlier steps still provide **overview**, **tours/orders lists** (optional filters), **tour + order detail**. Order rows still use **`lifecycle_kind` / `lifecycle_summary`** where applicable; raw order semantics remain as in `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` (see **section 1a**).
 
-**Earlier checkpoints:** Phase 6 / Steps 1–7 (foundation through core tour patch); Phase 6 / Steps 8–10 (boarding create / patch / delete); Phase 6 / Steps 11–12 (tour translation upsert/delete); Phase 6 / Step 13 (boarding point translation upsert); Phase 5 accepted + Step 20 docs (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
+**Earlier checkpoints:** Phase 6 / Steps 1–7 (foundation through core tour patch); Phase 6 / Steps 8–10 (boarding create / patch / delete); Phase 6 / Steps 11–12 (tour translation upsert/delete); Phase 6 / Steps 13–14 (boarding point translation upsert/delete); Phase 5 accepted + Step 20 docs (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
 
 **Phase 5 (closed for MVP):** Execution checkpoints **Steps 4–19** are summarized in `docs/PHASE_5_ACCEPTANCE_SUMMARY.md` and per-step notes under `docs/PHASE_5_STEP_*_NOTES.md`; **Step 20** was documentation/consolidation only (no intended production-code churn for acceptance).
 
-**Next safe direction:** **Phase 6 / Step 14** — **narrow boarding point translation delete-only** slice (**backend-first**) — see **Next Safe Step** below.
+**Next safe direction:** **Phase 6 / Step 15** — **narrow tour archive / unarchive** — see **Next Safe Step** below.
 
 **Optional follow-ups** (not Phase 5 blockers; prioritize with product): Telegram Web App init-data validation for Mini App APIs, real payment provider (PSP), broader handoff/waitlist customer notifications.
 
@@ -605,6 +605,14 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
   - **Scope respected:** public flows unchanged
   - **Prompt archive:** `docs/CURSOR_PROMPT_PHASE_6_STEP_13.md` (historical)
 
+- Phase 6 / Step 14 completed
+  - **Route:** **`DELETE /admin/boarding-points/{boarding_point_id}/translations/{language_code}`** — **204 No Content** when deleted
+  - **Write service:** `AdminTourWriteService.delete_boarding_point_translation`; **Repository:** `BoardingPointTranslationRepository.delete_for_boarding_point_language`; language allowlist via **`get_settings().telegram_supported_language_codes`**
+  - **Explicitly not in this step:** bulk ops, publication workflow, public catalog/Mini App changes
+  - **Tests:** `tests/unit/test_api_admin.py` (auth, success removes one language only, boarding point 404, translation 404, unsupported language)
+  - **Scope respected:** public flows unchanged
+  - **Prompt archive:** `docs/CURSOR_PROMPT_PHASE_6_STEP_14.md` (historical)
+
 ---
 
 ## Verified
@@ -683,7 +691,7 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
 
 ### Ready
 - **bot layer** — Telegram private chat; thin handlers; service-driven
-- **api layer** — FastAPI; public routes + Mini App routes + payments webhooks + **internal ops** JSON endpoints + **admin API** (`/admin/*`, `ADMIN_API_TOKEN`: overview, tours/orders **lists** with **optional read-only filters**, **tour + order detail** incl. **`cover_media_reference`**, **`POST /admin/tours`** create **core** tours, **`PUT /admin/tours/{tour_id}/cover`** for **one** media reference string, **`PATCH /admin/tours/{tour_id}`** for **core** field updates only, **`POST` / `PATCH` / `DELETE`** boarding points, **`PUT` / `DELETE`** **`/admin/tours/{tour_id}/translations/{language_code}`** for **tour** translations, **`PUT /admin/boarding-points/{boarding_point_id}/translations/{language_code}`** single-language **boarding** translation upsert)
+- **api layer** — FastAPI; public routes + Mini App routes + payments webhooks + **internal ops** JSON endpoints + **admin API** (`/admin/*`, `ADMIN_API_TOKEN`: overview, tours/orders **lists** with **optional read-only filters**, **tour + order detail** incl. **`cover_media_reference`**, **`POST /admin/tours`** create **core** tours, **`PUT /admin/tours/{tour_id}/cover`** for **one** media reference string, **`PATCH /admin/tours/{tour_id}`** for **core** field updates only, **`POST` / `PATCH` / `DELETE`** boarding points, **`PUT` / `DELETE`** **`/admin/tours/{tour_id}/translations/{language_code}`** for **tour** translations, **`PUT` / `DELETE`** **`/admin/boarding-points/{boarding_point_id}/translations/{language_code}`** for **boarding** translations)
 - **services layer** — business rules and orchestration
 - **repositories layer** — persistence-oriented data access
 - **mini_app** — Flet Mini App UI (separate deploy surface in staging); **MVP accepted** for agreed scope (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`); **no business logic in the frontend** — UI calls APIs only
@@ -697,29 +705,28 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
 - **Mini App / any web UI**: presentation only — no duplicated booking/payment rules in the client
 
 ### Not Implemented Yet
-- **Phase 6 / Step 14 (next):** narrow **boarding point translation delete-only** (single language per request) — **no** bulk — see **Next Safe Step**
-- **Phase 6 (later):** translation **bulk** import/export, real **media upload** / public cover **delivery**, tour **delete/archive**, publication workflow — schedule explicitly — per plan
-- **Phase 6+:** admin payment operations, richer content workflows, role-based admin UX as per plan
+- **Phase 6 / Step 15 (next):** **narrow tour archive / unarchive** — see **Next Safe Step** (not implemented in this documentation pass)
+- **Later (Phase 6+, schedule explicitly):** translation **bulk** tooling, **publication** workflow, real **media upload** / customer cover **delivery**, tour **hard-delete**, richer admin UX — per **`docs/IMPLEMENTATION_PLAN.md`**
 - **Phase 7–9:** group assistant, full handoff lifecycle at scale, content assistant, analytics/readiness — per `docs/IMPLEMENTATION_PLAN.md`
 
 ## Next Safe Step
 
-**Phase 6 / Step 14 — first narrow boarding point translation delete-only slice**.
+**Phase 6 / Step 15 — narrow tour archive / unarchive status slice**.
 
 ### Goal
-**Upsert** for **one boarding language** exists (**Step 13**). The **smallest** next increment is **delete** for a **single** boarding point translation row (exact route to finalize in implementation — e.g. **`DELETE /admin/boarding-points/{boarding_point_id}/translations/{language_code}`**). **`ADMIN_API_TOKEN`**-gated; **no** public catalog/Mini App contract changes.
+Operators need a **controlled** way to take a tour **out of active sale** (archive) and **restore** it when appropriate (unarchive), without building a full admin SPA or publication pipeline. Finalize in implementation: mapping to existing **`TourStatus`** and/or a **minimal** schema addition with migration, **`ADMIN_API_TOKEN`**-gated **one** or **two** narrow endpoints (e.g. `PATCH` with restricted fields or dedicated `POST` actions). **Public** booking and Mini App behavior must follow **explicit** rules defined in that step (e.g. archived tours not offered for new bookings).
 
 ### Safe scope for this step
-- **one** delete mutation for **boarding point translations** only; **no** bulk delete, **no** order/payment mutations
+- **One** narrow **status** mutation family for **tours** only; **no** bulk translation ops, **no** publication automation, **no** order/payment reconciliation changes
 
 ### Must not expand yet
-- **bulk** translation management, publication pipeline, **full** admin SPA, gallery/upload platform
+- **Bulk** translation management, **publication** workflow, **full** admin SPA, binary **media** upload, **broader** admin order/payment mutations
 
-**Completed step references:** `docs/CURSOR_PROMPT_PHASE_6_STEP_1.md` … `docs/CURSOR_PROMPT_PHASE_6_STEP_13.md` (historical).  
+**Completed step references:** `docs/CURSOR_PROMPT_PHASE_6_STEP_1.md` … `docs/CURSOR_PROMPT_PHASE_6_STEP_14.md` (historical).  
 **Plan:** `docs/IMPLEMENTATION_PLAN.md` (Phase 6)
 
 ## Recommended Next Prompt
-Implement **Phase 6 / Step 14** using `docs/CHAT_HANDOFF.md` (**Next Safe Step**), `docs/TECH_SPEC_TOURS_BOT.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, and `docs/TESTING_STRATEGY.md`. Add a frozen `docs/CURSOR_PROMPT_PHASE_6_STEP_14.md` if you want a durable prompt artifact — **do not** re-use Phase 5 “next step” prompts for new work.
+Implement **Phase 6 / Step 15** (tour archive / unarchive) using `docs/CHAT_HANDOFF.md` (**Next Safe Step**), `docs/TECH_SPEC_TOURS_BOT.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, and `docs/TESTING_STRATEGY.md`. Add a frozen `docs/CURSOR_PROMPT_PHASE_6_STEP_15.md` when starting implementation — **do not** re-use Phase 5 “next step” prompts for new work.
 
 ---
 

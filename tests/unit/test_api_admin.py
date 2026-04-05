@@ -810,6 +810,75 @@ class AdminRouteTests(FoundationDBTestCase):
         )
         self.assertEqual(r.status_code, 400)
 
+    def test_delete_admin_boarding_point_translation_requires_auth(self) -> None:
+        r = self.client.delete("/admin/boarding-points/1/translations/ro")
+        self.assertEqual(r.status_code, 401)
+
+    def test_delete_admin_boarding_point_translation_success_removes_only_one(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-BPTR-DEL-OK")
+        bp = self.create_boarding_point(tour)
+        self.session.commit()
+        self.client.put(
+            f"/admin/boarding-points/{bp.id}/translations/ro",
+            headers=headers,
+            json={"city": "Ro", "address": "A1"},
+        )
+        self.client.put(
+            f"/admin/boarding-points/{bp.id}/translations/de",
+            headers=headers,
+            json={"city": "De", "address": "A2"},
+        )
+        self.session.commit()
+        r = self.client.delete(
+            f"/admin/boarding-points/{bp.id}/translations/ro",
+            headers=headers,
+        )
+        self.assertEqual(r.status_code, 204)
+        self.assertEqual(r.content, b"")
+
+        g = self.client.get(f"/admin/tours/{tour.id}", headers=headers)
+        self.assertEqual(g.status_code, 200)
+        by_id = {p["id"]: p for p in g.json()["boarding_points"]}
+        codes = {t["language_code"] for t in by_id[bp.id]["translations"]}
+        self.assertEqual(codes, {"de"})
+
+    def test_delete_admin_boarding_point_translation_not_found_boarding_point(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.delete("/admin/boarding-points/999999/translations/ro", headers=headers)
+        self.assertEqual(r.status_code, 404)
+        self.assertIn("boarding", r.json()["detail"].lower())
+
+    def test_delete_admin_boarding_point_translation_not_found_translation(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-BPTR-DEL-NO-ROW")
+        bp = self.create_boarding_point(tour)
+        self.session.commit()
+        r = self.client.delete(
+            f"/admin/boarding-points/{bp.id}/translations/ro",
+            headers=headers,
+        )
+        self.assertEqual(r.status_code, 404)
+        self.assertIn("translation", r.json()["detail"].lower())
+
+    def test_delete_admin_boarding_point_translation_unsupported_language_400(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-BPTR-DEL-BAD-LANG")
+        bp = self.create_boarding_point(tour)
+        self.session.commit()
+        self.client.put(
+            f"/admin/boarding-points/{bp.id}/translations/ro",
+            headers=headers,
+            json={"city": "C", "address": "A"},
+        )
+        self.session.commit()
+        r = self.client.delete(
+            f"/admin/boarding-points/{bp.id}/translations/xx",
+            headers=headers,
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("language", r.json()["detail"].lower())
+
     def test_delete_admin_boarding_point_requires_auth(self) -> None:
         r = self.client.delete("/admin/boarding-points/1")
         self.assertEqual(r.status_code, 401)

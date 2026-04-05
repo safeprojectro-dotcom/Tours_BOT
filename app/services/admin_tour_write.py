@@ -53,6 +53,10 @@ class AdminTourTranslationNotFoundError(Exception):
     """No tour translation row for this tour and language."""
 
 
+class AdminBoardingPointTranslationNotFoundError(Exception):
+    """No boarding point translation row for this boarding point and language."""
+
+
 class AdminTourWriteService:
     def __init__(
         self,
@@ -373,3 +377,27 @@ class AdminTourWriteService:
         detail = self._read.get_tour_detail(session, tour_id=bp.tour_id)
         assert detail is not None
         return detail
+
+    def delete_boarding_point_translation(
+        self,
+        session: Session,
+        *,
+        boarding_point_id: int,
+        language_code: str,
+    ) -> None:
+        """Delete one `BoardingPointTranslation` row for a supported language; raises if point or row missing."""
+        lc = language_code.strip().lower()
+        allowed = get_settings().telegram_supported_language_codes
+        if lc not in allowed:
+            raise AdminTourCreateValidationError("Unsupported language code.")
+
+        if session.get(BoardingPoint, boarding_point_id) is None:
+            raise AdminBoardingPointNotFoundError()
+
+        deleted = self._bp_translations.delete_for_boarding_point_language(
+            session,
+            boarding_point_id=boarding_point_id,
+            language_code=lc,
+        )
+        if not deleted:
+            raise AdminBoardingPointTranslationNotFoundError()

@@ -27,6 +27,7 @@ from app.services.admin_read import AdminReadService
 from app.services.admin_tour_write import (
     AdminBoardingPointInUseError,
     AdminBoardingPointNotFoundError,
+    AdminBoardingPointTranslationNotFoundError,
     AdminTourCreateValidationError,
     AdminTourDuplicateCodeError,
     AdminTourNotFoundError,
@@ -205,6 +206,36 @@ def put_admin_boarding_point_translation(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     db.commit()
     return detail
+
+
+@router.delete(
+    "/boarding-points/{boarding_point_id}/translations/{language_code}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_admin_boarding_point_translation(
+    boarding_point_id: int,
+    language_code: str,
+    db: Session = Depends(get_db),
+) -> None:
+    try:
+        AdminTourWriteService().delete_boarding_point_translation(
+            db,
+            boarding_point_id=boarding_point_id,
+            language_code=language_code,
+        )
+    except AdminBoardingPointNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Boarding point not found.",
+        ) from None
+    except AdminBoardingPointTranslationNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Translation not found.",
+        ) from None
+    except AdminTourCreateValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
 
 
 @router.delete(

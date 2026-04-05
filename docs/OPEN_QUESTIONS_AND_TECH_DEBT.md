@@ -78,29 +78,31 @@ open (reference string can be set; **upload/delivery** not done)
 
 ### Current decision
 - **Phase 6 / Steps 8–10** add **`POST`**, **`PATCH`**, and **`DELETE /admin/boarding-points/{boarding_point_id}`** for core boarding fields; delete is blocked when **orders** reference the point (see implementation).
-- **Per-point translations**, **full route/itinerary** editing, and **tour-level** delete/archive remain **intentionally postponed** until scheduled (see `docs/CHAT_HANDOFF.md` **Not Implemented Yet**).
+- **Phase 6 / Steps 13–14** add **per-language** **`PUT` / `DELETE`** under **`/admin/boarding-points/{boarding_point_id}/translations/{language_code}`** (single row per language; allowlist matches **`telegram_supported_language_codes`**).
+- **Full route/itinerary** editing, reorder, and **tour-level** archive/hard-delete remain **intentionally postponed** until scheduled (see `docs/CHAT_HANDOFF.md` **Next Safe Step**).
 
 ### Revisit trigger
-- before admin treats **boarding management** as **complete** without reorder/translation workflows
+- before admin treats **boarding management** as **complete** without reorder/itinerary workflows
 - before **customer-facing** catalog or booking flows need structural changes tied to boarding CRUD beyond current slices
 
 ### Status
-open (CRUD **without** boarding translations / itinerary editor; **delete** exists for unused points)
+open (core CRUD + **narrow** per-language translations; **itinerary/reorder** not done)
 
 ---
 
-## 1d. Admin tour translations — upsert vs delete/bulk/boarding parity
+## 1d. Admin translations — per-language upsert/delete vs bulk/publication
 
 ### Current decision
-- **Phase 6 / Step 11** adds **`PUT /admin/tours/{tour_id}/translations/{language_code}`** for **one-language** create/merge-update (`AdminTourTranslationUpsert`); allowlist matches **`telegram_supported_language_codes`**.
-- **Single-language translation delete**, **bulk** import/export, and **boarding-point** translations remain **intentionally postponed** until scheduled (see `docs/CHAT_HANDOFF.md` **Next Safe Step**).
+- **Tours:** **Phase 6 / Steps 11–12** — **`PUT`** and **`DELETE`** **`/admin/tours/{tour_id}/translations/{language_code}`** (one row per language).
+- **Boarding points:** **Phase 6 / Steps 13–14** — **`PUT`** and **`DELETE`** **`/admin/boarding-points/{boarding_point_id}/translations/{language_code}`** (table **`boarding_point_translations`**, migration **`20260405_05`**).
+- **Bulk** translation import/export and **publication** workflow remain **intentionally postponed** (see `docs/CHAT_HANDOFF.md` **Not Implemented Yet**).
 
 ### Revisit trigger
-- before admin **content parity** across languages is treated as **complete** without delete or bulk tooling
-- before **customer-facing** catalog needs structural changes tied to translation CRUD beyond upsert
+- before admin treats **multilingual content ops** as **complete** without bulk tooling or publish pipeline
+- before **customer-facing** catalog needs structural changes tied to translation CRUD beyond per-language slices
 
 ### Status
-open (upsert only; **delete** / **bulk** / **boarding** translations **not done**)
+open (per-language **upsert/delete** done for tours and boarding points; **bulk** / **publication** **not done**)
 
 ---
 

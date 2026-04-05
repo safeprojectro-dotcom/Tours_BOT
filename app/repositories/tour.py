@@ -202,6 +202,23 @@ class BoardingPointTranslationRepository(SQLAlchemyRepository[BoardingPointTrans
         session.refresh(row)
         return row
 
+    def delete_for_boarding_point_language(
+        self,
+        session: Session,
+        *,
+        boarding_point_id: int,
+        language_code: str,
+    ) -> bool:
+        row = self.get_by_boarding_point_and_language(
+            session,
+            boarding_point_id=boarding_point_id,
+            language_code=language_code,
+        )
+        if row is None:
+            return False
+        self.delete(session, instance=row)
+        return True
+
 
 class BoardingPointRepository(SQLAlchemyRepository[BoardingPoint]):
     def __init__(self) -> None:
