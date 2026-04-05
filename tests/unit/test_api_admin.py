@@ -817,3 +817,45 @@ class AdminRouteTests(FoundationDBTestCase):
             json={"title": "   "},
         )
         self.assertEqual(r.status_code, 422)
+
+    def test_delete_admin_tour_translation_requires_auth(self) -> None:
+        r = self.client.delete("/admin/tours/1/translations/ro")
+        self.assertEqual(r.status_code, 401)
+
+    def test_delete_admin_tour_translation_success_removes_only_one(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-TR-DEL-OK")
+        self.create_translation(tour, language_code="ro", title="RO")
+        self.create_translation(tour, language_code="de", title="DE")
+        self.session.commit()
+        r = self.client.delete(f"/admin/tours/{tour.id}/translations/ro", headers=headers)
+        self.assertEqual(r.status_code, 204)
+        self.assertEqual(r.content, b"")
+
+        g = self.client.get(f"/admin/tours/{tour.id}", headers=headers)
+        self.assertEqual(g.status_code, 200)
+        codes = {t["language_code"] for t in g.json()["translations"]}
+        self.assertEqual(codes, {"de"})
+
+    def test_delete_admin_tour_translation_not_found_tour(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.delete("/admin/tours/999999/translations/ro", headers=headers)
+        self.assertEqual(r.status_code, 404)
+        self.assertIn("tour", r.json()["detail"].lower())
+
+    def test_delete_admin_tour_translation_not_found_translation(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-TR-DEL-NO-ROW")
+        self.session.commit()
+        r = self.client.delete(f"/admin/tours/{tour.id}/translations/ro", headers=headers)
+        self.assertEqual(r.status_code, 404)
+        self.assertIn("translation", r.json()["detail"].lower())
+
+    def test_delete_admin_tour_translation_unsupported_language_400(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-TR-DEL-BAD-LANG")
+        self.create_translation(tour, language_code="ro", title="X")
+        self.session.commit()
+        r = self.client.delete(f"/admin/tours/{tour.id}/translations/xx", headers=headers)
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("language", r.json()["detail"].lower())

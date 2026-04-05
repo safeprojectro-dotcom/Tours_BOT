@@ -47,6 +47,10 @@ class AdminBoardingPointInUseError(Exception):
     """At least one order references this boarding point (FK RESTRICT)."""
 
 
+class AdminTourTranslationNotFoundError(Exception):
+    """No tour translation row for this tour and language."""
+
+
 class AdminTourWriteService:
     def __init__(
         self,
@@ -289,3 +293,23 @@ class AdminTourWriteService:
         detail = self._read.get_tour_detail(session, tour_id=tour_id)
         assert detail is not None
         return detail
+
+    def delete_tour_translation(
+        self,
+        session: Session,
+        *,
+        tour_id: int,
+        language_code: str,
+    ) -> None:
+        """Delete one `TourTranslation` row for a supported language; raises if tour or row missing."""
+        lc = language_code.strip().lower()
+        allowed = get_settings().telegram_supported_language_codes
+        if lc not in allowed:
+            raise AdminTourCreateValidationError("Unsupported language code.")
+
+        if session.get(Tour, tour_id) is None:
+            raise AdminTourNotFoundError()
+
+        deleted = self._translations.delete_for_tour_language(session, tour_id=tour_id, language_code=lc)
+        if not deleted:
+            raise AdminTourTranslationNotFoundError()

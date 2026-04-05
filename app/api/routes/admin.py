@@ -29,6 +29,7 @@ from app.services.admin_tour_write import (
     AdminTourCreateValidationError,
     AdminTourDuplicateCodeError,
     AdminTourNotFoundError,
+    AdminTourTranslationNotFoundError,
     AdminTourWriteService,
 )
 
@@ -114,6 +115,26 @@ def put_admin_tour_translation(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     db.commit()
     return detail
+
+
+@router.delete(
+    "/tours/{tour_id}/translations/{language_code}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_admin_tour_translation(
+    tour_id: int,
+    language_code: str,
+    db: Session = Depends(get_db),
+) -> None:
+    try:
+        AdminTourWriteService().delete_tour_translation(db, tour_id=tour_id, language_code=language_code)
+    except AdminTourNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour not found.") from None
+    except AdminTourTranslationNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Translation not found.") from None
+    except AdminTourCreateValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
 
 
 @router.post(

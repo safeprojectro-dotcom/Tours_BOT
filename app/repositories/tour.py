@@ -149,6 +149,19 @@ class TourTranslationRepository(SQLAlchemyRepository[TourTranslation]):
         session.refresh(tr)
         return tr
 
+    def delete_for_tour_language(
+        self,
+        session: Session,
+        *,
+        tour_id: int,
+        language_code: str,
+    ) -> bool:
+        tr = self.get_by_tour_and_language(session, tour_id=tour_id, language_code=language_code)
+        if tr is None:
+            return False
+        self.delete(session, instance=tr)
+        return True
+
 
 class BoardingPointRepository(SQLAlchemyRepository[BoardingPoint]):
     def __init__(self) -> None:
