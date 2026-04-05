@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus
@@ -15,6 +15,10 @@ from app.repositories.base import SQLAlchemyRepository
 class OrderRepository(SQLAlchemyRepository[Order]):
     def __init__(self) -> None:
         super().__init__(Order)
+
+    def count_by_boarding_point(self, session: Session, *, boarding_point_id: int) -> int:
+        stmt = select(func.count()).select_from(Order).where(Order.boarding_point_id == boarding_point_id)
+        return int(session.scalar(stmt) or 0)
 
     def get_for_update(self, session: Session, *, order_id: int) -> Order | None:
         stmt = select(Order).where(Order.id == order_id).with_for_update()

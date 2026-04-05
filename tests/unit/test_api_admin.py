@@ -666,3 +666,47 @@ class AdminRouteTests(FoundationDBTestCase):
             json={"city": "X", "tour_id": tour_b.id},
         )
         self.assertEqual(r.status_code, 422)
+
+    def test_delete_admin_boarding_point_requires_auth(self) -> None:
+        r = self.client.delete("/admin/boarding-points/1")
+        self.assertEqual(r.status_code, 401)
+
+    def test_delete_admin_boarding_point_success_removes_only_one(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-BP-DEL-OK")
+        bp_keep = self.create_boarding_point(tour, city="KeepCity")
+        bp_go = self.create_boarding_point(tour, city="GoCity")
+        self.session.commit()
+        r = self.client.delete(f"/admin/boarding-points/{bp_go.id}", headers=headers)
+        self.assertEqual(r.status_code, 204)
+        self.assertEqual(r.content, b"")
+
+        g = self.client.get(f"/admin/tours/{tour.id}", headers=headers)
+        self.assertEqual(g.status_code, 200)
+        ids = {p["id"] for p in g.json()["boarding_points"]}
+        self.assertEqual(ids, {bp_keep.id})
+        self.assertNotIn(bp_go.id, ids)
+
+    def test_delete_admin_boarding_point_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.delete("/admin/boarding-points/999999", headers=headers)
+        self.assertEqual(r.status_code, 404)
+
+    def test_delete_admin_boarding_point_conflict_when_order_references(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(code="ADM-BP-DEL-BLOCK")
+        bp = self.create_boarding_point(tour)
+        self.create_order(
+            user,
+            tour,
+            bp,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.UNPAID,
+            cancellation_status=CancellationStatus.CANCELLED_NO_PAYMENT,
+            reservation_expires_at=None,
+        )
+        self.session.commit()
+        r = self.client.delete(f"/admin/boarding-points/{bp.id}", headers=headers)
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("reference", r.json()["detail"].lower())

@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.tour import BoardingPoint, Tour
+from app.repositories.order import OrderRepository
 from app.repositories.tour import BoardingPointRepository, TourRepository
 from app.schemas.admin import (
     AdminBoardingPointCreate,
@@ -36,16 +37,22 @@ class AdminBoardingPointNotFoundError(Exception):
     """No boarding point row for the given id."""
 
 
+class AdminBoardingPointInUseError(Exception):
+    """At least one order references this boarding point (FK RESTRICT)."""
+
+
 class AdminTourWriteService:
     def __init__(
         self,
         *,
         tour_repository: TourRepository | None = None,
         boarding_point_repository: BoardingPointRepository | None = None,
+        order_repository: OrderRepository | None = None,
         read_service: AdminReadService | None = None,
     ) -> None:
         self._tours = tour_repository or TourRepository()
         self._boarding_points = boarding_point_repository or BoardingPointRepository()
+        self._orders = order_repository or OrderRepository()
         self._read = read_service or AdminReadService()
 
     def create_tour(self, session: Session, *, payload: AdminTourCreate) -> AdminTourDetailRead:
@@ -211,3 +218,14 @@ class AdminTourWriteService:
         detail = self._read.get_tour_detail(session, tour_id=bp.tour_id)
         assert detail is not None
         return detail
+
+    def delete_boarding_point(self, session: Session, *, boarding_point_id: int) -> None:
+        """Delete one boarding point row by id; raises if referenced by any order."""
+        bp = session.get(BoardingPoint, boarding_point_id)
+        if bp is None:
+            raise AdminBoardingPointNotFoundError()
+
+        if self._orders.count_by_boarding_point(session, boarding_point_id=boarding_point_id) > 0:
+            raise AdminBoardingPointInUseError()
+
+        self._boarding_points.delete(session, instance=bp)

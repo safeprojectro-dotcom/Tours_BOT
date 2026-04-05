@@ -23,6 +23,7 @@ from app.schemas.admin import (
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
 from app.services.admin_read import AdminReadService
 from app.services.admin_tour_write import (
+    AdminBoardingPointInUseError,
     AdminBoardingPointNotFoundError,
     AdminTourCreateValidationError,
     AdminTourDuplicateCodeError,
@@ -131,6 +132,29 @@ def patch_admin_boarding_point(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     db.commit()
     return detail
+
+
+@router.delete(
+    "/boarding-points/{boarding_point_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_admin_boarding_point(
+    boarding_point_id: int,
+    db: Session = Depends(get_db),
+) -> None:
+    try:
+        AdminTourWriteService().delete_boarding_point(db, boarding_point_id=boarding_point_id)
+    except AdminBoardingPointNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Boarding point not found.",
+        ) from None
+    except AdminBoardingPointInUseError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Boarding point cannot be deleted while orders reference it.",
+        ) from None
+    db.commit()
 
 
 @router.get("/tours", response_model=AdminTourListRead)
