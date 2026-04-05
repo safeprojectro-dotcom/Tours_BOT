@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -38,15 +39,19 @@ class OrderRepository(SQLAlchemyRepository[Order]):
         *,
         limit: int = 100,
         offset: int = 0,
+        tour_id: int | None = None,
+        lifecycle_where: Any | None = None,
     ) -> list[Order]:
         """Recent orders for admin read-only lists (newest first); loads tour for display code."""
-        stmt = (
-            select(Order)
-            .options(selectinload(Order.tour))
-            .order_by(Order.created_at.desc(), Order.id.desc())
-            .offset(offset)
-            .limit(limit)
+        stmt = select(Order).options(selectinload(Order.tour)).order_by(
+            Order.created_at.desc(),
+            Order.id.desc(),
         )
+        if tour_id is not None:
+            stmt = stmt.where(Order.tour_id == tour_id)
+        if lifecycle_where is not None:
+            stmt = stmt.where(lifecycle_where)
+        stmt = stmt.offset(offset).limit(limit)
         return list(session.scalars(stmt).all())
 
     def list_by_user(self, session: Session, *, user_id: int, limit: int = 100, offset: int = 0) -> list[Order]:

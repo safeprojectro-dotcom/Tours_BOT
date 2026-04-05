@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.models.enums import TourStatus
 from app.models.handoff import Handoff
 from app.models.order import Order
 from app.models.tour import Tour
@@ -28,7 +29,11 @@ from app.schemas.admin import (
     AdminTourSummary,
     AdminTranslationSummaryItem,
 )
-from app.services.admin_order_lifecycle import describe_order_admin_lifecycle
+from app.services.admin_order_lifecycle import (
+    AdminOrderLifecycleKind,
+    describe_order_admin_lifecycle,
+    sql_predicate_for_lifecycle_kind,
+)
 
 
 class AdminReadService:
@@ -193,8 +198,22 @@ class AdminReadService:
             active_waitlist_entries_count=int(waitlist_n),
         )
 
-    def list_tours(self, session: Session, *, limit: int, offset: int) -> AdminTourListRead:
-        rows = self._tours.list_by_departure_desc(session, limit=limit, offset=offset)
+    def list_tours(
+        self,
+        session: Session,
+        *,
+        limit: int,
+        offset: int,
+        status: TourStatus | None = None,
+        guaranteed_only: bool = False,
+    ) -> AdminTourListRead:
+        rows = self._tours.list_by_departure_desc(
+            session,
+            limit=limit,
+            offset=offset,
+            status=status,
+            guaranteed_only=guaranteed_only,
+        )
         items = [
             AdminTourListItem(
                 id=t.id,
@@ -211,8 +230,25 @@ class AdminReadService:
         ]
         return AdminTourListRead(items=items, total_returned=len(items))
 
-    def list_orders(self, session: Session, *, limit: int, offset: int) -> AdminOrderListRead:
-        rows = self._orders.list_recent_for_admin(session, limit=limit, offset=offset)
+    def list_orders(
+        self,
+        session: Session,
+        *,
+        limit: int,
+        offset: int,
+        lifecycle_kind: AdminOrderLifecycleKind | None = None,
+        tour_id: int | None = None,
+    ) -> AdminOrderListRead:
+        lifecycle_where = (
+            sql_predicate_for_lifecycle_kind(lifecycle_kind) if lifecycle_kind is not None else None
+        )
+        rows = self._orders.list_recent_for_admin(
+            session,
+            limit=limit,
+            offset=offset,
+            tour_id=tour_id,
+            lifecycle_where=lifecycle_where,
+        )
         items: list[AdminOrderListItem] = []
         for o in rows:
             kind, summary = describe_order_admin_lifecycle(o)

@@ -55,14 +55,16 @@ class TourRepository(SQLAlchemyRepository[Tour]):
         *,
         limit: int = 100,
         offset: int = 0,
+        status: TourStatus | None = None,
+        guaranteed_only: bool = False,
     ) -> list[Tour]:
         """Recent/upcoming tours for admin read-only lists (newest departure first)."""
-        stmt = (
-            select(Tour)
-            .order_by(Tour.departure_datetime.desc(), Tour.id.desc())
-            .offset(offset)
-            .limit(limit)
-        )
+        stmt = select(Tour).order_by(Tour.departure_datetime.desc(), Tour.id.desc())
+        if status is not None:
+            stmt = stmt.where(Tour.status == status)
+        if guaranteed_only:
+            stmt = stmt.where(Tour.guaranteed_flag.is_(True))
+        stmt = stmt.offset(offset).limit(limit)
         return list(session.scalars(stmt).all())
 
 

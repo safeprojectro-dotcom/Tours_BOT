@@ -4,25 +4,25 @@
 Tours_BOT
 
 ## Current Status
-The project is ready to continue from the **latest approved checkpoint**: **Phase 6 / Step 3 completed** in code — read-only **admin tour detail** (`GET /admin/tours/{tour_id}`) with core tour fields, **translations** summary (language + title), **boarding points** summary, and **`orders_count`** as a **visibility metric only** (not a business rule). Public booking/payment/waitlist/handoff flows were **not** changed.
+The project is ready to continue from the **latest approved checkpoint**: **Phase 6 / Step 4 completed** in code — read-only **admin list filtering** on **`GET /admin/tours`** (`status`, `guaranteed_only`) and **`GET /admin/orders`** (`lifecycle_kind`, `tour_id`). Order list filtering by **`lifecycle_kind`** uses the **same service-layer lifecycle interpretation** as admin order rows (`sql_predicate_for_lifecycle_kind` aligned with **`describe_order_admin_lifecycle`**), not raw DB enums alone. Public booking/payment/waitlist/handoff flows were **not** changed.
 
-**Phase 6 / Steps 1–2** (already completed): **`ADMIN_API_TOKEN`**; **`GET /admin/overview`**, **`GET /admin/tours`**, **`GET /admin/orders`**; **`GET /admin/orders/{order_id}`** with lifecycle-first order read-side.
+**Phase 6 / Steps 1–4** (already completed): **`ADMIN_API_TOKEN`**; **`GET /admin/overview`**, **`GET /admin/tours`**, **`GET /admin/orders`** (with **optional read-only filters** on tours/orders lists); **`GET /admin/orders/{order_id}`**, **`GET /admin/tours/{tour_id}`** with lifecycle-first order read-side and tour detail read-side.
 
 Earlier: **Phase 5 (Mini App MVP) accepted** for MVP/staging; **Phase 5 / Step 20** documentation consolidation / acceptance (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`). No open Phase 5 MVP blockers for the agreed scope.
 
-**Phase 6 / Step 4 has not started yet** (see **Next Safe Step**).
+**Next work:** **Phase 6 / Step 5** — first **very narrow** admin **tours** write slice (see **Next Safe Step**).
 
 ## Current Phase
 
-**Current phase (forward work):** **Phase 6 — Admin Panel MVP** — **Phase 6 / Steps 1–3 completed; Phase 6 / Step 4 not started yet.**
+**Current phase (forward work):** **Phase 6 — Admin Panel MVP** — **Phase 6 / Steps 1–4 completed.**
 
-**Latest approved checkpoint:** **Phase 6 / Step 3** — read-only **tour detail**; admin read-side now covers **overview**, **tours list**, **tour detail**, **orders list**, and **order detail** under the same token gate. Order rows still use **`lifecycle_kind` / `lifecycle_summary`** where applicable; raw order semantics remain as in `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` (see **section 1a**).
+**Latest approved checkpoint:** **Phase 6 / Step 4** — read-only **list filtering**; admin read-side now covers **overview**, **tours list** (with **basic optional filters**), **tour detail**, **orders list** (with **basic optional filters**), and **order detail** under the same token gate. Order rows still use **`lifecycle_kind` / `lifecycle_summary`** where applicable; raw order semantics remain as in `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` (see **section 1a**).
 
-**Earlier checkpoints:** Phase 6 / Steps 1–2 (foundation, lists, order detail); Phase 5 accepted + Step 20 docs (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
+**Earlier checkpoints:** Phase 6 / Steps 1–3 (foundation, lists, detail reads); Phase 5 accepted + Step 20 docs (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
 
 **Phase 5 (closed for MVP):** Execution checkpoints **Steps 4–19** are summarized in `docs/PHASE_5_ACCEPTANCE_SUMMARY.md` and per-step notes under `docs/PHASE_5_STEP_*_NOTES.md`; **Step 20** was documentation/consolidation only (no intended production-code churn for acceptance).
 
-**Next safe direction:** **Phase 6 / Step 4** — narrow **read-only** **filtering / sorting** on **`GET /admin/tours`** and/or **`GET /admin/orders`** (query params only; no mutations) — see **Next Safe Step** below.
+**Next safe direction:** **Phase 6 / Step 5** — first **very narrow** **tours** **CRUD** slice (**backend-first**, **protected admin API**, **no broad CRUD wave**) — see **Next Safe Step** below.
 
 **Optional follow-ups** (not Phase 5 blockers; prioritize with product): Telegram Web App init-data validation for Mini App APIs, real payment provider (PSP), broader handoff/waitlist customer notifications.
 
@@ -517,6 +517,15 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
   - **Scope respected:** public flows unchanged; no CRUD / mutations
   - **Prompt archive:** `docs/CURSOR_PROMPT_PHASE_6_STEP_3.md` (historical)
 
+- Phase 6 / Step 4 completed
+  - **Read-only list filtering:** optional query parameters on **`GET /admin/tours`** and **`GET /admin/orders`** (no mutations)
+  - **`GET /admin/tours`:** `status`, `guaranteed_only`
+  - **`GET /admin/orders`:** `lifecycle_kind`, `tour_id` — **`lifecycle_kind`** filtering stays **service-driven** and consistent with **`describe_order_admin_lifecycle`** / **`sql_predicate_for_lifecycle_kind`**
+  - **Repositories:** `TourRepository.list_by_departure_desc`, `OrderRepository.list_recent_for_admin` (filter args)
+  - **Tests:** extended `tests/unit/test_api_admin.py` (filtered lists + auth; unfiltered defaults unchanged)
+  - **Scope respected:** public flows unchanged; no CRUD
+  - **Prompt archive:** `docs/CURSOR_PROMPT_PHASE_6_STEP_4.md` (historical)
+
 ---
 
 ## Verified
@@ -595,7 +604,7 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
 
 ### Ready
 - **bot layer** — Telegram private chat; thin handlers; service-driven
-- **api layer** — FastAPI; public routes + Mini App routes + payments webhooks + **internal ops** JSON endpoints + **admin read API** (`/admin/*`, `ADMIN_API_TOKEN`: overview, tours/orders **lists**, **tour + order detail**)
+- **api layer** — FastAPI; public routes + Mini App routes + payments webhooks + **internal ops** JSON endpoints + **admin read API** (`/admin/*`, `ADMIN_API_TOKEN`: overview, tours/orders **lists** with **optional read-only filters**, **tour + order detail**)
 - **services layer** — business rules and orchestration
 - **repositories layer** — persistence-oriented data access
 - **mini_app** — Flet Mini App UI (separate deploy surface in staging); **MVP accepted** for agreed scope (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`); **no business logic in the frontend** — UI calls APIs only
@@ -609,34 +618,33 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
 - **Mini App / any web UI**: presentation only — no duplicated booking/payment rules in the client
 
 ### Not Implemented Yet
-- **Phase 6 / Step 4:** narrow **read-only** **filtering / sorting** on **`GET /admin/tours`** and/or **`GET /admin/orders`** (optional query params only; **no** CRUD, **no** mutations)
-- **Phase 6 (later):** first **very narrow** tours CRUD or other admin **writes** only when explicitly scheduled — per plan
+- **Phase 6 / Step 5 (next):** first **very narrow** **tours** **write** slice (**create-only** *or* **update-core-fields-only**; **backend-first**; **no** broad CRUD wave) — see **Next Safe Step**
+- **Phase 6 (later):** translations/boarding CRUD, further admin writes — only when explicitly scheduled — per plan
 - **Phase 6+:** admin payment operations, content/publication workflows, role-based admin UX as per plan
 - **Phase 7–9:** group assistant, full handoff lifecycle at scale, content assistant, analytics/readiness — per `docs/IMPLEMENTATION_PLAN.md`
 
 ## Next Safe Step
 
-**Phase 6 / Step 4 — not started yet** (backend-first; **read-only list filtering / sorting** only).
+**Phase 6 / Step 5 — first very narrow tours CRUD slice** (pick **one** narrow write path for this step; **backend-first**).
 
 ### Goal
-Improve **operator visibility** on **`GET /admin/tours`** and/or **`GET /admin/orders`** with a **small**, **documented** set of **optional** query parameters (filters and/or stable sort) — still **read-only**, still **`ADMIN_API_TOKEN`**-gated. For orders, prefer filters aligned with **`lifecycle_kind`** where applicable rather than raw enum combinations as the primary UX.
+Introduce the **first** protected-admin **mutation** for **tours** only — small enough to review safely: either **create tour** *or* **update a constrained set of core tour fields** (not both in the same step unless the implementation plan explicitly shrinks further). Validation and invariants stay in the **service layer**; routes stay thin; **`ADMIN_API_TOKEN`** gate unchanged.
 
 ### Safe scope for this step
-- extend **query parameters only** on the chosen list endpoint(s) (minimal set — e.g. `tour_id` / `status` on tours; `lifecycle_kind` / `tour_id` / time window on orders — finalize in implementation)
-- repository/service read paths only; **no** new write endpoints
-- focused tests: auth + representative filter combinations + unchanged default list behavior
+- **one** new admin endpoint (or tightly related pair only if unavoidable) under `/admin/...` for the chosen slice
+- Pydantic request/response models; repository methods as needed; **no** translations CRUD and **no** boarding-points CRUD in this step
+- focused tests: auth, happy path, representative validation/409/404 cases as appropriate
 
 ### Must not expand yet
-- tours CRUD / translations CRUD / boarding points CRUD
-- admin order/payment **mutations** or refunds
-- changes to public Mini App, bot, or customer-facing APIs except unavoidable wiring imports
-- big SPA / full admin UI; content/publication workflows; broader Phase 6–9 scope
+- broad “full CRUD” for tours in one step; order/payment/refund/handoff **mutations**
+- public Mini App, bot, or customer-facing booking/payment API behavior changes (except unavoidable shared imports)
+- admin SPA / full operator UI; content/publication workflows; read-only **sort/search platform** work (defer unless explicitly scheduled)
 
-**Completed step references:** `docs/CURSOR_PROMPT_PHASE_6_STEP_1.md` … `docs/CURSOR_PROMPT_PHASE_6_STEP_3.md` (historical).  
+**Completed step references:** `docs/CURSOR_PROMPT_PHASE_6_STEP_1.md` … `docs/CURSOR_PROMPT_PHASE_6_STEP_4.md` (historical).  
 **Plan:** `docs/IMPLEMENTATION_PLAN.md` (Phase 6)
 
 ## Recommended Next Prompt
-Implement **Phase 6 / Step 4** using `docs/CHAT_HANDOFF.md` (**Next Safe Step**), `docs/TECH_SPEC_TOURS_BOT.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, and `docs/TESTING_STRATEGY.md`. Add `docs/CURSOR_PROMPT_PHASE_6_STEP_4.md` if you want a frozen prompt artifact — **do not** re-use Phase 5 “next step” prompts for new work.
+Implement **Phase 6 / Step 5** using `docs/CHAT_HANDOFF.md` (**Next Safe Step**), `docs/TECH_SPEC_TOURS_BOT.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, and `docs/TESTING_STRATEGY.md`. Add a frozen `docs/CURSOR_PROMPT_PHASE_6_STEP_5.md` if you want a durable prompt artifact — **do not** re-use Phase 5 “next step” prompts for new work.
 
 ---
 

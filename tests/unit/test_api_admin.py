@@ -184,3 +184,133 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(len(body["boarding_points"]), 2)
         cities = {x["city"] for x in body["boarding_points"]}
         self.assertEqual(cities, {"CityA", "CityB"})
+
+    def test_list_tours_filtered_by_status(self) -> None:
+        self.create_tour(
+            code="ADM-STATUS-OPEN",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 6, 1, 8, 0, tzinfo=UTC),
+        )
+        self.create_tour(
+            code="ADM-STATUS-DRAFT",
+            status=TourStatus.DRAFT,
+            departure_datetime=datetime(2026, 6, 2, 8, 0, tzinfo=UTC),
+        )
+        self.session.commit()
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.get("/admin/tours", headers=headers, params={"status": "draft"})
+        self.assertEqual(r.status_code, 200)
+        codes = {x["code"] for x in r.json()["items"]}
+        self.assertIn("ADM-STATUS-DRAFT", codes)
+        self.assertNotIn("ADM-STATUS-OPEN", codes)
+
+    def test_list_tours_guaranteed_only(self) -> None:
+        self.create_tour(
+            code="ADM-NOT-GUAR",
+            status=TourStatus.OPEN_FOR_SALE,
+            guaranteed_flag=False,
+            departure_datetime=datetime(2026, 8, 1, 8, 0, tzinfo=UTC),
+        )
+        self.create_tour(
+            code="ADM-GUAR",
+            status=TourStatus.OPEN_FOR_SALE,
+            guaranteed_flag=True,
+            departure_datetime=datetime(2026, 8, 2, 8, 0, tzinfo=UTC),
+        )
+        self.session.commit()
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.get("/admin/tours", headers=headers, params={"guaranteed_only": "true"})
+        self.assertEqual(r.status_code, 200)
+        codes = {x["code"] for x in r.json()["items"]}
+        self.assertIn("ADM-GUAR", codes)
+        self.assertNotIn("ADM-NOT-GUAR", codes)
+
+    def test_list_orders_filtered_by_lifecycle_kind(self) -> None:
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-LC-TOUR",
+            departure_datetime=datetime(2026, 5, 10, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        exp = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.UNPAID,
+            cancellation_status=CancellationStatus.CANCELLED_NO_PAYMENT,
+            reservation_expires_at=None,
+        )
+        active = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=datetime(2026, 5, 11, 12, 0, tzinfo=UTC),
+        )
+        conf = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.session.commit()
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r_exp = self.client.get(
+            "/admin/orders",
+            headers=headers,
+            params={"lifecycle_kind": "expired_unpaid_hold"},
+        )
+        self.assertEqual(r_exp.status_code, 200)
+        ids_exp = {x["id"] for x in r_exp.json()["items"]}
+        self.assertEqual(ids_exp, {exp.id})
+
+        r_act = self.client.get(
+            "/admin/orders",
+            headers=headers,
+            params={"lifecycle_kind": "active_temporary_hold"},
+        )
+        self.assertEqual(r_act.status_code, 200)
+        ids_act = {x["id"] for x in r_act.json()["items"]}
+        self.assertEqual(ids_act, {active.id})
+
+        r_conf = self.client.get(
+            "/admin/orders",
+            headers=headers,
+            params={"lifecycle_kind": "confirmed_paid"},
+        )
+        self.assertEqual(r_conf.status_code, 200)
+        ids_conf = {x["id"] for x in r_conf.json()["items"]}
+        self.assertEqual(ids_conf, {conf.id})
+
+    def test_list_orders_filtered_by_tour_id(self) -> None:
+        user = self.create_user()
+        t1 = self.create_tour(
+            code="ADM-TID-1",
+            departure_datetime=datetime(2026, 4, 1, 8, 0, tzinfo=UTC),
+        )
+        t2 = self.create_tour(
+            code="ADM-TID-2",
+            departure_datetime=datetime(2026, 4, 2, 8, 0, tzinfo=UTC),
+        )
+        p1 = self.create_boarding_point(t1)
+        p2 = self.create_boarding_point(t2)
+        o1 = self.create_order(user, t1, p1)
+        o2 = self.create_order(user, t2, p2)
+        self.session.commit()
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.get("/admin/orders", headers=headers, params={"tour_id": t1.id})
+        self.assertEqual(r.status_code, 200)
+        ids = {x["id"] for x in r.json()["items"]}
+        self.assertEqual(ids, {o1.id})
+        self.assertNotIn(o2.id, ids)
+
+    def test_filtered_admin_lists_require_auth(self) -> None:
+        r1 = self.client.get("/admin/tours", params={"status": "draft"})
+        self.assertEqual(r1.status_code, 401)
+        r2 = self.client.get("/admin/orders", params={"lifecycle_kind": "other"})
+        self.assertEqual(r2.status_code, 401)

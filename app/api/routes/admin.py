@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.admin_auth import require_admin_api_token
 from app.db.session import get_db
+from app.models.enums import TourStatus
 from app.schemas.admin import (
     AdminOrderDetailRead,
     AdminOrderListRead,
@@ -14,6 +15,7 @@ from app.schemas.admin import (
     AdminTourDetailRead,
     AdminTourListRead,
 )
+from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
 from app.services.admin_read import AdminReadService
 
 router = APIRouter(
@@ -35,8 +37,16 @@ def list_admin_tours(
     db: Session = Depends(get_db),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0, le=100_000),
+    status: TourStatus | None = Query(default=None),
+    guaranteed_only: bool = Query(default=False),
 ) -> AdminTourListRead:
-    return AdminReadService().list_tours(db, limit=limit, offset=offset)
+    return AdminReadService().list_tours(
+        db,
+        limit=limit,
+        offset=offset,
+        status=status,
+        guaranteed_only=guaranteed_only,
+    )
 
 
 @router.get("/tours/{tour_id}", response_model=AdminTourDetailRead)
@@ -55,8 +65,16 @@ def list_admin_orders(
     db: Session = Depends(get_db),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0, le=100_000),
+    lifecycle_kind: AdminOrderLifecycleKind | None = Query(default=None),
+    tour_id: int | None = Query(default=None, ge=1),
 ) -> AdminOrderListRead:
-    return AdminReadService().list_orders(db, limit=limit, offset=offset)
+    return AdminReadService().list_orders(
+        db,
+        limit=limit,
+        offset=offset,
+        lifecycle_kind=lifecycle_kind,
+        tour_id=tour_id,
+    )
 
 
 @router.get("/orders/{order_id}", response_model=AdminOrderDetailRead)
