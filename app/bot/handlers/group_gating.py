@@ -1,7 +1,7 @@
-"""Narrow group chat handler — trigger gating + short safe ack (Phase 7 / Steps 3–4).
+"""Narrow group chat handler — trigger gating + short safe reply + private CTA link (Phase 7 / Steps 3–5).
 
-Uses ``resolve_group_trigger_ack_reply`` (group trigger + optional handoff-category reply shaping;
-**no** handoff persistence). Private chat is unchanged (``private_entry`` filters to private).
+Uses ``resolve_group_trigger_ack_reply`` (group trigger + optional handoff-category reply shaping +
+deep link; **no** handoff persistence). Private chat is unchanged (``private_entry`` filters to private).
 
 Without ``TELEGRAM_BOT_USERNAME``, the resolver stays silent in groups.
 """

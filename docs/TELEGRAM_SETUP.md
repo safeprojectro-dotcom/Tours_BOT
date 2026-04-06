@@ -187,6 +187,8 @@ Deep links should be planned for:
 - group-to-private CTA
 - Mini App handoff
 
+**Phase 7 / Step 5 (narrow group CTA):** group bot replies may append ``https://t.me/<bot_username>?start=grp_private`` (generic private entry) or ``…?start=grp_followup`` (after a handoff-category-shaped line). These payloads are **not** interpreted as tour deep links; private ``/start`` falls through to the normal flow when the argument does not match ``tour_*`` (see bot browse service). They exist for a consistent tap target from groups without booking or handoff persistence.
+
 Deep links must preserve, where possible:
 - source channel
 - campaign/source tag

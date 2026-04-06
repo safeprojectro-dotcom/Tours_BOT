@@ -1,12 +1,14 @@
-"""Phase 7 / Steps 3–4 — minimal group chat gating + handoff-aware short replies.
+"""Phase 7 / Steps 3–5 — minimal group gating, handoff-aware replies, private CTA deep links.
 
-Uses Step 2 ``evaluate_group_trigger`` and ``evaluate_handoff_triggers``. No booking, payment,
-or handoff **persistence**. Replies stay short and safe — ``docs/GROUP_ASSISTANT_RULES.md``.
+Uses Step 2 ``evaluate_group_trigger`` and ``evaluate_handoff_triggers``; Step 5 appends a
+``t.me`` deep link via ``group_private_cta``. No booking, payment, or handoff **persistence**.
+Replies stay short and safe — ``docs/GROUP_ASSISTANT_RULES.md``.
 """
 
 from __future__ import annotations
 
 from app.schemas.group_assistant_triggers import HandoffCategory
+from app.services.group_private_cta import build_group_private_cta_target, entry_mode_from_handoff
 from app.services.group_trigger_evaluation import evaluate_group_trigger
 from app.services.handoff_trigger_evaluation import evaluate_handoff_triggers
 
@@ -43,8 +45,9 @@ _HANDOFF_CATEGORY_REPLY_TEXT: dict[HandoffCategory, str] = {
 
 def resolve_group_trigger_ack_reply(message_text: str, *, bot_username: str | None) -> str | None:
     """
-    If the **group** trigger matches, return one short reply (handoff-category-aware when applicable).
+    If the **group** trigger matches, return one reply line: base text + ``t.me`` deep link CTA.
 
+    Handoff-category-specific base text uses ``grp_followup`` payload; generic uses ``grp_private``.
     Otherwise ``None`` (stay silent). No handoff DB rows are created.
 
     When ``bot_username`` is unset, mention-based triggers cannot be evaluated safely;
@@ -59,8 +62,13 @@ def resolve_group_trigger_ack_reply(message_text: str, *, bot_username: str | No
 
     handoff = evaluate_handoff_triggers(message_text, low_confidence_signal=False)
     if handoff.handoff_required and handoff.handoff_category is not None:
-        return _HANDOFF_CATEGORY_REPLY_TEXT.get(
+        base = _HANDOFF_CATEGORY_REPLY_TEXT.get(
             handoff.handoff_category,
             GROUP_TRIGGER_ACK_REPLY_TEXT,
         )
-    return GROUP_TRIGGER_ACK_REPLY_TEXT
+    else:
+        base = GROUP_TRIGGER_ACK_REPLY_TEXT
+
+    mode = entry_mode_from_handoff(handoff)
+    cta = build_group_private_cta_target(bot_username=uname, entry_mode=mode)
+    return f"{base} — {cta.deep_link}"
