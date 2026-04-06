@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 
+from app.models.handoff import Handoff
 from app.services.handoff_entry import HandoffEntryService
 from tests.unit.base import FoundationDBTestCase
 
@@ -53,6 +54,65 @@ class HandoffEntryServiceTests(FoundationDBTestCase):
             order_id=order.id,
         )
         self.assertIsNotNone(hid)
+
+    def test_group_followup_start_creates_open_handoff(self) -> None:
+        self.create_user(telegram_user_id=77_010)
+        self.session.commit()
+        svc = HandoffEntryService()
+        hid = svc.create_for_group_followup_start(
+            self.session,
+            telegram_user_id=77_010,
+        )
+        self.assertIsNotNone(hid)
+        row = self.session.get(Handoff, hid)
+        self.assertIsNotNone(row)
+        assert row is not None
+        self.assertEqual(row.reason, HandoffEntryService.REASON_GROUP_FOLLOWUP_START)
+        self.assertEqual(row.status, "open")
+        self.session.commit()
+
+    def test_group_followup_start_dedupes_open_handoff(self) -> None:
+        self.create_user(telegram_user_id=77_005)
+        self.session.commit()
+        svc = HandoffEntryService()
+
+        first = svc.create_for_group_followup_start(
+            self.session,
+            telegram_user_id=77_005,
+        )
+        self.assertIsNotNone(first)
+        self.session.commit()
+
+        second = svc.create_for_group_followup_start(
+            self.session,
+            telegram_user_id=77_005,
+        )
+        self.assertEqual(first, second)
+
+    def test_group_followup_start_creates_new_after_previous_closed(self) -> None:
+        self.create_user(telegram_user_id=77_006)
+        self.session.commit()
+        svc = HandoffEntryService()
+
+        first = svc.create_for_group_followup_start(
+            self.session,
+            telegram_user_id=77_006,
+        )
+        self.assertIsNotNone(first)
+        self.session.commit()
+
+        first_row = self.session.get(Handoff, first)
+        self.assertIsNotNone(first_row)
+        assert first_row is not None
+        first_row.status = "closed"
+        self.session.commit()
+
+        second = svc.create_for_group_followup_start(
+            self.session,
+            telegram_user_id=77_006,
+        )
+        self.assertIsNotNone(second)
+        self.assertNotEqual(first, second)
 
 
 if __name__ == "__main__":

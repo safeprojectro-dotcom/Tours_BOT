@@ -55,6 +55,14 @@ class TestGroupPrivateCta(unittest.TestCase):
     def test_match_grp_followup(self) -> None:
         self.assertEqual(match_group_cta_start_payload("grp_followup"), START_PAYLOAD_GRP_FOLLOWUP)
 
+    def test_grp_private_payload_distinct_from_followup_for_handoff_gate(self) -> None:
+        """Step 7 persistence is keyed on ``grp_followup`` only; ``grp_private`` must remain distinct."""
+        self.assertEqual(match_group_cta_start_payload("grp_private"), START_PAYLOAD_GRP_PRIVATE)
+        self.assertNotEqual(
+            match_group_cta_start_payload("grp_private"),
+            match_group_cta_start_payload("grp_followup"),
+        )
+
     def test_match_none_for_tour_payload(self) -> None:
         self.assertIsNone(match_group_cta_start_payload("tour_BELGRADE-1"))
 

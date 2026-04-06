@@ -1,4 +1,4 @@
-"""Private chat handlers — catalog, reservations, payments (Phase 7 / Step 6: ``/start grp_*`` intros)."""
+"""Private chat handlers — catalog, reservations, payments (Phase 7 / Step 6: ``/start grp_*`` intros; Step 7: ``grp_followup`` handoff persistence)."""
 
 from __future__ import annotations
 
@@ -73,7 +73,11 @@ from app.bot.transient_messages import (
 from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.services.handoff_entry import HandoffEntryService
-from app.services.group_private_cta import START_PAYLOAD_GRP_PRIVATE, match_group_cta_start_payload
+from app.services.group_private_cta import (
+    START_PAYLOAD_GRP_FOLLOWUP,
+    START_PAYLOAD_GRP_PRIVATE,
+    match_group_cta_start_payload,
+)
 from app.services.order_summary import OrderSummaryService
 from app.services.payment_entry import PaymentEntryService
 from app.services.reservation_creation import TemporaryReservationService
@@ -126,6 +130,11 @@ async def handle_start(
                 else "start_grp_followup_intro"
             )
             await message.answer(translate(user.preferred_language, intro_key))
+            if grp_payload == START_PAYLOAD_GRP_FOLLOWUP:
+                await _persist_group_followup_handoff(
+                    message,
+                    telegram_language_code=message.from_user.language_code,
+                )
             await _send_catalog_overview(
                 message,
                 language_code=user.preferred_language,
@@ -1167,6 +1176,27 @@ async def _send_handoff_follow_up(message: Message, *, language_code: str, reaso
         translate(language_code, "handoff_request_recorded", ref=str(hid)),
         reply_markup=markup,
     )
+
+
+async def _persist_group_followup_handoff(
+    message: Message,
+    *,
+    telegram_language_code: str | None,
+) -> None:
+    """Phase 7 / Step 7 — narrow handoff row for ``/start grp_followup`` only; no user-visible extra step."""
+    if message.from_user is None:
+        return
+    with SessionLocal() as session:
+        svc = HandoffEntryService()
+        hid = svc.create_for_group_followup_start(
+            session,
+            telegram_user_id=message.from_user.id,
+            telegram_language_code=telegram_language_code,
+        )
+        if hid is None:
+            session.rollback()
+            return
+        session.commit()
 
 
 async def _resolve_message_language(message: Message) -> str | None:

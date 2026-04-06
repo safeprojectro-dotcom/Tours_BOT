@@ -47,6 +47,19 @@ class HandoffRepository(SQLAlchemyRepository[Handoff]):
         )
         return list(session.scalars(stmt).all())
 
+    def find_open_by_user_reason(self, session: Session, *, user_id: int, reason: str) -> Handoff | None:
+        stmt = (
+            select(Handoff)
+            .where(
+                Handoff.user_id == user_id,
+                Handoff.reason == reason,
+                Handoff.status == "open",
+            )
+            .order_by(Handoff.created_at.desc(), Handoff.id.desc())
+            .limit(1)
+        )
+        return session.scalars(stmt).first()
+
     def list_for_admin(
         self,
         session: Session,
