@@ -76,7 +76,10 @@ def compute_admin_action_preview(
             ),
         )
 
-    if lifecycle_kind == AdminOrderLifecycleKind.CONFIRMED_PAID:
+    if lifecycle_kind in (
+        AdminOrderLifecycleKind.CONFIRMED_PAID,
+        AdminOrderLifecycleKind.READY_FOR_DEPARTURE_PAID,
+    ):
         return AdminActionPreviewResult(
             suggested_admin_action=AdminSuggestedAdminAction.NONE,
             allowed_admin_actions=(),

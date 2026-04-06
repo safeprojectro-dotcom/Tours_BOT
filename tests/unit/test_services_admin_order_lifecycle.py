@@ -64,3 +64,21 @@ class DescribeOrderAdminLifecycleTests(TestCase):
         )
         kind, _ = describe_order_admin_lifecycle(o)
         self.assertEqual(kind, AdminOrderLifecycleKind.CONFIRMED_PAID)
+
+    def test_ready_for_departure_paid_active(self) -> None:
+        o = Order(
+            id=4,
+            user_id=1,
+            tour_id=1,
+            boarding_point_id=1,
+            seats_count=2,
+            booking_status=BookingStatus.READY_FOR_DEPARTURE,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=None,
+            total_amount=Decimal("10.00"),
+            currency="EUR",
+        )
+        kind, summary = describe_order_admin_lifecycle(o)
+        self.assertEqual(kind, AdminOrderLifecycleKind.READY_FOR_DEPARTURE_PAID)
+        self.assertIn("ready for departure", summary.lower())

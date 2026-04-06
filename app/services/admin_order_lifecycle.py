@@ -13,6 +13,8 @@ from app.models.order import Order
 class AdminOrderLifecycleKind(StrEnum):
     ACTIVE_TEMPORARY_HOLD = "active_temporary_hold"
     EXPIRED_UNPAID_HOLD = "expired_unpaid_hold"
+    # Paid + active, post–Step 26 manual mark — read-side label only (not a mutation).
+    READY_FOR_DEPARTURE_PAID = "ready_for_departure_paid"
     CONFIRMED_PAID = "confirmed_paid"
     OTHER = "other"
 
@@ -33,18 +35,26 @@ def sql_predicate_for_lifecycle_kind(kind: AdminOrderLifecycleKind):
         Order.cancellation_status == CancellationStatus.ACTIVE,
         Order.reservation_expires_at.is_not(None),
     )
+    ready_for_departure_paid = and_(
+        Order.booking_status == BookingStatus.READY_FOR_DEPARTURE,
+        Order.payment_status == PaymentStatus.PAID,
+        Order.cancellation_status == CancellationStatus.ACTIVE,
+    )
     confirmed_paid = and_(
         Order.booking_status == BookingStatus.CONFIRMED,
         Order.payment_status == PaymentStatus.PAID,
     )
+    classified = or_(expired, active_hold, ready_for_departure_paid, confirmed_paid)
     if kind == AdminOrderLifecycleKind.EXPIRED_UNPAID_HOLD:
         return expired
     if kind == AdminOrderLifecycleKind.ACTIVE_TEMPORARY_HOLD:
         return active_hold
+    if kind == AdminOrderLifecycleKind.READY_FOR_DEPARTURE_PAID:
+        return ready_for_departure_paid
     if kind == AdminOrderLifecycleKind.CONFIRMED_PAID:
         return confirmed_paid
     if kind == AdminOrderLifecycleKind.OTHER:
-        return not_(or_(expired, active_hold, confirmed_paid))
+        return not_(classified)
     raise ValueError(f"Unsupported lifecycle kind: {kind!r}")
 
 
@@ -76,6 +86,16 @@ def describe_order_admin_lifecycle(order: Order) -> tuple[AdminOrderLifecycleKin
         return (
             AdminOrderLifecycleKind.ACTIVE_TEMPORARY_HOLD,
             "Active temporary reservation — payment pending before deadline.",
+        )
+
+    if (
+        bs == BookingStatus.READY_FOR_DEPARTURE
+        and ps == PaymentStatus.PAID
+        and cs == CancellationStatus.ACTIVE
+    ):
+        return (
+            AdminOrderLifecycleKind.READY_FOR_DEPARTURE_PAID,
+            "Paid booking — marked ready for departure (pre-trip).",
         )
 
     if bs == BookingStatus.CONFIRMED and ps == PaymentStatus.PAID:

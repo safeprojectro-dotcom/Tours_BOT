@@ -275,6 +275,37 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(body["allowed_admin_actions"], [])
         self.assertIn("No payment follow-up", body["payment_action_preview"])
 
+    def test_order_detail_lifecycle_ready_for_departure_paid(self) -> None:
+        """Step 27: ready_for_departure + paid + active maps to ready_for_departure_paid, not other."""
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-LC-RFD",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 9, 1, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.READY_FOR_DEPARTURE,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.commit()
+
+        r = self.client.get(f"/admin/orders/{order.id}", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["lifecycle_kind"], "ready_for_departure_paid")
+        self.assertIn("ready for departure", body["lifecycle_summary"].lower())
+        self.assertEqual(body["suggested_admin_action"], "none")
+        self.assertIn("lifecycle_kind", body)
+        self.assertIn("needs_manual_review", body)
+        self.assertIn("payment_correction_hint", body)
+
     def test_order_detail_action_preview_active_hold_await_payment(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}
         user = self.create_user()
@@ -1694,6 +1725,36 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(r_conf.status_code, 200)
         ids_conf = {x["id"] for x in r_conf.json()["items"]}
         self.assertEqual(ids_conf, {conf.id})
+
+    def test_list_orders_filtered_by_lifecycle_kind_ready_for_departure_paid(self) -> None:
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-LC-RFD-FLT",
+            departure_datetime=datetime(2026, 10, 1, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        rfd = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.READY_FOR_DEPARTURE,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.session.commit()
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.get(
+            "/admin/orders",
+            headers=headers,
+            params={"lifecycle_kind": "ready_for_departure_paid"},
+        )
+        self.assertEqual(r.status_code, 200)
+        ids = {x["id"] for x in r.json()["items"]}
+        self.assertIn(rfd.id, ids)
+        self.assertEqual(
+            next(x["lifecycle_kind"] for x in r.json()["items"] if x["id"] == rfd.id),
+            "ready_for_departure_paid",
+        )
 
     def test_list_orders_filtered_by_tour_id(self) -> None:
         user = self.create_user()
