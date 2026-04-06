@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, time as time_type
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -378,6 +379,28 @@ class AdminHandoffListRead(BaseModel):
     total_returned: int
 
 
+class AdminOrderMovePlacementSnapshot(BaseModel):
+    """Read-only: **current** persisted tour/boarding placement; no move-audit timeline (Phase 6 / Step 30)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["current_placement_only"] = Field(
+        default="current_placement_only",
+        description="Only safe mode without persisted prior placement rows.",
+    )
+    timeline_available: bool = Field(
+        default=False,
+        description="False until optional future audit slice stores move history.",
+    )
+    tour_id: int
+    boarding_point_id: int
+    tour_code: str
+    tour_departure_datetime: datetime
+    boarding_city: str
+    order_updated_at: datetime
+    note: str
+
+
 class AdminOrderDetailRead(BaseModel):
     id: int
     user_id: int
@@ -467,6 +490,12 @@ class AdminOrderDetailRead(BaseModel):
     )
     move_readiness_hint: str = Field(
         description="One-line human orientation for move readiness; not a capability or workflow.",
+    )
+    move_placement_snapshot: AdminOrderMovePlacementSnapshot = Field(
+        description=(
+            "Read-only current tour/boarding placement for post-move inspection; "
+            "not a history timeline (Phase 6 / Step 30)."
+        ),
     )
 
 

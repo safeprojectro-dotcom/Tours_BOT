@@ -694,6 +694,94 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(r.status_code, 400)
         self.assertEqual(r.json()["detail"]["code"], "order_move_target_tour_not_open_for_sale")
 
+    def test_order_detail_move_placement_snapshot_stable_order(self) -> None:
+        """Step 30: read-only placement snapshot matches current tour/boarding; no timeline."""
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-MVPL-STABLE",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 8, 1, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour, city="StableCity")
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.commit()
+
+        r = self.client.get(f"/admin/orders/{order.id}", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        mps = body["move_placement_snapshot"]
+        self.assertEqual(mps["kind"], "current_placement_only")
+        self.assertFalse(mps["timeline_available"])
+        self.assertEqual(mps["tour_id"], tour.id)
+        self.assertEqual(mps["boarding_point_id"], point.id)
+        self.assertEqual(mps["tour_code"], "ADM-MVPL-STABLE")
+        self.assertEqual(mps["boarding_city"], "StableCity")
+        self.assertIn("not persisted", mps["note"].lower())
+        self.assertIn("lifecycle_kind", body)
+        self.assertIn("can_consider_move", body)
+        self.assertIn("needs_manual_review", body)
+        self.assertIn("suggested_admin_action", body)
+
+    def test_order_detail_move_placement_snapshot_after_admin_move(self) -> None:
+        """Step 30: after Step 29 move, snapshot reflects **current** target placement only."""
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour_a = self.create_tour(
+            code="ADM-MVPL-SRC",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 8, 15, 8, 0, tzinfo=UTC),
+            seats_total=40,
+            seats_available=38,
+        )
+        pa = self.create_boarding_point(tour_a, city="SourceCity")
+        tour_b = self.create_tour(
+            code="ADM-MVPL-TGT",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 8, 16, 9, 0, tzinfo=UTC),
+            seats_total=40,
+            seats_available=30,
+            currency="EUR",
+        )
+        pb = self.create_boarding_point(tour_b, city="TargetCity")
+        order = self.create_order(
+            user,
+            tour_a,
+            pa,
+            seats_count=2,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.commit()
+
+        mv = self.client.post(
+            f"/admin/orders/{order.id}/move",
+            headers=headers,
+            json={"target_tour_id": tour_b.id, "target_boarding_point_id": pb.id},
+        )
+        self.assertEqual(mv.status_code, 200)
+
+        r = self.client.get(f"/admin/orders/{order.id}", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        mps = body["move_placement_snapshot"]
+        self.assertFalse(mps["timeline_available"])
+        self.assertEqual(mps["tour_id"], tour_b.id)
+        self.assertEqual(mps["boarding_point_id"], pb.id)
+        self.assertEqual(mps["tour_code"], "ADM-MVPL-TGT")
+        self.assertEqual(mps["boarding_city"], "TargetCity")
+        self.assertIn("2026-08-16T09:00:00", mps["tour_departure_datetime"])
+
     def test_order_mark_cancelled_by_operator_requires_auth(self) -> None:
         r = self.client.post("/admin/orders/1/mark-cancelled-by-operator")
         self.assertEqual(r.status_code, 401)
