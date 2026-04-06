@@ -479,6 +479,214 @@ class AdminRouteTests(FoundationDBTestCase):
         self.session.refresh(tour)
         self.assertEqual(tour.seats_available, seats_after_first)
 
+    def test_order_mark_duplicate_requires_auth(self) -> None:
+        r = self.client.post("/admin/orders/1/mark-duplicate")
+        self.assertEqual(r.status_code, 401)
+
+    def test_order_mark_duplicate_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.post("/admin/orders/999999/mark-duplicate", headers=headers)
+        self.assertEqual(r.status_code, 404)
+
+    def test_order_mark_duplicate_rejects_paid(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-ORD-DUP-PAID",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 11, 1, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/mark-duplicate",
+            headers=headers,
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["detail"]["code"], "order_mark_duplicate_not_allowed")
+        self.assertEqual(r.json()["detail"]["payment_status"], "paid")
+
+    def test_order_mark_duplicate_rejects_cancelled_by_operator(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-ORD-DUP-CBO",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 11, 2, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.UNPAID,
+            cancellation_status=CancellationStatus.CANCELLED_BY_OPERATOR,
+            reservation_expires_at=None,
+        )
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/mark-duplicate",
+            headers=headers,
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["detail"]["code"], "order_mark_duplicate_not_allowed")
+
+    def test_order_mark_duplicate_rejects_hold_without_expiry(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-ORD-DUP-NOEXP",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 11, 3, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=None,
+        )
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/mark-duplicate",
+            headers=headers,
+        )
+        self.assertEqual(r.status_code, 400)
+
+    def test_order_mark_duplicate_success_active_hold_restores_seats(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-ORD-DUP-HOLD",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 11, 4, 8, 0, tzinfo=UTC),
+            seats_total=20,
+            seats_available=18,
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            seats_count=2,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=datetime(2026, 11, 3, 12, 0, 0, tzinfo=UTC),
+        )
+        self.create_payment(order, status=PaymentStatus.AWAITING_PAYMENT)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/mark-duplicate",
+            headers=headers,
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["persistence_snapshot"]["cancellation_status"], "duplicate")
+        self.assertEqual(body["persistence_snapshot"]["payment_status"], "unpaid")
+        self.assertIsNone(body["reservation_expires_at"])
+        self.assertIn("lifecycle_kind", body)
+        self.assertIn("needs_manual_review", body)
+        self.assertIn("suggested_admin_action", body)
+
+        self.session.refresh(tour)
+        self.assertEqual(tour.seats_available, 20)
+
+    def test_order_mark_duplicate_success_expired_unpaid_hold_no_seat_change(self) -> None:
+        """Expired hold: seats already returned by expiry semantics; only cancellation_status -> duplicate."""
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-ORD-DUP-EXP",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 11, 5, 8, 0, tzinfo=UTC),
+            seats_total=24,
+            seats_available=24,
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            seats_count=2,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.UNPAID,
+            cancellation_status=CancellationStatus.CANCELLED_NO_PAYMENT,
+            reservation_expires_at=None,
+        )
+        self.session.commit()
+        seats_before = tour.seats_available
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/mark-duplicate",
+            headers=headers,
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["persistence_snapshot"]["cancellation_status"], "duplicate")
+        self.assertEqual(body["persistence_snapshot"]["payment_status"], "unpaid")
+
+        self.session.refresh(tour)
+        self.assertEqual(tour.seats_available, seats_before)
+
+    def test_order_mark_duplicate_idempotent(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-ORD-DUP-IDEM",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 11, 6, 8, 0, tzinfo=UTC),
+            seats_total=25,
+            seats_available=23,
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            seats_count=2,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=datetime(2026, 11, 5, 12, 0, 0, tzinfo=UTC),
+        )
+        self.create_payment(order, status=PaymentStatus.AWAITING_PAYMENT)
+        self.session.commit()
+
+        r1 = self.client.post(
+            f"/admin/orders/{order.id}/mark-duplicate",
+            headers=headers,
+        )
+        self.assertEqual(r1.status_code, 200)
+        self.session.refresh(tour)
+        seats_after_first = tour.seats_available
+
+        r2 = self.client.post(
+            f"/admin/orders/{order.id}/mark-duplicate",
+            headers=headers,
+        )
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(r2.json()["persistence_snapshot"]["cancellation_status"], "duplicate")
+        self.session.refresh(tour)
+        self.assertEqual(tour.seats_available, seats_after_first)
+
     def test_handoffs_list_requires_auth(self) -> None:
         r = self.client.get("/admin/handoffs")
         self.assertEqual(r.status_code, 401)
