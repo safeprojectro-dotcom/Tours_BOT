@@ -274,6 +274,9 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(body["suggested_admin_action"], "none")
         self.assertEqual(body["allowed_admin_actions"], [])
         self.assertIn("No payment follow-up", body["payment_action_preview"])
+        self.assertTrue(body["can_consider_move"])
+        self.assertEqual(body["move_blockers"], [])
+        self.assertIn("future narrow move", body["move_readiness_hint"].lower())
 
     def test_order_detail_lifecycle_ready_for_departure_paid(self) -> None:
         """Step 27: ready_for_departure + paid + active maps to ready_for_departure_paid, not other."""
@@ -305,6 +308,72 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertIn("lifecycle_kind", body)
         self.assertIn("needs_manual_review", body)
         self.assertIn("payment_correction_hint", body)
+        self.assertTrue(body["can_consider_move"])
+        self.assertEqual(body["move_blockers"], [])
+        self.assertIn("future narrow move", body["move_readiness_hint"].lower())
+
+    def test_order_detail_move_readiness_blocked_open_handoff(self) -> None:
+        """Paid confirmed future tour but open handoff — conservative move blocker."""
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-MV-HO",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 12, 1, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.add(
+            Handoff(
+                user_id=user.id,
+                order_id=order.id,
+                reason="Need help",
+                priority="normal",
+                status="open",
+            )
+        )
+        self.session.commit()
+
+        r = self.client.get(f"/admin/orders/{order.id}", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertFalse(body["can_consider_move"])
+        self.assertIn("open_handoff_open", body["move_blockers"])
+        self.assertIn("blockers", body["move_readiness_hint"].lower())
+
+    def test_order_detail_move_readiness_blocked_past_departure(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-MV-PAST",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2020, 3, 1, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.commit()
+
+        r = self.client.get(f"/admin/orders/{order.id}", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertFalse(body["can_consider_move"])
+        self.assertIn("tour_departure_not_in_future", body["move_blockers"])
 
     def test_order_detail_action_preview_active_hold_await_payment(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}
@@ -334,6 +403,8 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertFalse(body["needs_manual_review"])
         self.assertEqual(body["suggested_admin_action"], "await_customer_payment")
         self.assertIn("monitor_reservation_deadline", body["allowed_admin_actions"])
+        self.assertFalse(body["can_consider_move"])
+        self.assertIn("lifecycle_not_move_candidate", body["move_blockers"])
 
     def test_order_mark_cancelled_by_operator_requires_auth(self) -> None:
         r = self.client.post("/admin/orders/1/mark-cancelled-by-operator")

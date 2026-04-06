@@ -4,9 +4,9 @@
 Tours_BOT
 
 ## Current Status
-The project is ready to continue from the **latest approved checkpoint**: **Phase 6 / Step 27 completed** — **read-side** admin order **lifecycle** refinement: **`AdminOrderLifecycleKind.READY_FOR_DEPARTURE_PAID`** (`ready_for_departure_paid`) in **`app/services/admin_order_lifecycle.py`** aligns **`describe_order_admin_lifecycle`**, **`sql_predicate_for_lifecycle_kind`** (incl. **`GET /admin/orders?lifecycle_kind=`**), and **`app/services/admin_order_action_preview.py`** so the post–Step **26** steady state (**`booking_status=ready_for_departure`**, **`payment_status=paid`**, **`cancellation_status=active`**) is **not** classified as generic **`other`**. **No new routes or mutations** in Step **27**.
+The project is ready to continue from the **latest approved checkpoint**: **Phase 6 / Step 28 completed** — **read-only** admin order **move-readiness** decision-support on **`GET /admin/orders/{order_id}`**: **`can_consider_move`**, **`move_blockers`**, **`move_readiness_hint`** (see **`app/services/admin_order_move_readiness.py`**). Conservative blockers only; **no** move mutation, **no** new routes beyond extending order detail. **Step 27** remains: **`ready_for_departure_paid`** lifecycle + list filter + action-preview alignment (**`app/services/admin_order_lifecycle.py`**, **`admin_order_action_preview.py`**).
 
-Order **write** surface (unchanged in count): **`app/services/admin_order_write.py`** — **`POST /admin/orders/{order_id}/mark-cancelled-by-operator`** (Step **23**), **`mark-duplicate`** (Step **24**), **`mark-no-show`** (Step **25**), **`mark-ready-for-departure`** (Step **26**); handoff writes Steps **19–22** (**`app/services/admin_handoff_write.py`**).
+Order **write** surface (unchanged): **`app/services/admin_order_write.py`** — **`POST /admin/orders/{order_id}/mark-cancelled-by-operator`** (Step **23**), **`mark-duplicate`** (Step **24**), **`mark-no-show`** (Step **25**), **`mark-ready-for-departure`** (Step **26**); handoff writes Steps **19–22** (**`app/services/admin_handoff_write.py`**). **No** **`POST .../move-...`** yet — forward **Step 29** (see **Next Safe Step**).
 
 **Agreed narrow semantics (combined):**
 - **`mark-in-review`:** **`open` → `in_review`**; **`in_review` → idempotent success** (no extra write); **`closed` → 400**; missing handoff → **404**.
@@ -18,29 +18,30 @@ Order **write** surface (unchanged in count): **`app/services/admin_order_write.
 - **`mark-no-show`** (Step **25**): **confirmed** + **paid** + **`cancellation_status=active`** only; **`tour.departure_datetime` must be in the past** (UTC); already **`booking_status=no_show`** and **`cancellation_status=no_show` → idempotent**; wrong statuses → **400**; valid statuses but **departure not in past** → **400** (`reason` **`departure_not_in_past`**); on success: **`booking_status`/`cancellation_status` → `no_show`**; **`payment_status` unchanged**; **no** seat restoration, **no** payment-row mutation; missing order or missing tour → **404**.
 - **`mark-ready-for-departure`** (Step **26**): **confirmed** + **paid** + **`cancellation_status=active`** only; **`tour.departure_datetime` must be strictly in the future** (UTC); already **`booking_status=ready_for_departure`** + paid + active → **idempotent**; departure not in future → **400** (`reason` **`departure_not_in_future`**); on success: **`booking_status` → `ready_for_departure` only**; **`payment_status` / `cancellation_status` unchanged**; **no** seat mutation, **no** payment-row mutation; missing order or tour → **404**. **Step 27** adds read-side **`ready_for_departure_paid`** lifecycle labeling for that steady state (see below).
 - **Lifecycle read (Step 27):** **`ready_for_departure_paid`** applies only to **`ready_for_departure` + paid + active**; list filter **`lifecycle_kind=ready_for_departure_paid`** matches **`describe_order_admin_lifecycle`**; action preview treats this like **confirmed paid** (clean / no spurious **`manual_review`** from lifecycle alone). **Not** a mutation; **no** repository writes.
+- **Move readiness (Step 28):** **`can_consider_move`**, **`move_blockers`**, **`move_readiness_hint`** on **`GET /admin/orders/{order_id}`** only; grounded in persisted order/tour + lifecycle + correction + open handoffs; blocker codes include **`payment_correction_manual_review`**, **`open_handoff_open`**, **`order_not_paid`**, **`cancellation_not_active`**, **`lifecycle_not_move_candidate`**, **`tour_departure_not_in_future`**. **Read-only** — does **not** perform or authorize a move.
 
-**Step 18** read API: **`GET /admin/handoffs`**, **`GET /admin/handoffs/{handoff_id}`** (**`is_open`**, **`needs_attention`**, **`age_bucket`**, **`assigned_operator_id`**). **Still not implemented:** **unassign**, broader **reassignment** policy redesign, full **operator workflow engine**, **notifications** from admin handoff actions, **public** customer handoff flow changes, **refund / capture / cancel-payment** admin actions, **broad** order workflow editor, **merge** tooling, **narrow move-to-another-tour/date** (forward: **Step 28** — see **Next Safe Step**), **full** admin SPA.
+**Step 18** read API: **`GET /admin/handoffs`**, **`GET /admin/handoffs/{handoff_id}`** (**`is_open`**, **`needs_attention`**, **`age_bucket`**, **`assigned_operator_id`**). **Still not implemented:** **unassign**, broader **reassignment** policy redesign, full **operator workflow engine**, **notifications** from admin handoff actions, **public** customer handoff flow changes, **refund / capture / cancel-payment** admin actions, **broad** order workflow editor, **merge** tooling, **narrow move-to-another-tour/date mutation** (forward: **Step 29** — see **Next Safe Step**), **full** admin SPA.
 
-**Phase 6 / Steps 1–27** (completed): **`ADMIN_API_TOKEN`**; tours, boarding, translations, archive/unarchive; orders **16–17** (read + preview) + **Step 27** (lifecycle **`ready_for_departure_paid`**) + **Steps 23–26** (cancel + duplicate + no-show + ready-for-departure); handoff **queue read** + **four** narrow mutations (**status progression + assign + reopen**).
+**Phase 6 / Steps 1–28** (completed): **`ADMIN_API_TOKEN`**; tours, boarding, translations, archive/unarchive; orders **16–17** (read + preview) + **Steps 27–28** (lifecycle **`ready_for_departure_paid`** + move-readiness hints) + **Steps 23–26** (cancel + duplicate + no-show + ready-for-departure); handoff **queue read** + **four** narrow mutations (**status progression + assign + reopen**).
 
 Earlier: **Phase 5 (Mini App MVP) accepted** for MVP/staging; **Phase 5 / Step 20** was docs-only consolidation (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
 
-**Next work:** **Phase 6 / Step 28** — see **Next Safe Step**.
+**Next work:** **Phase 6 / Step 29** — see **Next Safe Step**.
 
 ### Operational note (production — Step 6 schema recovery)
 After Step 6 backend shipped to Railway **before** production Postgres had applied Alembic revision **`20260405_04`**, the missing column **`tours.cover_media_reference`** caused **`ProgrammingError` / `UndefinedColumn`** and **500**s on routes that load tours (e.g. **`/mini-app/catalog`**, **`/mini-app/bookings`**). Root cause was **schema mismatch**, not Mini App UI logic. **Recovery completed:** migrations applied against the Railway DB (using the **public** Postgres URL and a local driver URL such as **`postgresql+psycopg://...`** where internal hostnames are not resolvable), backend **redeployed**, **`/health`**, catalog, and bookings smoke-checked. **Going forward:** any schema-changing step must include **migration apply → redeploy → smoke** for affected endpoints. Details: **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` section 17**.
 
 ## Current Phase
 
-**Current phase (forward work):** **Phase 6 — Admin Panel MVP**. **Completed through Phase 6 / Step 27**; **next implementation checkpoint: Phase 6 / Step 28** (see **Next Safe Step**).
+**Current phase (forward work):** **Phase 6 — Admin Panel MVP**. **Completed through Phase 6 / Step 28**; **next implementation checkpoint: Phase 6 / Step 29** (see **Next Safe Step**).
 
-**Latest approved checkpoint:** **Phase 6 / Step 27** — admin order **lifecycle-read** refinement (**`ready_for_departure_paid`**; **`describe_order_admin_lifecycle`** + **list filter** + **action preview** alignment; see **Current Status**). **Steps 23–26** order mutations unchanged in semantics. **Step 18** handoff list/detail unchanged. **Still not via `/admin/*`:** **unassign**, broader **reassignment** redesign, **notifications** from admin handoff actions, **refund / capture / cancel-payment**, **broad** order editor, **merge** tooling, **move-to-another-tour/date** (until **Step 28** or a later narrow slice), **full** admin SPA, **publication**, **bulk** ops, **hard-delete** tour. Internal **ops** JSON stays **separate** from **`/admin/*`**. Still **no** route/itinerary editor beyond current boarding slices.
+**Latest approved checkpoint:** **Phase 6 / Step 28** — **`GET /admin/orders/{order_id}`** extended with **move-readiness** fields (**`can_consider_move`**, **`move_blockers`**, **`move_readiness_hint`**); read-only; **no** move endpoint (see **Current Status**). **Steps 16–17** + **27** (lifecycle, correction, preview) + **28** (move readiness) form the admin order **read** story for detail. **Steps 23–26** mutations unchanged. **Step 18** handoff list/detail unchanged. **Still not via `/admin/*`:** actual **move-to-another-tour/date mutation** (until **Step 29**), **unassign**, broader **reassignment** redesign, **notifications** from admin handoff actions, **refund / capture / cancel-payment**, **broad** order editor, **merge** tooling, **full** admin SPA, **publication**, **bulk** ops, **hard-delete** tour. Internal **ops** JSON stays **separate** from **`/admin/*`**. Still **no** route/itinerary editor beyond current boarding slices.
 
-**Earlier checkpoints:** Phase 6 / Steps 1–7 (foundation through core tour patch); Phase 6 / Steps 8–10 (boarding create / patch / delete); Phase 6 / Steps 11–12 (tour translation upsert/delete); Phase 6 / Steps 13–14 (boarding point translation upsert/delete); Phase 6 / Step 15 (tour archive/unarchive); Phase 6 / Step 16 (order detail payment correction visibility); Phase 6 / Step 17 (order detail action preview); Phase 6 / Step 18 (admin handoff queue read API); Phase 6 / Step 19 (admin handoff mark-in-review); Phase 6 / Step 20 (admin handoff close-only); Phase 6 / Step 21 (admin handoff assign); Phase 6 / Step 22 (admin handoff reopen); Phase 6 / Step 23 (admin mark-cancelled-by-operator); Phase 6 / Step 24 (admin mark-duplicate); Phase 6 / Step 25 (admin mark-no-show); Phase 6 / Step 26 (admin mark-ready-for-departure); Phase 6 / Step 27 (admin lifecycle **`ready_for_departure_paid`** read refinement); Phase 5 accepted + Phase 5 Step 20 docs (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
+**Earlier checkpoints:** Phase 6 / Steps 1–7 (foundation through core tour patch); Phase 6 / Steps 8–10 (boarding create / patch / delete); Phase 6 / Steps 11–12 (tour translation upsert/delete); Phase 6 / Steps 13–14 (boarding point translation upsert/delete); Phase 6 / Step 15 (tour archive/unarchive); Phase 6 / Step 16 (order detail payment correction visibility); Phase 6 / Step 17 (order detail action preview); Phase 6 / Step 18 (admin handoff queue read API); Phase 6 / Step 19 (admin handoff mark-in-review); Phase 6 / Step 20 (admin handoff close-only); Phase 6 / Step 21 (admin handoff assign); Phase 6 / Step 22 (admin handoff reopen); Phase 6 / Step 23 (admin mark-cancelled-by-operator); Phase 6 / Step 24 (admin mark-duplicate); Phase 6 / Step 25 (admin mark-no-show); Phase 6 / Step 26 (admin mark-ready-for-departure); Phase 6 / Step 27 (admin lifecycle **`ready_for_departure_paid`** read refinement); Phase 6 / Step 28 (admin order move-readiness read-only fields); Phase 5 accepted + Phase 5 Step 20 docs (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
 
 **Phase 5 (closed for MVP):** Execution checkpoints **Steps 4–19** are summarized in `docs/PHASE_5_ACCEPTANCE_SUMMARY.md` and per-step notes under `docs/PHASE_5_STEP_*_NOTES.md`; **Phase 5 / Step 20** was documentation/consolidation only (no intended production-code churn for acceptance).
 
-**Forward:** implement **Phase 6 / Step 28** only as defined in **Next Safe Step** — do **not** use legacy Phase 5 “next step” prompts for new code.
+**Forward:** implement **Phase 6 / Step 29** only as defined in **Next Safe Step** — do **not** use legacy Phase 5 “next step” prompts for new code.
 
 **Optional follow-ups** (not Phase 5 blockers; prioritize with product): Telegram Web App init-data validation for Mini App APIs, real payment provider (PSP), broader handoff/waitlist customer notifications.
 
@@ -743,6 +744,14 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
   - **Scope respected:** public booking/payment/waitlist/handoff flows unchanged
   - **Prompt archive:** `docs/CURSOR_PROMPT_PHASE_6_STEP_27.md` (historical)
 
+- Phase 6 / Step 28 completed
+  - **Read-side only** — extends **`GET /admin/orders/{order_id}`** (`AdminOrderDetailRead`) with **`can_consider_move`**, **`move_blockers`**, **`move_readiness_hint`** — **`compute_move_readiness`** in **`app/services/admin_order_move_readiness.py`**
+  - **No** move mutation endpoint; **no** seat/payment writes; conservative blocker codes (see **Current Status**)
+  - **Explicitly not in this step:** move **POST**, refund, merge, reconciliation rewrite, public flow changes
+  - **Tests:** `tests/unit/test_api_admin.py` (focused)
+  - **Scope respected:** public booking/payment/waitlist/handoff flows unchanged
+  - **Prompt archive:** `docs/CURSOR_PROMPT_PHASE_6_STEP_28.md` (historical)
+
 ---
 
 ## Verified
@@ -821,7 +830,7 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
 
 ### Ready
 - **bot layer** — Telegram private chat; thin handlers; service-driven
-- **api layer** — FastAPI; public routes + Mini App routes + payments webhooks + **internal ops** JSON endpoints + **admin API** (`/admin/*`, `ADMIN_API_TOKEN`: overview, tours/orders **lists** with **optional read-only filters** incl. **`lifecycle_kind=ready_for_departure_paid`** (Step **27**), **`GET /admin/handoffs`** and **`GET /admin/handoffs/{handoff_id}`** handoff queue visibility, **`POST /admin/handoffs/{handoff_id}/mark-in-review`** (Step **19**), **`POST /admin/handoffs/{handoff_id}/close`** (Step **20**), **`POST /admin/handoffs/{handoff_id}/assign`** (Step **21**), **`POST /admin/handoffs/{handoff_id}/reopen`** (Step **22**), **`GET /admin/orders/{order_id}`** order detail with **Step 16** correction + **Step 17** action-preview fields + **Step 27** lifecycle mapping, **`POST /admin/orders/{order_id}/mark-cancelled-by-operator`** (Step **23**), **`POST /admin/orders/{order_id}/mark-duplicate`** (Step **24**), **`POST /admin/orders/{order_id}/mark-no-show`** (Step **25**), **`POST /admin/orders/{order_id}/mark-ready-for-departure`** (Step **26**), **tour + order detail** incl. **`cover_media_reference`**, **`POST /admin/tours`** create **core** tours, **`POST /admin/tours/{tour_id}/archive`** and **`POST /admin/tours/{tour_id}/unarchive`**, **`PUT /admin/tours/{tour_id}/cover`** for **one** media reference string, **`PATCH /admin/tours/{tour_id}`** for **core** field updates only, **`POST` / `PATCH` / `DELETE`** boarding points, **`PUT` / `DELETE`** **`/admin/tours/{tour_id}/translations/{language_code}`** for **tour** translations, **`PUT` / `DELETE`** **`/admin/boarding-points/{boarding_point_id}/translations/{language_code}`** for **boarding** translations)
+- **api layer** — FastAPI; public routes + Mini App routes + payments webhooks + **internal ops** JSON endpoints + **admin API** (`/admin/*`, `ADMIN_API_TOKEN`: overview, tours/orders **lists** with **optional read-only filters** incl. **`lifecycle_kind=ready_for_departure_paid`** (Step **27**), **`GET /admin/handoffs`** and **`GET /admin/handoffs/{handoff_id}`** handoff queue visibility, **`POST /admin/handoffs/{handoff_id}/mark-in-review`** (Step **19**), **`POST /admin/handoffs/{handoff_id}/close`** (Step **20**), **`POST /admin/handoffs/{handoff_id}/assign`** (Step **21**), **`POST /admin/handoffs/{handoff_id}/reopen`** (Step **22**), **`GET /admin/orders/{order_id}`** order detail with **Step 16** correction + **Step 17** action-preview + **Step 27** lifecycle mapping + **Step 28** move-readiness fields (**`can_consider_move`**, **`move_blockers`**, **`move_readiness_hint`**), **`POST /admin/orders/{order_id}/mark-cancelled-by-operator`** (Step **23**), **`POST /admin/orders/{order_id}/mark-duplicate`** (Step **24**), **`POST /admin/orders/{order_id}/mark-no-show`** (Step **25**), **`POST /admin/orders/{order_id}/mark-ready-for-departure`** (Step **26**), **tour + order detail** incl. **`cover_media_reference`**, **`POST /admin/tours`** create **core** tours, **`POST /admin/tours/{tour_id}/archive`** and **`POST /admin/tours/{tour_id}/unarchive`**, **`PUT /admin/tours/{tour_id}/cover`** for **one** media reference string, **`PATCH /admin/tours/{tour_id}`** for **core** field updates only, **`POST` / `PATCH` / `DELETE`** boarding points, **`PUT` / `DELETE`** **`/admin/tours/{tour_id}/translations/{language_code}`** for **tour** translations, **`PUT` / `DELETE`** **`/admin/boarding-points/{boarding_point_id}/translations/{language_code}`** for **boarding** translations)
 - **services layer** — business rules and orchestration
 - **repositories layer** — persistence-oriented data access
 - **mini_app** — Flet Mini App UI (separate deploy surface in staging); **MVP accepted** for agreed scope (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`); **no business logic in the frontend** — UI calls APIs only
@@ -835,29 +844,28 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
 - **Mini App / any web UI**: presentation only — no duplicated booking/payment rules in the client
 
 ### Not Implemented Yet
-- **Next (Step 28):** first narrow **admin order move-to-another-date *or* move-to-another-tour** correction — **exactly one** explicit **`POST /admin/orders/...`** path per product choice (**not** both in one step); **predicates and seat/payment rules must be product-approved** before coding; **no** refund workflow, **no** reconciliation rewrite, **no** public/catalog/Mini App changes in the same slice — see **Next Safe Step**.
-- **Alternative if product defers move:** another **read-only** admin refinement (e.g. lifecycle label for a **different** concrete persisted combo) — **no** payment-row mutation either way until an explicit payment-admin slice.
+- **Next (Step 29):** first narrow **admin order move-to-another-date *or* move-to-another-tour mutation** — **exactly one** explicit **`POST /admin/orders/...`** path (product picks **date** vs **tour**; **not** both in one step); **align predicates with Step 28 readiness** and product-approved seat/payment rules; **no** refund workflow, **no** reconciliation rewrite in the same slice — see **Next Safe Step**.
 - **Still postponed:** admin **refund / capture / cancel-payment**, **broad** order status editor, **merge** tooling, **payment reconciliation** rewrite, handoff **unassign**, broader **reassignment** policy, full **operator queue/workflow engine**, **notifications** from admin actions, **full** admin SPA, **publication**, **bulk** ops — per plan / product.
 - **Phase 7–9:** group assistant, handoff at scale, content assistant, analytics — per `docs/IMPLEMENTATION_PLAN.md`
 
 ## Next Safe Step
 
-**Phase 6 / Step 28 — first narrow admin order move-to-another-date *or* move-to-another-tour slice** — **one** explicit mutation endpoint and **one** happy-path semantics family (product picks **date move** vs **tour move**; **not** both in one step). **Narrow predicates**, **service-layer** rules, **thin** route; **repositories** persistence-oriented; **no** refund/capture, **no** reconciliation rewrite, **no** merge tooling, **no** broad order editor, **no** public customer-flow changes unless the step explicitly documents an exception.
+**Phase 6 / Step 29 — first narrow admin order move-to-another-date *or* move-to-another-tour mutation slice** — **one** explicit **`POST /admin/orders/{order_id}/...`** endpoint (product picks **date move** vs **tour move**; **not** both in one step). Build on **Step 28** move-readiness signals: reject or narrow when **`can_consider_move`** would have been **false** for the same persisted snapshot (unless product documents a deliberate exception). **Service-layer** rules, **thin** route; **repositories** persistence-oriented; **no** refund/capture, **no** reconciliation rewrite, **no** merge tooling, **no** broad order editor, **no** public customer-flow changes unless the step documents an exception.
 
 ### Goal
-Give operators a **minimal** correction path for the common “wrong date / wrong tour” case while keeping booking/payment core invariants explicit and testable.
+Minimal **mutable** correction path for “wrong date / wrong tour” after operators can **see** readiness on detail (**Step 28**).
 
 ### Safe scope boundaries
-- **One** focused **`POST /admin/orders/{order_id}/...`**; document seat transfer rules and **payment row** policy (**typically: no** payment mutation in MVP slice unless product explicitly approves).
+- **One** mutation; document **seat** transfer and **payment row** policy (**typically: no** payment-row mutation in MVP slice unless product explicitly approves).
 
-### Explicitly not in Step 28
+### Explicitly not in Step 29
 - Payment-admin **refund/capture/cancel-payment**, **merge** tooling, **broad** status matrix, **full** admin SPA, **notification** engine from admin actions.
 
-**Completed step references:** `docs/CURSOR_PROMPT_PHASE_6_STEP_1.md` … `docs/CURSOR_PROMPT_PHASE_6_STEP_27.md` (historical).  
+**Completed step references:** `docs/CURSOR_PROMPT_PHASE_6_STEP_1.md` … `docs/CURSOR_PROMPT_PHASE_6_STEP_28.md` (historical).  
 **Plan:** `docs/IMPLEMENTATION_PLAN.md` (Phase 6 — order oversight / restricted updates, taken as **narrow slices**).
 
 ## Recommended Next Prompt
-Implement **Phase 6 / Step 28** (**narrow move** booking — **one** of date vs tour, per **Next Safe Step** and product) using **`docs/CHAT_HANDOFF.md`**, `docs/IMPLEMENTATION_PLAN.md`, `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, `docs/TECH_SPEC_TOURS_BOT.md`, and `docs/TESTING_STRATEGY.md`. Add **`docs/CURSOR_PROMPT_PHASE_6_STEP_28.md`** when starting — **do not** use legacy Phase 5 “next step” prompts for new work.
+Implement **Phase 6 / Step 29** (**narrow move** mutation — **one** of date vs tour, per **Next Safe Step** and product) using **`docs/CHAT_HANDOFF.md`**, `docs/IMPLEMENTATION_PLAN.md`, `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, `docs/TECH_SPEC_TOURS_BOT.md`, and `docs/TESTING_STRATEGY.md`. Add **`docs/CURSOR_PROMPT_PHASE_6_STEP_29.md`** when starting — **do not** use legacy Phase 5 “next step” prompts for new work.
 
 ---
 
@@ -980,6 +988,6 @@ Continuity rules:
 - preserve the existing architecture and phase sequence
 - do not repeat already completed work
 - do not reintroduce previously postponed logic
-- continue from the last approved checkpoint in `docs/CHAT_HANDOFF.md` (**Phase 6 / Step 27** complete; forward work: **Phase 6 / Step 28** per **Next Safe Step**)
+- continue from the last approved checkpoint in `docs/CHAT_HANDOFF.md` (**Phase 6 / Step 28** complete; forward work: **Phase 6 / Step 29** per **Next Safe Step**)
 
 Forward **Phase 6** work only — do not use legacy Phase 5 “next step” prompts for new implementation slices.

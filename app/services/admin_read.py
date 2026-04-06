@@ -40,6 +40,7 @@ from app.services.admin_order_lifecycle import (
 )
 from app.services.admin_handoff_queue import compute_handoff_queue_fields
 from app.services.admin_order_action_preview import compute_admin_action_preview
+from app.services.admin_order_move_readiness import compute_move_readiness
 from app.services.admin_order_payment_visibility import compute_payment_correction_visibility
 
 
@@ -147,6 +148,12 @@ class AdminReadService:
             correction=correction,
             open_handoff_count=open_handoff_count,
         )
+        move_readiness = compute_move_readiness(
+            order=order,
+            lifecycle_kind=kind,
+            correction=correction,
+            open_handoff_count=open_handoff_count,
+        )
         pay_rows = all_payments[: self._MAX_PAYMENT_ROWS]
         payments = [
             AdminPaymentSummaryItem(
@@ -224,6 +231,9 @@ class AdminReadService:
             payment_action_preview=action_preview.payment_action_preview,
             payments=payments,
             handoffs=handoffs,
+            can_consider_move=move_readiness.can_consider_move,
+            move_blockers=list(move_readiness.move_blockers),
+            move_readiness_hint=move_readiness.move_readiness_hint,
         )
 
     def _handoff_to_read(self, h: Handoff) -> AdminHandoffRead:

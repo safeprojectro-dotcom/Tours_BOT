@@ -454,6 +454,20 @@ class AdminOrderDetailRead(BaseModel):
         default_factory=list,
         description="Handoff rows linked to this order (newest activity first).",
     )
+    can_consider_move: bool = Field(
+        default=False,
+        description=(
+            "Read-only: conservative signal whether persisted state might suit a future "
+            "move-to-tour/date feature; does not authorize or perform a move (Phase 6 / Step 28)."
+        ),
+    )
+    move_blockers: list[str] = Field(
+        default_factory=list,
+        description="Stable machine-oriented blocker codes when can_consider_move is false.",
+    )
+    move_readiness_hint: str = Field(
+        description="One-line human orientation for move readiness; not a capability or workflow.",
+    )
 
 
 class AdminOverviewRead(BaseModel):
