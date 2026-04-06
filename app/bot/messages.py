@@ -92,6 +92,8 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "payment_entry_note": "Your reservation is still temporary. Complete payment before the reservation expires.",
         "payment_verification_note": "Payment is not confirmed until the system verifies it.",
         "payment_entry_failed": "I could not start the payment step because this reservation is no longer valid for payment.",
+        "start_grp_private_intro": "Thanks for opening this chat from the group. You can browse tours below or open the Mini App when you are ready.",
+        "start_grp_followup_intro": "Thanks for continuing here. For team review, use /contact or /human to log a support request. You can browse tours below.",
     },
     "ro": {
         "language_prompt": "Pot continua in limba preferata. Alege o limba:",
@@ -169,6 +171,8 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "payment_entry_note": "Rezervarea ta este inca temporara. Finalizeaza plata inainte sa expire rezervarea.",
         "payment_verification_note": "Plata nu este confirmata pana cand sistemul nu o verifica.",
         "payment_entry_failed": "Nu am putut porni pasul de plata deoarece aceasta rezervare nu mai este valida pentru plata.",
+        "start_grp_private_intro": "Multumim ca ai deschis chatul din grup. Poti vedea tururi mai jos sau deschide Mini App cand esti gata.",
+        "start_grp_followup_intro": "Multumim ca continui aici. Pentru revizuire de echipa, foloseste /contact sau /human. Poti vedea tururi mai jos.",
     },
     "ru": {
         "language_prompt": "Ya mogu prodolzhit na udobnom dlya vas yazyke. Vyberite yazyk:",
@@ -235,6 +239,8 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "human_command_reply": "Если вам нужна проверка человеком, я могу зарегистрировать запрос в поддержку для команды и вернуть номер обращения.",
         "handoff_request_recorded": "Запрос в поддержку зарегистрирован. Номер: {ref}",
         "handoff_request_failed": "Сейчас не удалось зарегистрировать запрос в поддержку. Попробуйте позже.",
+        "start_grp_private_intro": "Спасибо, что открыли чат из группы. Туры ниже или Mini App, когда будете готовы.",
+        "start_grp_followup_intro": "Спасибо, что продолжаете здесь. Для команды — /contact или /human. Туры ниже.",
     },
     "sr": {
         "language_prompt": "Mogu da nastavim na vasem jeziku. Izaberite jezik:",
@@ -301,6 +307,8 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "human_command_reply": "Ako vam je potrebna ljudska provera, mogu evidentirati zahtev za podršku za tim i vratiti referentni broj.",
         "handoff_request_recorded": "Zahtev za podršku je evidentiran. Referenca: {ref}",
         "handoff_request_failed": "Zahtev za podršku trenutno nije moguće evidentirati. Pokušajte ponovo kasnije.",
+        "start_grp_private_intro": "Hvala sto ste otvorili chat iz grupe. Ture ispod ili Mini App kada budete spremni.",
+        "start_grp_followup_intro": "Hvala sto nastavljate ovde. Za tim koristite /contact ili /human. Ture ispod.",
     },
     "hu": {
         "language_prompt": "Folytathatom az on altal valasztott nyelven. Valasszon nyelvet:",
@@ -367,6 +375,8 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "human_command_reply": "Ha emberi felülvizsgálatra van szüksége, rögzíthetek egy támogatási kérelmet a csapat számára, és adok egy hivatkozási számot.",
         "handoff_request_recorded": "A támogatási kérelem rögzítve. Azonosító: {ref}",
         "handoff_request_failed": "A támogatási kérelmet most nem sikerült rögzíteni. Kérjük, próbálja újra később.",
+        "start_grp_private_intro": "Köszönjük, hogy a csoportból megnyitotta a chatet. Túrák lent vagy Mini App, ha kész.",
+        "start_grp_followup_intro": "Köszönjük, hogy itt folytatja. Csapathoz: /contact vagy /human. Túrák lent.",
     },
     "it": {
         "language_prompt": "Posso continuare nella lingua che preferisci. Scegli una lingua:",
@@ -433,6 +443,8 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "human_command_reply": "Se ti serve una verifica umana, posso registrare una richiesta di supporto per il team e restituirti un numero di riferimento.",
         "handoff_request_recorded": "Richiesta di supporto registrata. Riferimento: {ref}",
         "handoff_request_failed": "Non è stato possibile registrare la richiesta di supporto in questo momento. Riprova più tardi.",
+        "start_grp_private_intro": "Grazie per aver aperto la chat dal gruppo. Tour qui sotto o Mini App quando sei pronto.",
+        "start_grp_followup_intro": "Grazie per continuare qui. Per il team usa /contact o /human. Tour qui sotto.",
     },
     "de": {
         "language_prompt": "Ich kann in Ihrer bevorzugten Sprache weitermachen. Bitte waehlen Sie eine Sprache:",
@@ -499,6 +511,8 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "human_command_reply": "Wenn Sie eine menschliche Pruefung brauchen, kann ich eine Support-Anfrage fuer das Team erfassen und Ihnen eine Referenznummer geben.",
         "handoff_request_recorded": "Support-Anfrage wurde erfasst. Referenz: {ref}",
         "handoff_request_failed": "Die Support-Anfrage konnte im Moment nicht erfasst werden. Bitte versuchen Sie es spaeter erneut.",
+        "start_grp_private_intro": "Danke, dass Sie den Chat aus der Gruppe geoeffnet haben. Touren unten oder Mini App, wenn Sie soweit sind.",
+        "start_grp_followup_intro": "Danke, dass Sie hier weitermachen. Fuer das Team: /contact oder /human. Touren unten.",
     },
 }
 

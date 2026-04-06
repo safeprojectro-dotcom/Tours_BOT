@@ -1,3 +1,5 @@
+"""Private chat handlers — catalog, reservations, payments (Phase 7 / Step 6: ``/start grp_*`` intros)."""
+
 from __future__ import annotations
 
 from aiogram import F, Router
@@ -71,6 +73,7 @@ from app.bot.transient_messages import (
 from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.services.handoff_entry import HandoffEntryService
+from app.services.group_private_cta import START_PAYLOAD_GRP_PRIVATE, match_group_cta_start_payload
 from app.services.order_summary import OrderSummaryService
 from app.services.payment_entry import PaymentEntryService
 from app.services.reservation_creation import TemporaryReservationService
@@ -114,9 +117,25 @@ async def handle_start(
             return
 
         await state.clear()
+        raw_start = command.args if command is not None else None
+        grp_payload = match_group_cta_start_payload(raw_start)
+        if grp_payload is not None:
+            intro_key = (
+                "start_grp_private_intro"
+                if grp_payload == START_PAYLOAD_GRP_PRIVATE
+                else "start_grp_followup_intro"
+            )
+            await message.answer(translate(user.preferred_language, intro_key))
+            await _send_catalog_overview(
+                message,
+                language_code=user.preferred_language,
+                prefer_edit=True,
+            )
+            return
+
         detail = browse_service.get_tour_detail_from_start_arg(
             session,
-            start_arg=command.args if command is not None else None,
+            start_arg=raw_start,
             language_code=user.preferred_language,
         )
         if detail is not None:

@@ -187,7 +187,9 @@ Deep links should be planned for:
 - group-to-private CTA
 - Mini App handoff
 
-**Phase 7 / Step 5 (narrow group CTA):** group bot replies may append ``https://t.me/<bot_username>?start=grp_private`` (generic private entry) or ``…?start=grp_followup`` (after a handoff-category-shaped line). These payloads are **not** interpreted as tour deep links; private ``/start`` falls through to the normal flow when the argument does not match ``tour_*`` (see bot browse service). They exist for a consistent tap target from groups without booking or handoff persistence.
+**Phase 7 / Step 5 (narrow group CTA):** group bot replies may append ``https://t.me/<bot_username>?start=grp_private`` (generic private entry) or ``…?start=grp_followup`` (after a handoff-category-shaped line). They exist for a consistent tap target from groups without booking or handoff persistence.
+
+**Phase 7 / Step 6 (private ``/start`` branching):** when the user opens private chat with ``start=grp_private`` or ``start=grp_followup``, the bot sends one short intro message (keys ``start_grp_private_intro`` / ``start_grp_followup_intro`` in ``app/bot/messages.py``) then continues to the normal catalog overview — **no** handoff DB rows, **no** booking/payment side effects. ``tour_*`` deep links are unchanged (handled before this branch in ``handle_start``).
 
 Deep links must preserve, where possible:
 - source channel
