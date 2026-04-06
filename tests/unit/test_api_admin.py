@@ -800,6 +800,99 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(r.status_code, 400)
         self.assertEqual(r.json()["detail"]["code"], "handoff_assign_operator_not_found")
 
+    def test_handoff_reopen_requires_auth(self) -> None:
+        r = self.client.post("/admin/handoffs/1/reopen")
+        self.assertEqual(r.status_code, 401)
+
+    def test_handoff_reopen_success_closed_to_open_preserves_assignment(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        operator = self.create_user(telegram_user_id=910_001)
+        tour = self.create_tour(
+            code="ADM-HO-REOPEN-1",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 10, 1, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(customer, tour, point)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=order.id,
+            reason="Was closed",
+            priority="normal",
+            status="in_review",
+            assigned_operator_id=operator.id,
+        )
+        self.session.add(h)
+        self.session.commit()
+        self.client.post(f"/admin/handoffs/{h.id}/close", headers=headers)
+        self.session.refresh(h)
+        self.assertEqual(h.status, "closed")
+        self.assertEqual(h.assigned_operator_id, operator.id)
+
+        r = self.client.post(f"/admin/handoffs/{h.id}/reopen", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["status"], "open")
+        self.assertEqual(body["assigned_operator_id"], operator.id)
+        self.assertTrue(body["needs_attention"])
+        self.assertIn("age_bucket", body)
+
+    def test_handoff_reopen_idempotent_open(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        tour = self.create_tour(
+            code="ADM-HO-REOPEN-ID",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 10, 2, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(customer, tour, point)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=order.id,
+            reason="Already open",
+            priority="normal",
+            status="open",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(f"/admin/handoffs/{h.id}/reopen", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["status"], "open")
+
+    def test_handoff_reopen_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.post("/admin/handoffs/999999/reopen", headers=headers)
+        self.assertEqual(r.status_code, 404)
+
+    def test_handoff_reopen_rejects_in_review(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        tour = self.create_tour(
+            code="ADM-HO-REOPEN-IR",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 10, 3, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(customer, tour, point)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=order.id,
+            reason="In review",
+            priority="normal",
+            status="in_review",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(f"/admin/handoffs/{h.id}/reopen", headers=headers)
+        self.assertEqual(r.status_code, 400)
+        err = r.json()
+        self.assertEqual(err["detail"]["code"], "handoff_reopen_not_allowed")
+        self.assertEqual(err["detail"]["current_status"], "in_review")
+
     def test_tour_detail_not_found(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}
         r = self.client.get("/admin/tours/999999", headers=headers)

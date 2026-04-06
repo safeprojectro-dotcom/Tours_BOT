@@ -1,4 +1,4 @@
-"""Narrow admin mutations on handoffs (Phase 6 / Steps 19–21) — no notifications, no order/payment changes."""
+"""Narrow admin mutations on handoffs (Phase 6 / Steps 19–22) — no notifications, no order/payment changes."""
 
 from __future__ import annotations
 
@@ -51,8 +51,15 @@ class AdminHandoffReassignNotAllowedError(Exception):
         self.requested_operator_id = requested_operator_id
 
 
+class AdminHandoffReopenStateError(Exception):
+    """reopen not allowed from current status (narrow Step 22: not from in_review)."""
+
+    def __init__(self, *, current_status: str) -> None:
+        self.current_status = current_status
+
+
 class AdminHandoffWriteService:
-    """Minimal status transitions + narrow assignment for `/admin/handoffs/*`."""
+    """Minimal status transitions + narrow assignment + reopen for `/admin/handoffs/*`."""
 
     def __init__(self, *, handoff_repository: HandoffRepository | None = None) -> None:
         self._handoffs = handoff_repository or HandoffRepository()
@@ -124,3 +131,20 @@ class AdminHandoffWriteService:
             instance=row,
             data={"assigned_operator_id": assigned_operator_id},
         )
+
+    def reopen_handoff(self, session: Session, *, handoff_id: int) -> Handoff:
+        """
+        Step 22 narrow rule: closed -> open. Already open -> idempotent (no write).
+        in_review -> error (close first or use other flows; no broad workflow here).
+        Only ``status`` is updated; ``assigned_operator_id`` is left unchanged (preserved).
+        """
+        row = self._handoffs.get(session, handoff_id)
+        if row is None:
+            raise AdminHandoffNotFoundError
+        if row.status == HANDOFF_STATUS_OPEN:
+            return row
+        if row.status == HANDOFF_STATUS_CLOSED:
+            return self._handoffs.update(session, instance=row, data={"status": HANDOFF_STATUS_OPEN})
+        if row.status == HANDOFF_STATUS_IN_REVIEW:
+            raise AdminHandoffReopenStateError(current_status=row.status)
+        raise AdminHandoffReopenStateError(current_status=row.status)
