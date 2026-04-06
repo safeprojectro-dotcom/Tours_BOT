@@ -35,6 +35,11 @@ from app.services.admin_handoff_write import (
     AdminHandoffReopenStateError,
     AdminHandoffWriteService,
 )
+from app.services.admin_order_write import (
+    AdminOrderMarkCancelledByOperatorNotAllowedError,
+    AdminOrderNotFoundError,
+    AdminOrderWriteService,
+)
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
 from app.services.admin_read import AdminReadService
 from app.services.admin_tour_write import (
@@ -354,6 +359,32 @@ def get_admin_order_detail(
     order_id: int,
     db: Session = Depends(get_db),
 ) -> AdminOrderDetailRead:
+    detail = AdminReadService().get_order_detail(db, order_id=order_id)
+    if detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.")
+    return detail
+
+
+@router.post("/orders/{order_id}/mark-cancelled-by-operator", response_model=AdminOrderDetailRead)
+def post_admin_order_mark_cancelled_by_operator(
+    order_id: int,
+    db: Session = Depends(get_db),
+) -> AdminOrderDetailRead:
+    try:
+        AdminOrderWriteService().mark_cancelled_by_operator(db, order_id=order_id)
+    except AdminOrderNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.") from None
+    except AdminOrderMarkCancelledByOperatorNotAllowedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "order_mark_cancelled_by_operator_not_allowed",
+                "booking_status": exc.booking_status,
+                "payment_status": exc.payment_status,
+                "cancellation_status": exc.cancellation_status,
+            },
+        ) from None
+    db.commit()
     detail = AdminReadService().get_order_detail(db, order_id=order_id)
     if detail is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.")

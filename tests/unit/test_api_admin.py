@@ -304,6 +304,181 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(body["suggested_admin_action"], "await_customer_payment")
         self.assertIn("monitor_reservation_deadline", body["allowed_admin_actions"])
 
+    def test_order_mark_cancelled_by_operator_requires_auth(self) -> None:
+        r = self.client.post("/admin/orders/1/mark-cancelled-by-operator")
+        self.assertEqual(r.status_code, 401)
+
+    def test_order_mark_cancelled_by_operator_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.post("/admin/orders/999999/mark-cancelled-by-operator", headers=headers)
+        self.assertEqual(r.status_code, 404)
+
+    def test_order_mark_cancelled_by_operator_rejects_paid(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-ORD-CXL-PAID",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 10, 1, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/mark-cancelled-by-operator",
+            headers=headers,
+        )
+        self.assertEqual(r.status_code, 400)
+        err = r.json()
+        self.assertEqual(err["detail"]["code"], "order_mark_cancelled_by_operator_not_allowed")
+        self.assertEqual(err["detail"]["payment_status"], "paid")
+
+    def test_order_mark_cancelled_by_operator_rejects_expired_hold(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-ORD-CXL-EXP",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 10, 2, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.UNPAID,
+            cancellation_status=CancellationStatus.CANCELLED_NO_PAYMENT,
+            reservation_expires_at=None,
+        )
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/mark-cancelled-by-operator",
+            headers=headers,
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(
+            r.json()["detail"]["code"],
+            "order_mark_cancelled_by_operator_not_allowed",
+        )
+
+    def test_order_mark_cancelled_by_operator_rejects_hold_without_expiry(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-ORD-CXL-NOEXP",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 10, 3, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=None,
+        )
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/mark-cancelled-by-operator",
+            headers=headers,
+        )
+        self.assertEqual(r.status_code, 400)
+
+    def test_order_mark_cancelled_by_operator_success_restores_seats(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-ORD-CXL-OK",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 10, 4, 8, 0, tzinfo=UTC),
+            seats_total=20,
+            seats_available=18,
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            seats_count=2,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=datetime(2026, 10, 3, 12, 0, 0, tzinfo=UTC),
+        )
+        self.create_payment(order, status=PaymentStatus.AWAITING_PAYMENT)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/mark-cancelled-by-operator",
+            headers=headers,
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["persistence_snapshot"]["cancellation_status"], "cancelled_by_operator")
+        self.assertEqual(body["persistence_snapshot"]["payment_status"], "unpaid")
+        self.assertIsNone(body["reservation_expires_at"])
+
+        self.session.refresh(tour)
+        self.assertEqual(tour.seats_available, 20)
+
+    def test_order_mark_cancelled_by_operator_idempotent(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-ORD-CXL-IDEM",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 10, 5, 8, 0, tzinfo=UTC),
+            seats_total=30,
+            seats_available=28,
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            seats_count=2,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=datetime(2026, 10, 4, 12, 0, 0, tzinfo=UTC),
+        )
+        self.create_payment(order, status=PaymentStatus.AWAITING_PAYMENT)
+        self.session.commit()
+
+        r1 = self.client.post(
+            f"/admin/orders/{order.id}/mark-cancelled-by-operator",
+            headers=headers,
+        )
+        self.assertEqual(r1.status_code, 200)
+        self.session.refresh(tour)
+        seats_after_first = tour.seats_available
+
+        r2 = self.client.post(
+            f"/admin/orders/{order.id}/mark-cancelled-by-operator",
+            headers=headers,
+        )
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(
+            r2.json()["persistence_snapshot"]["cancellation_status"],
+            "cancelled_by_operator",
+        )
+        self.session.refresh(tour)
+        self.assertEqual(tour.seats_available, seats_after_first)
+
     def test_handoffs_list_requires_auth(self) -> None:
         r = self.client.get("/admin/handoffs")
         self.assertEqual(r.status_code, 401)
