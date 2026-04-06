@@ -599,8 +599,10 @@ open (narrow rule shipped; **order-sum validation** not implemented)
 ### Current decision
 - **Phase 7 / Step 1** delivered **`docs/GROUP_ASSISTANT_RULES.md`** — operational rules only (no code).
 - **Phase 7 / Step 2** added **helper-layer** (**group trigger** + **handoff trigger** evaluation): `app/services/group_trigger_evaluation.py`, `handoff_trigger_evaluation.py`, `assistant_trigger_evaluation.py`; tests `tests/unit/test_group_assistant_triggers.py`.
-- **Phase 7 / Step 3** added **minimal** **Telegram** **group** runtime: `app/bot/handlers/group_gating.py` + `app/services/group_chat_gating.py` — **group/supergroup text**; **non-trigger** silence; trigger → **one** short ack; **`TELEGRAM_BOT_USERNAME`** unset → silence; **no** `evaluate_handoff_triggers` in runtime yet.
-- **Handoff trigger evaluation** (`evaluate_handoff_triggers`) remains **helper-only** until **Phase 7 / Step 4** wires it for **escalation recommendation** in the group path — **still** **no** automatic persistence / full **operator** workflow until explicitly scheduled — **`docs/CHAT_HANDOFF.md` Next Safe Step**.
+- **Phase 7 / Step 3** added **minimal** **Telegram** **group** runtime: `app/bot/handlers/group_gating.py` + `app/services/group_chat_gating.py` — **group/supergroup text**; **non-trigger** silence; trigger → **one** short ack; **`TELEGRAM_BOT_USERNAME`** unset → silence.
+- **Phase 7 / Step 4** wires **`evaluate_handoff_triggers`** in the **same** narrow path **after** **`evaluate_group_trigger`** succeeds — **reply shaping only** (handoff **categories** drive short safe lines in **`app/services/group_chat_gating.py`**); **no** handoff DB rows, **no** operator assignment, **no** workflow engine. Tests: **`tests/unit/test_group_chat_gating.py`** (category cases + non-trigger silence).
+- **Forward (documented):** **`docs/CHAT_HANDOFF.md` Next Safe Step** — **Phase 7 / Step 5** = **private CTA / deep-link routing foundation for group replies** (implementation **not** implied by this section until coded).
+- **Still postponed** until explicit future slices: **real handoff persistence** from group runtime, **operator workflow engine**, **full** group assistant; optional later: **i18n** acks, **rate limits**, **structured logging** — product-scoped.
 
 ### Status
-open (forward work; see **`docs/CHAT_HANDOFF.md`**)
+open (Step **4** runtime reply-shaping **shipped**; persistence / operator workflow / full assistant **not** done — see **`docs/CHAT_HANDOFF.md` Next Safe Step**)

@@ -1,10 +1,9 @@
-"""Narrow group chat handler — trigger gating + short ack only (Phase 7 / Step 3).
+"""Narrow group chat handler — trigger gating + short safe ack (Phase 7 / Steps 3–4).
 
-Integration point: ``create_dispatcher`` includes this router. Private chat is unchanged
-(``private_entry`` router filters to ``chat.type == private``).
+Uses ``resolve_group_trigger_ack_reply`` (group trigger + optional handoff-category reply shaping;
+**no** handoff persistence). Private chat is unchanged (``private_entry`` filters to private).
 
-Without ``TELEGRAM_BOT_USERNAME``, mention triggers are skipped by ``resolve_group_trigger_ack_reply``;
-configure it for staging/production group behavior.
+Without ``TELEGRAM_BOT_USERNAME``, the resolver stays silent in groups.
 """
 
 from __future__ import annotations
