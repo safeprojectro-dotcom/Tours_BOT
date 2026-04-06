@@ -63,6 +63,23 @@ class AdminOrderMarkNoShowNotAllowedError(Exception):
         self.reason = reason
 
 
+class AdminOrderMarkReadyForDepartureNotAllowedError(Exception):
+    """Current order state or tour timing does not allow ready-for-departure marking via this slice."""
+
+    def __init__(
+        self,
+        *,
+        booking_status: str,
+        payment_status: str,
+        cancellation_status: str,
+        reason: str | None = None,
+    ) -> None:
+        self.booking_status = booking_status
+        self.payment_status = payment_status
+        self.cancellation_status = cancellation_status
+        self.reason = reason
+
+
 class AdminOrderWriteService:
     """
     Operator cancellation for an active temporary hold only (aligned with
@@ -79,6 +96,11 @@ class AdminOrderWriteService:
     **`tour.departure_datetime` is in the past** (post-departure manual terminal mark). Sets
     **`booking_status`/`cancellation_status` to `no_show`**; **does not** change **`payment_status`**,
     **does not** touch payment rows, **does not** adjust tour seats.
+
+    Ready-for-departure (`mark_ready_for_departure`): **confirmed + paid + active cancellation** only,
+    and only while **`tour.departure_datetime` is strictly in the future** (UTC). Updates
+    **`booking_status` → `ready_for_departure` only**; **does not** change **`payment_status`** or
+    **`cancellation_status`**, **does not** touch payment rows or seats.
     """
 
     def __init__(
@@ -219,6 +241,54 @@ class AdminOrderWriteService:
                 "booking_status": BookingStatus.NO_SHOW,
                 "cancellation_status": CancellationStatus.NO_SHOW,
             },
+        )
+
+    def mark_ready_for_departure(
+        self,
+        session: Session,
+        *,
+        order_id: int,
+        now: datetime | None = None,
+    ) -> Order:
+        """
+        Narrow pre-departure mark: **confirmed + paid + active cancellation**, tour departure
+        **strictly after** `now` (UTC). Idempotent when already **`ready_for_departure`** with paid+active.
+        """
+        current = now or datetime.now(UTC)
+        order = self._orders.get_for_update(session, order_id=order_id)
+        if order is None:
+            raise AdminOrderNotFoundError
+
+        if (
+            order.booking_status == BookingStatus.READY_FOR_DEPARTURE
+            and order.payment_status == PaymentStatus.PAID
+            and order.cancellation_status == CancellationStatus.ACTIVE
+        ):
+            return order
+
+        if not self._is_eligible_confirmed_paid_active(order):
+            raise AdminOrderMarkReadyForDepartureNotAllowedError(
+                booking_status=order.booking_status.value,
+                payment_status=order.payment_status.value,
+                cancellation_status=order.cancellation_status.value,
+            )
+
+        tour = self._tours.get(session, order.tour_id)
+        if tour is None:
+            raise AdminOrderNotFoundError
+
+        if tour.departure_datetime <= current:
+            raise AdminOrderMarkReadyForDepartureNotAllowedError(
+                booking_status=order.booking_status.value,
+                payment_status=order.payment_status.value,
+                cancellation_status=order.cancellation_status.value,
+                reason="departure_not_in_future",
+            )
+
+        return self._orders.update(
+            session,
+            instance=order,
+            data={"booking_status": BookingStatus.READY_FOR_DEPARTURE},
         )
 
     @staticmethod

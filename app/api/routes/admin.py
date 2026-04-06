@@ -39,6 +39,7 @@ from app.services.admin_order_write import (
     AdminOrderMarkCancelledByOperatorNotAllowedError,
     AdminOrderMarkDuplicateNotAllowedError,
     AdminOrderMarkNoShowNotAllowedError,
+    AdminOrderMarkReadyForDepartureNotAllowedError,
     AdminOrderNotFoundError,
     AdminOrderWriteService,
 )
@@ -431,6 +432,35 @@ def post_admin_order_mark_no_show(
     except AdminOrderMarkNoShowNotAllowedError as exc:
         err_body: dict = {
             "code": "order_mark_no_show_not_allowed",
+            "booking_status": exc.booking_status,
+            "payment_status": exc.payment_status,
+            "cancellation_status": exc.cancellation_status,
+        }
+        if exc.reason is not None:
+            err_body["reason"] = exc.reason
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=err_body,
+        ) from None
+    db.commit()
+    detail_read = AdminReadService().get_order_detail(db, order_id=order_id)
+    if detail_read is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.")
+    return detail_read
+
+
+@router.post("/orders/{order_id}/mark-ready-for-departure", response_model=AdminOrderDetailRead)
+def post_admin_order_mark_ready_for_departure(
+    order_id: int,
+    db: Session = Depends(get_db),
+) -> AdminOrderDetailRead:
+    try:
+        AdminOrderWriteService().mark_ready_for_departure(db, order_id=order_id)
+    except AdminOrderNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.") from None
+    except AdminOrderMarkReadyForDepartureNotAllowedError as exc:
+        err_body: dict = {
+            "code": "order_mark_ready_for_departure_not_allowed",
             "booking_status": exc.booking_status,
             "payment_status": exc.payment_status,
             "cancellation_status": exc.cancellation_status,
