@@ -687,6 +687,146 @@ class AdminRouteTests(FoundationDBTestCase):
         self.session.refresh(tour)
         self.assertEqual(tour.seats_available, seats_after_first)
 
+    def test_order_mark_no_show_requires_auth(self) -> None:
+        r = self.client.post("/admin/orders/1/mark-no-show")
+        self.assertEqual(r.status_code, 401)
+
+    def test_order_mark_no_show_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.post("/admin/orders/999999/mark-no-show", headers=headers)
+        self.assertEqual(r.status_code, 404)
+
+    def test_order_mark_no_show_success_confirmed_paid_after_departure(self) -> None:
+        """Policy: CONFIRMED + PAID + ACTIVE, tour.departure in the past; booking+cancellation -> no_show; payment stays paid."""
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-ORD-NS-OK",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2025, 6, 1, 8, 0, tzinfo=UTC),
+            seats_total=40,
+            seats_available=38,
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            seats_count=2,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.commit()
+        seats_before = tour.seats_available
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/mark-no-show",
+            headers=headers,
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["persistence_snapshot"]["booking_status"], "no_show")
+        self.assertEqual(body["persistence_snapshot"]["cancellation_status"], "no_show")
+        self.assertEqual(body["persistence_snapshot"]["payment_status"], "paid")
+        self.assertIn("lifecycle_kind", body)
+        self.assertIn("needs_manual_review", body)
+        self.assertIn("suggested_admin_action", body)
+
+        self.session.refresh(tour)
+        self.assertEqual(tour.seats_available, seats_before)
+
+    def test_order_mark_no_show_idempotent(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-ORD-NS-IDEM",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2025, 7, 1, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.commit()
+
+        r1 = self.client.post(
+            f"/admin/orders/{order.id}/mark-no-show",
+            headers=headers,
+        )
+        self.assertEqual(r1.status_code, 200)
+
+        r2 = self.client.post(
+            f"/admin/orders/{order.id}/mark-no-show",
+            headers=headers,
+        )
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(r2.json()["persistence_snapshot"]["booking_status"], "no_show")
+        self.assertEqual(r2.json()["persistence_snapshot"]["cancellation_status"], "no_show")
+
+    def test_order_mark_no_show_rejects_future_departure(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-ORD-NS-FUT",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2030, 12, 1, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/mark-no-show",
+            headers=headers,
+        )
+        self.assertEqual(r.status_code, 400)
+        err = r.json()["detail"]
+        self.assertEqual(err["code"], "order_mark_no_show_not_allowed")
+        self.assertEqual(err["reason"], "departure_not_in_past")
+
+    def test_order_mark_no_show_rejects_temporary_hold(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-ORD-NS-HOLD",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2025, 8, 1, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=datetime(2025, 7, 31, 12, 0, 0, tzinfo=UTC),
+        )
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/mark-no-show",
+            headers=headers,
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["detail"]["code"], "order_mark_no_show_not_allowed")
+
     def test_handoffs_list_requires_auth(self) -> None:
         r = self.client.get("/admin/handoffs")
         self.assertEqual(r.status_code, 401)
