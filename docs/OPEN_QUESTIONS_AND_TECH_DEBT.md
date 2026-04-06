@@ -598,8 +598,9 @@ open (narrow rule shipped; **order-sum validation** not implemented)
 
 ### Current decision
 - **Phase 7 / Step 1** delivered **`docs/GROUP_ASSISTANT_RULES.md`** — operational rules only (no code).
-- **Phase 7 / Step 2** added **helper-layer only** (**group trigger** + **handoff trigger** evaluation): `app/services/group_trigger_evaluation.py`, `handoff_trigger_evaluation.py`, `assistant_trigger_evaluation.py`; tests `tests/unit/test_group_assistant_triggers.py` — **no** live Telegram **group** hookup in that step; **no** automatic handoff persistence.
-- **Real bot integration** (narrow **group** message path calling these helpers) is the **next** checkpoint — **`docs/CHAT_HANDOFF.md` Next Safe Step** (**Phase 7 / Step 3**). **Full** group runtime / operator engine remains **out of scope** until explicitly scheduled.
+- **Phase 7 / Step 2** added **helper-layer** (**group trigger** + **handoff trigger** evaluation): `app/services/group_trigger_evaluation.py`, `handoff_trigger_evaluation.py`, `assistant_trigger_evaluation.py`; tests `tests/unit/test_group_assistant_triggers.py`.
+- **Phase 7 / Step 3** added **minimal** **Telegram** **group** runtime: `app/bot/handlers/group_gating.py` + `app/services/group_chat_gating.py` — **group/supergroup text**; **non-trigger** silence; trigger → **one** short ack; **`TELEGRAM_BOT_USERNAME`** unset → silence; **no** `evaluate_handoff_triggers` in runtime yet.
+- **Handoff trigger evaluation** (`evaluate_handoff_triggers`) remains **helper-only** until **Phase 7 / Step 4** wires it for **escalation recommendation** in the group path — **still** **no** automatic persistence / full **operator** workflow until explicitly scheduled — **`docs/CHAT_HANDOFF.md` Next Safe Step**.
 
 ### Status
 open (forward work; see **`docs/CHAT_HANDOFF.md`**)
