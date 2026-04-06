@@ -470,6 +470,15 @@ class AdminOrderDetailRead(BaseModel):
     )
 
 
+class AdminOrderMoveBody(BaseModel):
+    """Body for `POST /admin/orders/{order_id}/move` — target tour plus boarding point on that tour."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    target_tour_id: int = Field(ge=1, description="Tour row to move the order onto.")
+    target_boarding_point_id: int = Field(ge=1, description="Boarding point belonging to `target_tour_id`.")
+
+
 class AdminOverviewRead(BaseModel):
     app_env: str = Field(description="Configured APP_ENV for orientation (not a secret).")
     tours_total_approx: int

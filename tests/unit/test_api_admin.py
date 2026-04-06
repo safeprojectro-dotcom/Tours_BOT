@@ -406,6 +406,294 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertFalse(body["can_consider_move"])
         self.assertIn("lifecycle_not_move_candidate", body["move_blockers"])
 
+    def test_post_admin_order_move_requires_auth(self) -> None:
+        r = self.client.post("/admin/orders/1/move", json={"target_tour_id": 1, "target_boarding_point_id": 1})
+        self.assertEqual(r.status_code, 401)
+
+    def test_post_admin_order_move_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.post(
+            "/admin/orders/999999/move",
+            headers=headers,
+            json={"target_tour_id": 1, "target_boarding_point_id": 1},
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_post_admin_order_move_success_cross_tour_updates_seats_and_tour(self) -> None:
+        """Phase 6 Step 29: narrow move when Step 28 readiness is clean — restore source, deduct target."""
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour_a = self.create_tour(
+            code="ADM-MV-SRC",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 11, 10, 8, 0, tzinfo=UTC),
+            seats_total=40,
+            seats_available=38,
+        )
+        point_a = self.create_boarding_point(tour_a)
+        tour_b = self.create_tour(
+            code="ADM-MV-TGT",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 11, 11, 8, 0, tzinfo=UTC),
+            seats_total=40,
+            seats_available=30,
+            currency="EUR",
+        )
+        point_b = self.create_boarding_point(tour_b)
+        order = self.create_order(
+            user,
+            tour_a,
+            point_a,
+            seats_count=2,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+            total_amount=Decimal("199.98"),
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/move",
+            headers=headers,
+            json={"target_tour_id": tour_b.id, "target_boarding_point_id": point_b.id},
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["tour"]["code"], "ADM-MV-TGT")
+        self.assertEqual(body["tour"]["id"], tour_b.id)
+        self.assertEqual(body["boarding_point"]["id"], point_b.id)
+        self.assertEqual(body["persistence_snapshot"]["payment_status"], "paid")
+        self.assertEqual(body["persistence_snapshot"]["booking_status"], "confirmed")
+        self.assertEqual(Decimal(body["total_amount"]), Decimal("199.98"))
+        self.assertTrue(body["can_consider_move"])
+
+        self.session.refresh(tour_a)
+        self.session.refresh(tour_b)
+        self.assertEqual(tour_a.seats_available, 40)
+        self.assertEqual(tour_b.seats_available, 28)
+
+    def test_post_admin_order_move_rejects_not_ready_active_hold(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour_a = self.create_tour(
+            code="ADM-MV-NR",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 8, 10, 8, 0, tzinfo=UTC),
+            seats_total=40,
+            seats_available=38,
+        )
+        pa = self.create_boarding_point(tour_a)
+        tour_b = self.create_tour(
+            code="ADM-MV-NR-B",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 8, 11, 8, 0, tzinfo=UTC),
+        )
+        pb = self.create_boarding_point(tour_b)
+        order = self.create_order(
+            user,
+            tour_a,
+            pa,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=datetime(2026, 8, 9, 12, 0, 0, tzinfo=UTC),
+        )
+        self.create_payment(order, status=PaymentStatus.AWAITING_PAYMENT)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/move",
+            headers=headers,
+            json={"target_tour_id": tour_b.id, "target_boarding_point_id": pb.id},
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["detail"]["code"], "order_move_not_ready")
+
+    def test_post_admin_order_move_rejects_boarding_not_on_target_tour(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour_a = self.create_tour(
+            code="ADM-MV-BP-A",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 9, 10, 8, 0, tzinfo=UTC),
+            seats_total=40,
+            seats_available=38,
+        )
+        pa = self.create_boarding_point(tour_a)
+        tour_b = self.create_tour(
+            code="ADM-MV-BP-B",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 9, 11, 8, 0, tzinfo=UTC),
+        )
+        pb = self.create_boarding_point(tour_b)
+        order = self.create_order(
+            user,
+            tour_a,
+            pa,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/move",
+            headers=headers,
+            json={"target_tour_id": tour_a.id, "target_boarding_point_id": pb.id},
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["detail"]["code"], "order_move_boarding_not_on_target_tour")
+
+    def test_post_admin_order_move_rejects_insufficient_seats_on_target(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour_a = self.create_tour(
+            code="ADM-MV-SEAT-A",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 10, 10, 8, 0, tzinfo=UTC),
+            seats_total=40,
+            seats_available=38,
+        )
+        pa = self.create_boarding_point(tour_a)
+        tour_b = self.create_tour(
+            code="ADM-MV-SEAT-B",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 10, 11, 8, 0, tzinfo=UTC),
+            seats_total=40,
+            seats_available=1,
+        )
+        pb = self.create_boarding_point(tour_b)
+        order = self.create_order(
+            user,
+            tour_a,
+            pa,
+            seats_count=2,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/move",
+            headers=headers,
+            json={"target_tour_id": tour_b.id, "target_boarding_point_id": pb.id},
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["detail"]["code"], "order_move_insufficient_seats_on_target")
+
+        self.session.refresh(tour_a)
+        self.session.refresh(tour_b)
+        self.assertEqual(tour_a.seats_available, 38)
+        self.assertEqual(tour_b.seats_available, 1)
+
+    def test_post_admin_order_move_rejects_target_tour_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour_a = self.create_tour(
+            code="ADM-MV-NT",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 12, 20, 8, 0, tzinfo=UTC),
+            seats_total=40,
+            seats_available=38,
+        )
+        pa = self.create_boarding_point(tour_a)
+        order = self.create_order(
+            user,
+            tour_a,
+            pa,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/move",
+            headers=headers,
+            json={"target_tour_id": 999_999, "target_boarding_point_id": pa.id},
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["detail"]["code"], "order_move_target_tour_not_found")
+
+    def test_post_admin_order_move_same_tour_different_boarding_no_seat_change(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour = self.create_tour(
+            code="ADM-MV-SAME",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 7, 20, 8, 0, tzinfo=UTC),
+            seats_total=40,
+            seats_available=36,
+        )
+        p1 = self.create_boarding_point(tour, city="Alpha")
+        p2 = self.create_boarding_point(tour, city="Beta")
+        order = self.create_order(
+            user,
+            tour,
+            p1,
+            seats_count=4,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.commit()
+        seats_before = tour.seats_available
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/move",
+            headers=headers,
+            json={"target_tour_id": tour.id, "target_boarding_point_id": p2.id},
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["boarding_point"]["city"], "Beta")
+        self.session.refresh(tour)
+        self.assertEqual(tour.seats_available, seats_before)
+
+    def test_post_admin_order_move_rejects_target_not_open_for_sale(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        tour_a = self.create_tour(
+            code="ADM-MV-CLS-A",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 4, 10, 8, 0, tzinfo=UTC),
+            seats_total=40,
+            seats_available=38,
+        )
+        pa = self.create_boarding_point(tour_a)
+        tour_b = self.create_tour(
+            code="ADM-MV-CLS-B",
+            status=TourStatus.SALES_CLOSED,
+            departure_datetime=datetime(2026, 4, 11, 8, 0, tzinfo=UTC),
+            seats_total=40,
+            seats_available=30,
+        )
+        pb = self.create_boarding_point(tour_b)
+        order = self.create_order(
+            user,
+            tour_a,
+            pa,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            cancellation_status=CancellationStatus.ACTIVE,
+        )
+        self.create_payment(order, status=PaymentStatus.PAID)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/orders/{order.id}/move",
+            headers=headers,
+            json={"target_tour_id": tour_b.id, "target_boarding_point_id": pb.id},
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["detail"]["code"], "order_move_target_tour_not_open_for_sale")
+
     def test_order_mark_cancelled_by_operator_requires_auth(self) -> None:
         r = self.client.post("/admin/orders/1/mark-cancelled-by-operator")
         self.assertEqual(r.status_code, 401)

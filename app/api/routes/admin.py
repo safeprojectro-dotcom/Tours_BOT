@@ -17,6 +17,7 @@ from app.schemas.admin import (
     AdminHandoffRead,
     AdminOrderDetailRead,
     AdminOrderListRead,
+    AdminOrderMoveBody,
     AdminOverviewRead,
     AdminTourCoreUpdate,
     AdminTourCoverSet,
@@ -35,6 +36,7 @@ from app.services.admin_handoff_write import (
     AdminHandoffReopenStateError,
     AdminHandoffWriteService,
 )
+from app.services.admin_order_move_write import AdminOrderMoveNotAllowedError, AdminOrderMoveWriteService
 from app.services.admin_order_write import (
     AdminOrderMarkCancelledByOperatorNotAllowedError,
     AdminOrderMarkDuplicateNotAllowedError,
@@ -470,6 +472,33 @@ def post_admin_order_mark_ready_for_departure(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=err_body,
+        ) from None
+    db.commit()
+    detail_read = AdminReadService().get_order_detail(db, order_id=order_id)
+    if detail_read is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.")
+    return detail_read
+
+
+@router.post("/orders/{order_id}/move", response_model=AdminOrderDetailRead)
+def post_admin_order_move(
+    order_id: int,
+    body: AdminOrderMoveBody,
+    db: Session = Depends(get_db),
+) -> AdminOrderDetailRead:
+    try:
+        AdminOrderMoveWriteService().move_order(
+            db,
+            order_id=order_id,
+            target_tour_id=body.target_tour_id,
+            target_boarding_point_id=body.target_boarding_point_id,
+        )
+    except AdminOrderNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.") from None
+    except AdminOrderMoveNotAllowedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": exc.code, "message": exc.message},
         ) from None
     db.commit()
     detail_read = AdminReadService().get_order_detail(db, order_id=order_id)

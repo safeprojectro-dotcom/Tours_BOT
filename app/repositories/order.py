@@ -37,6 +37,20 @@ class OrderRepository(SQLAlchemyRepository[Order]):
         )
         return session.scalar(stmt)
 
+    def get_by_id_for_admin_detail_for_update(self, session: Session, *, order_id: int) -> Order | None:
+        """Same relations as admin detail, with row lock — for narrow admin mutations (e.g. move)."""
+        stmt = (
+            select(Order)
+            .where(Order.id == order_id)
+            .options(
+                selectinload(Order.tour),
+                selectinload(Order.boarding_point),
+                selectinload(Order.handoffs),
+            )
+            .with_for_update()
+        )
+        return session.scalar(stmt)
+
     def list_recent_for_admin(
         self,
         session: Session,
