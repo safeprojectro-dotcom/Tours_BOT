@@ -597,9 +597,9 @@ open (narrow rule shipped; **order-sum validation** not implemented)
 ## 19. Phase 7 group runtime vs rules documentation (Step 1 vs Step 2+)
 
 ### Current decision
-- **Phase 7 / Step 1** delivered **`docs/GROUP_ASSISTANT_RULES.md`** only — operational rules for group triggers, CTAs, anti-spam, handoff categories, operator continuity. **No** production code change in that step.
-- **Full Telegram group bot runtime** (webhook-driven group handling, reply policy in live chat) remains **postponed** until explicitly scheduled.
-- **Handoff trigger categorization** may gain **helper/service** logic in **Phase 7 / Step 2**; **wiring** that logic to **automatic handoff persistence** from **group** messages is **not** implied by Step 2 — track **`docs/CHAT_HANDOFF.md` Next Safe Step**.
+- **Phase 7 / Step 1** delivered **`docs/GROUP_ASSISTANT_RULES.md`** — operational rules only (no code).
+- **Phase 7 / Step 2** added **helper-layer only** (**group trigger** + **handoff trigger** evaluation): `app/services/group_trigger_evaluation.py`, `handoff_trigger_evaluation.py`, `assistant_trigger_evaluation.py`; tests `tests/unit/test_group_assistant_triggers.py` — **no** live Telegram **group** hookup in that step; **no** automatic handoff persistence.
+- **Real bot integration** (narrow **group** message path calling these helpers) is the **next** checkpoint — **`docs/CHAT_HANDOFF.md` Next Safe Step** (**Phase 7 / Step 3**). **Full** group runtime / operator engine remains **out of scope** until explicitly scheduled.
 
 ### Status
 open (forward work; see **`docs/CHAT_HANDOFF.md`**)
