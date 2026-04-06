@@ -53,7 +53,7 @@ open
 - **Phase 6 / Step 27** (read-only): **`AdminOrderLifecycleKind.READY_FOR_DEPARTURE_PAID`** in **`app/services/admin_order_lifecycle.py`** so **`ready_for_departure` + paid + active** maps to a **first-class** admin lifecycle label (not generic **`other`**); **`sql_predicate_for_lifecycle_kind`** and **`GET /admin/orders?lifecycle_kind=`** stay consistent; **`admin_order_action_preview`** treats this kind like **confirmed paid** for preview noise.
 - **Phase 6 / Step 28** (read-only): **`GET /admin/orders/{order_id}`** adds **`can_consider_move`**, **`move_blockers`**, **`move_readiness_hint`** (**`app/services/admin_order_move_readiness.py`**) — conservative decision-support for operators; **does not** perform a move by itself.
 - **Phase 6 / Step 29** (narrow mutation): **`POST /admin/orders/{order_id}/move`** (**`app/services/admin_order_move_write.py`**) — move when Step **28**-style readiness passes; **no** payment-row writes, **no** reconciliation semantics change.
-- **Phase 6 / Step 30** (read-only): **`GET /admin/orders/{order_id}`** adds **`move_placement_snapshot`** (**`app/services/admin_order_move_inspection.py`**) — **current** tour/boarding placement for inspection only; **`timeline_available`** is **false** because **no** persisted move audit/timeline rows exist yet (**forward:** **Phase 6 / Step 31** or product review — `docs/CHAT_HANDOFF.md`). **Payment**-row admin **mutations** (refund/capture/cancel-payment) remain **postponed** until explicit product approval.
+- **Phase 6 / Step 30** (read-only): **`GET /admin/orders/{order_id}`** adds **`move_placement_snapshot`** (**`app/services/admin_order_move_inspection.py`**) — **current** tour/boarding placement for inspection only; **`timeline_available`** is **false** because **no** persisted move audit/timeline rows exist yet. **Closure:** **`docs/PHASE_6_REVIEW.md`** — narrow Phase 6 track **closed**; default forward path **transition**, **not** payment admin. **Payment**-row admin **mutations** (refund/capture/cancel-payment) remain **postponed** (see **§1f** below).
 - **Database fields are unchanged:** the combination described in **section 1** (`booking_status` may remain `reserved` after expiry, etc.) still exists at persistence layer.
 
 ### Why core debt remains open
@@ -130,6 +130,19 @@ open (per-language **upsert/delete** done for tours and boarding points; **bulk*
 
 ### Status
 open (narrow **two-endpoint** slice; **not** a full lifecycle editor)
+
+---
+
+## 1f. Admin payment-side operations vs reconciliation (future)
+
+### Current decision
+- **Admin payment mutations** (refund, capture, cancel-payment, forced paid-state edits, manual reconciliation commands) are **intentionally postponed** — no **`/admin/*`** payment-write slice is implied by Phase 6 Steps **1–30**.
+- **Payment reconciliation** (service-layer, webhooks) remains the **single source of truth** for **confirmed paid-state transitions** on orders until product defines a different contract — **this boundary stays intact**; admin tooling must **not** silently bypass it.
+- **Phase 6 review** is recorded in **`docs/PHASE_6_REVIEW.md`** (checkpoint **Step 30**). **Revisit** admin payment-side operations **only** via a **separate design checkpoint** (product + safety rules + reconciliation contract) — **not** as the default follow-up to Phase 6 closure.
+- **Revisit** before: **real PSP-integrated** admin payment tooling, **refund workflow**, **production payment rollout**, **broader** admin-side payment operations.
+
+### Status
+open (by design; **not** default next implementation — see **`docs/PHASE_6_REVIEW.md`** and handoff **Next Safe Step**)
 
 ---
 
@@ -578,3 +591,15 @@ open
 
 ### Status
 open (narrow rule shipped; **order-sum validation** not implemented)
+
+---
+
+## 19. Phase 7 group runtime vs rules documentation (Step 1 vs Step 2+)
+
+### Current decision
+- **Phase 7 / Step 1** delivered **`docs/GROUP_ASSISTANT_RULES.md`** only — operational rules for group triggers, CTAs, anti-spam, handoff categories, operator continuity. **No** production code change in that step.
+- **Full Telegram group bot runtime** (webhook-driven group handling, reply policy in live chat) remains **postponed** until explicitly scheduled.
+- **Handoff trigger categorization** may gain **helper/service** logic in **Phase 7 / Step 2**; **wiring** that logic to **automatic handoff persistence** from **group** messages is **not** implied by Step 2 — track **`docs/CHAT_HANDOFF.md` Next Safe Step**.
+
+### Status
+open (forward work; see **`docs/CHAT_HANDOFF.md`**)

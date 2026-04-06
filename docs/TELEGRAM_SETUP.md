@@ -134,6 +134,8 @@ Telegram delivery must support:
 The bot in group is not a full booking processor.
 It is a warm-up and routing assistant.
 
+**Normative rule detail (Phase 7):** operational constraints for triggers, forbidden group behavior, CTAs, anti-spam, handoff categories, and operator continuity are centralized in **[docs/GROUP_ASSISTANT_RULES.md](GROUP_ASSISTANT_RULES.md)**. This section stays high-level; implementers align both documents.
+
 ## Allowed behavior
 - answer when mentioned
 - answer to approved trigger phrases

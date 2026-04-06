@@ -3,8 +3,14 @@
 ## Project
 Tours_BOT
 
+**Continuity anchor (read this first):** The **live** approved checkpoint is **Phase 7 / Step 1 completed** — **`docs/GROUP_ASSISTANT_RULES.md`** (**allowed triggers**, **CTA routing**, **anti-spam**, **handoff trigger categories**, **operator continuity** expectations). **Next planned slice:** **Phase 7 / Step 2** — see **Next Safe Step**. **Phase 6** (**Steps 1–30**) and **`docs/PHASE_6_REVIEW.md`** remain the **historical closure** of the narrow admin API track. **Not** automatic **Phase 6 / Step 31**, **not** **admin payment** mutation, **not** full **Telegram group** runtime or **operator workflow engine** in one step. **Phase 5** entries under **Completed Steps** below are **historical** (Mini App MVP acceptance); **do not** resume from old **Phase 5 / Step 4** or **Phase 5 / Step 5** “next step” narratives — those are **closed** for MVP. Use **`Next Safe Step`** and this file’s **Current Status** only.
+
 ## Current Status
-The project is ready to continue from the **latest approved checkpoint**: **Phase 6 / Step 30 completed** — **read-only** **`move_placement_snapshot`** on **`GET /admin/orders/{order_id}`** (**`AdminOrderMovePlacementSnapshot`** via **`compute_move_placement_snapshot`** in **`app/services/admin_order_move_inspection.py`**): **`kind=current_placement_only`**, **`timeline_available=false`**, current **`tour_id`** / **`boarding_point_id`**, **`tour_code`**, **`tour_departure_datetime`**, **`boarding_city`**, **`order_updated_at`**, plus a **note** that **no** persisted move timeline/audit exists yet. **No** new routes, **no** mutations, **no** public/catalog/Mini App or customer flow changes.
+The **latest approved checkpoint** is **Phase 7 / Step 1 completed**. **Documentation-first group foundation** exists in **`docs/GROUP_ASSISTANT_RULES.md`**: **allowed group triggers** (mentions, approved commands, approved trigger phrases); **CTA routing rules** (private chat vs Mini App); **anti-spam principles**; **handoff trigger categories** (e.g. discount, group booking, custom pickup, complaint, unclear payment issue, explicit human request, low-confidence answer); **operator continuity expectations** (preserve context, language, reason/category). Step 1 introduced **no** production code and **no** change to **public** booking / payment / waitlist / Mini App behavior.
+
+**Still not implemented (explicit):** full **Telegram group** runtime behavior; **automatic handoff persistence** driven from group messages; **operator workflow engine**; any retarget of **public** customer flows — all **out of scope** for Step 1 and unchanged.
+
+**Baseline still true from Phase 6 closure:** **read-only** **`move_placement_snapshot`** on **`GET /admin/orders/{order_id}`** (**Phase 6 / Step 30**); **narrow** **`POST /admin/orders/{order_id}/move`** (**Step 29**); admin handoff/order surfaces unchanged in meaning — see **Completed Steps** / Phase 6.
 
 **Phase 6 / Step 29** (still in baseline): **narrow** **`POST /admin/orders/{order_id}/move`** (**`app/services/admin_order_move_write.py`**); guarded by Step **28** readiness; **no** payment-row writes, **no** reconciliation/webhook changes.
 
@@ -28,22 +34,22 @@ Order **write** surface: **`app/services/admin_order_write.py`** — **`POST /ad
 
 **Step 18** read API: **`GET /admin/handoffs`**, **`GET /admin/handoffs/{handoff_id}`** (**`is_open`**, **`needs_attention`**, **`age_bucket`**, **`assigned_operator_id`**). **Still not implemented:** **unassign**, broader **reassignment** policy redesign, full **operator workflow engine**, **notifications** from admin handoff actions, **public** customer handoff flow changes, **refund / capture / cancel-payment** admin actions, **broad** order workflow editor, **merge** tooling, **persisted** move timeline / audit history, **full** admin SPA.
 
-**Phase 6 / Steps 1–30** (completed): **`ADMIN_API_TOKEN`**; tours, boarding, translations, archive/unarchive; orders **16–17** (read + preview) + **Steps 27–28** (lifecycle **`ready_for_departure_paid`** + move-readiness) + **Step 30** (**`move_placement_snapshot`**) + **Step 29** (narrow **move** **POST**) + **Steps 23–26** (cancel + duplicate + no-show + ready-for-departure); handoff **queue read** + **four** narrow mutations (**status progression + assign + reopen**).
+**Phase 6 / Steps 1–30** (completed): **`ADMIN_API_TOKEN`**; tours, boarding, translations, archive/unarchive; orders **16–17** (read + preview) + **Steps 27–28** (lifecycle **`ready_for_departure_paid`** + move-readiness) + **Step 30** (**`move_placement_snapshot`**) + **Step 29** (narrow **move** **POST**) + **Steps 23–26** (cancel + duplicate + no-show + ready-for-departure); handoff **queue read** + **four** narrow mutations (**status progression + assign + reopen**). **Public** booking/payment/waitlist/customer handoff flows were **not** retargeted by these admin slices — they remain as in Phase 5 acceptance.
 
-Earlier: **Phase 5 (Mini App MVP) accepted** for MVP/staging; **Phase 5 / Step 20** was docs-only consolidation (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
+**Historical (closed for MVP narrative):** **Phase 5 (Mini App MVP) accepted** for staging; details in `docs/PHASE_5_ACCEPTANCE_SUMMARY.md` — **not** the forward checkpoint.
 
-**Next work:** **Phase 6 / Step 31** — see **Next Safe Step** (or **staging/product review** if no narrow slice is prioritized).
+**Next work:** **Phase 7 / Step 2** — first **narrow helper/service** implementation for **group trigger evaluation** and **handoff trigger categorization** (see **Next Safe Step**). Rules reference: **`docs/GROUP_ASSISTANT_RULES.md`**. **Admin payment mutations** are **not** the default. Optional future **narrow** admin slices (e.g. persisted move audit) only with **explicit** product approval — **not** assumed.
 
 ### Operational note (production — Step 6 schema recovery)
 After Step 6 backend shipped to Railway **before** production Postgres had applied Alembic revision **`20260405_04`**, the missing column **`tours.cover_media_reference`** caused **`ProgrammingError` / `UndefinedColumn`** and **500**s on routes that load tours (e.g. **`/mini-app/catalog`**, **`/mini-app/bookings`**). Root cause was **schema mismatch**, not Mini App UI logic. **Recovery completed:** migrations applied against the Railway DB (using the **public** Postgres URL and a local driver URL such as **`postgresql+psycopg://...`** where internal hostnames are not resolvable), backend **redeployed**, **`/health`**, catalog, and bookings smoke-checked. **Going forward:** any schema-changing step must include **migration apply → redeploy → smoke** for affected endpoints. Details: **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` section 17**.
 
 ## Current Phase
 
-**Current phase (forward work):** **Phase 6 — Admin Panel MVP**. **Completed through Phase 6 / Step 30**; **next:** **Phase 6 / Step 31** or **staging/product review** (see **Next Safe Step**).
+**Current phase (forward work):** **Phase 7 — Group Assistant And Operator Handoff**. **Phase 7 / Step 1** **completed** (**`docs/GROUP_ASSISTANT_RULES.md`**). **Next:** **Phase 7 / Step 2** (see **Next Safe Step**). Phase 6 narrow admin API track **closed** through **Step 30** — see **`docs/PHASE_6_REVIEW.md`**.
 
-**Latest approved checkpoint:** **Phase 6 / Step 30** — **`GET /admin/orders/{order_id}`** includes **`move_placement_snapshot`** (current-state placement only; **no** persisted move timeline). **Step 29** move mutation and **Steps 16–17** + **27** + **28** read story unchanged in meaning. **Still not:** **persisted** move audit/timeline rows, **unassign**, broader **reassignment** redesign, **notifications** from admin handoff actions, **refund / capture / cancel-payment**, **broad** order editor, **merge** tooling, **payment reconciliation** rewrite, **full** admin SPA, **publication**, **bulk** ops, **hard-delete** tour. Internal **ops** JSON stays **separate** from **`/admin/*`**. Still **no** route/itinerary editor beyond current boarding slices.
+**Latest approved checkpoint:** **Phase 7 / Step 1** — **group + handoff rules** documented (triggers, CTA, anti-spam, handoff categories, operator continuity); **no** Telegram group bot runtime in this step; **public flows unchanged**. **Prior code baseline** unchanged: **Phase 6 / Step 30** **`move_placement_snapshot`**, **Step 29** move **POST**, admin handoffs/orders as implemented. **Admin payment mutations** remain **intentionally postponed** (see **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** **§1f**). **Still not:** full **Telegram group** runtime, **automatic handoff from group messages** at scale, **persisted** move audit/timeline rows, **unassign**, broader **reassignment** redesign, **notifications** from admin handoff actions, **refund / capture / cancel-payment**, **full** operator workflow engine, **public** customer flow redesign. Internal **ops** JSON stays **separate** from **`/admin/*`**.
 
-**Earlier checkpoints:** Phase 6 / Steps 1–7 (foundation through core tour patch); Phase 6 / Steps 8–10 (boarding create / patch / delete); Phase 6 / Steps 11–12 (tour translation upsert/delete); Phase 6 / Steps 13–14 (boarding point translation upsert/delete); Phase 6 / Step 15 (tour archive/unarchive); Phase 6 / Step 16 (order detail payment correction visibility); Phase 6 / Step 17 (order detail action preview); Phase 6 / Step 18 (admin handoff queue read API); Phase 6 / Step 19 (admin handoff mark-in-review); Phase 6 / Step 20 (admin handoff close-only); Phase 6 / Step 21 (admin handoff assign); Phase 6 / Step 22 (admin handoff reopen); Phase 6 / Step 23 (admin mark-cancelled-by-operator); Phase 6 / Step 24 (admin mark-duplicate); Phase 6 / Step 25 (admin mark-no-show); Phase 6 / Step 26 (admin mark-ready-for-departure); Phase 6 / Step 27 (admin lifecycle **`ready_for_departure_paid`** read refinement); Phase 6 / Step 28 (admin order move-readiness read-only fields); Phase 6 / Step 29 (admin order narrow **move** mutation); Phase 6 / Step 30 (admin **`move_placement_snapshot`** read-only); Phase 5 accepted + Phase 5 Step 20 docs (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
+**Earlier checkpoints:** Phase 7 / Step 1 ( **`docs/GROUP_ASSISTANT_RULES.md`** — group/handoff rules foundation, documentation-only); Phase 6 / Steps 1–7 (foundation through core tour patch); Phase 6 / Steps 8–10 (boarding create / patch / delete); Phase 6 / Steps 11–12 (tour translation upsert/delete); Phase 6 / Steps 13–14 (boarding point translation upsert/delete); Phase 6 / Step 15 (tour archive/unarchive); Phase 6 / Step 16 (order detail payment correction visibility); Phase 6 / Step 17 (order detail action preview); Phase 6 / Step 18 (admin handoff queue read API); Phase 6 / Step 19 (admin handoff mark-in-review); Phase 6 / Step 20 (admin handoff close-only); Phase 6 / Step 21 (admin handoff assign); Phase 6 / Step 22 (admin handoff reopen); Phase 6 / Step 23 (admin mark-cancelled-by-operator); Phase 6 / Step 24 (admin mark-duplicate); Phase 6 / Step 25 (admin mark-no-show); Phase 6 / Step 26 (admin mark-ready-for-departure); Phase 6 / Step 27 (admin lifecycle **`ready_for_departure_paid`** read refinement); Phase 6 / Step 28 (admin order move-readiness read-only fields); Phase 6 / Step 29 (admin order narrow **move** mutation); Phase 6 / Step 30 (admin **`move_placement_snapshot`** read-only); Phase 5 accepted + Phase 5 Step 20 docs (`docs/PHASE_5_ACCEPTANCE_SUMMARY.md`).
 
 **Phase 5 (closed for MVP):** Execution checkpoints **Steps 4–19** are summarized in `docs/PHASE_5_ACCEPTANCE_SUMMARY.md` and per-step notes under `docs/PHASE_5_STEP_*_NOTES.md`; **Phase 5 / Step 20** was documentation/consolidation only (no intended production-code churn for acceptance).
 
@@ -775,6 +781,13 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
   - **Scope respected:** public booking/payment/waitlist/handoff flows unchanged
   - **Prompt archive:** `docs/CURSOR_PROMPT_PHASE_6_STEP_30.md` (historical)
 
+### Phase 7
+- Phase 7 / Step 1 completed
+  - **Documentation-only** — **`docs/GROUP_ASSISTANT_RULES.md`**: allowed group triggers (mentions, approved commands, approved trigger phrases); forbidden group behavior (no private data in group, no long negotiation, no payment-sensitive discussion in group, no reply to every message); CTA strategy (private chat vs Mini App); anti-spam principles; handoff trigger categories (discount, group booking, custom pickup, complaint, unclear payment issue, explicit human request, low-confidence answer); minimal operator continuity (context, language, reason/category)
+  - **Aligns with:** **`docs/AI_ASSISTANT_SPEC.md`**, **`docs/AI_DIALOG_FLOWS.md`**, **`docs/TELEGRAM_SETUP.md`**, Phase 7 in **`docs/IMPLEMENTATION_PLAN.md`**
+  - **Explicitly not in this step:** Telegram group bot runtime, webhooks, new API routes, public booking/payment/Mini App changes, admin payment mutations, full operator workflow engine
+  - **Prompt archive:** `docs/CURSOR_PROMPT_PHASE_7_STEP_1.md` (historical)
+
 ---
 
 ## Verified
@@ -852,6 +865,7 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
 ## Current Architecture State
 
 ### Ready
+- **Phase 7 / Step 1 (documentation)** — **`docs/GROUP_ASSISTANT_RULES.md`** fixes **operational rules** for group triggers, CTAs, anti-spam, handoff categories, operator continuity; **no** group **runtime** in code yet
 - **bot layer** — Telegram private chat; thin handlers; service-driven
 - **api layer** — FastAPI; public routes + Mini App routes + payments webhooks + **internal ops** JSON endpoints + **admin API** (`/admin/*`, `ADMIN_API_TOKEN`: overview, tours/orders **lists** with **optional read-only filters** incl. **`lifecycle_kind=ready_for_departure_paid`** (Step **27**), **`GET /admin/handoffs`** and **`GET /admin/handoffs/{handoff_id}`** handoff queue visibility, **`POST /admin/handoffs/{handoff_id}/mark-in-review`** (Step **19**), **`POST /admin/handoffs/{handoff_id}/close`** (Step **20**), **`POST /admin/handoffs/{handoff_id}/assign`** (Step **21**), **`POST /admin/handoffs/{handoff_id}/reopen`** (Step **22**), **`GET /admin/orders/{order_id}`** order detail with **Step 16** correction + **Step 17** action-preview + **Step 27** lifecycle mapping + **Step 28** move-readiness (**`can_consider_move`**, **`move_blockers`**, **`move_readiness_hint`**) + **Step 30** **`move_placement_snapshot`** (current placement only), **`POST /admin/orders/{order_id}/mark-cancelled-by-operator`** (Step **23**), **`POST /admin/orders/{order_id}/mark-duplicate`** (Step **24**), **`POST /admin/orders/{order_id}/mark-no-show`** (Step **25**), **`POST /admin/orders/{order_id}/mark-ready-for-departure`** (Step **26**), **`POST /admin/orders/{order_id}/move`** (Step **29**), **tour + order detail** incl. **`cover_media_reference`**, **`POST /admin/tours`** create **core** tours, **`POST /admin/tours/{tour_id}/archive`** and **`POST /admin/tours/{tour_id}/unarchive`**, **`PUT /admin/tours/{tour_id}/cover`** for **one** media reference string, **`PATCH /admin/tours/{tour_id}`** for **core** field updates only, **`POST` / `PATCH` / `DELETE`** boarding points, **`PUT` / `DELETE`** **`/admin/tours/{tour_id}/translations/{language_code}`** for **tour** translations, **`PUT` / `DELETE`** **`/admin/boarding-points/{boarding_point_id}/translations/{language_code}`** for **boarding** translations)
 - **services layer** — business rules and orchestration
@@ -867,28 +881,37 @@ These steps are **closed** for the Phase 5 MVP acceptance narrative; detail live
 - **Mini App / any web UI**: presentation only — no duplicated booking/payment rules in the client
 
 ### Not Implemented Yet
-- **Next (Step 31):** **either** first narrow **persisted move placement audit** (append-only rows or minimal columns tied to **`POST /admin/orders/{order_id}/move`**) **or** **product-approved** first narrow **admin payment** mutation — see **Next Safe Step**. **If neither is approved:** **staging review** / freeze Phase 6 admin MVP before Phase 7+.
-- **Still postponed:** **persisted** move timeline without an explicit slice, admin **refund / capture / cancel-payment** (unless Step **31** payment path is approved), **broad** order status editor, **merge** tooling, **payment reconciliation** rewrite, handoff **unassign**, broader **reassignment** policy, full **operator queue/workflow engine**, **notifications** from admin actions, **full** admin SPA, **publication**, **bulk** ops — per plan / product.
-- **Phase 7–9:** group assistant, handoff at scale, content assistant, analytics — per `docs/IMPLEMENTATION_PLAN.md`
+- **Next (Phase 7):** **Phase 7 / Step 2** — **first narrow helper/service slice** for **group trigger evaluation** and **handoff trigger categorization** (per **`docs/GROUP_ASSISTANT_RULES.md`** and **Next Safe Step**); **not** full Telegram group runtime hookup, **not** automatic persistence of handoffs from group messages, **not** operator workflow engine — unless a **later** step explicitly scopes them.
+- **Group / handoff runtime gap:** rules exist on paper; **Telegram group** delivery and **wiring** trigger logic into the bot remain **future** work — see **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** §**19** (short).
+- **Still valid:** staging smoke on **`/admin/*`** through Phase 6 Step 30 when convenient; **`docs/PHASE_6_REVIEW.md`** remains the Phase 6 closure reference.
+- **Optional later (product-prioritized only):** narrow **persisted move placement audit** on successful **`POST /move`**, **or** another **low-risk** admin read refinement — **never** default to **admin payment** mutation; requires **explicit** design checkpoint (**`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** **§1f**).
+- **Still postponed:** admin **refund / capture / cancel-payment**, **broad** order status editor, **merge** tooling, **payment reconciliation** rewrite, **persisted** move timeline without an explicit slice, handoff **unassign**, broader **reassignment** policy, full **operator queue/workflow engine**, **notifications** from admin actions, **full** admin SPA, **publication**, **bulk** ops — per plan / product.
+- **Phase 7–9 (beyond Step 2):** group runtime at scale, content assistant, analytics — per `docs/IMPLEMENTATION_PLAN.md`
 
 ## Next Safe Step
 
-**Phase 6 / Step 31 — default: first narrow persisted move placement audit** — minimal **append-only** persistence on successful Step **29** moves (e.g. **from/to** tour + boarding + timestamp) so a future read step can set **`timeline_available`** truthfully; **one** migration + narrow writes in **`AdminOrderMoveWriteService`** only; **no** reconciliation rewrite, **no** public flow changes. **Alternative (explicit product approval only):** first narrow **admin payment** mutation (refund/capture/cancel-payment) — **do not** start without written product sign-off. **Third path:** **no** new code — **staging validation** of Steps **29–30** and backlog triage.
+**Primary (single outcome):** **Phase 7 / Step 2** — **first narrow helper/service implementation slice** for **group trigger evaluation** and **handoff trigger categorization** (predicates / classification toward **`docs/GROUP_ASSISTANT_RULES.md`**). Step 1 defined the **rules**; Step 2 adds **testable service-layer logic** without committing to full **Telegram group** webhook handling yet.
+
+- **Rules reference:** **`docs/GROUP_ASSISTANT_RULES.md`** (Step 1).
+- **Suggested direction:** pure **helpers** or **small service module(s)** + **unit tests** (`docs/TESTING_STRATEGY.md`); **no** new **`/admin/*`** or public API **unless** explicitly scoped; **no** change to public booking/payment/Mini App flows **unless** a future step scopes it.
+- **Explicitly out of scope for Step 2 unless re-scoped:** full **group** bot runtime, **automatic handoff persistence** from group messages, **operator workflow engine**.
+- **Not the default:** **admin payment** mutations, **Phase 6 / Step 31**, **payment reconciliation** semantics change.
+- **`payment reconciliation`** remains the **single** place for **confirmed paid-state** transitions on orders until **§1f** in **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** is satisfied.
+
+**Staging (optional):** **`/admin/*`** smoke when touching handoff-adjacent code; group **E2E** waits for later runtime steps.
 
 ### Goal
-Close the gap between Step **30** (current placement **snapshot**) and **real** move traceability — **or** unlock payment ops — **or** pause for review.
+Turn **documented** triggers and handoff categories into **deterministic, tested** evaluation logic — **before** wiring Telegram group updates.
 
 ### Safe scope boundaries
-- **One** narrow slice per release; **service-layer** rules; **repositories** persistence-oriented.
+- **Preserve** public customer flows and existing APIs.
+- **Phase 6 review** (`docs/PHASE_6_REVIEW.md`) remains the admin-track closure record.
 
-### Explicitly not in Step 31 (unless product explicitly expands — default **no**)
-- **Broad** move workflow editor, **full** admin SPA, **notification** engine from admin actions, **merge** tooling.
-
-**Completed step references:** `docs/CURSOR_PROMPT_PHASE_6_STEP_1.md` … `docs/CURSOR_PROMPT_PHASE_6_STEP_30.md` (historical).  
-**Plan:** `docs/IMPLEMENTATION_PLAN.md` (Phase 6 — order oversight / restricted updates, taken as **narrow slices**).
+**Completed step references:** `docs/CURSOR_PROMPT_PHASE_6_STEP_1.md` … `docs/CURSOR_PROMPT_PHASE_6_STEP_30.md` (historical); **`docs/CURSOR_PROMPT_PHASE_7_STEP_1.md`** (historical).  
+**Plan:** `docs/IMPLEMENTATION_PLAN.md` — Phase 7.
 
 ## Recommended Next Prompt
-Either: implement **Phase 6 / Step 31** (**narrow persisted move audit** on successful admin move — per **Next Safe Step**) using **`docs/CHAT_HANDOFF.md`**, `docs/IMPLEMENTATION_PLAN.md`, `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, `docs/TECH_SPEC_TOURS_BOT.md`, and `docs/TESTING_STRATEGY.md`, and add **`docs/CURSOR_PROMPT_PHASE_6_STEP_31.md`** when starting — **or** run **staging review** on **`move_placement_snapshot`** + Step **29** move and **defer** Step **31**. **Payment** mutation path: **only** if **product-approved** — **do not** use legacy Phase 5 “next step” prompts for new work.
+Execute **Phase 7 / Step 2**: implement **narrow** **group trigger evaluation** + **handoff trigger categorization** helpers/services and **unit tests**, guided by **`docs/GROUP_ASSISTANT_RULES.md`** and **`docs/CHAT_HANDOFF.md`**. **Do not** ship full **Telegram group** runtime, **automatic handoff persistence** from group, or **operator workflow engine** unless explicitly scoped. Sources: `docs/IMPLEMENTATION_PLAN.md`, `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`, `docs/TECH_SPEC_TOURS_BOT.md`, `docs/TESTING_STRATEGY.md`, `docs/AI_ASSISTANT_SPEC.md`, `docs/AI_DIALOG_FLOWS.md`, `docs/TELEGRAM_SETUP.md`.
 
 ---
 
@@ -1001,16 +1024,21 @@ Use the following as source of truth for continuity:
 - current codebase
 - docs/TECH_SPEC_TOURS_BOT.md
 - docs/IMPLEMENTATION_PLAN.md
+- docs/PHASE_6_REVIEW.md (Phase 6 closure / MVP-sufficient assessment)
+- docs/GROUP_ASSISTANT_RULES.md (Phase 7 Step 1 — group + handoff operational rules; required for Phase 7 work)
 - docs/CHAT_HANDOFF.md (latest approved checkpoint and **Next Safe Step**)
 - docs/OPEN_QUESTIONS_AND_TECH_DEBT.md
 - docs/TESTING_STRATEGY.md
 - docs/AI_ASSISTANT_SPEC.md
 - docs/AI_DIALOG_FLOWS.md
+- docs/TELEGRAM_SETUP.md
 
 Continuity rules:
 - preserve the existing architecture and phase sequence
 - do not repeat already completed work
 - do not reintroduce previously postponed logic
-- continue from the last approved checkpoint in `docs/CHAT_HANDOFF.md` (**Phase 6 / Step 30** complete; forward work: **Phase 6 / Step 31** or **staging review** per **Next Safe Step**)
+- **Approved checkpoint:** **Phase 7 / Step 1** complete (**`docs/GROUP_ASSISTANT_RULES.md`**). **Forward:** **Phase 7 / Step 2** — see **Next Safe Step** (helper/service slice for trigger evaluation + handoff categorization). Phase 6 closure: **`docs/PHASE_6_REVIEW.md`**. **Not** old **Phase 5 / Step 4–5** checkpoints; **not** admin payment mutation or **Phase 6 / Step 31** unless explicitly scoped; **not** full group runtime unless scoped.
 
-Forward **Phase 6** work only — do not use legacy Phase 5 “next step” prompts for new implementation slices.
+**Primary continuity document:** `docs/CHAT_HANDOFF.md` (**Current Status** + **Next Safe Step**); Phase 7 rules: **`docs/GROUP_ASSISTANT_RULES.md`**; Phase 6 closure: **`docs/PHASE_6_REVIEW.md`**.
+
+Default forward path is **Phase 7 / Step 2** — do not use legacy Phase 5 “next step” prompts for new implementation slices.
