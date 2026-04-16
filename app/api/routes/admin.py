@@ -38,6 +38,8 @@ from app.services.admin_handoff_write import (
     AdminHandoffNotFoundError,
     AdminHandoffReassignNotAllowedError,
     AdminHandoffReopenStateError,
+    AdminHandoffResolveGroupFollowupReasonOnlyError,
+    AdminHandoffResolveGroupFollowupStateError,
     AdminHandoffWriteService,
 )
 from app.services.admin_order_move_write import AdminOrderMoveNotAllowedError, AdminOrderMoveWriteService
@@ -706,6 +708,39 @@ def post_admin_handoff_mark_group_followup_in_work(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "code": "handoff_mark_in_work_not_allowed",
+                "current_status": exc.current_status,
+            },
+        ) from None
+    db.commit()
+    detail = AdminReadService().get_handoff_detail(db, handoff_id=handoff_id)
+    if detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Handoff not found.")
+    return detail
+
+
+@router.post("/handoffs/{handoff_id}/resolve-group-followup", response_model=AdminHandoffRead)
+def post_admin_handoff_resolve_group_followup(
+    handoff_id: int,
+    db: Session = Depends(get_db),
+) -> AdminHandoffRead:
+    """Phase 7 / Steps 13–14 — close/resolve ``group_followup_start`` from ``in_review`` only."""
+    try:
+        AdminHandoffWriteService().resolve_group_followup_handoff(db, handoff_id=handoff_id)
+    except AdminHandoffNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Handoff not found.") from None
+    except AdminHandoffResolveGroupFollowupReasonOnlyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "handoff_resolve_group_followup_reason_only",
+                "current_reason": exc.current_reason,
+            },
+        ) from None
+    except AdminHandoffResolveGroupFollowupStateError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "handoff_resolve_group_followup_not_allowed",
                 "current_status": exc.current_status,
             },
         ) from None

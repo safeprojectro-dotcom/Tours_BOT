@@ -51,6 +51,20 @@ def compute_group_followup_assignment_visibility(
     return True, "Operator assigned — open (follow-up pending)"
 
 
+def compute_group_followup_resolution_label(*, reason: str, status: str) -> str | None:
+    """
+    Phase 7 / Steps 13–14 — read-only label when a ``group_followup_start`` handoff is **closed**.
+
+    ``None`` for other reasons or non-terminal statuses. Does not record *how* the row was closed.
+    """
+    is_gf, _ = compute_group_followup_visibility(reason=reason)
+    if not is_gf:
+        return None
+    if status == "closed":
+        return "Group follow-up resolved (closed)"
+    return None
+
+
 def compute_handoff_queue_fields(
     *,
     status: str,

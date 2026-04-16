@@ -1,4 +1,4 @@
-"""Phase 7 / Steps 9–11 — read-only visibility helpers for group_followup_start (admin handoff surfaces)."""
+"""Phase 7 / Steps 9–11 + 13–14 — read-only visibility helpers for group_followup_start (admin handoff surfaces)."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import unittest
 
 from app.services.admin_handoff_queue import (
     compute_group_followup_assignment_visibility,
+    compute_group_followup_resolution_label,
     compute_group_followup_visibility,
 )
 from app.services.handoff_entry import HandoffEntryService
@@ -74,6 +75,29 @@ class ComputeGroupFollowupAssignmentVisibilityTests(unittest.TestCase):
         )
         self.assertFalse(is_agf)
         self.assertIsNone(work)
+
+
+class ComputeGroupFollowupResolutionLabelTests(unittest.TestCase):
+    """Phase 7 / Steps 13–14 — closed group_followup_start resolution read label."""
+
+    def test_closed_group_followup_has_resolution_label(self) -> None:
+        lbl = compute_group_followup_resolution_label(
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            status="closed",
+        )
+        self.assertIsNotNone(lbl)
+        self.assertIn("resolved", lbl.lower())
+
+    def test_open_group_followup_no_resolution_label(self) -> None:
+        lbl = compute_group_followup_resolution_label(
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            status="open",
+        )
+        self.assertIsNone(lbl)
+
+    def test_other_reason_closed_no_resolution_label(self) -> None:
+        lbl = compute_group_followup_resolution_label(reason="private_contact", status="closed")
+        self.assertIsNone(lbl)
 
 
 if __name__ == "__main__":

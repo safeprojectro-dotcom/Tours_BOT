@@ -40,6 +40,7 @@ from app.services.admin_order_lifecycle import (
 )
 from app.services.admin_handoff_queue import (
     compute_group_followup_assignment_visibility,
+    compute_group_followup_resolution_label,
     compute_group_followup_visibility,
     compute_handoff_queue_fields,
 )
@@ -186,6 +187,7 @@ class AdminReadService:
                 assigned_operator_id=h.assigned_operator_id,
                 status=h.status,
             )
+            res_lbl = compute_group_followup_resolution_label(reason=h.reason, status=h.status)
             handoffs.append(
                 AdminHandoffSummaryItem(
                     id=h.id,
@@ -198,6 +200,7 @@ class AdminReadService:
                     source_label=src_lbl,
                     is_assigned_group_followup=is_agf,
                     group_followup_work_label=work_lbl,
+                    group_followup_resolution_label=res_lbl,
                 )
             )
         t = order.tour
@@ -269,6 +272,7 @@ class AdminReadService:
             assigned_operator_id=h.assigned_operator_id,
             status=h.status,
         )
+        res_lbl = compute_group_followup_resolution_label(reason=h.reason, status=h.status)
         return AdminHandoffRead(
             id=h.id,
             status=h.status,
@@ -289,6 +293,7 @@ class AdminReadService:
             source_label=src_lbl,
             is_assigned_group_followup=is_agf,
             group_followup_work_label=work_lbl,
+            group_followup_resolution_label=res_lbl,
         )
 
     def list_handoffs(

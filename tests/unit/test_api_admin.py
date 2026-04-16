@@ -2380,6 +2380,131 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(err["code"], "handoff_mark_in_work_not_allowed")
         self.assertEqual(err["current_status"], "closed")
 
+    def test_handoff_resolve_group_followup_success_in_review_to_closed(self) -> None:
+        """Phase 7 / Steps 13–14 — narrow resolve closes assigned group followup from in_review."""
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        operator = self.create_user(telegram_user_id=940_001)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="in_review",
+            assigned_operator_id=operator.id,
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(f"/admin/handoffs/{h.id}/resolve-group-followup", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["status"], "closed")
+        self.assertIsNotNone(body.get("group_followup_resolution_label"))
+        self.assertIn("resolved", body["group_followup_resolution_label"].lower())
+
+    def test_handoff_resolve_group_followup_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.post("/admin/handoffs/999999/resolve-group-followup", headers=headers)
+        self.assertEqual(r.status_code, 404)
+
+    def test_handoff_resolve_group_followup_rejects_wrong_reason(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        h = Handoff(
+            user_id=customer.id,
+            order_id=None,
+            reason="private_contact",
+            priority="normal",
+            status="in_review",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(f"/admin/handoffs/{h.id}/resolve-group-followup", headers=headers)
+        self.assertEqual(r.status_code, 400)
+        err = r.json()["detail"]
+        self.assertEqual(err["code"], "handoff_resolve_group_followup_reason_only")
+
+    def test_handoff_resolve_group_followup_rejects_open(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        operator = self.create_user(telegram_user_id=940_002)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="open",
+            assigned_operator_id=operator.id,
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(f"/admin/handoffs/{h.id}/resolve-group-followup", headers=headers)
+        self.assertEqual(r.status_code, 400)
+        err = r.json()["detail"]
+        self.assertEqual(err["code"], "handoff_resolve_group_followup_not_allowed")
+        self.assertEqual(err["current_status"], "open")
+
+    def test_handoff_resolve_group_followup_idempotent_closed(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        operator = self.create_user(telegram_user_id=940_003)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="closed",
+            assigned_operator_id=operator.id,
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(f"/admin/handoffs/{h.id}/resolve-group-followup", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["status"], "closed")
+        self.assertIsNotNone(body.get("group_followup_resolution_label"))
+
+    def test_handoffs_list_closed_group_followup_shows_resolution_label(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        h = Handoff(
+            user_id=user.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="closed",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.get("/admin/handoffs", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        row = next(x for x in r.json()["items"] if x["id"] == h.id)
+        self.assertIsNotNone(row.get("group_followup_resolution_label"))
+        self.assertIn("resolved", row["group_followup_resolution_label"].lower())
+
+    def test_handoffs_list_private_contact_closed_no_resolution_label(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        h = Handoff(
+            user_id=user.id,
+            order_id=None,
+            reason="private_contact",
+            priority="normal",
+            status="closed",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.get("/admin/handoffs", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        row = next(x for x in r.json()["items"] if x["id"] == h.id)
+        self.assertIsNone(row.get("group_followup_resolution_label"))
+
     def test_handoff_reopen_requires_auth(self) -> None:
         r = self.client.post("/admin/handoffs/1/reopen")
         self.assertEqual(r.status_code, 401)

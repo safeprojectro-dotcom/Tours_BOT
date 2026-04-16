@@ -358,6 +358,10 @@ class AdminHandoffSummaryItem(BaseModel):
         default=None,
         description="Triage copy for group_followup_start only (assigned vs awaiting); None for other reasons.",
     )
+    group_followup_resolution_label: str | None = Field(
+        default=None,
+        description="Read-only: set when group_followup_start is closed (resolved); None otherwise.",
+    )
 
 
 class AdminHandoffAssignBody(BaseModel):
@@ -403,6 +407,10 @@ class AdminHandoffRead(BaseModel):
     group_followup_work_label: str | None = Field(
         default=None,
         description="Triage copy for group_followup_start only (assigned vs awaiting); None for other reasons.",
+    )
+    group_followup_resolution_label: str | None = Field(
+        default=None,
+        description="Read-only: set when group_followup_start is closed (resolved); None otherwise.",
     )
 
 

@@ -79,6 +79,20 @@ class AdminHandoffMarkInWorkStateError(Exception):
         self.current_status = current_status
 
 
+class AdminHandoffResolveGroupFollowupReasonOnlyError(Exception):
+    """Phase 7 / Steps 13–14 — resolve-group-followup accepts ``group_followup_start`` only."""
+
+    def __init__(self, *, current_reason: str) -> None:
+        self.current_reason = current_reason
+
+
+class AdminHandoffResolveGroupFollowupStateError(Exception):
+    """Phase 7 / Steps 13–14 — resolve only from ``in_review`` (``open`` rejected)."""
+
+    def __init__(self, *, current_status: str) -> None:
+        self.current_status = current_status
+
+
 class AdminHandoffReopenStateError(Exception):
     """reopen not allowed from current status (narrow Step 22: not from in_review)."""
 
@@ -217,6 +231,25 @@ class AdminHandoffWriteService:
         if row.status == HANDOFF_STATUS_OPEN:
             return self._handoffs.update(session, instance=row, data={"status": HANDOFF_STATUS_IN_REVIEW})
         raise AdminHandoffMarkInWorkStateError(current_status=row.status)
+
+    def resolve_group_followup_handoff(self, session: Session, *, handoff_id: int) -> Handoff:
+        """
+        Phase 7 / Steps 13–14 — narrow close/resolve: ``group_followup_start`` only.
+
+        ``in_review`` → ``closed``; ``closed`` → idempotent; ``open`` → error (use ``mark-in-work`` first).
+        """
+        row = self._handoffs.get(session, handoff_id)
+        if row is None:
+            raise AdminHandoffNotFoundError
+        if row.reason != HandoffEntryService.REASON_GROUP_FOLLOWUP_START:
+            raise AdminHandoffResolveGroupFollowupReasonOnlyError(current_reason=row.reason)
+        if row.status == HANDOFF_STATUS_CLOSED:
+            return row
+        if row.status == HANDOFF_STATUS_IN_REVIEW:
+            return self._handoffs.update(session, instance=row, data={"status": HANDOFF_STATUS_CLOSED})
+        if row.status == HANDOFF_STATUS_OPEN:
+            raise AdminHandoffResolveGroupFollowupStateError(current_status=row.status)
+        raise AdminHandoffResolveGroupFollowupStateError(current_status=row.status)
 
     def reopen_handoff(self, session: Session, *, handoff_id: int) -> Handoff:
         """
