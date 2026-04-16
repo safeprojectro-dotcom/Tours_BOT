@@ -2270,6 +2270,116 @@ class AdminRouteTests(FoundationDBTestCase):
         err = r.json()["detail"]
         self.assertEqual(err["code"], "handoff_reassign_not_allowed")
 
+    def test_handoff_mark_in_work_requires_auth(self) -> None:
+        r = self.client.post("/admin/handoffs/1/mark-in-work")
+        self.assertEqual(r.status_code, 401)
+
+    def test_handoff_mark_in_work_success_assigned_group_followup_open_to_in_review(self) -> None:
+        """Phase 7 / Step 12 — narrow take-in-work: open → in_review when assigned + group_followup_start."""
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        operator = self.create_user(telegram_user_id=930_001)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="open",
+            assigned_operator_id=operator.id,
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(f"/admin/handoffs/{h.id}/mark-in-work", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["status"], "in_review")
+        self.assertEqual(body["assigned_operator_id"], operator.id)
+        self.assertTrue(body["is_assigned_group_followup"])
+
+    def test_handoff_mark_in_work_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.post("/admin/handoffs/999999/mark-in-work", headers=headers)
+        self.assertEqual(r.status_code, 404)
+
+    def test_handoff_mark_in_work_rejects_non_group_followup_reason(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        operator = self.create_user(telegram_user_id=930_002)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=None,
+            reason="private_contact",
+            priority="normal",
+            status="open",
+            assigned_operator_id=operator.id,
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(f"/admin/handoffs/{h.id}/mark-in-work", headers=headers)
+        self.assertEqual(r.status_code, 400)
+        err = r.json()["detail"]
+        self.assertEqual(err["code"], "handoff_mark_in_work_reason_only")
+        self.assertEqual(err["current_reason"], "private_contact")
+
+    def test_handoff_mark_in_work_rejects_unassigned_group_followup(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        h = Handoff(
+            user_id=customer.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="open",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(f"/admin/handoffs/{h.id}/mark-in-work", headers=headers)
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["detail"]["code"], "handoff_mark_in_work_assignment_required")
+
+    def test_handoff_mark_in_work_idempotent_in_review(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        operator = self.create_user(telegram_user_id=930_003)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="in_review",
+            assigned_operator_id=operator.id,
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(f"/admin/handoffs/{h.id}/mark-in-work", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["status"], "in_review")
+
+    def test_handoff_mark_in_work_rejects_closed(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        operator = self.create_user(telegram_user_id=930_004)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="closed",
+            assigned_operator_id=operator.id,
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(f"/admin/handoffs/{h.id}/mark-in-work", headers=headers)
+        self.assertEqual(r.status_code, 400)
+        err = r.json()["detail"]
+        self.assertEqual(err["code"], "handoff_mark_in_work_not_allowed")
+        self.assertEqual(err["current_status"], "closed")
+
     def test_handoff_reopen_requires_auth(self) -> None:
         r = self.client.post("/admin/handoffs/1/reopen")
         self.assertEqual(r.status_code, 401)

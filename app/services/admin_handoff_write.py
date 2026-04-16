@@ -59,6 +59,26 @@ class AdminHandoffAssignGroupFollowupReasonOnlyError(Exception):
         self.current_reason = current_reason
 
 
+class AdminHandoffMarkInWorkReasonOnlyError(Exception):
+    """Phase 7 / Step 12 — mark-in-work accepts ``group_followup_start`` only."""
+
+    def __init__(self, *, current_reason: str) -> None:
+        self.current_reason = current_reason
+
+
+class AdminHandoffMarkInWorkAssignmentRequiredError(Exception):
+    """Phase 7 / Step 12 — mark-in-work requires ``assigned_operator_id``."""
+
+    pass
+
+
+class AdminHandoffMarkInWorkStateError(Exception):
+    """Phase 7 / Step 12 — mark-in-work not allowed from current status (e.g. closed)."""
+
+    def __init__(self, *, current_status: str) -> None:
+        self.current_status = current_status
+
+
 class AdminHandoffReopenStateError(Exception):
     """reopen not allowed from current status (narrow Step 22: not from in_review)."""
 
@@ -175,6 +195,28 @@ class AdminHandoffWriteService:
             row=row,
             assigned_operator_id=assigned_operator_id,
         )
+
+    def mark_group_followup_in_work(self, session: Session, *, handoff_id: int) -> Handoff:
+        """
+        Phase 7 / Step 12 — narrow take-in-work: ``group_followup_start`` + assigned operator only.
+
+        ``open`` → ``in_review``; already ``in_review`` → idempotent (no write).
+        ``closed`` or unexpected status → error. No new DB columns (reuses status).
+        """
+        row = self._handoffs.get(session, handoff_id)
+        if row is None:
+            raise AdminHandoffNotFoundError
+        if row.reason != HandoffEntryService.REASON_GROUP_FOLLOWUP_START:
+            raise AdminHandoffMarkInWorkReasonOnlyError(current_reason=row.reason)
+        if row.assigned_operator_id is None:
+            raise AdminHandoffMarkInWorkAssignmentRequiredError
+        if row.status == HANDOFF_STATUS_CLOSED:
+            raise AdminHandoffMarkInWorkStateError(current_status=row.status)
+        if row.status == HANDOFF_STATUS_IN_REVIEW:
+            return row
+        if row.status == HANDOFF_STATUS_OPEN:
+            return self._handoffs.update(session, instance=row, data={"status": HANDOFF_STATUS_IN_REVIEW})
+        raise AdminHandoffMarkInWorkStateError(current_status=row.status)
 
     def reopen_handoff(self, session: Session, *, handoff_id: int) -> Handoff:
         """

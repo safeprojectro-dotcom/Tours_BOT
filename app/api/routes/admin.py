@@ -32,6 +32,9 @@ from app.services.admin_handoff_write import (
     AdminHandoffCloseStateError,
     AdminHandoffInvalidOperatorError,
     AdminHandoffMarkInReviewStateError,
+    AdminHandoffMarkInWorkAssignmentRequiredError,
+    AdminHandoffMarkInWorkReasonOnlyError,
+    AdminHandoffMarkInWorkStateError,
     AdminHandoffNotFoundError,
     AdminHandoffReassignNotAllowedError,
     AdminHandoffReopenStateError,
@@ -666,6 +669,44 @@ def post_admin_handoff_assign_group_followup_operator(
                 "code": "handoff_reassign_not_allowed",
                 "current_assigned_operator_id": exc.current_assigned_operator_id,
                 "requested_operator_id": exc.requested_operator_id,
+            },
+        ) from None
+    db.commit()
+    detail = AdminReadService().get_handoff_detail(db, handoff_id=handoff_id)
+    if detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Handoff not found.")
+    return detail
+
+
+@router.post("/handoffs/{handoff_id}/mark-in-work", response_model=AdminHandoffRead)
+def post_admin_handoff_mark_group_followup_in_work(
+    handoff_id: int,
+    db: Session = Depends(get_db),
+) -> AdminHandoffRead:
+    """Phase 7 / Step 12 — take-in-work for assigned ``group_followup_start`` only (open → in_review)."""
+    try:
+        AdminHandoffWriteService().mark_group_followup_in_work(db, handoff_id=handoff_id)
+    except AdminHandoffNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Handoff not found.") from None
+    except AdminHandoffMarkInWorkReasonOnlyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "handoff_mark_in_work_reason_only",
+                "current_reason": exc.current_reason,
+            },
+        ) from None
+    except AdminHandoffMarkInWorkAssignmentRequiredError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "handoff_mark_in_work_assignment_required"},
+        ) from None
+    except AdminHandoffMarkInWorkStateError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "handoff_mark_in_work_not_allowed",
+                "current_status": exc.current_status,
             },
         ) from None
     db.commit()
