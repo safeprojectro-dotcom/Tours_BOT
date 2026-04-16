@@ -66,7 +66,8 @@ class PrivateEntryGrpFollowupChainTests(FoundationDBTestCase):
             message.answer.assert_called()
             intro_text = message.answer.call_args[0][0]
             self.assertIn("/contact", intro_text)
-            self.assertIn("Thanks for continuing", intro_text)
+            self.assertIn("Thanks", intro_text)
+            self.assertIn("group", intro_text.lower())
 
         self._run(body())
 
@@ -111,7 +112,7 @@ class PrivateEntryGrpFollowupChainTests(FoundationDBTestCase):
         ).all()
         self.assertEqual(len(rows), 1)
         self.assertEqual(len(second_intro), 1)
-        self.assertIn("already open", second_intro[0].lower())
+        self.assertIn("queued", second_intro[0].lower())
 
     def test_grp_private_no_group_followup_handoff_row(self) -> None:
         user_id = self.create_user(telegram_user_id=88_203, preferred_language="en").id
@@ -169,7 +170,7 @@ class PrivateEntryGrpFollowupChainTests(FoundationDBTestCase):
                     await private_entry.handle_start(message, state, command)
 
             intro_text = message.answer.call_args[0][0]
-            self.assertIn("resolved", intro_text.lower())
+            self.assertIn("closed", intro_text.lower())
 
         self._run(body())
 
@@ -212,7 +213,7 @@ class PrivateEntryGrpFollowupChainTests(FoundationDBTestCase):
 
             intro_text = message.answer.call_args[0][0]
             self.assertIn("working on", intro_text.lower())
-            self.assertNotIn("marked resolved", intro_text.lower())
+            self.assertNotIn("closed", intro_text.lower())
 
         self._run(body())
 
@@ -243,8 +244,8 @@ class PrivateEntryGrpFollowupChainTests(FoundationDBTestCase):
                     await private_entry.handle_start(message, state, command)
 
             intro_text = message.answer.call_args[0][0]
-            self.assertIn("reviewing", intro_text.lower())
-            self.assertNotIn("marked resolved", intro_text.lower())
+            self.assertIn("assigned", intro_text.lower())
+            self.assertNotIn("closed", intro_text.lower())
 
         self._run(body())
 
@@ -273,7 +274,8 @@ class PrivateEntryGrpFollowupChainTests(FoundationDBTestCase):
                     await private_entry.handle_start(message, state, command)
 
             intro_text = message.answer.call_args[0][0]
-            self.assertIn("Thanks for continuing", intro_text)
+            self.assertIn("Thanks", intro_text)
+            self.assertIn("group", intro_text.lower())
 
         self._run(body())
 

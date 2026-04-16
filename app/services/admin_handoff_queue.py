@@ -43,12 +43,12 @@ def compute_group_followup_assignment_visibility(
     if not is_gf:
         return False, None
     if assigned_operator_id is None:
-        return False, "Awaiting operator assignment"
+        return False, "Queued with team — Awaiting assignment"
     if status == "closed":
-        return True, "Operator assigned — handoff closed"
+        return True, "Assigned — follow-up closed"
     if status == "in_review":
-        return True, "Operator assigned — in review"
-    return True, "Operator assigned — open (follow-up pending)"
+        return True, "Assigned — in progress"
+    return True, "Assigned — follow-up open"
 
 
 def compute_group_followup_queue_state(
@@ -87,7 +87,7 @@ def compute_group_followup_resolution_label(*, reason: str, status: str) -> str 
     if not is_gf:
         return None
     if status == "closed":
-        return "Group follow-up resolved (closed)"
+        return "Group follow-up closed (resolved)"
     return None
 
 

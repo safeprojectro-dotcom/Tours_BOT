@@ -137,9 +137,11 @@ class HandoffEntryService:
         user_id: int,
     ) -> str:
         """
-        Phase 7 / Step 17 — map existing ``group_followup_start`` rows to a short private intro key.
+        Map ``group_followup_start`` rows to a private intro key (Phase 7 follow-up UX; read-only).
 
-        Read-only. No operator identifiers or workflow jargon in the returned key (copy is in messages).
+        Aligns with admin read-side buckets from ``compute_group_followup_queue_state``:
+        ``awaiting_assignment`` → pending; ``assigned_open`` → assigned; ``in_work`` → in_progress;
+        ``resolved`` → resolved intro. Copy stays in ``app.bot.messages`` — no operator IDs or timing.
         """
         reason = self.REASON_GROUP_FOLLOWUP_START
         open_row = self._handoffs.find_open_by_user_reason(

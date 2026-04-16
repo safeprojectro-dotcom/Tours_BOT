@@ -39,7 +39,7 @@ class ComputeGroupFollowupAssignmentVisibilityTests(unittest.TestCase):
         )
         self.assertFalse(is_agf)
         self.assertIsNotNone(work)
-        self.assertIn("Awaiting", work)
+        self.assertIn("Queued", work)
 
     def test_assigned_open_group_followup(self) -> None:
         is_agf, work = compute_group_followup_assignment_visibility(
@@ -48,7 +48,8 @@ class ComputeGroupFollowupAssignmentVisibilityTests(unittest.TestCase):
             status="open",
         )
         self.assertTrue(is_agf)
-        self.assertIn("Operator assigned", work or "")
+        self.assertIn("Assigned", work or "")
+        self.assertIn("follow-up", work or "")
 
     def test_assigned_in_review_group_followup(self) -> None:
         is_agf, work = compute_group_followup_assignment_visibility(
@@ -57,7 +58,7 @@ class ComputeGroupFollowupAssignmentVisibilityTests(unittest.TestCase):
             status="in_review",
         )
         self.assertTrue(is_agf)
-        self.assertIn("in review", work or "")
+        self.assertIn("progress", work or "")
 
     def test_assigned_closed_group_followup(self) -> None:
         is_agf, work = compute_group_followup_assignment_visibility(

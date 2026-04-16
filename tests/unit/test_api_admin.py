@@ -1617,7 +1617,7 @@ class AdminRouteTests(FoundationDBTestCase):
         row_gfa = items[h_gf_assigned.id]
         self.assertTrue(row_gfa["is_assigned_group_followup"])
         self.assertIsNotNone(row_gfa["group_followup_work_label"])
-        self.assertIn("Operator assigned", row_gfa["group_followup_work_label"])
+        self.assertIn("Assigned", row_gfa["group_followup_work_label"])
         row_o = items[h_other.id]
         self.assertFalse(row_o["is_group_followup"])
         self.assertIsNone(row_o["source_label"])
@@ -1835,7 +1835,7 @@ class AdminRouteTests(FoundationDBTestCase):
         ho = next(x for x in r.json()["handoffs"] if x["id"] == h.id)
         self.assertTrue(ho["is_assigned_group_followup"])
         self.assertIsNotNone(ho["group_followup_work_label"])
-        self.assertIn("Operator assigned", ho["group_followup_work_label"])
+        self.assertIn("Assigned", ho["group_followup_work_label"])
         self.assertEqual(ho["group_followup_queue_state"], "assigned_open")
 
     def test_handoff_mark_in_review_preserves_group_followup_visibility(self) -> None:
@@ -2275,7 +2275,7 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertTrue(body["is_group_followup"])
         self.assertTrue(body["is_assigned_group_followup"])
         self.assertIsNotNone(body["group_followup_work_label"])
-        self.assertIn("Operator assigned", body["group_followup_work_label"])
+        self.assertIn("Assigned", body["group_followup_work_label"])
 
     def test_handoff_assign_operator_not_found(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}
