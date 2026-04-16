@@ -7,6 +7,22 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from app.services.handoff_entry import HandoffEntryService
+
+
+def compute_group_followup_visibility(*, reason: str) -> tuple[bool, str | None]:
+    """
+    Phase 7 / Step 9 — derived read-only labels for the group → private follow-up chain.
+
+    Returns (is_group_followup, source_label). Does not imply assignment or workflow state.
+    """
+    if reason == HandoffEntryService.REASON_GROUP_FOLLOWUP_START:
+        return (
+            True,
+            "Group chat → private follow-up (/start grp_followup)",
+        )
+    return (False, None)
+
 
 def compute_handoff_queue_fields(
     *,

@@ -38,7 +38,10 @@ from app.services.admin_order_lifecycle import (
     describe_order_admin_lifecycle,
     sql_predicate_for_lifecycle_kind,
 )
-from app.services.admin_handoff_queue import compute_handoff_queue_fields
+from app.services.admin_handoff_queue import (
+    compute_group_followup_visibility,
+    compute_handoff_queue_fields,
+)
 from app.services.admin_order_action_preview import compute_admin_action_preview
 from app.services.admin_order_move_inspection import compute_move_placement_snapshot
 from app.services.admin_order_move_readiness import compute_move_readiness
@@ -174,17 +177,21 @@ class AdminReadService:
             key=lambda h: (h.updated_at, h.id),
             reverse=True,
         )
-        handoffs = [
-            AdminHandoffSummaryItem(
-                id=h.id,
-                status=h.status,
-                reason=h.reason,
-                priority=h.priority,
-                created_at=h.created_at,
-                updated_at=h.updated_at,
+        handoffs = []
+        for h in handoffs_sorted:
+            is_gf, src_lbl = compute_group_followup_visibility(reason=h.reason)
+            handoffs.append(
+                AdminHandoffSummaryItem(
+                    id=h.id,
+                    status=h.status,
+                    reason=h.reason,
+                    priority=h.priority,
+                    created_at=h.created_at,
+                    updated_at=h.updated_at,
+                    is_group_followup=is_gf,
+                    source_label=src_lbl,
+                )
             )
-            for h in handoffs_sorted
-        ]
         t = order.tour
         bp = order.boarding_point
         return AdminOrderDetailRead(
@@ -248,6 +255,7 @@ class AdminReadService:
             status=h.status,
             created_at=h.created_at,
         )
+        is_gf, src_lbl = compute_group_followup_visibility(reason=h.reason)
         return AdminHandoffRead(
             id=h.id,
             status=h.status,
@@ -264,6 +272,8 @@ class AdminReadService:
             is_open=is_open,
             needs_attention=needs_attention,
             age_bucket=age_bucket,
+            is_group_followup=is_gf,
+            source_label=src_lbl,
         )
 
     def list_handoffs(

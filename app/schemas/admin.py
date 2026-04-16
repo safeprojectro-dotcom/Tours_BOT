@@ -342,6 +342,14 @@ class AdminHandoffSummaryItem(BaseModel):
     priority: str
     created_at: datetime
     updated_at: datetime
+    is_group_followup: bool = Field(
+        default=False,
+        description="True when reason is group_followup_start (narrow Phase 7 group→private follow-up chain).",
+    )
+    source_label: str | None = Field(
+        default=None,
+        description="Human-readable origin label when is_group_followup; read-only.",
+    )
 
 
 class AdminHandoffAssignBody(BaseModel):
@@ -371,6 +379,14 @@ class AdminHandoffRead(BaseModel):
     )
     age_bucket: str = Field(
         description="within_1h | within_24h | older — coarse age from created_at (server clock).",
+    )
+    is_group_followup: bool = Field(
+        default=False,
+        description="True when reason is group_followup_start (narrow Phase 7 group→private follow-up chain).",
+    )
+    source_label: str | None = Field(
+        default=None,
+        description="Human-readable origin label when is_group_followup; read-only.",
     )
 
 
