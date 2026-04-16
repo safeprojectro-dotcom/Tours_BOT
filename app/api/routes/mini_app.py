@@ -30,7 +30,10 @@ from app.schemas.mini_app import (
 from app.schemas.payment import PaymentReconciliationRead
 from app.schemas.prepared import OrderSummaryRead, PaymentEntryRead, ReservationPreparationSummaryRead
 from app.services.catalog import CatalogLookupService
-from app.services.mini_app_booking import MiniAppBookingService
+from app.services.mini_app_booking import (
+    MiniAppBookingService,
+    MiniAppSelfServiceBookingNotAllowedError,
+)
 from app.services.mini_app_bookings import MiniAppBookingsService
 from app.services.mini_app_catalog import MiniAppCatalogService
 from app.services.handoff_entry import HandoffEntryService
@@ -266,14 +269,24 @@ def create_temporary_reservation(
     language_code: str | None = Query(default=None),
     session: Session = Depends(get_db),
 ) -> OrderSummaryRead:
-    summary = MiniAppBookingService().create_temporary_reservation(
-        session,
-        tour_code=tour_code,
-        telegram_user_id=payload.telegram_user_id,
-        seats_count=payload.seats_count,
-        boarding_point_id=payload.boarding_point_id,
-        language_code=language_code,
-    )
+    try:
+        summary = MiniAppBookingService().create_temporary_reservation(
+            session,
+            tour_code=tour_code,
+            telegram_user_id=payload.telegram_user_id,
+            seats_count=payload.seats_count,
+            boarding_point_id=payload.boarding_point_id,
+            language_code=language_code,
+        )
+    except MiniAppSelfServiceBookingNotAllowedError:
+        session.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": MiniAppSelfServiceBookingNotAllowedError.code,
+                "message": "Self-service reservation is not available for this tour sales mode.",
+            },
+        ) from None
     if summary is None:
         session.rollback()
         if CatalogLookupService().get_tour_by_code(session, code=tour_code) is None:

@@ -237,35 +237,49 @@ class CatalogScreen:
             spacing=8,
         )
         description = card.short_description or shell(lg, "catalog_card_no_description")
+        assisted_line = None
+        if not card.sales_mode_policy.per_seat_self_service_allowed:
+            assisted_line = ft.Text(
+                shell(lg, "catalog_card_assisted_notice"),
+                color=ft.Colors.TERTIARY,
+                size=13,
+            )
+        card_children: list[ft.Control] = [
+            badges,
+            ft.Text(card.title, size=18, weight=ft.FontWeight.BOLD),
+            ft.Text(
+                f"{self._format_datetime(card.departure_datetime)} | "
+                + shell(lg, "days_hours", n=str(card.duration_days)),
+                color=ft.Colors.ON_SURFACE_VARIANT,
+            ),
+            ft.Text(
+                f"{self._format_price(card.base_price)} {card.currency} | {card.seats_available} / {card.seats_total} seats left",
+                color=ft.Colors.ON_SURFACE_VARIANT,
+            ),
+        ]
+        if assisted_line is not None:
+            card_children.append(assisted_line)
+        card_children.extend(
+            [
+                ft.Text(description, max_lines=3, overflow=ft.TextOverflow.ELLIPSIS),
+                ft.Row(
+                    [
+                        ft.TextButton(
+                            shell(lg, "view_details"),
+                            on_click=lambda _, code=card.code: self.on_open_detail(code),
+                        )
+                    ],
+                    alignment=ft.MainAxisAlignment.END,
+                ),
+            ]
+        )
         return ft.Container(
             bgcolor=ft.Colors.SURFACE_CONTAINER_LOW,
             border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
             border_radius=16,
             padding=16,
             content=ft.Column(
-                [
-                    badges,
-                    ft.Text(card.title, size=18, weight=ft.FontWeight.BOLD),
-                    ft.Text(
-                        f"{self._format_datetime(card.departure_datetime)} | "
-                        + shell(lg, "days_hours", n=str(card.duration_days)),
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                    ),
-                    ft.Text(
-                        f"{self._format_price(card.base_price)} {card.currency} | {card.seats_available} / {card.seats_total} seats left",
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                    ),
-                    ft.Text(description, max_lines=3, overflow=ft.TextOverflow.ELLIPSIS),
-                    ft.Row(
-                        [
-                            ft.TextButton(
-                                shell(lg, "view_details"),
-                                on_click=lambda _, code=card.code: self.on_open_detail(code),
-                            )
-                        ],
-                        alignment=ft.MainAxisAlignment.END,
-                    ),
-                ],
+                card_children,
                 spacing=8,
             ),
         )
@@ -353,7 +367,12 @@ class CatalogScreen:
         if exc.response is None:
             return default
         try:
-            return exc.response.json().get("detail", default)
+            raw = exc.response.json().get("detail", default)
+            if isinstance(raw, dict):
+                return str(raw.get("message") or raw.get("code") or default)
+            if isinstance(raw, str):
+                return raw
+            return str(raw)
         except Exception:
             return default
 
@@ -556,14 +575,25 @@ class TourDetailScreen:
     ) -> ft.Control:
         lg = self.language_code
         if detail.is_available:
-            return ft.Row(
-                [
-                    ft.ElevatedButton(
-                        shell(lg, "prepare_reservation"),
-                        on_click=lambda _, code=detail.tour.code: self.on_prepare(code),
-                    )
-                ],
-                alignment=ft.MainAxisAlignment.START,
+            if detail.sales_mode_policy.per_seat_self_service_allowed:
+                return ft.Row(
+                    [
+                        ft.ElevatedButton(
+                            shell(lg, "prepare_reservation"),
+                            on_click=lambda _, code=detail.tour.code: self.on_prepare(code),
+                        )
+                    ],
+                    alignment=ft.MainAxisAlignment.START,
+                )
+            return ft.Container(
+                padding=ft.padding.only(top=4),
+                content=ft.Column(
+                    [
+                        ft.Text(shell(lg, "detail_assisted_booking_title"), weight=ft.FontWeight.W_600),
+                        ft.Text(shell(lg, "detail_assisted_booking_body"), color=ft.Colors.ON_SURFACE_VARIANT),
+                    ],
+                    spacing=6,
+                ),
             )
         if detail.tour.status != TourStatus.OPEN_FOR_SALE:
             return ft.Row(
@@ -885,6 +915,45 @@ class ReservationPreparationScreen:
         if preparation is None:
             return
 
+        lg = self.language_code
+        localized = preparation.tour.localized_content
+        header_rows: list[ft.Control] = [
+            ft.Text(localized.title, size=26, weight=ft.FontWeight.BOLD),
+            ft.Text(
+                f"{CatalogScreen._format_datetime(preparation.tour.departure_datetime)} | "
+                f"{CatalogScreen._format_price(preparation.tour.base_price)} {preparation.tour.currency}",
+                color=ft.Colors.ON_SURFACE_VARIANT,
+            ),
+            ft.Text(
+                f"Seats available for preparation: {preparation.tour.seats_available_snapshot}",
+                color=ft.Colors.ON_SURFACE_VARIANT,
+            ),
+        ]
+
+        if not preparation.sales_mode_policy.per_seat_self_service_allowed:
+            self.preparation_note.visible = False
+            self.selection_container.controls.extend(
+                header_rows
+                + [
+                    ft.Container(
+                        padding=ft.padding.only(top=8),
+                        content=ft.Column(
+                            [
+                                ft.Text(shell(lg, "preparation_assisted_title"), weight=ft.FontWeight.W_600),
+                                ft.Text(shell(lg, "preparation_assisted_body"), color=ft.Colors.ON_SURFACE_VARIANT),
+                            ],
+                            spacing=6,
+                        ),
+                    ),
+                ]
+            )
+            self.seats_dropdown.options = []
+            self.seats_dropdown.value = None
+            self.boarding_dropdown.options = []
+            self.boarding_dropdown.value = None
+            return
+
+        self.preparation_note.visible = True
         self.seats_dropdown.options = [
             ft.dropdown.Option(str(option), str(option)) for option in preparation.seat_count_options
         ]
@@ -897,19 +966,9 @@ class ReservationPreparationScreen:
             str(preparation.boarding_points[0].id) if preparation.boarding_points else None
         )
 
-        localized = preparation.tour.localized_content
         self.selection_container.controls.extend(
-            [
-                ft.Text(localized.title, size=26, weight=ft.FontWeight.BOLD),
-                ft.Text(
-                    f"{CatalogScreen._format_datetime(preparation.tour.departure_datetime)} | "
-                    f"{CatalogScreen._format_price(preparation.tour.base_price)} {preparation.tour.currency}",
-                    color=ft.Colors.ON_SURFACE_VARIANT,
-                ),
-                ft.Text(
-                    f"Seats available for preparation: {preparation.tour.seats_available_snapshot}",
-                    color=ft.Colors.ON_SURFACE_VARIANT,
-                ),
+            header_rows
+            + [
                 self.seats_dropdown,
                 self.boarding_dropdown,
                 ft.Row([self.preview_button], alignment=ft.MainAxisAlignment.START),

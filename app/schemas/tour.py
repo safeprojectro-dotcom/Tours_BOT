@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 
-from app.models.enums import TourStatus
+from app.models.enums import TourSalesMode, TourStatus
 from app.schemas.common import ORMBaseSchema, TimestampSchema
 
 
@@ -74,6 +74,7 @@ class TourBase(BaseModel):
     seats_total: int
     seats_available: int
     sales_deadline: datetime | None = None
+    sales_mode: TourSalesMode = TourSalesMode.PER_SEAT
     status: TourStatus = TourStatus.DRAFT
     guaranteed_flag: bool = False
 

@@ -27,6 +27,7 @@ from app.services.catalog import CatalogLookupService
 from app.services.catalog_preparation import CatalogPreparationService
 from app.services.language_aware_tour import LanguageAwareTourReadService
 from app.services.reservation_expiry import lazy_expire_due_reservations
+from app.services.tour_sales_mode_policy import TourSalesModePolicyService
 from sqlalchemy.orm import Session
 
 
@@ -316,6 +317,8 @@ class PrivateReservationPreparationService:
         return detail
 
     def list_seat_count_options(self, detail: PreparedTourDetailRead) -> tuple[int, ...]:
+        if not TourSalesModePolicyService.policy_for_sales_mode(detail.tour.sales_mode).per_seat_self_service_allowed:
+            return ()
         available = min(detail.tour.seats_available, MAX_PRIVATE_PREPARATION_SEATS)
         if available <= 0:
             return ()
@@ -336,6 +339,9 @@ class PrivateReservationPreparationService:
             language_code=language_code,
         )
         if detail is None:
+            return None
+
+        if not TourSalesModePolicyService.policy_for_sales_mode(detail.tour.sales_mode).per_seat_self_service_allowed:
             return None
 
         if seats_count not in self.list_seat_count_options(detail):

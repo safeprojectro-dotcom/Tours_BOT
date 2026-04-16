@@ -16,6 +16,7 @@ from app.bot.constants import (
     CHANGE_PREPARED_SEATS_CALLBACK,
     CHANGE_LANGUAGE_CALLBACK,
     CREATE_TEMPORARY_RESERVATION_CALLBACK,
+    REQUEST_BOOKING_ASSISTANCE_CALLBACK,
     FILTER_BUDGET_CALLBACK_PREFIX,
     FILTER_BY_BUDGET_CALLBACK,
     FILTER_BY_DATE_CALLBACK,
@@ -72,6 +73,7 @@ from app.bot.transient_messages import (
 )
 from app.core.config import get_settings
 from app.db.session import SessionLocal
+from app.repositories.tour import TourRepository
 from app.services.handoff_entry import HandoffEntryService
 from app.services.group_private_cta import (
     START_PAYLOAD_GRP_FOLLOWUP,
@@ -81,6 +83,7 @@ from app.services.group_private_cta import (
 from app.services.order_summary import OrderSummaryService
 from app.services.payment_entry import PaymentEntryService
 from app.services.reservation_creation import TemporaryReservationService
+from app.services.tour_sales_mode_policy import TourSalesModePolicyService
 
 router = Router(name="private-entry")
 router.message.filter(F.chat.type == "private")
@@ -157,6 +160,7 @@ async def handle_start(
                     language_code=user.preferred_language,
                     tour_id=detail.tour.id,
                     mini_app_url=settings.telegram_mini_app_url,
+                    per_seat_self_service_allowed=detail.sales_mode_policy.per_seat_self_service_allowed,
                 ),
             )
             return
@@ -550,6 +554,40 @@ async def handle_language_selected(callback: CallbackQuery, state: FSMContext) -
     await _send_catalog_overview(callback.message, language_code=language_code)
 
 
+@router.callback_query(F.data == REQUEST_BOOKING_ASSISTANCE_CALLBACK)
+async def handle_request_booking_assistance(callback: CallbackQuery, state: FSMContext) -> None:
+    language_code = await _resolve_callback_language(callback)
+    await callback.answer()
+    if callback.message is None:
+        return
+
+    if language_code is None:
+        settings = get_settings()
+        await state.set_state(PrivateEntryState.choosing_language)
+        await answer_and_register_language_prompt(
+            callback.message,
+            translate(settings.telegram_default_language, "language_prompt"),
+            reply_markup=build_language_keyboard(settings.telegram_supported_language_codes),
+        )
+        return
+
+    await state.clear()
+    settings = get_settings()
+    markup = build_mini_app_entry_keyboard(
+        language_code=language_code,
+        mini_app_url=settings.telegram_mini_app_url,
+    )
+    await callback.message.answer(
+        translate(language_code, "contact_command_reply"),
+        reply_markup=markup,
+    )
+    await _send_handoff_follow_up(
+        callback.message,
+        language_code=language_code,
+        reason=HandoffEntryService.REASON_PRIVATE_CONTACT,
+    )
+
+
 @router.callback_query(F.data.startswith(PREPARE_RESERVATION_CALLBACK_PREFIX))
 async def handle_prepare_reservation(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.message is None or callback.data is None:
@@ -740,7 +778,21 @@ async def handle_create_temporary_reservation(callback: CallbackQuery, state: FS
     user_service = _user_service()
     reservation_service = TemporaryReservationService()
     order_summary_service = OrderSummaryService()
+    tour_repository = TourRepository()
     with SessionLocal() as session:
+        tour = tour_repository.get(session, tour_id)
+        if tour is None or not TourSalesModePolicyService.policy_for_sales_mode(
+            tour.sales_mode
+        ).per_seat_self_service_allowed:
+            await callback.message.answer(
+                translate(language_code, "private_self_service_reservation_blocked"),
+                reply_markup=build_private_home_keyboard(
+                    language_code=language_code,
+                    mini_app_url=get_settings().telegram_mini_app_url,
+                ),
+            )
+            return
+
         user = user_service.sync_private_user(
             session,
             telegram_user_id=callback.from_user.id,
@@ -910,6 +962,7 @@ async def handle_tour_detail(callback: CallbackQuery, state: FSMContext) -> None
             language_code=language_code,
             tour_id=detail.tour.id,
             mini_app_url=settings.telegram_mini_app_url,
+            per_seat_self_service_allowed=detail.sales_mode_policy.per_seat_self_service_allowed,
         ),
     )
 
@@ -1053,6 +1106,17 @@ async def _send_seat_count_prompt(
         return
 
     seat_options = preparation_service.list_seat_count_options(detail)
+    if not seat_options:
+        await state.clear()
+        await message.answer(
+            translate(language_code, "private_self_service_reservation_blocked"),
+            reply_markup=build_private_home_keyboard(
+                language_code=language_code,
+                mini_app_url=get_settings().telegram_mini_app_url,
+            ),
+        )
+        return
+
     await state.set_state(PrivateEntryState.choosing_preparation_seat_count)
     await state.update_data(prepared_tour_id=tour_id, prepared_boarding_point_id=None, prepared_seats_count=None)
     await message.answer(

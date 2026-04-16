@@ -9,7 +9,11 @@ from tests.unit.base import FoundationDBTestCase
 
 
 class TemporaryReservationServiceTests(FoundationDBTestCase):
-    def test_create_temporary_reservation_updates_seats_and_creates_reserved_order(self) -> None:
+    @patch("app.services.reservation_creation.get_settings")
+    def test_create_temporary_reservation_updates_seats_and_creates_reserved_order(
+        self, mock_get_settings
+    ) -> None:
+        mock_get_settings.return_value.temp_reservation_ttl_minutes = None
         user = self.create_user()
         tour = self.create_tour(
             code="BELGRADE-RES-1",
@@ -113,7 +117,9 @@ class TemporaryReservationServiceTests(FoundationDBTestCase):
         self.assertIsNone(closed_order)
         self.assertIsNone(expired_order)
 
-    def test_calculate_reservation_expiration_caps_to_sales_deadline(self) -> None:
+    @patch("app.services.reservation_creation.get_settings")
+    def test_calculate_reservation_expiration_caps_to_sales_deadline(self, mock_get_settings) -> None:
+        mock_get_settings.return_value.temp_reservation_ttl_minutes = None
         tour = self.create_tour(
             departure_datetime=datetime(2026, 4, 3, 8, 0, tzinfo=UTC),
             sales_deadline=datetime(2026, 4, 1, 12, 0, tzinfo=UTC),

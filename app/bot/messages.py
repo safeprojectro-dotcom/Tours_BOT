@@ -70,6 +70,10 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "filter_budget_summary": "budget up to {amount} {currency}",
         "filter_budget_any_summary": "any budget",
         "prepare_reservation": "Prepare reservation",
+        "request_booking_assistance": "Request booking assistance",
+        "assisted_booking_detail_note": "Automated per-seat reservation in this chat is not available for this tour. Use the button below or /contact so the team can help.",
+        "catalog_card_assisted_hint": "(Booking via team assistance)",
+        "private_self_service_reservation_blocked": "This tour cannot be reserved with the automated seat flow in chat. Use /contact or the assistance button on the tour details.",
         "seat_count_prompt": "How many seats should I prepare?",
         "boarding_point_prompt": "Which boarding point should I use for this preparation?",
         "preparation_unavailable": "This tour is not available for reservation preparation right now.",
@@ -153,6 +157,10 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "filter_budget_summary": "buget pana la {amount} {currency}",
         "filter_budget_any_summary": "orice buget",
         "prepare_reservation": "Pregateste rezervarea",
+        "request_booking_assistance": "Asistenta pentru rezervare",
+        "assisted_booking_detail_note": "Rezervarea automata pe locuri in acest chat nu este disponibila pentru acest tur. Foloseste butonul de mai jos sau /contact pentru ajutor din partea echipei.",
+        "catalog_card_assisted_hint": "(Rezervare cu asistenta echipei)",
+        "private_self_service_reservation_blocked": "Acest tur nu poate fi rezervat cu fluxul automat pe locuri in chat. Foloseste /contact sau butonul de asistenta din detaliile turului.",
         "seat_count_prompt": "Pentru cate locuri sa pregatesc rezervarea?",
         "boarding_point_prompt": "Ce punct de imbarcare sa folosesc pentru aceasta pregatire?",
         "preparation_unavailable": "Acest tur nu este disponibil acum pentru pregatirea rezervarii.",
@@ -619,6 +627,9 @@ def format_tour_detail_message(language_code: str | None, detail: PreparedTourDe
     if detail.tour.status == TourStatus.OPEN_FOR_SALE and detail.tour.seats_available <= 0:
         parts.append(translate(language_code, "waitlist_private_hint"))
 
+    if not detail.sales_mode_policy.per_seat_self_service_allowed:
+        parts.append(translate(language_code, "assisted_booking_detail_note"))
+
     parts.append(translate(language_code, "tour_cta"))
     return "\n".join(parts)
 
@@ -713,11 +724,14 @@ def format_budget_filter_summary(
 
 def _format_catalog_card(language_code: str | None, *, index: int, card: CatalogTourCardRead) -> str:
     availability = "OK" if card.is_available else "WAIT"
-    return (
+    base = (
         f"{index}. {card.title}\n"
         f"{card.departure_datetime:%Y-%m-%d} -> {card.return_datetime:%Y-%m-%d}\n"
         f"{card.base_price} {card.currency} | {availability}"
     )
+    if not card.sales_mode_policy.per_seat_self_service_allowed:
+        return f"{base}\n{translate(language_code, 'catalog_card_assisted_hint')}"
+    return base
 
 
 def _format_date_range(start: datetime, end: datetime) -> str:

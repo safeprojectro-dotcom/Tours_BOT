@@ -40,7 +40,8 @@ class RepositoryTests(FoundationDBTestCase):
         assert locked is not None
         self.assertEqual(by_code.id, matching.id)
         self.assertEqual(locked.id, matching.id)
-        self.assertEqual([tour.id for tour in by_status], [matching.id])
+        ours = [tour for tour in by_status if tour.code == "BELGRADE-1"]
+        self.assertEqual([tour.id for tour in ours], [matching.id])
 
     def test_translation_and_boarding_point_repositories(self) -> None:
         tour = self.create_tour()

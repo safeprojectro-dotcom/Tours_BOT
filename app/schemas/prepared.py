@@ -9,6 +9,7 @@ from app.models.enums import BookingStatus, PaymentStatus, TourStatus
 from app.schemas.order import OrderRead
 from app.schemas.payment import PaymentRead
 from app.schemas.tour import BoardingPointRead, TourRead
+from app.schemas.tour_sales_mode_policy import TourSalesModePolicyRead
 
 
 class LocalizedTourContentRead(BaseModel):
@@ -39,6 +40,7 @@ class CatalogTourCardRead(BaseModel):
     guaranteed_flag: bool
     is_available: bool
     localized_content: LocalizedTourContentRead
+    sales_mode_policy: TourSalesModePolicyRead
 
 
 class CatalogBrowseFiltersRead(BaseModel):
@@ -52,6 +54,7 @@ class PreparedTourDetailRead(BaseModel):
     tour: TourRead
     localized_content: LocalizedTourContentRead
     boarding_points: list[BoardingPointRead]
+    sales_mode_policy: TourSalesModePolicyRead
 
 
 class ReservationPreparationTourRead(BaseModel):

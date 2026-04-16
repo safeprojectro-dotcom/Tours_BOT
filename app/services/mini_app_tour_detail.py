@@ -7,6 +7,7 @@ from app.schemas.mini_app import MiniAppTourDetailRead
 from app.services.catalog import CatalogLookupService
 from app.services.language_aware_tour import LanguageAwareTourReadService
 from app.services.reservation_expiry import lazy_expire_due_reservations
+from app.services.tour_sales_mode_policy import TourSalesModePolicyService
 
 
 class MiniAppTourDetailService:
@@ -41,9 +42,11 @@ class MiniAppTourDetailService:
         if detail is None:
             return None
 
+        mode_policy = TourSalesModePolicyService.policy_for_sales_mode(detail.tour.sales_mode)
         return MiniAppTourDetailRead(
             tour=detail.tour,
             localized_content=detail.localized_content,
             boarding_points=detail.boarding_points,
             is_available=detail.tour.seats_available > 0,
+            sales_mode_policy=mode_policy,
         )

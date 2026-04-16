@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from app.models.enums import PaymentStatus, TourStatus
-from app.services.mini_app_booking import MINI_APP_SOURCE_CHANNEL, MiniAppBookingService
+from app.models.enums import PaymentStatus, TourSalesMode, TourStatus
+from app.services.mini_app_booking import (
+    MINI_APP_SOURCE_CHANNEL,
+    MiniAppBookingService,
+    MiniAppSelfServiceBookingNotAllowedError,
+)
 from tests.unit.base import FoundationDBTestCase
 
 
@@ -56,6 +60,27 @@ class MiniAppBookingServiceTests(FoundationDBTestCase):
             language_code="en",
         )
         self.assertIsNone(too_many)
+
+    def test_create_temporary_reservation_raises_when_sales_mode_disallows_self_service(self) -> None:
+        tour = self.create_tour(
+            code="MINI-BOOK-FULL-BUS",
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=10,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        point = self.create_boarding_point(tour)
+        self.session.commit()
+
+        svc = MiniAppBookingService()
+        with self.assertRaises(MiniAppSelfServiceBookingNotAllowedError):
+            svc.create_temporary_reservation(
+                self.session,
+                tour_code=tour.code,
+                telegram_user_id=77_099,
+                seats_count=1,
+                boarding_point_id=point.id,
+                language_code="en",
+            )
 
     def test_start_payment_entry_returns_entry_for_same_user(self) -> None:
         user = self.create_user(telegram_user_id=77_003)

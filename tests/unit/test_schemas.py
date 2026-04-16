@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.models.enums import TourStatus
 from app.schemas.payment import PaymentRead
 from app.schemas.prepared import CatalogTourCardRead, LocalizedTourContentRead, PaymentSummaryRead
 from app.services.catalog_preparation import CatalogPreparationService
@@ -16,12 +17,15 @@ class SchemaSerializationTests(FoundationDBTestCase):
         cards = CatalogPreparationService().list_catalog_cards(
             self.session,
             language_code="ro",
+            status=TourStatus.OPEN_FOR_SALE,
         )
 
-        self.assertEqual(len(cards), 1)
-        payload = cards[0].model_dump()
+        by_code = {c.code: c for c in cards}
+        self.assertIn(tour.code, by_code)
+        payload = by_code[tour.code].model_dump()
         self.assertEqual(payload["title"], "Belgrad")
         self.assertTrue(payload["localized_content"]["requested_language"] == "ro")
+        self.assertEqual(payload["sales_mode_policy"]["effective_sales_mode"], "per_seat")
 
     def test_payment_summary_schema_serialization(self) -> None:
         user = self.create_user()

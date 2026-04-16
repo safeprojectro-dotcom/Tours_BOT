@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourStatus
+from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourSalesMode, TourStatus
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
 
 
@@ -19,6 +19,7 @@ class AdminTourListItem(BaseModel):
     title_default: str
     departure_datetime: datetime
     status: TourStatus
+    sales_mode: TourSalesMode
     seats_total: int
     seats_available: int
     currency: str
@@ -44,6 +45,7 @@ class AdminTourCreate(BaseModel):
     currency: str = Field(min_length=1, max_length=8)
     seats_total: int = Field(ge=0)
     sales_deadline: datetime | None = None
+    sales_mode: TourSalesMode = TourSalesMode.PER_SEAT
     status: TourStatus
     guaranteed_flag: bool = False
 
@@ -74,6 +76,7 @@ class AdminTourCoreUpdate(BaseModel):
     currency: str | None = Field(default=None, min_length=1, max_length=8)
     seats_total: int | None = Field(default=None, ge=0)
     sales_deadline: datetime | None = None
+    sales_mode: TourSalesMode | None = None
     status: TourStatus | None = None
     guaranteed_flag: bool | None = None
 
@@ -305,6 +308,7 @@ class AdminTourDetailRead(BaseModel):
     seats_total: int
     seats_available: int
     sales_deadline: datetime | None
+    sales_mode: TourSalesMode
     status: TourStatus
     guaranteed_flag: bool
     cover_media_reference: str | None = Field(

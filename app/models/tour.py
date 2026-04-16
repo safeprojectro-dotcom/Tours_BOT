@@ -7,7 +7,7 @@ from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.models.enums import TourStatus, sqlalchemy_enum
+from app.models.enums import TourSalesMode, TourStatus, sqlalchemy_enum
 from app.models.mixins import TimestampMixin
 
 
@@ -34,6 +34,11 @@ class Tour(TimestampMixin, Base):
     seats_total: Mapped[int] = mapped_column(Integer, nullable=False)
     seats_available: Mapped[int] = mapped_column(Integer, nullable=False)
     sales_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sales_mode: Mapped[TourSalesMode] = mapped_column(
+        sqlalchemy_enum(TourSalesMode, name="tour_sales_mode"),
+        nullable=False,
+        default=TourSalesMode.PER_SEAT,
+    )
     status: Mapped[TourStatus] = mapped_column(
         sqlalchemy_enum(TourStatus, name="tour_status"),
         nullable=False,

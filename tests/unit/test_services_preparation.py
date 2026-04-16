@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, time
 from unittest.mock import patch
 
-from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourStatus
+from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourSalesMode, TourStatus
 from app.schemas.prepared import CatalogBrowseFiltersRead
 from app.schemas.prepared import PaymentSummaryRead
 from app.services.catalog_preparation import CatalogPreparationService
@@ -36,6 +36,8 @@ class PreparationServiceTests(FoundationDBTestCase):
         self.assertEqual(result.localized_content.title, "Titlu RO")
         self.assertFalse(result.localized_content.used_fallback)
         self.assertEqual(len(result.boarding_points), 1)
+        self.assertTrue(result.sales_mode_policy.per_seat_self_service_allowed)
+        self.assertEqual(result.sales_mode_policy.effective_sales_mode, TourSalesMode.PER_SEAT)
 
     def test_language_aware_tour_falls_back_to_default_fields(self) -> None:
         tour = self.create_tour(

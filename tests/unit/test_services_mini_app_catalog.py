@@ -62,6 +62,7 @@ class MiniAppCatalogServiceTests(FoundationDBTestCase):
         self.assertEqual(result.status_scope, [TourStatus.OPEN_FOR_SALE])
         self.assertEqual(result.limit, MiniAppCatalogService.DEFAULT_LIMIT)
         self.assertEqual(result.offset, 0)
+        self.assertTrue(result.items[0].sales_mode_policy.per_seat_self_service_allowed)
 
     def test_list_catalog_rejects_invalid_date_range(self) -> None:
         with self.assertRaisesRegex(ValueError, "departure date range is invalid"):

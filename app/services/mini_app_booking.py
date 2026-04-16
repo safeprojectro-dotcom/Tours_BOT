@@ -12,8 +12,15 @@ from app.services.order_summary import OrderSummaryService
 from app.services.payment_entry import PaymentEntryService
 from app.services.reservation_creation import TemporaryReservationService
 from app.services.reservation_expiry import lazy_expire_due_reservations
+from app.services.tour_sales_mode_policy import TourSalesModePolicyService
 
 MINI_APP_SOURCE_CHANNEL = "mini_app"
+
+
+class MiniAppSelfServiceBookingNotAllowedError(Exception):
+    """Raised when `tour.sales_mode` does not allow Mini App per-seat self-service reservation."""
+
+    code = "mini_app_self_service_booking_not_available"
 
 
 class MiniAppBookingService:
@@ -52,6 +59,8 @@ class MiniAppBookingService:
         tour = self.catalog_lookup_service.get_tour_by_code(session, code=tour_code)
         if tour is None:
             return None
+        if not TourSalesModePolicyService.policy_for_sales_mode(tour.sales_mode).per_seat_self_service_allowed:
+            raise MiniAppSelfServiceBookingNotAllowedError
 
         user = self._user_sync().sync_private_user(
             session,

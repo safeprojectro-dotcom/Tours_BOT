@@ -44,6 +44,7 @@ class MiniAppTourDetailServiceTests(FoundationDBTestCase):
         self.assertEqual(result.tour.code, tour.code)
         self.assertTrue(result.is_available)
         self.assertEqual(len(result.boarding_points), 1)
+        self.assertTrue(result.sales_mode_policy.per_seat_self_service_allowed)
 
     def test_get_tour_detail_returns_none_for_non_open_tour_or_unknown_code(self) -> None:
         collecting_group = self.create_tour(

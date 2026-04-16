@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.schemas.prepared import LocalizedTourContentRead, PreparedTourDetailRead
 from app.schemas.tour import TourDetailRead
 from app.services.tour_detail import TourDetailService
+from app.services.tour_sales_mode_policy import TourSalesModePolicyService
 from sqlalchemy.orm import Session
 
 
@@ -22,10 +23,12 @@ class LanguageAwareTourReadService:
             return None
 
         localized_content = self.build_localized_content(detail, language_code=language_code)
+        mode_policy = TourSalesModePolicyService.policy_for_sales_mode(detail.tour.sales_mode)
         return PreparedTourDetailRead(
             tour=detail.tour,
             localized_content=localized_content,
             boarding_points=detail.boarding_points,
+            sales_mode_policy=mode_policy,
         )
 
     def build_localized_content(

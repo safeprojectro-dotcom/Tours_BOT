@@ -117,6 +117,7 @@ class AdminTourWriteService:
             "seats_total": payload.seats_total,
             "seats_available": seats_available,
             "sales_deadline": payload.sales_deadline,
+            "sales_mode": payload.sales_mode,
             "status": payload.status,
             "guaranteed_flag": payload.guaranteed_flag,
         }

@@ -26,6 +26,7 @@ from app.bot.constants import (
     PREPARE_BOARDING_POINT_CALLBACK_PREFIX,
     PREPARE_RESERVATION_CALLBACK_PREFIX,
     PREPARE_SEAT_COUNT_CALLBACK_PREFIX,
+    REQUEST_BOOKING_ASSISTANCE_CALLBACK,
     START_PAYMENT_ENTRY_CALLBACK_PREFIX,
     TOUR_CALLBACK_PREFIX,
 )
@@ -149,12 +150,18 @@ def build_tour_detail_keyboard(
     language_code: str | None,
     tour_id: int | None = None,
     mini_app_url: str | None = None,
+    per_seat_self_service_allowed: bool = True,
 ) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    if tour_id is not None:
+    if tour_id is not None and per_seat_self_service_allowed:
         builder.button(
             text=translate(language_code, "prepare_reservation"),
             callback_data=f"{PREPARE_RESERVATION_CALLBACK_PREFIX}{tour_id}",
+        )
+    elif tour_id is not None and not per_seat_self_service_allowed:
+        builder.button(
+            text=translate(language_code, "request_booking_assistance"),
+            callback_data=REQUEST_BOOKING_ASSISTANCE_CALLBACK,
         )
     builder.button(
         text=translate(language_code, "back_to_catalog"),

@@ -9,6 +9,7 @@ from app.schemas.prepared import CatalogBrowseFiltersRead, CatalogTourCardRead
 from app.services.catalog import CatalogLookupService
 from app.services.language_aware_tour import LanguageAwareTourReadService
 from app.services.reservation_expiry import lazy_expire_due_reservations
+from app.services.tour_sales_mode_policy import TourSalesModePolicyService
 
 
 class CatalogPreparationService:
@@ -48,6 +49,7 @@ class CatalogPreparationService:
                 continue
 
             localized_content = prepared_detail.localized_content
+            mode_policy = TourSalesModePolicyService.policy_for_sales_mode(tour.sales_mode)
             cards.append(
                 CatalogTourCardRead(
                     id=tour.id,
@@ -65,6 +67,7 @@ class CatalogPreparationService:
                     guaranteed_flag=tour.guaranteed_flag,
                     is_available=tour.seats_available > 0,
                     localized_content=localized_content,
+                    sales_mode_policy=mode_policy,
                 )
             )
 

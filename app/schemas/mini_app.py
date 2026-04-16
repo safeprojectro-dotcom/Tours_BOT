@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from app.models.enums import TourStatus
 from app.schemas.prepared import CatalogTourCardRead, LocalizedTourContentRead, OrderSummaryRead, ReservationPreparationTourRead
 from app.schemas.tour import BoardingPointRead, TourRead
+from app.schemas.tour_sales_mode_policy import TourSalesModePolicyRead
 
 
 class MiniAppBookingFacadeState(StrEnum):
@@ -67,6 +68,7 @@ class MiniAppTourDetailRead(BaseModel):
     localized_content: LocalizedTourContentRead
     boarding_points: list[BoardingPointRead]
     is_available: bool
+    sales_mode_policy: TourSalesModePolicyRead
 
 
 class MiniAppReservationPreparationRead(BaseModel):
@@ -74,6 +76,7 @@ class MiniAppReservationPreparationRead(BaseModel):
     boarding_points: list[BoardingPointRead]
     seat_count_options: list[int]
     preparation_only: bool = True
+    sales_mode_policy: TourSalesModePolicyRead
 
 
 class MiniAppCreateReservationRequest(BaseModel):

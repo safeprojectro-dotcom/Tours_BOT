@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from app.bot.services import PrivateReservationPreparationService
 from app.models.enums import TourStatus
 from app.schemas.mini_app import MiniAppReservationPreparationRead
 from app.schemas.prepared import ReservationPreparationSummaryRead, ReservationPreparationTourRead
 from app.services.catalog import CatalogLookupService
-from sqlalchemy.orm import Session
+from app.services.tour_sales_mode_policy import TourSalesModePolicyService
 
 
 class MiniAppReservationPreparationService:
@@ -41,7 +43,12 @@ class MiniAppReservationPreparationService:
         if detail is None:
             return None
 
-        seat_count_options = list(self.reservation_preparation_service.list_seat_count_options(detail))
+        mode_policy = TourSalesModePolicyService.policy_for_sales_mode(tour.sales_mode)
+        seat_count_options = (
+            list(self.reservation_preparation_service.list_seat_count_options(detail))
+            if mode_policy.per_seat_self_service_allowed
+            else []
+        )
         return MiniAppReservationPreparationRead(
             tour=ReservationPreparationTourRead(
                 id=detail.tour.id,
@@ -55,6 +62,7 @@ class MiniAppReservationPreparationService:
             ),
             boarding_points=detail.boarding_points,
             seat_count_options=seat_count_options,
+            sales_mode_policy=mode_policy,
         )
 
     def build_preparation_summary(
@@ -68,6 +76,8 @@ class MiniAppReservationPreparationService:
     ) -> ReservationPreparationSummaryRead | None:
         tour = self.catalog_lookup_service.get_tour_by_code(session, code=code)
         if tour is None or tour.status not in self.STATUS_SCOPE:
+            return None
+        if not TourSalesModePolicyService.policy_for_sales_mode(tour.sales_mode).per_seat_self_service_allowed:
             return None
 
         return self.reservation_preparation_service.build_preparation_summary(

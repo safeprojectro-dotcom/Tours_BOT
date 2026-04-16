@@ -3,13 +3,15 @@ from __future__ import annotations
 import unittest
 from datetime import UTC, datetime
 
-from app.bot.constants import DATE_OPTION_NEXT_30_DAYS, DATE_OPTION_WEEKEND
+from app.bot.constants import DATE_OPTION_NEXT_30_DAYS, DATE_OPTION_WEEKEND, REQUEST_BOOKING_ASSISTANCE_CALLBACK
+from app.bot.keyboards import build_tour_detail_keyboard
 from app.bot.messages import (
     format_catalog_message,
     format_filtered_catalog_message,
     format_payment_entry_message,
     format_reservation_preparation_summary,
     format_temporary_reservation_confirmation,
+    format_tour_detail_message,
     translate,
 )
 from app.bot.services import (
@@ -17,7 +19,9 @@ from app.bot.services import (
     PrivateTourBrowseService,
     TelegramUserContextService,
 )
-from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourStatus
+from app.services.catalog_preparation import CatalogPreparationService
+from app.services.language_aware_tour import LanguageAwareTourReadService
+from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourSalesMode, TourStatus
 from tests.unit.base import FoundationDBTestCase
 
 
@@ -55,23 +59,29 @@ class TelegramUserContextServiceTests(FoundationDBTestCase):
 class PrivateTourBrowseServiceTests(FoundationDBTestCase):
     def test_list_entry_tours_limits_to_three_open_tours(self) -> None:
         service = PrivateTourBrowseService()
+        open_tours: list = []
         for index in range(4):
             tour = self.create_tour(
                 code=f"OPEN-{index}",
                 title_default=f"Open Tour {index}",
                 status=TourStatus.OPEN_FOR_SALE,
             )
+            open_tours.append(tour)
             self.create_translation(tour, language_code="ro", title=f"Tur {index}")
             self.create_boarding_point(tour)
         cancelled = self.create_tour(code="CANCELLED-1", status=TourStatus.CANCELLED)
         self.create_boarding_point(cancelled)
         self.session.commit()
 
-        cards = service.list_entry_tours(self.session, language_code="ro", limit=3)
+        cards = service.list_entry_tours(self.session, language_code="ro", limit=50)
+        open_ids = {t.id for t in open_tours}
+        ours = sorted((c for c in cards if c.id in open_ids), key=lambda c: c.code)
+        self.assertEqual(len(ours), 4)
+        self.assertTrue(all(card.status == TourStatus.OPEN_FOR_SALE for card in ours))
+        self.assertEqual(ours[0].title, "Tur 0")
 
-        self.assertEqual(len(cards), 3)
-        self.assertTrue(all(card.status == TourStatus.OPEN_FOR_SALE for card in cards))
-        self.assertEqual(cards[0].title, "Tur 0")
+        capped = service.list_entry_tours(self.session, language_code="ro", limit=3)
+        self.assertEqual(len(capped), 3)
 
     def test_get_tour_detail_from_start_arg(self) -> None:
         service = PrivateTourBrowseService()
@@ -107,7 +117,8 @@ class PrivateTourBrowseServiceTests(FoundationDBTestCase):
             filters=service.build_destination_filters("Belgrad"),
         )
 
-        self.assertEqual([card.code for card in cards], ["BELGRADE-1"])
+        belgrade = [card for card in cards if card.code == "BELGRADE-1"]
+        self.assertEqual([c.code for c in belgrade], ["BELGRADE-1"])
 
     def test_build_date_filters_for_weekend_and_next_30_days(self) -> None:
         service = PrivateTourBrowseService()
@@ -194,6 +205,47 @@ class PrivateReservationPreparationServiceTests(FoundationDBTestCase):
             language_code="en",
         )
 
+        self.assertIsNone(summary)
+
+    def test_list_seat_count_options_empty_for_full_bus(self) -> None:
+        service = PrivateReservationPreparationService()
+        tour = self.create_tour(
+            code="FULLBUS-OPTS",
+            seats_available=4,
+            status=TourStatus.OPEN_FOR_SALE,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.create_translation(tour, language_code="en", title="Charter")
+        self.create_boarding_point(tour)
+        self.session.commit()
+
+        detail = LanguageAwareTourReadService().get_localized_tour_detail(
+            self.session, tour_id=tour.id, language_code="en"
+        )
+        self.assertIsNotNone(detail)
+        assert detail is not None
+        self.assertFalse(detail.sales_mode_policy.per_seat_self_service_allowed)
+        self.assertEqual(service.list_seat_count_options(detail), ())
+
+    def test_build_preparation_summary_none_for_full_bus_tour(self) -> None:
+        service = PrivateReservationPreparationService()
+        tour = self.create_tour(
+            code="FULLBUS-SUM",
+            seats_available=4,
+            status=TourStatus.OPEN_FOR_SALE,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        point = self.create_boarding_point(tour)
+        self.create_translation(tour, language_code="en", title="Charter")
+        self.session.commit()
+
+        summary = service.build_preparation_summary(
+            self.session,
+            tour_id=tour.id,
+            seats_count=2,
+            boarding_point_id=point.id,
+            language_code="en",
+        )
         self.assertIsNone(summary)
 
 
@@ -326,3 +378,69 @@ class BotMessageTemplateTests(unittest.TestCase):
         self.assertIn("Payment step ready: Belgrad", payment_message)
         self.assertIn("Payment session: mockpay-order-7-abc123", payment_message)
         self.assertIn("Amount due: 179.00 EUR", payment_message)
+
+
+class PrivateBotSalesModeReadTests(FoundationDBTestCase):
+    def test_format_tour_detail_message_includes_assisted_note_for_full_bus(self) -> None:
+        tour = self.create_tour(
+            code="CHARTER-DETAIL",
+            title_default="Charter default",
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=5,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.create_translation(tour, language_code="en", title="Charter trip")
+        self.create_boarding_point(tour, city="Timisoara")
+        self.session.commit()
+
+        detail = LanguageAwareTourReadService().get_localized_tour_detail(
+            self.session, tour_id=tour.id, language_code="en"
+        )
+        self.assertIsNotNone(detail)
+        assert detail is not None
+        body = format_tour_detail_message("en", detail)
+        self.assertIn("Automated per-seat reservation", body)
+        self.assertFalse(detail.sales_mode_policy.per_seat_self_service_allowed)
+
+    def test_format_catalog_message_marks_full_bus_card(self) -> None:
+        tour = self.create_tour(
+            code="CHARTER-CAT",
+            status=TourStatus.OPEN_FOR_SALE,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.create_translation(tour, language_code="en", title="Charter list")
+        self.create_boarding_point(tour)
+        self.session.commit()
+
+        cards = CatalogPreparationService().list_catalog_cards(
+            self.session,
+            language_code="en",
+            status=TourStatus.OPEN_FOR_SALE,
+            limit=10,
+        )
+        ours = [c for c in cards if c.code == "CHARTER-CAT"]
+        self.assertEqual(len(ours), 1)
+        self.assertFalse(ours[0].sales_mode_policy.per_seat_self_service_allowed)
+        text = format_catalog_message("en", ours)
+        self.assertIn("team assistance", text.lower())
+
+    def test_tour_detail_keyboard_prepare_vs_assistance(self) -> None:
+        prep = build_tour_detail_keyboard(
+            language_code="en",
+            tour_id=42,
+            mini_app_url=None,
+            per_seat_self_service_allowed=True,
+        )
+        prep_data = [b.callback_data for row in prep.inline_keyboard for b in row]
+        self.assertIn("prepare:tour:42", prep_data)
+        self.assertNotIn(REQUEST_BOOKING_ASSISTANCE_CALLBACK, prep_data)
+
+        assisted = build_tour_detail_keyboard(
+            language_code="en",
+            tour_id=42,
+            mini_app_url=None,
+            per_seat_self_service_allowed=False,
+        )
+        asst_data = [b.callback_data for row in assisted.inline_keyboard for b in row]
+        self.assertIn(REQUEST_BOOKING_ASSISTANCE_CALLBACK, asst_data)
+        self.assertFalse(any(x and x.startswith("prepare:tour:") for x in asst_data))

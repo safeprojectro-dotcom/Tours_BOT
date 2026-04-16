@@ -11,7 +11,7 @@ from sqlalchemy import event
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
-from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourStatus
+from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourSalesMode, TourStatus
 from app.models.handoff import Handoff
 from app.services.handoff_entry import HandoffEntryService
 from tests.unit.base import FoundationDBTestCase
@@ -663,7 +663,7 @@ class AdminRouteTests(FoundationDBTestCase):
         tour_a = self.create_tour(
             code="ADM-MV-CLS-A",
             status=TourStatus.OPEN_FOR_SALE,
-            departure_datetime=datetime(2026, 4, 10, 8, 0, tzinfo=UTC),
+            departure_datetime=datetime(2026, 8, 10, 8, 0, tzinfo=UTC),
             seats_total=40,
             seats_available=38,
         )
@@ -671,7 +671,7 @@ class AdminRouteTests(FoundationDBTestCase):
         tour_b = self.create_tour(
             code="ADM-MV-CLS-B",
             status=TourStatus.SALES_CLOSED,
-            departure_datetime=datetime(2026, 4, 11, 8, 0, tzinfo=UTC),
+            departure_datetime=datetime(2026, 8, 11, 8, 0, tzinfo=UTC),
             seats_total=40,
             seats_available=30,
         )
@@ -2941,10 +2941,30 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(body["short_description_default"], "Short")
         self.assertEqual(body["full_description_default"], "Full body")
         self.assertEqual(body["status"], "draft")
+        self.assertEqual(body["sales_mode"], "per_seat")
         self.assertEqual(body["orders_count"], 0)
         self.assertEqual(len(body["translations"]), 0)
         self.assertEqual(len(body["boarding_points"]), 0)
         self.assertIsNone(body.get("cover_media_reference"))
+
+    def test_post_admin_tour_can_set_sales_mode(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        payload = self._admin_tour_create_payload(code="ADM-POST-FULL-BUS")
+        payload["sales_mode"] = "full_bus"
+
+        r = self.client.post("/admin/tours", headers=headers, json=payload)
+
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(r.json()["sales_mode"], "full_bus")
+
+    def test_post_admin_tour_rejects_invalid_sales_mode(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        payload = self._admin_tour_create_payload(code="ADM-POST-BAD-SMODE")
+        payload["sales_mode"] = "invalid_mode"
+
+        r = self.client.post("/admin/tours", headers=headers, json=payload)
+
+        self.assertEqual(r.status_code, 422)
 
     def test_post_admin_tour_duplicate_code(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}
@@ -3047,6 +3067,48 @@ class AdminRouteTests(FoundationDBTestCase):
         body = r.json()
         self.assertEqual(body["title_default"], "New title")
         self.assertTrue(body["guaranteed_flag"])
+        self.assertEqual(body["sales_mode"], "per_seat")
+
+    def test_patch_admin_tour_core_can_update_sales_mode(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="ADM-PATCH-SMODE", title_default="Mode tour")
+        self.session.commit()
+
+        r = self.client.patch(
+            f"/admin/tours/{tour.id}",
+            headers=headers,
+            json={"sales_mode": "full_bus"},
+        )
+
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["sales_mode"], "full_bus")
+        self.assertEqual(body["title_default"], "Mode tour")
+        self.assertEqual(body["seats_total"], tour.seats_total)
+        self.assertEqual(body["seats_available"], tour.seats_available)
+
+        detail = self.client.get(f"/admin/tours/{tour.id}", headers=headers)
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.json()["sales_mode"], "full_bus")
+
+    def test_admin_tour_reads_expose_sales_mode(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        default_tour = self.create_tour(code="ADM-READ-SMODE-DEFAULT")
+        full_bus_tour = self.create_tour(
+            code="ADM-READ-SMODE-FULL",
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.session.commit()
+
+        list_response = self.client.get("/admin/tours", headers=headers)
+        self.assertEqual(list_response.status_code, 200)
+        items_by_code = {item["code"]: item for item in list_response.json()["items"]}
+        self.assertEqual(items_by_code["ADM-READ-SMODE-DEFAULT"]["sales_mode"], "per_seat")
+        self.assertEqual(items_by_code["ADM-READ-SMODE-FULL"]["sales_mode"], "full_bus")
+
+        detail_response = self.client.get(f"/admin/tours/{full_bus_tour.id}", headers=headers)
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(detail_response.json()["sales_mode"], "full_bus")
 
     def test_patch_admin_tour_core_not_found(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}

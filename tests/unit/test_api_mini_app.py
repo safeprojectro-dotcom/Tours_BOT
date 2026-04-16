@@ -9,7 +9,7 @@ from sqlalchemy import event
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
-from app.models.enums import TourStatus
+from app.models.enums import TourSalesMode, TourStatus
 from app.models.waitlist import WaitlistEntry
 from app.repositories.user import UserRepository
 from tests.unit.base import FoundationDBTestCase
@@ -87,6 +87,8 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual([item["code"] for item in payload["items"]], ["BELGRADE-API"])
         self.assertEqual(payload["status_scope"], ["open_for_sale"])
         self.assertEqual(payload["applied_filters"]["destination_query"], "Belgrade")
+        self.assertEqual(payload["items"][0]["sales_mode_policy"]["effective_sales_mode"], "per_seat")
+        self.assertTrue(payload["items"][0]["sales_mode_policy"]["per_seat_self_service_allowed"])
 
     def test_catalog_route_rejects_invalid_date_range(self) -> None:
         response = self.client.get(
@@ -134,6 +136,8 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(payload["localized_content"]["full_description"], "Detalii API")
         self.assertEqual(payload["boarding_points"][0]["city"], "Arad")
         self.assertTrue(payload["is_available"])
+        self.assertEqual(payload["sales_mode_policy"]["effective_sales_mode"], "per_seat")
+        self.assertTrue(payload["sales_mode_policy"]["per_seat_self_service_allowed"])
 
     def test_tour_detail_route_returns_not_found_for_unknown_or_non_open_tour(self) -> None:
         collecting_group = self.create_tour(
@@ -178,6 +182,7 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(payload["seat_count_options"], [1, 2, 3])
         self.assertEqual(payload["boarding_points"][0]["id"], point.id)
         self.assertTrue(payload["preparation_only"])
+        self.assertTrue(payload["sales_mode_policy"]["per_seat_self_service_allowed"])
 
     def test_preparation_summary_route_returns_preparation_only_summary(self) -> None:
         tour = self.create_tour(
@@ -209,6 +214,77 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(payload["boarding_point"]["city"], "Arad")
         self.assertEqual(payload["estimated_total_amount"], "190.00")
         self.assertTrue(payload["preparation_only"])
+
+    def test_full_bus_preparation_read_side_no_self_service_seats(self) -> None:
+        tour = self.create_tour(
+            code="FULL-BUS-PREP-API",
+            title_default="Charter Tour",
+            departure_datetime=datetime(2026, 7, 1, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 7, 2, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=40,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.create_translation(tour, language_code="en", title="Charter EN")
+        self.create_boarding_point(tour)
+        self.session.commit()
+
+        prep = self.client.get(f"/mini-app/tours/{tour.code}/preparation", params={"language_code": "en"})
+        self.assertEqual(prep.status_code, 200)
+        body = prep.json()
+        self.assertEqual(body["seat_count_options"], [])
+        self.assertFalse(body["sales_mode_policy"]["per_seat_self_service_allowed"])
+        self.assertTrue(body["sales_mode_policy"]["operator_path_required"])
+
+        point_id = body["boarding_points"][0]["id"]
+        summary = self.client.get(
+            f"/mini-app/tours/{tour.code}/preparation-summary",
+            params={"language_code": "en", "seats_count": 1, "boarding_point_id": point_id},
+        )
+        self.assertEqual(summary.status_code, 400)
+        self.assertEqual(summary.json()["detail"], "invalid reservation preparation selection")
+
+    def test_full_bus_reservation_post_rejected_with_policy_code(self) -> None:
+        tour = self.create_tour(
+            code="FULL-BUS-RES-API",
+            title_default="Charter Reserve",
+            departure_datetime=datetime(2026, 7, 5, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 7, 6, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=20,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        point = self.create_boarding_point(tour)
+        self.session.commit()
+
+        response = self.client.post(
+            f"/mini-app/tours/{tour.code}/reservations",
+            json={"telegram_user_id": 90_001, "seats_count": 2, "boarding_point_id": point.id},
+        )
+        self.assertEqual(response.status_code, 400)
+        detail = response.json()["detail"]
+        self.assertIsInstance(detail, dict)
+        self.assertEqual(detail["code"], "mini_app_self_service_booking_not_available")
+
+    def test_tour_detail_full_bus_shows_policy_without_prepare_path_in_api(self) -> None:
+        tour = self.create_tour(
+            code="FULL-BUS-DETAIL-API",
+            title_default="Charter Detail",
+            departure_datetime=datetime(2026, 7, 10, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 7, 11, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=10,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.create_translation(tour, language_code="en", title="Charter Detail EN")
+        self.create_boarding_point(tour)
+        self.session.commit()
+
+        response = self.client.get(f"/mini-app/tours/{tour.code}", params={"language_code": "en"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["sales_mode_policy"]["per_seat_self_service_allowed"])
+        self.assertEqual(payload["tour"]["sales_mode"], "full_bus")
 
     def test_preparation_routes_reject_invalid_or_unavailable_inputs(self) -> None:
         sold_out = self.create_tour(

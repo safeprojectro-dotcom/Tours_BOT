@@ -45,6 +45,11 @@ class TourStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class TourSalesMode(StrEnum):
+    PER_SEAT = "per_seat"
+    FULL_BUS = "full_bus"
+
+
 def sqlalchemy_enum(enum_cls: type[StrEnum], *, name: str) -> SQLAlchemyEnum:
     return SQLAlchemyEnum(
         enum_cls,
