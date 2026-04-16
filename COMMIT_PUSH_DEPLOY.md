@@ -6,6 +6,20 @@ Two narrow slices: **Step 1** (admin + migration) and **Step 2** (backend policy
 
 ---
 
+## Deploy-critical — Phase 7.1 `tours.sales_mode` (Railway / staging / production)
+
+**Confirmed failure when schema lags code:** deployed application code **SELECT**s **`tours.sales_mode`** (ORM + Phase **7.1**), but PostgreSQL had **not** applied Alembic revision **`20260416_06`** → **`psycopg.errors.UndefinedColumn: column tours.sales_mode does not exist`**. **Root cause:** the migration was **not** applied to the target database before or with the deploy that shipped that code — **schema drift**, not application “logic bugs.”
+
+**Requirement for any environment running Phase 7.1+ tour code:** run migrations **before** or **as part of** deploy so the DB matches `heads`, at minimum:
+
+```bash
+python -m alembic upgrade head
+```
+
+(Use a **reachable** `DATABASE_URL` for that environment — often the Railway **public** Postgres URL and a driver form such as **`postgresql+psycopg://...`** if running Alembic from a local shell.) **Do not** treat Mini App, private bot, or API fixes as the next step until **`alembic current`** on that database matches **`alembic heads`** (including **`20260416_06`** or later). Then redeploy if needed and smoke **`/health`**, catalog, and any tour-loading routes.
+
+---
+
 # Part A — Step 1 (frozen)
 
 Operational notes for **admin/source-of-truth** `tour.sales_mode` only.  
@@ -103,7 +117,7 @@ Pick one (Conventional Commits style):
 
 ## A7. Deploy / migration notes
 
-- **This step includes a DB migration** — deploy **must** run **`alembic upgrade head`** (or equivalent) **before or with** the app version that loads `Tour` with `sales_mode`, or you risk **`UndefinedColumn`** on any code path that selects `tours.*`.
+- **This step includes a DB migration** — deploy **must** run **`python -m alembic upgrade head`** (or equivalent) **before or with** the app version that loads `Tour` with `sales_mode`, or you risk **`psycopg.errors.UndefinedColumn` / `column tours.sales_mode does not exist`** (and **`ProgrammingError`**) on **every** path that loads **`Tour`** — catalog, bookings, admin, bot, etc. **Skipping this step is a known production/staging incident pattern** (see **Deploy-critical** above).
 - **Existing tours** — column backfill uses **`server_default=per_seat`**; all existing rows should land on **`per_seat`**.
 - **After deploy** — confirm admin **`GET /admin/tours`**, **`GET /admin/tours/{id}`**, **`POST /admin/tours`**, **`PATCH /admin/tours/{id}`** still work and return **`sales_mode`**.
 
@@ -209,7 +223,7 @@ Same non-goals as Step **1** for customer-visible behavior: booking creation sem
 ## B7. Deploy notes
 
 - **Schema:** unchanged by Step **2**.
-- **Risk:** low — new modules only; ensure Step **1** migration already applied on DBs that run ORM with **`Tour.sales_mode`**.
+- **Risk:** low for DDL — new modules only — but **runtime risk is high** if Step **1** was never applied: Step **2** and later Phase **7.1** code still **expects** **`tours.sales_mode`**. **Always** confirm **`python -m alembic upgrade head`** (or equivalent) has been run on the target DB **before** relying on any Phase **7.1** release there (see **Deploy-critical** at top of this doc).
 
 ---
 
