@@ -2050,6 +2050,140 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(r.status_code, 400)
         self.assertEqual(r.json()["detail"]["code"], "handoff_assign_operator_not_found")
 
+    def test_handoff_assign_operator_requires_auth(self) -> None:
+        r = self.client.post(
+            "/admin/handoffs/1/assign-operator",
+            json={"assigned_operator_id": 1},
+        )
+        self.assertEqual(r.status_code, 401)
+
+    def test_handoff_assign_operator_success_group_followup_start(self) -> None:
+        """Phase 7 / Step 10 — narrow path assigns only ``group_followup_start``."""
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        operator = self.create_user(telegram_user_id=920_001)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="open",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/handoffs/{h.id}/assign-operator",
+            headers=headers,
+            json={"assigned_operator_id": operator.id},
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["assigned_operator_id"], operator.id)
+        self.assertTrue(body["is_group_followup"])
+
+    def test_handoff_assign_operator_not_found(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.post(
+            "/admin/handoffs/999999/assign-operator",
+            headers=headers,
+            json={"assigned_operator_id": 1},
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_handoff_assign_operator_invalid_operator(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        h = Handoff(
+            user_id=customer.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="open",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/handoffs/{h.id}/assign-operator",
+            headers=headers,
+            json={"assigned_operator_id": 999_999_999},
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["detail"]["code"], "handoff_assign_operator_not_found")
+
+    def test_handoff_assign_operator_rejects_non_group_followup_reason(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        operator = self.create_user(telegram_user_id=920_002)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=None,
+            reason="private_contact",
+            priority="normal",
+            status="open",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/handoffs/{h.id}/assign-operator",
+            headers=headers,
+            json={"assigned_operator_id": operator.id},
+        )
+        self.assertEqual(r.status_code, 400)
+        err = r.json()["detail"]
+        self.assertEqual(err["code"], "handoff_assign_group_followup_reason_only")
+        self.assertEqual(err["current_reason"], "private_contact")
+
+    def test_handoff_assign_operator_idempotent_same_operator(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        operator = self.create_user(telegram_user_id=920_003)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="open",
+            assigned_operator_id=operator.id,
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/handoffs/{h.id}/assign-operator",
+            headers=headers,
+            json={"assigned_operator_id": operator.id},
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["assigned_operator_id"], operator.id)
+
+    def test_handoff_assign_operator_rejects_reassign_different_operator(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        op_a = self.create_user(telegram_user_id=920_004)
+        op_b = self.create_user(telegram_user_id=920_005)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="open",
+            assigned_operator_id=op_a.id,
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(
+            f"/admin/handoffs/{h.id}/assign-operator",
+            headers=headers,
+            json={"assigned_operator_id": op_b.id},
+        )
+        self.assertEqual(r.status_code, 400)
+        err = r.json()["detail"]
+        self.assertEqual(err["code"], "handoff_reassign_not_allowed")
+
     def test_handoff_reopen_requires_auth(self) -> None:
         r = self.client.post("/admin/handoffs/1/reopen")
         self.assertEqual(r.status_code, 401)

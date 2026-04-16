@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.handoff import Handoff
 from app.models.user import User
 from app.repositories.handoff import HandoffRepository
+from app.services.handoff_entry import HandoffEntryService
 from app.services.handoff_ops_actions import (
     HANDOFF_STATUS_CLOSED,
     HANDOFF_STATUS_IN_REVIEW,
@@ -49,6 +50,13 @@ class AdminHandoffReassignNotAllowedError(Exception):
     def __init__(self, *, current_assigned_operator_id: int, requested_operator_id: int) -> None:
         self.current_assigned_operator_id = current_assigned_operator_id
         self.requested_operator_id = requested_operator_id
+
+
+class AdminHandoffAssignGroupFollowupReasonOnlyError(Exception):
+    """Phase 7 / Step 10 — assign-operator path accepts ``group_followup_start`` only."""
+
+    def __init__(self, *, current_reason: str) -> None:
+        self.current_reason = current_reason
 
 
 class AdminHandoffReopenStateError(Exception):
@@ -96,22 +104,14 @@ class AdminHandoffWriteService:
             raise AdminHandoffCloseStateError(current_status=row.status)
         raise AdminHandoffCloseStateError(current_status=row.status)
 
-    def assign_handoff(
+    def _apply_operator_assignment(
         self,
         session: Session,
         *,
-        handoff_id: int,
+        row: Handoff,
         assigned_operator_id: int,
     ) -> Handoff:
-        """
-        Step 21: set assigned_operator_id on non-closed handoffs only.
-        open / in_review only; closed -> error.
-        Operator user must exist. First assignment (None -> id) or idempotent same id OK.
-        If already assigned to a different operator -> error (no broad reassign / unassign in this slice).
-        """
-        row = self._handoffs.get(session, handoff_id)
-        if row is None:
-            raise AdminHandoffNotFoundError
+        """Shared Step 21 rules: open/in_review, operator exists, no reassign to different id."""
         if row.status == HANDOFF_STATUS_CLOSED:
             raise AdminHandoffAssignStateError(current_status=row.status)
         if row.status not in (HANDOFF_STATUS_OPEN, HANDOFF_STATUS_IN_REVIEW):
@@ -130,6 +130,50 @@ class AdminHandoffWriteService:
             session,
             instance=row,
             data={"assigned_operator_id": assigned_operator_id},
+        )
+
+    def assign_handoff(
+        self,
+        session: Session,
+        *,
+        handoff_id: int,
+        assigned_operator_id: int,
+    ) -> Handoff:
+        """
+        Step 21: set assigned_operator_id on non-closed handoffs only.
+        open / in_review only; closed -> error.
+        Operator user must exist. First assignment (None -> id) or idempotent same id OK.
+        If already assigned to a different operator -> error (no broad reassign / unassign in this slice).
+        """
+        row = self._handoffs.get(session, handoff_id)
+        if row is None:
+            raise AdminHandoffNotFoundError
+        return self._apply_operator_assignment(
+            session,
+            row=row,
+            assigned_operator_id=assigned_operator_id,
+        )
+
+    def assign_group_followup_operator(
+        self,
+        session: Session,
+        *,
+        handoff_id: int,
+        assigned_operator_id: int,
+    ) -> Handoff:
+        """
+        Phase 7 / Step 10 — same assignment rules as ``assign_handoff``, but only when
+        ``reason == group_followup_start`` (narrow path; no notifications / workflow).
+        """
+        row = self._handoffs.get(session, handoff_id)
+        if row is None:
+            raise AdminHandoffNotFoundError
+        if row.reason != HandoffEntryService.REASON_GROUP_FOLLOWUP_START:
+            raise AdminHandoffAssignGroupFollowupReasonOnlyError(current_reason=row.reason)
+        return self._apply_operator_assignment(
+            session,
+            row=row,
+            assigned_operator_id=assigned_operator_id,
         )
 
     def reopen_handoff(self, session: Session, *, handoff_id: int) -> Handoff:
