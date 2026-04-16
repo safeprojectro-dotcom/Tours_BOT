@@ -350,6 +350,14 @@ class AdminHandoffSummaryItem(BaseModel):
         default=None,
         description="Human-readable origin label when is_group_followup; read-only.",
     )
+    is_assigned_group_followup: bool = Field(
+        default=False,
+        description="True only for group_followup_start with assigned_operator_id set; read-only.",
+    )
+    group_followup_work_label: str | None = Field(
+        default=None,
+        description="Triage copy for group_followup_start only (assigned vs awaiting); None for other reasons.",
+    )
 
 
 class AdminHandoffAssignBody(BaseModel):
@@ -387,6 +395,14 @@ class AdminHandoffRead(BaseModel):
     source_label: str | None = Field(
         default=None,
         description="Human-readable origin label when is_group_followup; read-only.",
+    )
+    is_assigned_group_followup: bool = Field(
+        default=False,
+        description="True only for group_followup_start with assigned_operator_id set; read-only.",
+    )
+    group_followup_work_label: str | None = Field(
+        default=None,
+        description="Triage copy for group_followup_start only (assigned vs awaiting); None for other reasons.",
     )
 
 

@@ -1564,6 +1564,8 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(body["status"], "in_review")
         self.assertTrue(body["needs_attention"])
         self.assertFalse(body["is_open"])
+        self.assertFalse(body["is_assigned_group_followup"])
+        self.assertIsNone(body["group_followup_work_label"])
 
     def test_handoff_detail_not_found(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}
@@ -1581,6 +1583,15 @@ class AdminRouteTests(FoundationDBTestCase):
             priority="normal",
             status="open",
         )
+        operator = self.create_user(telegram_user_id=880_101)
+        h_gf_assigned = Handoff(
+            user_id=user.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="in_review",
+            assigned_operator_id=operator.id,
+        )
         h_other = Handoff(
             user_id=user.id,
             order_id=None,
@@ -1589,6 +1600,7 @@ class AdminRouteTests(FoundationDBTestCase):
             status="open",
         )
         self.session.add(h_gf)
+        self.session.add(h_gf_assigned)
         self.session.add(h_other)
         self.session.commit()
 
@@ -1599,9 +1611,41 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertTrue(row_gf["is_group_followup"])
         self.assertIsNotNone(row_gf["source_label"])
         self.assertIn("grp_followup", row_gf["source_label"])
+        self.assertFalse(row_gf["is_assigned_group_followup"])
+        self.assertIsNotNone(row_gf["group_followup_work_label"])
+        self.assertIn("Awaiting", row_gf["group_followup_work_label"])
+        row_gfa = items[h_gf_assigned.id]
+        self.assertTrue(row_gfa["is_assigned_group_followup"])
+        self.assertIsNotNone(row_gfa["group_followup_work_label"])
+        self.assertIn("Operator assigned", row_gfa["group_followup_work_label"])
         row_o = items[h_other.id]
         self.assertFalse(row_o["is_group_followup"])
         self.assertIsNone(row_o["source_label"])
+        self.assertFalse(row_o["is_assigned_group_followup"])
+        self.assertIsNone(row_o["group_followup_work_label"])
+
+    def test_handoffs_list_private_contact_assigned_operator_no_group_followup_work_fields(self) -> None:
+        """Phase 7 / Step 11 — non-group-followup reasons never get assigned-group-followup triage flags."""
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        op = self.create_user(telegram_user_id=880_202)
+        h = Handoff(
+            user_id=user.id,
+            order_id=None,
+            reason="private_contact",
+            priority="normal",
+            status="open",
+            assigned_operator_id=op.id,
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.get("/admin/handoffs", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        row = next(x for x in r.json()["items"] if x["id"] == h.id)
+        self.assertFalse(row["is_group_followup"])
+        self.assertFalse(row["is_assigned_group_followup"])
+        self.assertIsNone(row["group_followup_work_label"])
 
     def test_handoff_detail_group_followup_start_visibility(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}
@@ -1622,6 +1666,9 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertTrue(body["is_group_followup"])
         self.assertIsNotNone(body["source_label"])
         self.assertEqual(body["reason"], HandoffEntryService.REASON_GROUP_FOLLOWUP_START)
+        self.assertFalse(body["is_assigned_group_followup"])
+        self.assertIsNotNone(body["group_followup_work_label"])
+        self.assertIn("Awaiting", body["group_followup_work_label"])
 
     def test_order_detail_handoff_summary_group_followup_visibility(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}
@@ -1648,6 +1695,39 @@ class AdminRouteTests(FoundationDBTestCase):
         ho = next(x for x in r.json()["handoffs"] if x["id"] == h.id)
         self.assertTrue(ho["is_group_followup"])
         self.assertIsNotNone(ho["source_label"])
+        self.assertFalse(ho["is_assigned_group_followup"])
+        self.assertIsNotNone(ho["group_followup_work_label"])
+        self.assertIn("Awaiting", ho["group_followup_work_label"])
+
+    def test_order_detail_handoff_summary_assigned_group_followup_work_label(self) -> None:
+        """Phase 7 / Step 11 — embedded order handoffs expose assignment triage for group_followup_start."""
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        operator = self.create_user(telegram_user_id=880_303)
+        tour = self.create_tour(
+            code="ADM-HO-GF-ORD-ASG",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 10, 2, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order = self.create_order(user, tour, point)
+        h = Handoff(
+            user_id=user.id,
+            order_id=order.id,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="open",
+            assigned_operator_id=operator.id,
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.get(f"/admin/orders/{order.id}", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        ho = next(x for x in r.json()["handoffs"] if x["id"] == h.id)
+        self.assertTrue(ho["is_assigned_group_followup"])
+        self.assertIsNotNone(ho["group_followup_work_label"])
+        self.assertIn("Operator assigned", ho["group_followup_work_label"])
 
     def test_handoff_mark_in_review_preserves_group_followup_visibility(self) -> None:
         """Mutation response shape unchanged except new read-only fields; status transition as before."""
@@ -1676,6 +1756,9 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(body["status"], "in_review")
         self.assertTrue(body["is_group_followup"])
         self.assertIsNotNone(body["source_label"])
+        self.assertFalse(body["is_assigned_group_followup"])
+        self.assertIsNotNone(body["group_followup_work_label"])
+        self.assertIn("Awaiting", body["group_followup_work_label"])
 
     def test_handoff_mark_in_review_requires_auth(self) -> None:
         r = self.client.post("/admin/handoffs/1/mark-in-review")
@@ -2081,6 +2164,9 @@ class AdminRouteTests(FoundationDBTestCase):
         body = r.json()
         self.assertEqual(body["assigned_operator_id"], operator.id)
         self.assertTrue(body["is_group_followup"])
+        self.assertTrue(body["is_assigned_group_followup"])
+        self.assertIsNotNone(body["group_followup_work_label"])
+        self.assertIn("Operator assigned", body["group_followup_work_label"])
 
     def test_handoff_assign_operator_not_found(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}

@@ -1,10 +1,13 @@
-"""Phase 7 / Step 9 — read-only visibility helpers for group_followup_start (admin handoff surfaces)."""
+"""Phase 7 / Steps 9–11 — read-only visibility helpers for group_followup_start (admin handoff surfaces)."""
 
 from __future__ import annotations
 
 import unittest
 
-from app.services.admin_handoff_queue import compute_group_followup_visibility
+from app.services.admin_handoff_queue import (
+    compute_group_followup_assignment_visibility,
+    compute_group_followup_visibility,
+)
 from app.services.handoff_entry import HandoffEntryService
 
 
@@ -21,6 +24,56 @@ class ComputeGroupFollowupVisibilityTests(unittest.TestCase):
         is_gf, label = compute_group_followup_visibility(reason="private_contact")
         self.assertFalse(is_gf)
         self.assertIsNone(label)
+
+
+class ComputeGroupFollowupAssignmentVisibilityTests(unittest.TestCase):
+    """Phase 7 / Step 11 — assigned group_followup_start read-side triage flags."""
+
+    def test_unassigned_group_followup_no_assigned_flag(self) -> None:
+        is_agf, work = compute_group_followup_assignment_visibility(
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            assigned_operator_id=None,
+            status="open",
+        )
+        self.assertFalse(is_agf)
+        self.assertIsNotNone(work)
+        self.assertIn("Awaiting", work)
+
+    def test_assigned_open_group_followup(self) -> None:
+        is_agf, work = compute_group_followup_assignment_visibility(
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            assigned_operator_id=42,
+            status="open",
+        )
+        self.assertTrue(is_agf)
+        self.assertIn("Operator assigned", work or "")
+
+    def test_assigned_in_review_group_followup(self) -> None:
+        is_agf, work = compute_group_followup_assignment_visibility(
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            assigned_operator_id=1,
+            status="in_review",
+        )
+        self.assertTrue(is_agf)
+        self.assertIn("in review", work or "")
+
+    def test_assigned_closed_group_followup(self) -> None:
+        is_agf, work = compute_group_followup_assignment_visibility(
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            assigned_operator_id=1,
+            status="closed",
+        )
+        self.assertTrue(is_agf)
+        self.assertIn("closed", work or "")
+
+    def test_other_reason_with_operator_not_assigned_group_followup(self) -> None:
+        is_agf, work = compute_group_followup_assignment_visibility(
+            reason="private_contact",
+            assigned_operator_id=99,
+            status="open",
+        )
+        self.assertFalse(is_agf)
+        self.assertIsNone(work)
 
 
 if __name__ == "__main__":

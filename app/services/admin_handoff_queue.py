@@ -24,6 +24,33 @@ def compute_group_followup_visibility(*, reason: str) -> tuple[bool, str | None]
     return (False, None)
 
 
+def compute_group_followup_assignment_visibility(
+    *,
+    reason: str,
+    assigned_operator_id: int | None,
+    status: str,
+) -> tuple[bool, str | None]:
+    """
+    Phase 7 / Step 11 — read-only triage signal for assigned ``group_followup_start`` handoffs.
+
+    Returns (is_assigned_group_followup, group_followup_work_label).
+
+    ``is_assigned_group_followup`` is True only when reason is ``group_followup_start`` and an
+    operator is assigned. ``group_followup_work_label`` is set only for that reason (including
+    unassigned awaiting-assignment copy); for any other reason both are falsy / None.
+    """
+    is_gf, _ = compute_group_followup_visibility(reason=reason)
+    if not is_gf:
+        return False, None
+    if assigned_operator_id is None:
+        return False, "Awaiting operator assignment"
+    if status == "closed":
+        return True, "Operator assigned — handoff closed"
+    if status == "in_review":
+        return True, "Operator assigned — in review"
+    return True, "Operator assigned — open (follow-up pending)"
+
+
 def compute_handoff_queue_fields(
     *,
     status: str,

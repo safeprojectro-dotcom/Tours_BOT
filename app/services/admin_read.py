@@ -39,6 +39,7 @@ from app.services.admin_order_lifecycle import (
     sql_predicate_for_lifecycle_kind,
 )
 from app.services.admin_handoff_queue import (
+    compute_group_followup_assignment_visibility,
     compute_group_followup_visibility,
     compute_handoff_queue_fields,
 )
@@ -180,6 +181,11 @@ class AdminReadService:
         handoffs = []
         for h in handoffs_sorted:
             is_gf, src_lbl = compute_group_followup_visibility(reason=h.reason)
+            is_agf, work_lbl = compute_group_followup_assignment_visibility(
+                reason=h.reason,
+                assigned_operator_id=h.assigned_operator_id,
+                status=h.status,
+            )
             handoffs.append(
                 AdminHandoffSummaryItem(
                     id=h.id,
@@ -190,6 +196,8 @@ class AdminReadService:
                     updated_at=h.updated_at,
                     is_group_followup=is_gf,
                     source_label=src_lbl,
+                    is_assigned_group_followup=is_agf,
+                    group_followup_work_label=work_lbl,
                 )
             )
         t = order.tour
@@ -256,6 +264,11 @@ class AdminReadService:
             created_at=h.created_at,
         )
         is_gf, src_lbl = compute_group_followup_visibility(reason=h.reason)
+        is_agf, work_lbl = compute_group_followup_assignment_visibility(
+            reason=h.reason,
+            assigned_operator_id=h.assigned_operator_id,
+            status=h.status,
+        )
         return AdminHandoffRead(
             id=h.id,
             status=h.status,
@@ -274,6 +287,8 @@ class AdminReadService:
             age_bucket=age_bucket,
             is_group_followup=is_gf,
             source_label=src_lbl,
+            is_assigned_group_followup=is_agf,
+            group_followup_work_label=work_lbl,
         )
 
     def list_handoffs(
