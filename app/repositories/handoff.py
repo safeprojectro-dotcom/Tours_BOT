@@ -7,6 +7,8 @@ from app.models.handoff import Handoff
 from app.models.order import Order
 from app.repositories.base import SQLAlchemyRepository
 
+_GROUP_FOLLOWUP_START_REASON = "group_followup_start"
+
 
 class HandoffRepository(SQLAlchemyRepository[Handoff]):
     def __init__(self) -> None:
@@ -67,11 +69,22 @@ class HandoffRepository(SQLAlchemyRepository[Handoff]):
         limit: int,
         offset: int,
         status: str | None = None,
+        group_followup_queue: str | None = None,
     ) -> list[Handoff]:
         """Recent activity first; optional status filter. Loads order+tour for list summaries."""
         stmt = select(Handoff).options(selectinload(Handoff.order).selectinload(Order.tour))
         if status is not None:
             stmt = stmt.where(Handoff.status == status)
+        if group_followup_queue is not None:
+            stmt = stmt.where(Handoff.reason == _GROUP_FOLLOWUP_START_REASON)
+            if group_followup_queue == "resolved":
+                stmt = stmt.where(Handoff.status == "closed")
+            elif group_followup_queue == "awaiting_assignment":
+                stmt = stmt.where(Handoff.status == "open", Handoff.assigned_operator_id.is_(None))
+            elif group_followup_queue == "assigned_open":
+                stmt = stmt.where(Handoff.status == "open", Handoff.assigned_operator_id.is_not(None))
+            elif group_followup_queue == "in_work":
+                stmt = stmt.where(Handoff.status == "in_review")
         stmt = stmt.order_by(Handoff.updated_at.desc(), Handoff.id.desc()).offset(offset).limit(limit)
         return list(session.scalars(stmt).all())
 

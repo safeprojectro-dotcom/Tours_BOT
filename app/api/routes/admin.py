@@ -13,6 +13,7 @@ from app.schemas.admin import (
     AdminBoardingPointTranslationUpsert,
     AdminBoardingPointUpdate,
     AdminHandoffAssignBody,
+    AdminHandoffGroupFollowupQueueFilter,
     AdminHandoffListRead,
     AdminHandoffRead,
     AdminOrderDetailRead,
@@ -522,8 +523,15 @@ def list_admin_handoffs(
         default=None,
         description="Filter by handoff status (e.g. open, in_review, closed). Omit for all.",
     ),
+    group_followup_queue: AdminHandoffGroupFollowupQueueFilter | None = Query(
+        default=None,
+        description="Phase 7 / Step 15: narrow filter for group_followup_start queue bucket only (AND with status if both set).",
+    ),
 ) -> AdminHandoffListRead:
-    return AdminReadService().list_handoffs(db, limit=limit, offset=offset, status=status)
+    gq = group_followup_queue.value if group_followup_queue is not None else None
+    return AdminReadService().list_handoffs(
+        db, limit=limit, offset=offset, status=status, group_followup_queue=gq
+    )
 
 
 @router.get("/handoffs/{handoff_id}", response_model=AdminHandoffRead)

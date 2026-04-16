@@ -6,6 +6,7 @@ import unittest
 
 from app.services.admin_handoff_queue import (
     compute_group_followup_assignment_visibility,
+    compute_group_followup_queue_state,
     compute_group_followup_resolution_label,
     compute_group_followup_visibility,
 )
@@ -75,6 +76,51 @@ class ComputeGroupFollowupAssignmentVisibilityTests(unittest.TestCase):
         )
         self.assertFalse(is_agf)
         self.assertIsNone(work)
+
+
+class ComputeGroupFollowupQueueStateTests(unittest.TestCase):
+    """Phase 7 / Step 15 — single queue bucket for group_followup_start (read-only)."""
+
+    def test_resolved_when_closed_group_followup(self) -> None:
+        s = compute_group_followup_queue_state(
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            status="closed",
+            assigned_operator_id=1,
+        )
+        self.assertEqual(s, "resolved")
+
+    def test_in_work_when_in_review(self) -> None:
+        s = compute_group_followup_queue_state(
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            status="in_review",
+            assigned_operator_id=1,
+        )
+        self.assertEqual(s, "in_work")
+
+    def test_awaiting_assignment_open_unassigned(self) -> None:
+        s = compute_group_followup_queue_state(
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            status="open",
+            assigned_operator_id=None,
+        )
+        self.assertEqual(s, "awaiting_assignment")
+
+    def test_assigned_open(self) -> None:
+        s = compute_group_followup_queue_state(
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            status="open",
+            assigned_operator_id=99,
+        )
+        self.assertEqual(s, "assigned_open")
+
+    def test_private_contact_none(self) -> None:
+        self.assertIsNone(
+            compute_group_followup_queue_state(
+                reason="private_contact",
+                status="closed",
+                assigned_operator_id=1,
+            )
+        )
 
 
 class ComputeGroupFollowupResolutionLabelTests(unittest.TestCase):

@@ -40,6 +40,7 @@ from app.services.admin_order_lifecycle import (
 )
 from app.services.admin_handoff_queue import (
     compute_group_followup_assignment_visibility,
+    compute_group_followup_queue_state,
     compute_group_followup_resolution_label,
     compute_group_followup_visibility,
     compute_handoff_queue_fields,
@@ -188,6 +189,11 @@ class AdminReadService:
                 status=h.status,
             )
             res_lbl = compute_group_followup_resolution_label(reason=h.reason, status=h.status)
+            q_state = compute_group_followup_queue_state(
+                reason=h.reason,
+                status=h.status,
+                assigned_operator_id=h.assigned_operator_id,
+            )
             handoffs.append(
                 AdminHandoffSummaryItem(
                     id=h.id,
@@ -201,6 +207,7 @@ class AdminReadService:
                     is_assigned_group_followup=is_agf,
                     group_followup_work_label=work_lbl,
                     group_followup_resolution_label=res_lbl,
+                    group_followup_queue_state=q_state,
                 )
             )
         t = order.tour
@@ -273,6 +280,11 @@ class AdminReadService:
             status=h.status,
         )
         res_lbl = compute_group_followup_resolution_label(reason=h.reason, status=h.status)
+        q_state = compute_group_followup_queue_state(
+            reason=h.reason,
+            status=h.status,
+            assigned_operator_id=h.assigned_operator_id,
+        )
         return AdminHandoffRead(
             id=h.id,
             status=h.status,
@@ -294,6 +306,7 @@ class AdminReadService:
             is_assigned_group_followup=is_agf,
             group_followup_work_label=work_lbl,
             group_followup_resolution_label=res_lbl,
+            group_followup_queue_state=q_state,
         )
 
     def list_handoffs(
@@ -303,8 +316,15 @@ class AdminReadService:
         limit: int,
         offset: int,
         status: str | None = None,
+        group_followup_queue: str | None = None,
     ) -> AdminHandoffListRead:
-        rows = self._handoffs.list_for_admin(session, limit=limit, offset=offset, status=status)
+        rows = self._handoffs.list_for_admin(
+            session,
+            limit=limit,
+            offset=offset,
+            status=status,
+            group_followup_queue=group_followup_queue,
+        )
         items = [self._handoff_to_read(h) for h in rows]
         return AdminHandoffListRead(items=items, total_returned=len(items))
 

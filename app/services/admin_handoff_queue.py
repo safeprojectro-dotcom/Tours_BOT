@@ -51,6 +51,32 @@ def compute_group_followup_assignment_visibility(
     return True, "Operator assigned — open (follow-up pending)"
 
 
+def compute_group_followup_queue_state(
+    *,
+    reason: str,
+    status: str,
+    assigned_operator_id: int | None,
+) -> str | None:
+    """
+    Phase 7 / Step 15 — single derived queue bucket for ``group_followup_start`` only.
+
+    Returns ``awaiting_assignment`` | ``assigned_open`` | ``in_work`` | ``resolved``, or ``None``
+    for other reasons or unexpected statuses. Read-only; does not encode permissions.
+    """
+    is_gf, _ = compute_group_followup_visibility(reason=reason)
+    if not is_gf:
+        return None
+    if status == "closed":
+        return "resolved"
+    if status == "in_review":
+        return "in_work"
+    if status == "open":
+        if assigned_operator_id is None:
+            return "awaiting_assignment"
+        return "assigned_open"
+    return None
+
+
 def compute_group_followup_resolution_label(*, reason: str, status: str) -> str | None:
     """
     Phase 7 / Steps 13–14 — read-only label when a ``group_followup_start`` handoff is **closed**.

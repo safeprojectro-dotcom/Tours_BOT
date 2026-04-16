@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, time as time_type
 from decimal import Decimal
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -335,6 +336,18 @@ class AdminPaymentSummaryItem(BaseModel):
     created_at: datetime
 
 
+class AdminHandoffGroupFollowupQueueFilter(str, Enum):
+    """Phase 7 / Step 15 — narrow list filter for ``group_followup_start`` queue buckets only."""
+
+    awaiting_assignment = "awaiting_assignment"
+    assigned_open = "assigned_open"
+    in_work = "in_work"
+    resolved = "resolved"
+
+
+GroupFollowupQueueState = Literal["awaiting_assignment", "assigned_open", "in_work", "resolved"]
+
+
 class AdminHandoffSummaryItem(BaseModel):
     id: int
     status: str
@@ -361,6 +374,10 @@ class AdminHandoffSummaryItem(BaseModel):
     group_followup_resolution_label: str | None = Field(
         default=None,
         description="Read-only: set when group_followup_start is closed (resolved); None otherwise.",
+    )
+    group_followup_queue_state: GroupFollowupQueueState | None = Field(
+        default=None,
+        description="Phase 7 / Step 15: single queue bucket for group_followup_start only; None for other reasons.",
     )
 
 
@@ -411,6 +428,10 @@ class AdminHandoffRead(BaseModel):
     group_followup_resolution_label: str | None = Field(
         default=None,
         description="Read-only: set when group_followup_start is closed (resolved); None otherwise.",
+    )
+    group_followup_queue_state: GroupFollowupQueueState | None = Field(
+        default=None,
+        description="Phase 7 / Step 15: single queue bucket for group_followup_start only; None for other reasons.",
     )
 
 

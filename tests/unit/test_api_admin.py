@@ -1670,6 +1670,113 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertIsNotNone(body["group_followup_work_label"])
         self.assertIn("Awaiting", body["group_followup_work_label"])
 
+    def test_handoff_list_detail_group_followup_queue_state_phase7_step15(self) -> None:
+        """Phase 7 / Step 15 — derived queue_state; no false signals for non-group-followup."""
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        op = self.create_user(telegram_user_id=881_501)
+        h_resolved = Handoff(
+            user_id=user.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="closed",
+            assigned_operator_id=op.id,
+        )
+        h_open = Handoff(
+            user_id=user.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="open",
+            assigned_operator_id=None,
+        )
+        h_pc = Handoff(
+            user_id=user.id,
+            order_id=None,
+            reason="private_contact",
+            priority="normal",
+            status="closed",
+        )
+        self.session.add_all([h_resolved, h_open, h_pc])
+        self.session.commit()
+
+        r = self.client.get("/admin/handoffs", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        items = {x["id"]: x for x in r.json()["items"]}
+        self.assertEqual(items[h_resolved.id]["group_followup_queue_state"], "resolved")
+        self.assertIsNotNone(items[h_resolved.id]["group_followup_resolution_label"])
+        self.assertEqual(items[h_open.id]["group_followup_queue_state"], "awaiting_assignment")
+        self.assertIsNone(items[h_open.id]["group_followup_resolution_label"])
+        self.assertIsNone(items[h_pc.id]["group_followup_queue_state"])
+
+        r_d = self.client.get(f"/admin/handoffs/{h_resolved.id}", headers=headers)
+        self.assertEqual(r_d.status_code, 200)
+        self.assertEqual(r_d.json()["group_followup_queue_state"], "resolved")
+
+    def test_handoffs_list_filter_group_followup_queue_resolved(self) -> None:
+        """Phase 7 / Step 15 — optional list filter for resolved group_followup_start only."""
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        op = self.create_user(telegram_user_id=881_502)
+        h_gf_closed = Handoff(
+            user_id=user.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="closed",
+            assigned_operator_id=op.id,
+        )
+        h_gf_open = Handoff(
+            user_id=user.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="open",
+        )
+        h_pc_closed = Handoff(
+            user_id=user.id,
+            order_id=None,
+            reason="private_contact",
+            priority="normal",
+            status="closed",
+        )
+        self.session.add_all([h_gf_closed, h_gf_open, h_pc_closed])
+        self.session.commit()
+
+        r = self.client.get(
+            "/admin/handoffs",
+            headers=headers,
+            params={"group_followup_queue": "resolved"},
+        )
+        self.assertEqual(r.status_code, 200)
+        ids = {x["id"] for x in r.json()["items"]}
+        self.assertIn(h_gf_closed.id, ids)
+        self.assertNotIn(h_gf_open.id, ids)
+        self.assertNotIn(h_pc_closed.id, ids)
+
+    def test_resolve_group_followup_mutation_unchanged_after_step15_read_fields(self) -> None:
+        """Regression: resolve endpoint semantics unchanged (read-only Step 15 additions)."""
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        customer = self.create_user()
+        operator = self.create_user(telegram_user_id=881_503)
+        h = Handoff(
+            user_id=customer.id,
+            order_id=None,
+            reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+            priority="normal",
+            status="in_review",
+            assigned_operator_id=operator.id,
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.post(f"/admin/handoffs/{h.id}/resolve-group-followup", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["status"], "closed")
+        self.assertEqual(body["group_followup_queue_state"], "resolved")
+
     def test_order_detail_handoff_summary_group_followup_visibility(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}
         user = self.create_user()
@@ -1698,6 +1805,7 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertFalse(ho["is_assigned_group_followup"])
         self.assertIsNotNone(ho["group_followup_work_label"])
         self.assertIn("Awaiting", ho["group_followup_work_label"])
+        self.assertEqual(ho["group_followup_queue_state"], "awaiting_assignment")
 
     def test_order_detail_handoff_summary_assigned_group_followup_work_label(self) -> None:
         """Phase 7 / Step 11 — embedded order handoffs expose assignment triage for group_followup_start."""
@@ -1728,6 +1836,7 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertTrue(ho["is_assigned_group_followup"])
         self.assertIsNotNone(ho["group_followup_work_label"])
         self.assertIn("Operator assigned", ho["group_followup_work_label"])
+        self.assertEqual(ho["group_followup_queue_state"], "assigned_open")
 
     def test_handoff_mark_in_review_preserves_group_followup_visibility(self) -> None:
         """Mutation response shape unchanged except new read-only fields; status transition as before."""
