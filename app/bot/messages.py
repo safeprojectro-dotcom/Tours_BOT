@@ -94,6 +94,7 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "payment_entry_failed": "I could not start the payment step because this reservation is no longer valid for payment.",
         "start_grp_private_intro": "Thanks for opening this chat from the group. You can browse tours below or open the Mini App when you are ready.",
         "start_grp_followup_intro": "Thanks for continuing here. For team review, use /contact or /human to log a support request. You can browse tours below.",
+        "start_grp_followup_resolved_intro": "Your recent follow-up from the group chat is marked resolved. You can browse tours below. For a new support request, use /contact or /human.",
     },
     "ro": {
         "language_prompt": "Pot continua in limba preferata. Alege o limba:",
@@ -173,6 +174,7 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "payment_entry_failed": "Nu am putut porni pasul de plata deoarece aceasta rezervare nu mai este valida pentru plata.",
         "start_grp_private_intro": "Multumim ca ai deschis chatul din grup. Poti vedea tururi mai jos sau deschide Mini App cand esti gata.",
         "start_grp_followup_intro": "Multumim ca continui aici. Pentru revizuire de echipa, foloseste /contact sau /human. Poti vedea tururi mai jos.",
+        "start_grp_followup_resolved_intro": "Urmarirea recenta din grup este marcata rezolvata. Poti vedea tururi mai jos. Pentru o cerere noua, foloseste /contact sau /human.",
     },
     "ru": {
         "language_prompt": "Ya mogu prodolzhit na udobnom dlya vas yazyke. Vyberite yazyk:",
@@ -241,6 +243,7 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "handoff_request_failed": "Сейчас не удалось зарегистрировать запрос в поддержку. Попробуйте позже.",
         "start_grp_private_intro": "Спасибо, что открыли чат из группы. Туры ниже или Mini App, когда будете готовы.",
         "start_grp_followup_intro": "Спасибо, что продолжаете здесь. Для команды — /contact или /human. Туры ниже.",
+        "start_grp_followup_resolved_intro": "Недавний запрос из группы отмечен как решённый. Туры ниже. Новый запрос — /contact или /human.",
     },
     "sr": {
         "language_prompt": "Mogu da nastavim na vasem jeziku. Izaberite jezik:",
@@ -309,6 +312,7 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "handoff_request_failed": "Zahtev za podršku trenutno nije moguće evidentirati. Pokušajte ponovo kasnije.",
         "start_grp_private_intro": "Hvala sto ste otvorili chat iz grupe. Ture ispod ili Mini App kada budete spremni.",
         "start_grp_followup_intro": "Hvala sto nastavljate ovde. Za tim koristite /contact ili /human. Ture ispod.",
+        "start_grp_followup_resolved_intro": "Nedavni nastavak iz grupe je oznacen kao resen. Ture ispod. Za novi zahtev koristite /contact ili /human.",
     },
     "hu": {
         "language_prompt": "Folytathatom az on altal valasztott nyelven. Valasszon nyelvet:",
@@ -377,6 +381,7 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "handoff_request_failed": "A támogatási kérelmet most nem sikerült rögzíteni. Kérjük, próbálja újra később.",
         "start_grp_private_intro": "Köszönjük, hogy a csoportból megnyitotta a chatet. Túrák lent vagy Mini App, ha kész.",
         "start_grp_followup_intro": "Köszönjük, hogy itt folytatja. Csapathoz: /contact vagy /human. Túrák lent.",
+        "start_grp_followup_resolved_intro": "A csoportos követés megjelölve megoldottként. Túrák lent. Új kéréshez: /contact vagy /human.",
     },
     "it": {
         "language_prompt": "Posso continuare nella lingua che preferisci. Scegli una lingua:",
@@ -445,6 +450,7 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "handoff_request_failed": "Non è stato possibile registrare la richiesta di supporto in questo momento. Riprova più tardi.",
         "start_grp_private_intro": "Grazie per aver aperto la chat dal gruppo. Tour qui sotto o Mini App quando sei pronto.",
         "start_grp_followup_intro": "Grazie per continuare qui. Per il team usa /contact o /human. Tour qui sotto.",
+        "start_grp_followup_resolved_intro": "Il recente follow-up dal gruppo risulta risolto. Tour qui sotto. Per una nuova richiesta: /contact o /human.",
     },
     "de": {
         "language_prompt": "Ich kann in Ihrer bevorzugten Sprache weitermachen. Bitte waehlen Sie eine Sprache:",
@@ -513,6 +519,7 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "handoff_request_failed": "Die Support-Anfrage konnte im Moment nicht erfasst werden. Bitte versuchen Sie es spaeter erneut.",
         "start_grp_private_intro": "Danke, dass Sie den Chat aus der Gruppe geoeffnet haben. Touren unten oder Mini App, wenn Sie soweit sind.",
         "start_grp_followup_intro": "Danke, dass Sie hier weitermachen. Fuer das Team: /contact oder /human. Touren unten.",
+        "start_grp_followup_resolved_intro": "Ihre juengste Gruppen-Nachverfolgung ist als erledigt markiert. Touren unten. Fuer eine neue Anfrage: /contact oder /human.",
     },
 }
 

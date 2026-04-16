@@ -99,3 +99,33 @@ class HandoffEntryService:
             telegram_language_code=telegram_language_code,
             dedupe_open_by_reason=True,
         )
+
+    def should_show_group_followup_resolved_confirmation(
+        self,
+        session: Session,
+        *,
+        user_id: int,
+    ) -> bool:
+        """
+        Phase 7 / Step 16 — private ``grp_followup`` entry: show resolved copy when there is no
+        open ``group_followup_start`` row and the latest such row is ``closed``.
+
+        Read-only predicate; does not mutate. ``in_review`` or missing rows → False.
+        """
+        if (
+            self._handoffs.find_open_by_user_reason(
+                session,
+                user_id=user_id,
+                reason=self.REASON_GROUP_FOLLOWUP_START,
+            )
+            is not None
+        ):
+            return False
+        latest = self._handoffs.find_latest_by_user_reason(
+            session,
+            user_id=user_id,
+            reason=self.REASON_GROUP_FOLLOWUP_START,
+        )
+        if latest is None:
+            return False
+        return latest.status == "closed"

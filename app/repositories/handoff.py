@@ -62,6 +62,16 @@ class HandoffRepository(SQLAlchemyRepository[Handoff]):
         )
         return session.scalars(stmt).first()
 
+    def find_latest_by_user_reason(self, session: Session, *, user_id: int, reason: str) -> Handoff | None:
+        """Most recently updated row for this user+reason (any status)."""
+        stmt = (
+            select(Handoff)
+            .where(Handoff.user_id == user_id, Handoff.reason == reason)
+            .order_by(Handoff.updated_at.desc(), Handoff.id.desc())
+            .limit(1)
+        )
+        return session.scalars(stmt).first()
+
     def list_for_admin(
         self,
         session: Session,

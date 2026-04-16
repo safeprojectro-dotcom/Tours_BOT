@@ -114,6 +114,76 @@ class HandoffEntryServiceTests(FoundationDBTestCase):
         self.assertIsNotNone(second)
         self.assertNotEqual(first, second)
 
+    def test_should_show_group_followup_resolved_when_closed_no_open(self) -> None:
+        user = self.create_user(telegram_user_id=77_020)
+        self.session.add(
+            Handoff(
+                user_id=user.id,
+                order_id=None,
+                reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+                priority="normal",
+                status="closed",
+            )
+        )
+        self.session.commit()
+        svc = HandoffEntryService()
+        self.assertTrue(
+            svc.should_show_group_followup_resolved_confirmation(self.session, user_id=user.id)
+        )
+
+    def test_should_show_group_followup_resolved_false_when_open(self) -> None:
+        user = self.create_user(telegram_user_id=77_021)
+        self.session.add(
+            Handoff(
+                user_id=user.id,
+                order_id=None,
+                reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+                priority="normal",
+                status="open",
+            )
+        )
+        self.session.commit()
+        svc = HandoffEntryService()
+        self.assertFalse(
+            svc.should_show_group_followup_resolved_confirmation(self.session, user_id=user.id)
+        )
+
+    def test_should_show_group_followup_resolved_false_when_in_review(self) -> None:
+        user = self.create_user(telegram_user_id=77_022)
+        op = self.create_user(telegram_user_id=77_122)
+        self.session.add(
+            Handoff(
+                user_id=user.id,
+                order_id=None,
+                reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+                priority="normal",
+                status="in_review",
+                assigned_operator_id=op.id,
+            )
+        )
+        self.session.commit()
+        svc = HandoffEntryService()
+        self.assertFalse(
+            svc.should_show_group_followup_resolved_confirmation(self.session, user_id=user.id)
+        )
+
+    def test_should_show_group_followup_resolved_false_when_only_other_reason(self) -> None:
+        user = self.create_user(telegram_user_id=77_023)
+        self.session.add(
+            Handoff(
+                user_id=user.id,
+                order_id=None,
+                reason="private_contact",
+                priority="normal",
+                status="closed",
+            )
+        )
+        self.session.commit()
+        svc = HandoffEntryService()
+        self.assertFalse(
+            svc.should_show_group_followup_resolved_confirmation(self.session, user_id=user.id)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -138,6 +138,108 @@ class PrivateEntryGrpFollowupChainTests(FoundationDBTestCase):
         )
         self.assertEqual(n, 0)
 
+    def test_grp_followup_closed_shows_resolved_intro_and_opens_new_row(self) -> None:
+        """Phase 7 / Step 16 — resolved group_followup_start triggers closure copy; persist adds new open row."""
+        user_id = self.create_user(telegram_user_id=88_210, preferred_language="en").id
+        self.session.add(
+            Handoff(
+                user_id=user_id,
+                order_id=None,
+                reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+                priority="normal",
+                status="closed",
+            )
+        )
+        self.session.commit()
+
+        async def body() -> None:
+            message = _private_message(telegram_user_id=88_210)
+            state = MagicMock()
+            state.clear = AsyncMock()
+            command = MagicMock()
+            command.args = "grp_followup"
+            binder = _SessionLocalBinder(self.session)
+            with patch.object(private_entry, "SessionLocal", binder):
+                with patch.object(private_entry, "_send_catalog_overview", new_callable=AsyncMock):
+                    await private_entry.handle_start(message, state, command)
+
+            intro_text = message.answer.call_args[0][0]
+            self.assertIn("resolved", intro_text.lower())
+
+        self._run(body())
+
+        n_open = self.session.scalar(
+            select(func.count())
+            .select_from(Handoff)
+            .where(
+                Handoff.user_id == user_id,
+                Handoff.reason == HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+                Handoff.status == "open",
+            )
+        )
+        self.assertEqual(n_open, 1)
+
+    def test_grp_followup_in_review_still_generic_intro(self) -> None:
+        user_id = self.create_user(telegram_user_id=88_211, preferred_language="en").id
+        op_id = self.create_user(telegram_user_id=88_311).id
+        self.session.add(
+            Handoff(
+                user_id=user_id,
+                order_id=None,
+                reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+                priority="normal",
+                status="in_review",
+                assigned_operator_id=op_id,
+            )
+        )
+        self.session.commit()
+
+        async def body() -> None:
+            message = _private_message(telegram_user_id=88_211)
+            state = MagicMock()
+            state.clear = AsyncMock()
+            command = MagicMock()
+            command.args = "grp_followup"
+            binder = _SessionLocalBinder(self.session)
+            with patch.object(private_entry, "SessionLocal", binder):
+                with patch.object(private_entry, "_send_catalog_overview", new_callable=AsyncMock):
+                    await private_entry.handle_start(message, state, command)
+
+            intro_text = message.answer.call_args[0][0]
+            self.assertIn("Thanks for continuing", intro_text)
+            self.assertNotIn("marked resolved", intro_text.lower())
+
+        self._run(body())
+
+    def test_grp_followup_only_private_contact_closed_uses_generic_intro(self) -> None:
+        user_id = self.create_user(telegram_user_id=88_212, preferred_language="en").id
+        self.session.add(
+            Handoff(
+                user_id=user_id,
+                order_id=None,
+                reason="private_contact",
+                priority="normal",
+                status="closed",
+            )
+        )
+        self.session.commit()
+
+        async def body() -> None:
+            message = _private_message(telegram_user_id=88_212)
+            state = MagicMock()
+            state.clear = AsyncMock()
+            command = MagicMock()
+            command.args = "grp_followup"
+            binder = _SessionLocalBinder(self.session)
+            with patch.object(private_entry, "SessionLocal", binder):
+                with patch.object(private_entry, "_send_catalog_overview", new_callable=AsyncMock):
+                    await private_entry.handle_start(message, state, command)
+
+            intro_text = message.answer.call_args[0][0]
+            self.assertIn("Thanks for continuing", intro_text)
+
+        self._run(body())
+
     def test_legacy_tour_start_payload_still_reaches_tour_detail(self) -> None:
         tour = self.create_tour(code="CHAIN-LEGACY-1", title_default="Legacy Chain", status=TourStatus.OPEN_FOR_SALE)
         self.create_translation(tour, language_code="en", title="Legacy Title EN")

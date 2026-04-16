@@ -124,11 +124,17 @@ async def handle_start(
         raw_start = command.args if command is not None else None
         grp_payload = match_group_cta_start_payload(raw_start)
         if grp_payload is not None:
-            intro_key = (
-                "start_grp_private_intro"
-                if grp_payload == START_PAYLOAD_GRP_PRIVATE
-                else "start_grp_followup_intro"
-            )
+            if grp_payload == START_PAYLOAD_GRP_PRIVATE:
+                intro_key = "start_grp_private_intro"
+            else:
+                entry_svc = HandoffEntryService()
+                if entry_svc.should_show_group_followup_resolved_confirmation(
+                    session,
+                    user_id=user.id,
+                ):
+                    intro_key = "start_grp_followup_resolved_intro"
+                else:
+                    intro_key = "start_grp_followup_intro"
             await message.answer(translate(user.preferred_language, intro_key))
             if grp_payload == START_PAYLOAD_GRP_FOLLOWUP:
                 await _persist_group_followup_handoff(
