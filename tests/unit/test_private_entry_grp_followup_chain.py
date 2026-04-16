@@ -84,10 +84,11 @@ class PrivateEntryGrpFollowupChainTests(FoundationDBTestCase):
     def test_grp_followup_second_start_dedupes_open_handoff(self) -> None:
         user_id = self.create_user(telegram_user_id=88_202, preferred_language="en").id
         self.session.commit()
+        second_intro: list[str] = []
 
         async def body() -> None:
             binder = _SessionLocalBinder(self.session)
-            for _ in range(2):
+            for i in range(2):
                 message = _private_message(telegram_user_id=88_202)
                 state = MagicMock()
                 state.clear = AsyncMock()
@@ -96,6 +97,8 @@ class PrivateEntryGrpFollowupChainTests(FoundationDBTestCase):
                 with patch.object(private_entry, "SessionLocal", binder):
                     with patch.object(private_entry, "_send_catalog_overview", new_callable=AsyncMock):
                         await private_entry.handle_start(message, state, command)
+                if i == 1:
+                    second_intro.append(message.answer.call_args[0][0])
 
         self._run(body())
 
@@ -107,6 +110,8 @@ class PrivateEntryGrpFollowupChainTests(FoundationDBTestCase):
             )
         ).all()
         self.assertEqual(len(rows), 1)
+        self.assertEqual(len(second_intro), 1)
+        self.assertIn("already open", second_intro[0].lower())
 
     def test_grp_private_no_group_followup_handoff_row(self) -> None:
         user_id = self.create_user(telegram_user_id=88_203, preferred_language="en").id
@@ -179,7 +184,7 @@ class PrivateEntryGrpFollowupChainTests(FoundationDBTestCase):
         )
         self.assertEqual(n_open, 1)
 
-    def test_grp_followup_in_review_still_generic_intro(self) -> None:
+    def test_grp_followup_in_review_shows_readiness_in_progress(self) -> None:
         user_id = self.create_user(telegram_user_id=88_211, preferred_language="en").id
         op_id = self.create_user(telegram_user_id=88_311).id
         self.session.add(
@@ -206,7 +211,39 @@ class PrivateEntryGrpFollowupChainTests(FoundationDBTestCase):
                     await private_entry.handle_start(message, state, command)
 
             intro_text = message.answer.call_args[0][0]
-            self.assertIn("Thanks for continuing", intro_text)
+            self.assertIn("working on", intro_text.lower())
+            self.assertNotIn("marked resolved", intro_text.lower())
+
+        self._run(body())
+
+    def test_grp_followup_open_assigned_shows_readiness_assigned(self) -> None:
+        user_id = self.create_user(telegram_user_id=88_213, preferred_language="en").id
+        op_id = self.create_user(telegram_user_id=88_313).id
+        self.session.add(
+            Handoff(
+                user_id=user_id,
+                order_id=None,
+                reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+                priority="normal",
+                status="open",
+                assigned_operator_id=op_id,
+            )
+        )
+        self.session.commit()
+
+        async def body() -> None:
+            message = _private_message(telegram_user_id=88_213)
+            state = MagicMock()
+            state.clear = AsyncMock()
+            command = MagicMock()
+            command.args = "grp_followup"
+            binder = _SessionLocalBinder(self.session)
+            with patch.object(private_entry, "SessionLocal", binder):
+                with patch.object(private_entry, "_send_catalog_overview", new_callable=AsyncMock):
+                    await private_entry.handle_start(message, state, command)
+
+            intro_text = message.answer.call_args[0][0]
+            self.assertIn("reviewing", intro_text.lower())
             self.assertNotIn("marked resolved", intro_text.lower())
 
         self._run(body())

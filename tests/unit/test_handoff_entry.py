@@ -184,6 +184,110 @@ class HandoffEntryServiceTests(FoundationDBTestCase):
             svc.should_show_group_followup_resolved_confirmation(self.session, user_id=user.id)
         )
 
+    def test_group_followup_private_intro_key_no_rows(self) -> None:
+        user = self.create_user(telegram_user_id=77_030)
+        self.session.commit()
+        svc = HandoffEntryService()
+        self.assertEqual(
+            svc.group_followup_private_intro_key(self.session, user_id=user.id),
+            "start_grp_followup_intro",
+        )
+
+    def test_group_followup_private_intro_key_open_unassigned(self) -> None:
+        user = self.create_user(telegram_user_id=77_031)
+        self.session.add(
+            Handoff(
+                user_id=user.id,
+                order_id=None,
+                reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+                priority="normal",
+                status="open",
+                assigned_operator_id=None,
+            )
+        )
+        self.session.commit()
+        svc = HandoffEntryService()
+        self.assertEqual(
+            svc.group_followup_private_intro_key(self.session, user_id=user.id),
+            "start_grp_followup_readiness_pending",
+        )
+
+    def test_group_followup_private_intro_key_open_assigned(self) -> None:
+        user = self.create_user(telegram_user_id=77_032)
+        op = self.create_user(telegram_user_id=77_132)
+        self.session.add(
+            Handoff(
+                user_id=user.id,
+                order_id=None,
+                reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+                priority="normal",
+                status="open",
+                assigned_operator_id=op.id,
+            )
+        )
+        self.session.commit()
+        svc = HandoffEntryService()
+        self.assertEqual(
+            svc.group_followup_private_intro_key(self.session, user_id=user.id),
+            "start_grp_followup_readiness_assigned",
+        )
+
+    def test_group_followup_private_intro_key_in_review(self) -> None:
+        user = self.create_user(telegram_user_id=77_033)
+        op = self.create_user(telegram_user_id=77_133)
+        self.session.add(
+            Handoff(
+                user_id=user.id,
+                order_id=None,
+                reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+                priority="normal",
+                status="in_review",
+                assigned_operator_id=op.id,
+            )
+        )
+        self.session.commit()
+        svc = HandoffEntryService()
+        self.assertEqual(
+            svc.group_followup_private_intro_key(self.session, user_id=user.id),
+            "start_grp_followup_readiness_in_progress",
+        )
+
+    def test_group_followup_private_intro_key_resolved_no_open(self) -> None:
+        user = self.create_user(telegram_user_id=77_034)
+        self.session.add(
+            Handoff(
+                user_id=user.id,
+                order_id=None,
+                reason=HandoffEntryService.REASON_GROUP_FOLLOWUP_START,
+                priority="normal",
+                status="closed",
+            )
+        )
+        self.session.commit()
+        svc = HandoffEntryService()
+        self.assertEqual(
+            svc.group_followup_private_intro_key(self.session, user_id=user.id),
+            "start_grp_followup_resolved_intro",
+        )
+
+    def test_group_followup_private_intro_key_other_reason_only(self) -> None:
+        user = self.create_user(telegram_user_id=77_035)
+        self.session.add(
+            Handoff(
+                user_id=user.id,
+                order_id=None,
+                reason="private_contact",
+                priority="normal",
+                status="closed",
+            )
+        )
+        self.session.commit()
+        svc = HandoffEntryService()
+        self.assertEqual(
+            svc.group_followup_private_intro_key(self.session, user_id=user.id),
+            "start_grp_followup_intro",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

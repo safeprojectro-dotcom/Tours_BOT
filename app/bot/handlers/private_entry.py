@@ -128,13 +128,10 @@ async def handle_start(
                 intro_key = "start_grp_private_intro"
             else:
                 entry_svc = HandoffEntryService()
-                if entry_svc.should_show_group_followup_resolved_confirmation(
+                intro_key = entry_svc.group_followup_private_intro_key(
                     session,
                     user_id=user.id,
-                ):
-                    intro_key = "start_grp_followup_resolved_intro"
-                else:
-                    intro_key = "start_grp_followup_intro"
+                )
             await message.answer(translate(user.preferred_language, intro_key))
             if grp_payload == START_PAYLOAD_GRP_FOLLOWUP:
                 await _persist_group_followup_handoff(

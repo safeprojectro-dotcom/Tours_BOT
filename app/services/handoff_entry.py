@@ -129,3 +129,38 @@ class HandoffEntryService:
         if latest is None:
             return False
         return latest.status == "closed"
+
+    def group_followup_private_intro_key(
+        self,
+        session: Session,
+        *,
+        user_id: int,
+    ) -> str:
+        """
+        Phase 7 / Step 17 — map existing ``group_followup_start`` rows to a short private intro key.
+
+        Read-only. No operator identifiers or workflow jargon in the returned key (copy is in messages).
+        """
+        reason = self.REASON_GROUP_FOLLOWUP_START
+        open_row = self._handoffs.find_open_by_user_reason(
+            session,
+            user_id=user_id,
+            reason=reason,
+        )
+        if open_row is not None:
+            if open_row.assigned_operator_id is not None:
+                return "start_grp_followup_readiness_assigned"
+            return "start_grp_followup_readiness_pending"
+
+        latest = self._handoffs.find_latest_by_user_reason(
+            session,
+            user_id=user_id,
+            reason=reason,
+        )
+        if latest is None:
+            return "start_grp_followup_intro"
+        if latest.status == "in_review":
+            return "start_grp_followup_readiness_in_progress"
+        if latest.status == "closed":
+            return "start_grp_followup_resolved_intro"
+        return "start_grp_followup_intro"

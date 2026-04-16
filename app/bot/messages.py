@@ -95,6 +95,9 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "start_grp_private_intro": "Thanks for opening this chat from the group. You can browse tours below or open the Mini App when you are ready.",
         "start_grp_followup_intro": "Thanks for continuing here. For team review, use /contact or /human to log a support request. You can browse tours below.",
         "start_grp_followup_resolved_intro": "Your recent follow-up from the group chat is marked resolved. You can browse tours below. For a new support request, use /contact or /human.",
+        "start_grp_followup_readiness_pending": "Your follow-up from the group is already open with the team. Browse tours below.",
+        "start_grp_followup_readiness_assigned": "The team is reviewing your open follow-up. Browse tours below.",
+        "start_grp_followup_readiness_in_progress": "We are working on your follow-up from the group. Browse tours below.",
     },
     "ro": {
         "language_prompt": "Pot continua in limba preferata. Alege o limba:",
@@ -175,6 +178,9 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "start_grp_private_intro": "Multumim ca ai deschis chatul din grup. Poti vedea tururi mai jos sau deschide Mini App cand esti gata.",
         "start_grp_followup_intro": "Multumim ca continui aici. Pentru revizuire de echipa, foloseste /contact sau /human. Poti vedea tururi mai jos.",
         "start_grp_followup_resolved_intro": "Urmarirea recenta din grup este marcata rezolvata. Poti vedea tururi mai jos. Pentru o cerere noua, foloseste /contact sau /human.",
+        "start_grp_followup_readiness_pending": "Urmarirea din grup este deja deschisa la echipa. Vezi tururi mai jos.",
+        "start_grp_followup_readiness_assigned": "Echipa revizuieste urmarirea deschisa. Vezi tururi mai jos.",
+        "start_grp_followup_readiness_in_progress": "Lucram la urmarirea din grup. Vezi tururi mai jos.",
     },
     "ru": {
         "language_prompt": "Ya mogu prodolzhit na udobnom dlya vas yazyke. Vyberite yazyk:",
@@ -244,6 +250,9 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "start_grp_private_intro": "Спасибо, что открыли чат из группы. Туры ниже или Mini App, когда будете готовы.",
         "start_grp_followup_intro": "Спасибо, что продолжаете здесь. Для команды — /contact или /human. Туры ниже.",
         "start_grp_followup_resolved_intro": "Недавний запрос из группы отмечен как решённый. Туры ниже. Новый запрос — /contact или /human.",
+        "start_grp_followup_readiness_pending": "Запрос из группы уже открыт у команды. Туры ниже.",
+        "start_grp_followup_readiness_assigned": "Команда проверяет открытый запрос. Туры ниже.",
+        "start_grp_followup_readiness_in_progress": "Мы работаем над запросом из группы. Туры ниже.",
     },
     "sr": {
         "language_prompt": "Mogu da nastavim na vasem jeziku. Izaberite jezik:",
@@ -313,6 +322,9 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "start_grp_private_intro": "Hvala sto ste otvorili chat iz grupe. Ture ispod ili Mini App kada budete spremni.",
         "start_grp_followup_intro": "Hvala sto nastavljate ovde. Za tim koristite /contact ili /human. Ture ispod.",
         "start_grp_followup_resolved_intro": "Nedavni nastavak iz grupe je oznacen kao resen. Ture ispod. Za novi zahtev koristite /contact ili /human.",
+        "start_grp_followup_readiness_pending": "Nastavak iz grupe je vec otvoren kod tima. Ture ispod.",
+        "start_grp_followup_readiness_assigned": "Tim pregleda otvoren nastavak. Ture ispod.",
+        "start_grp_followup_readiness_in_progress": "Radimo na nastavku iz grupe. Ture ispod.",
     },
     "hu": {
         "language_prompt": "Folytathatom az on altal valasztott nyelven. Valasszon nyelvet:",
@@ -382,6 +394,9 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "start_grp_private_intro": "Köszönjük, hogy a csoportból megnyitotta a chatet. Túrák lent vagy Mini App, ha kész.",
         "start_grp_followup_intro": "Köszönjük, hogy itt folytatja. Csapathoz: /contact vagy /human. Túrák lent.",
         "start_grp_followup_resolved_intro": "A csoportos követés megjelölve megoldottként. Túrák lent. Új kéréshez: /contact vagy /human.",
+        "start_grp_followup_readiness_pending": "A csoportos követés már nyitva van a csapatnál. Túrák lent.",
+        "start_grp_followup_readiness_assigned": "A csapat a nyitott követést nézi. Túrák lent.",
+        "start_grp_followup_readiness_in_progress": "Dolgozunk a csoportos követésen. Túrák lent.",
     },
     "it": {
         "language_prompt": "Posso continuare nella lingua che preferisci. Scegli una lingua:",
@@ -451,6 +466,9 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "start_grp_private_intro": "Grazie per aver aperto la chat dal gruppo. Tour qui sotto o Mini App quando sei pronto.",
         "start_grp_followup_intro": "Grazie per continuare qui. Per il team usa /contact o /human. Tour qui sotto.",
         "start_grp_followup_resolved_intro": "Il recente follow-up dal gruppo risulta risolto. Tour qui sotto. Per una nuova richiesta: /contact o /human.",
+        "start_grp_followup_readiness_pending": "Il follow-up dal gruppo e' gia' aperto con il team. Tour qui sotto.",
+        "start_grp_followup_readiness_assigned": "Il team sta controllando il follow-up aperto. Tour qui sotto.",
+        "start_grp_followup_readiness_in_progress": "Stiamo lavorando sul follow-up dal gruppo. Tour qui sotto.",
     },
     "de": {
         "language_prompt": "Ich kann in Ihrer bevorzugten Sprache weitermachen. Bitte waehlen Sie eine Sprache:",
@@ -520,6 +538,9 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "start_grp_private_intro": "Danke, dass Sie den Chat aus der Gruppe geoeffnet haben. Touren unten oder Mini App, wenn Sie soweit sind.",
         "start_grp_followup_intro": "Danke, dass Sie hier weitermachen. Fuer das Team: /contact oder /human. Touren unten.",
         "start_grp_followup_resolved_intro": "Ihre juengste Gruppen-Nachverfolgung ist als erledigt markiert. Touren unten. Fuer eine neue Anfrage: /contact oder /human.",
+        "start_grp_followup_readiness_pending": "Ihre Gruppen-Nachverfolgung ist beim Team bereits offen. Touren unten.",
+        "start_grp_followup_readiness_assigned": "Das Team prueft Ihre offene Nachverfolgung. Touren unten.",
+        "start_grp_followup_readiness_in_progress": "Wir bearbeiten Ihre Gruppen-Nachverfolgung. Touren unten.",
     },
 }
 
