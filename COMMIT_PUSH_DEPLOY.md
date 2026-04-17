@@ -18,6 +18,20 @@ Operational checkpoints in this file: **Part A — Step 1** (admin + migration *
 
 ---
 
+## Dev/staging — smoke tour refresh (test data)
+
+Manual Mini App / catalog smokes expect **future** `departure_datetime`, a future **`sales_deadline`**, and **`OPEN_FOR_SALE`** tours. When fixed demo codes drift into the past, refresh from repo root (valid **`DATABASE_URL`**; **dev/staging** or empty DBs — not for busy production if orders exist on these codes):
+
+```bash
+python -m app.scripts.ensure_smoke_tours
+```
+
+Optional env: **`SMOKE_TOURS_DAYS_AHEAD`** (default **`60`**, minimum **`2`**).
+
+**Behavior:** **creates or updates** tours **`SMOKE_PER_SEAT_001`** (`per_seat`) and **`SMOKE_FULL_BUS_001`** (`full_bus`); adds a default **`boarding_points`** row if the tour has none; normalizes **seat counts** on those codes. **Implementation:** `app/scripts/ensure_smoke_tours.py` — **no** booking, payment, or marketplace logic changes.
+
+---
+
 ## Deploy-critical — Phase 7.1 `tours.sales_mode` (Railway / staging / production)
 
 **Confirmed failure when schema lags code:** deployed application code **SELECT**s **`tours.sales_mode`** (ORM + Phase **7.1**), but PostgreSQL had **not** applied Alembic revision **`20260416_06`** → **`psycopg.errors.UndefinedColumn: column tours.sales_mode does not exist`**. **Root cause:** the migration was **not** applied to the target database before or with the deploy that shipped that code — **schema drift**, not application “logic bugs.”
