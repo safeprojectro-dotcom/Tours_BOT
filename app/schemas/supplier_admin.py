@@ -28,6 +28,8 @@ class SupplierOfferRead(BaseModel):
     return_datetime: datetime
     transport_notes: str | None
     vehicle_label: str | None
+    showcase_photo_url: str | None = None
+    boarding_places_text: str | None = None
     seats_total: int
     base_price: Decimal | None
     currency: str | None
@@ -76,6 +78,8 @@ class SupplierOfferCreate(BaseModel):
     return_datetime: datetime
     transport_notes: str | None = None
     vehicle_label: str | None = Field(default=None, max_length=128)
+    showcase_photo_url: str | None = Field(default=None, max_length=1024)
+    boarding_places_text: str | None = Field(default=None, max_length=4000)
     seats_total: int = Field(default=0, ge=0)
     base_price: Decimal | None = Field(default=None, ge=0)
     currency: str | None = Field(default=None, max_length=8)
@@ -83,9 +87,17 @@ class SupplierOfferCreate(BaseModel):
     sales_mode: TourSalesMode = TourSalesMode.PER_SEAT
     payment_mode: SupplierOfferPaymentMode = SupplierOfferPaymentMode.PLATFORM_CHECKOUT
 
-    @field_validator("supplier_reference", "currency", "vehicle_label")
+    @field_validator("supplier_reference", "currency", "vehicle_label", "showcase_photo_url")
     @classmethod
     def strip_optional(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s or None
+
+    @field_validator("boarding_places_text")
+    @classmethod
+    def strip_boarding(cls, v: str | None) -> str | None:
         if v is None:
             return None
         s = v.strip()
@@ -108,6 +120,8 @@ class SupplierOfferUpdate(BaseModel):
     return_datetime: datetime | None = None
     transport_notes: str | None = None
     vehicle_label: str | None = Field(default=None, max_length=128)
+    showcase_photo_url: str | None = Field(default=None, max_length=1024)
+    boarding_places_text: str | None = Field(default=None, max_length=4000)
     seats_total: int | None = Field(default=None, ge=0)
     base_price: Decimal | None = Field(default=None, ge=0)
     currency: str | None = Field(default=None, max_length=8)
@@ -116,9 +130,17 @@ class SupplierOfferUpdate(BaseModel):
     payment_mode: SupplierOfferPaymentMode | None = None
     lifecycle_status: SupplierOfferLifecycle | None = None
 
-    @field_validator("supplier_reference", "currency", "vehicle_label")
+    @field_validator("supplier_reference", "currency", "vehicle_label", "showcase_photo_url")
     @classmethod
     def strip_optional(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s or None
+
+    @field_validator("boarding_places_text")
+    @classmethod
+    def strip_boarding(cls, v: str | None) -> str | None:
         if v is None:
             return None
         s = v.strip()

@@ -11,8 +11,8 @@ from app.models.enums import SupplierOfferLifecycle
 from app.models.supplier import SupplierOffer
 from app.repositories.supplier import SupplierOfferRepository
 from app.schemas.supplier_admin import SupplierOfferRead
-from app.services.supplier_offer_showcase_message import format_supplier_offer_showcase_html
-from app.services.telegram_showcase_client import TelegramShowcaseSendError, send_channel_html_message
+from app.services.supplier_offer_showcase_message import build_showcase_publication
+from app.services.telegram_showcase_client import TelegramShowcaseSendError, send_showcase_publication
 
 
 class SupplierOfferModerationNotFoundError(Exception):
@@ -91,12 +91,13 @@ class SupplierOfferModerationService:
             raise SupplierOfferPublicationConfigError(
                 "Set TELEGRAM_OFFER_SHOWCASE_CHANNEL_ID and TELEGRAM_BOT_TOKEN to publish.",
             )
-        html_text = format_supplier_offer_showcase_html(row, cfg)
+        pub = build_showcase_publication(row, cfg)
         try:
-            message_id = send_channel_html_message(
+            message_id = send_showcase_publication(
                 bot_token=token,
                 chat_id=channel_id,
-                text=html_text,
+                caption_html=pub.caption_html,
+                photo_url=pub.photo_url,
             )
         except TelegramShowcaseSendError as exc:
             raise SupplierOfferModerationStateError(f"Telegram publish failed: {exc}") from exc

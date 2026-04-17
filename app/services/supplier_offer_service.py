@@ -86,6 +86,8 @@ class SupplierOfferService:
             return_datetime=payload.return_datetime,
             transport_notes=payload.transport_notes,
             vehicle_label=payload.vehicle_label,
+            showcase_photo_url=payload.showcase_photo_url,
+            boarding_places_text=payload.boarding_places_text,
             seats_total=payload.seats_total,
             base_price=payload.base_price,
             currency=payload.currency,

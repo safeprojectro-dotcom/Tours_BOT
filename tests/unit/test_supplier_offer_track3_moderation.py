@@ -111,7 +111,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         with (
             patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
             patch(
-                "app.services.supplier_offer_moderation_service.send_channel_html_message",
+                "app.services.supplier_offer_moderation_service.send_showcase_publication",
                 return_value=42,
             ),
         ):
@@ -186,10 +186,15 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
             telegram_mini_app_url = "https://t.me/mybot/myapp"
 
         html = format_supplier_offer_showcase_html(offer, _Cfg())  # type: ignore[arg-type]
-        self.assertIn("Open bot", html)
-        self.assertIn("Mini App", html)
+        self.assertIn("Detalii", html)
+        self.assertIn("Rezervă", html)
         self.assertIn("supoffer_", html)
+        self.assertIn("Plecare:", html)
+        self.assertIn("Întoarcere:", html)
+        self.assertIn("Abonează-te la canal", html)
         self.assertNotIn("<test>", html)  # escaped
+        self.assertRegex(html, r'href="https://t\.me/mybot\?start=supoffer_')
+        self.assertRegex(html, r'href="https://t\.me/mybot/myapp"')
 
     def test_deep_link_helpers(self) -> None:
         self.assertEqual(supplier_offer_start_payload(7), "supoffer_7")

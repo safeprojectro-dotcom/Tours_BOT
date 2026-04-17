@@ -13,15 +13,14 @@ class TelegramShowcaseSendError(Exception):
         super().__init__(message)
 
 
-def send_channel_html_message(*, bot_token: str, chat_id: str, text: str, timeout_s: float = 30.0) -> int:
-    """POST sendMessage; return message_id. Raises TelegramShowcaseSendError on failure."""
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    payload: dict[str, Any] = {
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": False,
-    }
+def _post_telegram_api(
+    *,
+    bot_token: str,
+    method: str,
+    payload: dict[str, Any],
+    timeout_s: float,
+) -> int:
+    url = f"https://api.telegram.org/bot{bot_token}/{method}"
     try:
         with httpx.Client(timeout=timeout_s) as client:
             response = client.post(url, json=payload)
@@ -44,3 +43,67 @@ def send_channel_html_message(*, bot_token: str, chat_id: str, text: str, timeou
     if mid is None:
         raise TelegramShowcaseSendError("telegram_missing_message_id")
     return int(mid)
+
+
+def send_channel_html_message(*, bot_token: str, chat_id: str, text: str, timeout_s: float = 30.0) -> int:
+    """POST sendMessage; return message_id. Raises TelegramShowcaseSendError on failure."""
+    return _post_telegram_api(
+        bot_token=bot_token,
+        method="sendMessage",
+        payload={
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": False,
+        },
+        timeout_s=timeout_s,
+    )
+
+
+def send_channel_photo(
+    *,
+    bot_token: str,
+    chat_id: str,
+    photo: str,
+    caption: str,
+    timeout_s: float = 30.0,
+) -> int:
+    """POST sendPhoto with HTML caption (max 1024 chars per Bot API)."""
+    cap = caption if len(caption) <= 1024 else caption[:1023] + "…"
+    return _post_telegram_api(
+        bot_token=bot_token,
+        method="sendPhoto",
+        payload={
+            "chat_id": chat_id,
+            "photo": photo,
+            "caption": cap,
+            "parse_mode": "HTML",
+        },
+        timeout_s=timeout_s,
+    )
+
+
+def send_showcase_publication(
+    *,
+    bot_token: str,
+    chat_id: str,
+    caption_html: str,
+    photo_url: str | None,
+    timeout_s: float = 30.0,
+) -> int:
+    """Photo + caption when ``photo_url`` is set; otherwise text-only sendMessage."""
+    safe_photo = (photo_url or "").strip()
+    if safe_photo:
+        return send_channel_photo(
+            bot_token=bot_token,
+            chat_id=chat_id,
+            photo=safe_photo,
+            caption=caption_html,
+            timeout_s=timeout_s,
+        )
+    return send_channel_html_message(
+        bot_token=bot_token,
+        chat_id=chat_id,
+        text=caption_html,
+        timeout_s=timeout_s,
+    )

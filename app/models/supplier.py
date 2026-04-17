@@ -79,6 +79,8 @@ class SupplierOffer(TimestampMixin, Base):
     return_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     transport_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     vehicle_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    showcase_photo_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    boarding_places_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     seats_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     base_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
