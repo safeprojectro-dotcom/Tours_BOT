@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.admin_auth import require_admin_api_token
 from app.db.session import get_db
-from app.models.enums import SupplierOfferLifecycle, TourStatus
+from app.models.enums import CustomMarketplaceRequestStatus, SupplierOfferLifecycle, TourStatus
 from app.models.supplier import Supplier
 from app.schemas.admin import (
     AdminBoardingPointCreate,
@@ -67,6 +67,18 @@ from app.services.supplier_offer_moderation_service import (
     SupplierOfferPublicationConfigError,
 )
 from app.services.supplier_offer_service import SupplierOfferService
+from app.services.custom_marketplace_request_service import (
+    CustomMarketplaceRequestNotFoundError,
+    CustomMarketplaceRequestService,
+    CustomMarketplaceValidationError,
+)
+from app.schemas.custom_marketplace import (
+    AdminCustomRequestPatch,
+    AdminCustomRequestResolutionApply,
+    CustomMarketplaceRequestDetailRead,
+    CustomMarketplaceRequestListRead,
+    CustomMarketplaceRequestRead,
+)
 from app.schemas.supplier_admin import (
     AdminSupplierOfferPublishResult,
     AdminSupplierOfferRejectBody,
@@ -923,3 +935,62 @@ def post_admin_supplier_offer_publish(offer_id: int, db: Session = Depends(get_d
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     db.commit()
     return AdminSupplierOfferPublishResult(offer=offer_read, telegram_message_id=message_id)
+
+
+@router.get("/custom-requests", response_model=CustomMarketplaceRequestListRead)
+def list_admin_custom_requests(
+    db: Session = Depends(get_db),
+    status_filter: CustomMarketplaceRequestStatus | None = Query(default=None, alias="status"),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> CustomMarketplaceRequestListRead:
+    svc = CustomMarketplaceRequestService()
+    items = svc.list_for_admin(db, status=status_filter, limit=limit, offset=offset)
+    return CustomMarketplaceRequestListRead(items=items, total_returned=len(items))
+
+
+@router.get("/custom-requests/{request_id}", response_model=CustomMarketplaceRequestDetailRead)
+def get_admin_custom_request(request_id: int, db: Session = Depends(get_db)) -> CustomMarketplaceRequestDetailRead:
+    try:
+        return CustomMarketplaceRequestService().get_admin_detail(db, request_id=request_id)
+    except CustomMarketplaceRequestNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found.") from None
+
+
+@router.patch("/custom-requests/{request_id}", response_model=CustomMarketplaceRequestRead)
+def patch_admin_custom_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminCustomRequestPatch = Body(...),
+) -> CustomMarketplaceRequestRead:
+    try:
+        row = CustomMarketplaceRequestService().admin_patch(
+            db,
+            request_id=request_id,
+            admin_intervention_note=payload.admin_intervention_note,
+            status=payload.status,
+        )
+    except CustomMarketplaceRequestNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found.") from None
+    db.commit()
+    return row
+
+
+@router.post("/custom-requests/{request_id}/resolution", response_model=CustomMarketplaceRequestRead)
+def post_admin_custom_request_resolution(
+    request_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminCustomRequestResolutionApply = Body(...),
+) -> CustomMarketplaceRequestRead:
+    try:
+        row = CustomMarketplaceRequestService().admin_apply_resolution(
+            db,
+            request_id=request_id,
+            payload=payload,
+        )
+    except CustomMarketplaceRequestNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found.") from None
+    except CustomMarketplaceValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return row

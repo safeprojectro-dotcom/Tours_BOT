@@ -39,3 +39,6 @@ class User(TimestampMixin, Base):
     waitlist_entries: Mapped[list["WaitlistEntry"]] = relationship(back_populates="user")
     messages: Mapped[list["Message"]] = relationship(back_populates="user")
     approved_content_items: Mapped[list["ContentItem"]] = relationship(back_populates="approver")
+    custom_marketplace_requests: Mapped[list["CustomMarketplaceRequest"]] = relationship(
+        back_populates="user",
+    )

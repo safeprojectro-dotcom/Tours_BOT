@@ -4,6 +4,11 @@ from decimal import Decimal
 
 import httpx
 
+from app.schemas.custom_marketplace import (
+    MiniAppCustomRequestCreatedRead,
+    MiniAppCustomRequestCustomerDetailRead,
+    MiniAppCustomRequestCustomerListRead,
+)
 from app.schemas.mini_app import (
     MiniAppBookingDetailRead,
     MiniAppBookingsListRead,
@@ -33,6 +38,41 @@ class MiniAppApiClient:
             response = await client.get("/mini-app/help", params=params or None)
             response.raise_for_status()
             return MiniAppHelpRead.model_validate(response.json())
+
+    async def post_custom_request(self, *, body: dict[str, object]) -> MiniAppCustomRequestCreatedRead:
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=20.0) as client:
+            response = await client.post("/mini-app/custom-requests", json=body)
+            response.raise_for_status()
+            return MiniAppCustomRequestCreatedRead.model_validate(response.json())
+
+    async def list_custom_requests_for_customer(
+        self,
+        *,
+        telegram_user_id: int,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> MiniAppCustomRequestCustomerListRead:
+        params: dict[str, object] = {
+            "telegram_user_id": telegram_user_id,
+            "limit": limit,
+            "offset": offset,
+        }
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=15.0) as client:
+            response = await client.get("/mini-app/custom-requests", params=params)
+            response.raise_for_status()
+            return MiniAppCustomRequestCustomerListRead.model_validate(response.json())
+
+    async def get_custom_request_for_customer(
+        self,
+        *,
+        request_id: int,
+        telegram_user_id: int,
+    ) -> MiniAppCustomRequestCustomerDetailRead:
+        params = {"telegram_user_id": telegram_user_id}
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=15.0) as client:
+            response = await client.get(f"/mini-app/custom-requests/{request_id}", params=params)
+            response.raise_for_status()
+            return MiniAppCustomRequestCustomerDetailRead.model_validate(response.json())
 
     async def post_support_request(
         self,

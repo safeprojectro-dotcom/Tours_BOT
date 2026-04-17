@@ -35,6 +35,10 @@ class Supplier(TimestampMixin, Base):
         back_populates="supplier",
         cascade="all, delete-orphan",
     )
+    custom_request_responses: Mapped[list["SupplierCustomRequestResponse"]] = relationship(
+        back_populates="supplier",
+        cascade="all, delete-orphan",
+    )
 
 
 class SupplierApiCredential(Base):

@@ -10,7 +10,9 @@ Deliver supplier-admin and request-marketplace capabilities as a major platform 
 | **0** — Freeze core | **Completed** — `docs/TRACK_0_CORE_BOOKING_PLATFORM_BASELINE.md` | — |
 | **1** — Design acceptance / alignment | **Completed** — package aligned with Track **0**; see **Track 1** section | — |
 | **2** — Supplier admin foundation | **Completed (implementation)** — additive Layer B (`suppliers`, credentials, `supplier_offers`); admin bootstrap + `/supplier-admin/offers`; Alembic **`20260417_07`**; stabilization/review: **`docs/CURSOR_PROMPT_TRACK_2_STABILIZATION_AND_REVIEW_V2.md`** | — |
-| **3** — Supplier offer publication | **Completed (implementation)** — moderation (`approved`/`rejected`), showcase publish to Telegram channel (`published`), `supoffer_<id>` private `/start` CTA; Alembic **`20260418_08`** | **Track 4** — request marketplace (when scheduled) |
+| **3** — Supplier offer publication | **Completed (implementation)** — moderation (`approved`/`rejected`), showcase publish to Telegram channel (`published`), `supoffer_<id>` private `/start` CTA; Alembic **`20260418_08`** | — |
+| **4** — Request marketplace foundation | **Completed (implementation)** — Layer C RFQ intake (Mini App + `/custom_request`), supplier list/respond (`declined`/`proposed`), admin list/detail/patch; Alembic **`20260421_10`**; stabilization **`docs/CURSOR_PROMPT_TRACK_4_STABILIZATION_AND_REVIEW_V2.md`** | **Track 5a** (below) |
+| **5a** — Commercial resolution selection foundation | **Completed (implementation)** — admin **`POST /admin/custom-requests/{id}/resolution`**, selection FK + resolution kind + statuses; customer minimal status reads; **no** order/reservation/payment bridge; Alembic **`20260422_11`**; **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** §26 | **Track 5** — remaining scope (RFQ→Layer A bridge **only** when explicitly approved) |
 
 ## Scope Guardrails
 - no code implementation in this document
@@ -182,17 +184,35 @@ Deliver supplier-admin and request-marketplace capabilities as a major platform 
 **Exit Signal**
 - End-to-end request lifecycle works from intake to supplier responses with admin governance.
 
+**Implementation record (Track 4 closure)**
+- **Schema:** **`custom_marketplace_requests`**, **`supplier_custom_request_responses`**, enums **`custom_marketplace_request_*`**, **`supplier_custom_request_response_kind`** (**`20260421_10`**); **`User`** gains optional **`custom_marketplace_requests`** relationship only.
+- **Intake:** **`POST /mini-app/custom-requests`**; private **`/custom_request`** (FSM); Mini App Help → **`/custom-request`** form. **No** `Order` / reservation / payment creation.
+- **Suppliers:** **`GET /supplier-admin/custom-requests`**, **`GET .../{id}`**, **`PUT .../{id}/response`** — broadcast listing of **`open`** requests; minimal response model (not bidding).
+- **Admin:** **`GET/PATCH /admin/custom-requests`**, detail includes supplier responses.
+- **Compatibility:** Track **0** Layer A semantics preserved; Track **2**/**3** supplier and publication paths unchanged by RFQ code paths.
+- **Stabilization:** **`docs/CURSOR_PROMPT_TRACK_4_STABILIZATION_AND_REVIEW_V2.md`**, **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** §25.
+
+## Track 5a - Commercial Resolution Selection Foundation
+**Status (implementation):** **completed** — selection + resolution recording only; **no** RFQ→`Order` bridge.
+
+**Implementation record (Track 5a closure)**
+- **Schema:** Alembic **`20260422_11`** — new request status values; migrate **`fulfilled` → `closed_assisted`**; **`commercial_resolution_kind`** enum; **`selected_supplier_response_id`** FK (**`ON DELETE SET NULL`**).
+- **Admin:** **`POST /admin/custom-requests/{id}/resolution`** for **`under_review`**, **`supplier_selected`**, **`closed_assisted`**, **`closed_external`**; **`PATCH`** blocks terminal commercial statuses (use resolution endpoint).
+- **Suppliers:** responses only **`open`/`under_review`**; portal lists won requests after closure.
+- **Customer:** **`GET /mini-app/custom-requests`** (+ by id) — **`customer_visible_summary`** only.
+- **Compatibility:** Tracks **0–4** Layer A and RFQ foundation preserved; enum downgrade limitations documented (**§26**).
+
 ## Track 5 - Commercial Resolution Layer
 **Goal**
-- Define and implement commercial closure ownership options for request outcomes.
+- Define and implement commercial closure ownership options for request outcomes **including**, when explicitly scoped, **transition contracts into booking/payment rails**.
 
 **Scope**
 - ownership models:
   - platform-owned checkout
   - supplier-assisted closure
   - hybrid transition
-- selection/winner handling
-- transition contracts into booking/payment rails where applicable
+- **Track 5a already delivered:** central-admin winner selection + resolution status/kind + minimal customer status reads (**no** bridge).
+- **Remaining Track 5 scope:** transition contracts into booking/payment rails where applicable (**explicit slice only**)
 
 **Dependencies**
 - Track 4 marketplace foundation

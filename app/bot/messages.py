@@ -26,13 +26,32 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "• Open Mini App — full catalog, booking, and payment\n"
         "• My bookings (Mini App) — reservation and payment status\n"
         "• Quick filters below — optional shortcuts in chat\n\n"
-        "Commands: /tours (tour list here), /language, /bookings, /contact, /human. "
+        "Commands: /tours (tour list here), /language, /bookings, /contact, /human, /custom_request. "
+        "/custom_request starts a structured custom trip / group request to suppliers (not a booking). "
         "/contact or /human can log a support signal for the team (not a live operator chat). "
         "Tap Help inside the Mini App for detailed topics and “Log support request” on payment or booking screens.",
         "bookings_command_reply": "Reservation and payment status live in the Mini App.\n\n"
         "Use the buttons below to open the Mini App or go straight to My bookings.",
         "contact_command_reply": "Need help with a booking or payment? I can record a support request for the team and return a reference number.",
         "human_command_reply": "If you need human review, I can record a support request for the team and return a reference number.",
+        "custom_request_start": "Let's record a custom trip / group request for suppliers (not a booking yet).\n\n"
+        "Choose the type that fits best:",
+        "custom_request_choose_type": "Choose request type:",
+        "custom_request_dates_prompt": "Send the travel date as YYYY-MM-DD, or two lines: start date then end date.",
+        "custom_request_dates_invalid": "I could not read those dates. Use YYYY-MM-DD (one date or two lines).",
+        "custom_request_route_prompt": "Describe the route, destination, or direction you need (plain text).",
+        "custom_request_route_too_short": "Please add a bit more detail (at least a few characters).",
+        "custom_request_group_size_prompt": "How many travelers? Reply with a number (1–999), or send - to skip.",
+        "custom_request_group_size_invalid": "Send a number between 1 and 999, or - to skip.",
+        "custom_request_special_prompt": "Any special conditions? Send text, or - to skip.",
+        "custom_request_saved": "Request #{request_id} recorded. Suppliers can review it in their admin area. "
+        "This is not a reservation — the team or a supplier will follow up separately.",
+        "custom_request_cancelled": "Custom request flow cancelled.",
+        "custom_request_failed": "Could not save the request right now. Please try again later.",
+        "custom_request_type_group": "Group trip",
+        "custom_request_type_route": "Custom route",
+        "custom_request_type_other": "Other",
+        "custom_request_cancel": "Cancel",
         "handoff_request_recorded": "Support request recorded. Reference: {ref}",
         "handoff_request_failed": "Could not record the support request right now. Please try again later.",
         "catalog_empty": "There are no open tours to show right now. Please try again later.",
@@ -115,13 +134,32 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "• Deschide Mini App — catalog complet, rezervare si plata\n"
         "• Rezervarile mele (Mini App) — status rezervare si plata\n"
         "• Filtre rapide mai jos — scurtaturi optionale in chat\n\n"
-        "Comenzi: /tours (lista aici), /language, /bookings, /contact, /human. "
+        "Comenzi: /tours (lista aici), /language, /bookings, /contact, /human, /custom_request. "
+        "/custom_request porneste o cerere structurata catre furnizori (nu este o rezervare). "
         "/contact sau /human pot inregistra un semnal de suport pentru echipa (nu chat live cu operator). "
         "Apasa Help in Mini App pentru detalii si „Inregistreaza cerere suport” la plata sau pe rezervare.",
         "bookings_command_reply": "Statusul rezervarii si al platii este in Mini App.\n\n"
         "Foloseste butoanele de mai jos pentru Mini App sau direct Rezervarile mele.",
         "contact_command_reply": "Ai nevoie de ajutor cu o rezervare sau o plată? Pot înregistra o cerere de suport pentru echipă și îți pot da un număr de referință.",
         "human_command_reply": "Dacă ai nevoie de analiză umană, pot înregistra o cerere de suport pentru echipă și îți pot da un număr de referință.",
+        "custom_request_start": "Înregistrăm o cerere personalizată / grup pentru furnizori (încă nu e o rezervare).\n\n"
+        "Alege tipul care se potrivește:",
+        "custom_request_choose_type": "Alege tipul cererii:",
+        "custom_request_dates_prompt": "Trimite data călătoriei ca AAAA-LL-ZZ, sau două rânduri: data de început apoi data de sfârșit.",
+        "custom_request_dates_invalid": "Nu am putut citi datele. Folosește AAAA-LL-ZZ (o dată sau două rânduri).",
+        "custom_request_route_prompt": "Descrie ruta, destinația sau direcția dorită (text simplu).",
+        "custom_request_route_too_short": "Adaugă puțin mai mult detaliu (minimum câteva caractere).",
+        "custom_request_group_size_prompt": "Câți călători? Răspunde cu un număr (1–999) sau - pentru a sări.",
+        "custom_request_group_size_invalid": "Trimite un număr între 1 și 999 sau - pentru a sări.",
+        "custom_request_special_prompt": "Condiții speciale? Trimite text sau - pentru a sări.",
+        "custom_request_saved": "Cererea #{request_id} a fost înregistrată. Furnizorii o pot vedea în zona lor de administrare. "
+        "Aceasta nu este o rezervare — echipa sau un furnizor te va contacta separat.",
+        "custom_request_cancelled": "Fluxul de cerere personalizată a fost anulat.",
+        "custom_request_failed": "Nu am putut salva cererea acum. Încearcă din nou mai târziu.",
+        "custom_request_type_group": "Excursie grup",
+        "custom_request_type_route": "Rută personalizată",
+        "custom_request_type_other": "Altele",
+        "custom_request_cancel": "Anulează",
         "handoff_request_recorded": "Cererea de suport a fost înregistrată. Referință: {ref}",
         "handoff_request_failed": "Cererea de suport nu a putut fi înregistrată acum. Încearcă din nou mai târziu.",
         "catalog_empty": "Momentan nu exista tururi deschise pentru vanzare. Te rog incearca mai tarziu.",

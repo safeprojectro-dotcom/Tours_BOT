@@ -2053,6 +2053,136 @@ class BookingDetailScreen:
         self.error_text.visible = True
 
 
+class CustomRequestScreen:
+    """Track 4: structured RFQ from Mini App (no order created)."""
+
+    def __init__(
+        self,
+        page: ft.Page,
+        *,
+        api_client: MiniAppApiClient,
+        dev_telegram_user_id: int,
+        on_close: Callable[[], None],
+        language_code: str,
+    ) -> None:
+        self.page = page
+        self.api_client = api_client
+        self._dev_telegram_user_id = dev_telegram_user_id
+        self.on_close = on_close
+        self.language_code = language_code
+        lg = language_code
+        self.nav_back = ft.TextButton(shell(lg, "back"), icon=ft.Icons.ARROW_BACK, on_click=lambda _: self.on_close())
+        self.title = ft.Text(shell(lg, "custom_request_title"), size=26, weight=ft.FontWeight.BOLD)
+        self.intro = ft.Text(shell(lg, "custom_request_intro"), size=13, color=ft.Colors.ON_SURFACE_VARIANT)
+        self.request_type = ft.Dropdown(
+            label=shell(lg, "custom_request_field_type"),
+            width=400,
+            value="group_trip",
+            options=[
+                ft.dropdown.Option("group_trip", shell(lg, "custom_request_opt_group_trip")),
+                ft.dropdown.Option("custom_route", shell(lg, "custom_request_opt_custom_route")),
+                ft.dropdown.Option("other", shell(lg, "custom_request_opt_other")),
+            ],
+        )
+        self.start_date = ft.TextField(label=shell(lg, "custom_request_field_start"), width=400)
+        self.end_date = ft.TextField(label=shell(lg, "custom_request_field_end"), width=400)
+        self.route_notes = ft.TextField(
+            label=shell(lg, "custom_request_field_route"),
+            width=400,
+            multiline=True,
+            min_lines=2,
+            max_lines=6,
+        )
+        self.group_size = ft.TextField(label=shell(lg, "custom_request_field_group"), width=200)
+        self.special = ft.TextField(
+            label=shell(lg, "custom_request_field_special"),
+            width=400,
+            multiline=True,
+            min_lines=2,
+            max_lines=4,
+        )
+        self.submit_btn = ft.FilledButton(
+            shell(lg, "custom_request_submit"),
+            on_click=lambda _: self.page.run_task(self._submit_async),
+        )
+
+    def sync_shell_labels(self) -> None:
+        lg = self.language_code
+        self.nav_back.text = shell(lg, "back")
+        self.title.value = shell(lg, "custom_request_title")
+        self.intro.value = shell(lg, "custom_request_intro")
+        self.request_type.label = shell(lg, "custom_request_field_type")
+        keys = ("custom_request_opt_group_trip", "custom_request_opt_custom_route", "custom_request_opt_other")
+        vals = ("group_trip", "custom_route", "other")
+        self.request_type.options = [ft.dropdown.Option(v, shell(lg, k)) for v, k in zip(vals, keys, strict=True)]
+        self.start_date.label = shell(lg, "custom_request_field_start")
+        self.end_date.label = shell(lg, "custom_request_field_end")
+        self.route_notes.label = shell(lg, "custom_request_field_route")
+        self.group_size.label = shell(lg, "custom_request_field_group")
+        self.special.label = shell(lg, "custom_request_field_special")
+        self.submit_btn.text = shell(lg, "custom_request_submit")
+
+    def build(self) -> ft.Control:
+        return scrollable_page(
+            ft.Row([self.nav_back], alignment=ft.MainAxisAlignment.START),
+            self.title,
+            self.intro,
+            self.request_type,
+            self.start_date,
+            self.end_date,
+            self.route_notes,
+            self.group_size,
+            self.special,
+            ft.Row([self.submit_btn], alignment=ft.MainAxisAlignment.START),
+        )
+
+    async def _submit_async(self) -> None:
+        lg = self.language_code
+        self.submit_btn.disabled = True
+        self.page.update()
+        try:
+            end_raw = (self.end_date.value or "").strip()
+            route = (self.route_notes.value or "").strip()
+            if len(route) < 3:
+                raise ValueError("route")
+            start_raw = (self.start_date.value or "").strip()
+            body: dict[str, object] = {
+                "telegram_user_id": self._dev_telegram_user_id,
+                "request_type": self.request_type.value or "group_trip",
+                "travel_date_start": start_raw,
+                "route_notes": route,
+            }
+            if end_raw:
+                body["travel_date_end"] = end_raw
+            gs = (self.group_size.value or "").strip()
+            if gs:
+                body["group_size"] = int(gs)
+            sp = (self.special.value or "").strip()
+            if sp:
+                body["special_conditions"] = sp
+            r = await self.api_client.post_custom_request(body=body)
+        except httpx.HTTPStatusError as exc:
+            msg = CatalogScreen._http_error_message(exc, default=shell(lg, "custom_request_error"))
+            self.page.snack_bar = ft.SnackBar(content=ft.Text(msg), action="OK")
+            self.page.snack_bar.open = True
+        except Exception:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "custom_request_error")),
+                action="OK",
+            )
+            self.page.snack_bar.open = True
+        else:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "custom_request_success", id=str(r.id))),
+                action="OK",
+            )
+            self.page.snack_bar.open = True
+            self.on_close()
+        finally:
+            self.submit_btn.disabled = False
+            self.page.update()
+
+
 class HelpScreen:
     def __init__(
         self,
@@ -2060,11 +2190,13 @@ class HelpScreen:
         *,
         api_client: MiniAppApiClient,
         on_close: Callable[[], None],
+        on_open_custom_request: Callable[[], None] | None = None,
         language_code: str,
     ) -> None:
         self.page = page
         self.api_client = api_client
         self.on_close = on_close
+        self.on_open_custom_request = on_open_custom_request
         self.language_code = language_code
         self.body_column = ft.Column(spacing=12)
         lg = language_code
@@ -2129,6 +2261,21 @@ class HelpScreen:
                 )
             )
             blocks.append(ft.Text(h.when_to_contact_support, color=ft.Colors.ON_SURFACE_VARIANT, size=14))
+            if self.on_open_custom_request is not None:
+                blocks.append(ft.Container(height=8))
+                blocks.append(
+                    ft.Text(
+                        shell(lg, "custom_request_from_help_hint"),
+                        size=13,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    )
+                )
+                blocks.append(
+                    ft.FilledButton(
+                        shell(lg, "btn_custom_request"),
+                        on_click=lambda _: self.on_open_custom_request(),
+                    )
+                )
             self.body_column.controls = blocks
         self.page.update()
 
@@ -2313,10 +2460,19 @@ class MiniAppShell:
             on_open_settings=self.open_settings,
             on_open_bookings=self.open_bookings,
         )
+        self._custom_request_return_route: str = "/"
         self.help_screen = HelpScreen(
             page,
             api_client=self.api_client,
             on_close=self.close_modal,
+            on_open_custom_request=self.open_custom_request_from_help,
+            language_code=settings.mini_app_default_language,
+        )
+        self.custom_request_screen = CustomRequestScreen(
+            page,
+            api_client=self.api_client,
+            dev_telegram_user_id=self._dev_telegram_user_id,
+            on_close=self.close_custom_request,
             language_code=settings.mini_app_default_language,
         )
         self.settings_screen = SettingsScreen(
@@ -2337,6 +2493,7 @@ class MiniAppShell:
         self.booking_detail_screen.language_code = code
         self.payment_entry_screen.language_code = code
         self.help_screen.language_code = code
+        self.custom_request_screen.language_code = code
         self.settings_screen.language_code = code
         self.catalog_screen.sync_shell_labels()
         self.settings_screen.sync_shell_labels()
@@ -2347,6 +2504,7 @@ class MiniAppShell:
         self.my_bookings_screen.sync_shell_labels()
         self.booking_detail_screen.sync_shell_labels()
         self.help_screen.sync_shell_labels()
+        self.custom_request_screen.sync_shell_labels()
 
     async def hydrate_language_from_server(self) -> None:
         try:
@@ -2366,6 +2524,13 @@ class MiniAppShell:
         self._modal_return_route = self.page.route or "/"
         self.page.go("/settings")
 
+    def open_custom_request_from_help(self) -> None:
+        self._custom_request_return_route = self.page.route or "/help"
+        self.page.go("/custom-request")
+
+    def close_custom_request(self) -> None:
+        self.page.go(self._custom_request_return_route or "/")
+
     def close_modal(self) -> None:
         target = self._modal_return_route or "/"
         self.page.go(target)
@@ -2378,6 +2543,20 @@ class MiniAppShell:
             self.page.views.append(ft.View(route="/help", controls=[self.help_screen.build()], padding=0, spacing=0))
             self.page.update()
             self.page.run_task(self.help_screen.load_content)
+            return
+
+        if self._is_custom_request_route(self.page.route):
+            if not self._custom_request_return_route:
+                self._custom_request_return_route = "/"
+            self.page.views.append(
+                ft.View(
+                    route="/custom-request",
+                    controls=[self.custom_request_screen.build()],
+                    padding=0,
+                    spacing=0,
+                )
+            )
+            self.page.update()
             return
 
         if self._is_settings_route(self.page.route):
@@ -2596,6 +2775,13 @@ class MiniAppShell:
             return False
         normalized = route.strip()
         return normalized == "/help" or normalized == "/help/"
+
+    @staticmethod
+    def _is_custom_request_route(route: str | None) -> bool:
+        if not route:
+            return False
+        normalized = route.strip()
+        return normalized == "/custom-request" or normalized == "/custom-request/"
 
     @staticmethod
     def _is_settings_route(route: str | None) -> bool:

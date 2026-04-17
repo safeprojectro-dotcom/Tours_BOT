@@ -76,6 +76,47 @@ class SupplierOfferLifecycle(StrEnum):
     PUBLISHED = "published"
 
 
+class CustomMarketplaceRequestType(StrEnum):
+    """Layer C: structured custom trip / group RFQ categories (Track 4)."""
+
+    GROUP_TRIP = "group_trip"
+    CUSTOM_ROUTE = "custom_route"
+    OTHER = "other"
+
+
+class CustomMarketplaceRequestStatus(StrEnum):
+    """Custom request lifecycle — separate from order/booking states (Track 4–5a)."""
+
+    OPEN = "open"
+    UNDER_REVIEW = "under_review"
+    SUPPLIER_SELECTED = "supplier_selected"
+    CLOSED_ASSISTED = "closed_assisted"
+    CLOSED_EXTERNAL = "closed_external"
+    CANCELLED = "cancelled"
+    FULFILLED = "fulfilled"  # legacy DB value; migrated to closed_assisted in Track 5a migration
+
+
+class CommercialResolutionKind(StrEnum):
+    """How commercial closure was handled (Track 5a) — no payment execution."""
+
+    ASSISTED_CLOSURE = "assisted_closure"
+    EXTERNAL_RECORD = "external_record"
+
+
+class CustomMarketplaceRequestSource(StrEnum):
+    """Where the customer submitted the RFQ."""
+
+    PRIVATE_BOT = "private_bot"
+    MINI_APP = "mini_app"
+
+
+class SupplierCustomRequestResponseKind(StrEnum):
+    """Supplier stance on a marketplace request."""
+
+    DECLINED = "declined"
+    PROPOSED = "proposed"
+
+
 def sqlalchemy_enum(enum_cls: type[StrEnum], *, name: str) -> SQLAlchemyEnum:
     return SQLAlchemyEnum(
         enum_cls,

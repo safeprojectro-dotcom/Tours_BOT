@@ -695,4 +695,43 @@ closed for **Track 2** scope (foundation + stabilization review); **Track 3** de
 - **Unpublish**, edit/delete channel messages, and linking showcase offers to core **`Tour`** SKUs remain **postponed**.
 
 ### Status
-closed for **Track 3** scope (publication layer + stabilization review); **Track 4** owns request marketplace when scheduled
+closed for **Track 3** scope (publication layer + stabilization review); **Track 4** closure recorded in **§25**; **Track 5a** in **§26**
+
+---
+
+## 25. V2 Track 4 — Custom request marketplace foundation (Layer C) — implementation + stabilization
+
+### Current decision
+- **Track 4** is **additive** Layer **C**: **`custom_marketplace_requests`** (customer context, type, dates, route notes, group size, specials, **`source_channel`**, **`status`**, **`admin_intervention_note`**) + **`supplier_custom_request_responses`** (**`declined`/`proposed`**, optional quote) — Alembic **`20260421_10`**. **No** DDL on **`tours`**, **`orders`**, **`payments`**, or **`supplier_offers`** lifecycle beyond pre-Track-4 state.
+- **Separation from orders:** intake and services **do not** create **`Order`** rows, holds, or payment sessions; **no** bridge to booking in this track (explicit future track, e.g. **Track 5**).
+- **Supplier visibility:** **open** requests listed to all authenticated suppliers (broadcast MVP); **no** ranking, auction, or automated matching.
+- **Admin:** list/detail all statuses; **`PATCH`** for note and/or **`status`** (e.g. **`cancelled`**); responses visible on detail.
+- **Layer A touchpoints (intentionally narrow):** additive Mini App **`POST /mini-app/custom-requests`**, optional **`/custom-request`** view from Help, private **`/custom_request`** command + FSM; **`help_command_reply`** text extended — core catalog/reservation/payment routes **unchanged**.
+- **User model:** **`User.custom_marketplace_requests`** relationship only (ORM navigation + FK from requests to **`users.id`**); **no** change to order/handoff/waitlist relationships.
+- **Bot routing:** **`custom_request`** router is registered before **`private_entry`** so FSM handlers win when state is set; **`private_entry`** still owns default private chat behavior when not in custom-request states — see **`docs/CURSOR_PROMPT_TRACK_4_STABILIZATION_AND_REVIEW_V2.md`**.
+
+### Residual debt / forward hooks
+- Request → booking/payment **transition contract**, winner selection, commercial ownership (**Track 5**), smarter supplier routing, notifications, customer-facing response UX.
+
+### Status
+closed for **Track 4** scope (foundation + stabilization review); **Track 5a** records commercial selection without orders — see **§26**; broader **Track 5** (RFQ→Layer A bridge) remains **when explicitly scoped**
+
+---
+
+## 26. V2 Track 5a — Commercial resolution selection foundation (Layer C) — stabilization
+
+### Current decision
+- **Additive only:** Alembic **`20260422_11`** extends **`custom_marketplace_request_status`** (new values), adds **`commercial_resolution_kind`** enum + nullable columns on **`custom_marketplace_requests`**; **no** DDL on **`orders`**, **`payments`**, **`tours`**, **`supplier_offers`**, or handoff tables.
+- **No request→order bridge:** codebase review: **`app/services/custom_marketplace_request_service.py`** and related RFQ routes do **not** import or call reservation/payment/order write services; customer Mini App reads return **status + short summary** only.
+- **Selection rules:** **`supplier_selected`** requires **`selected_supplier_response_id`** pointing at a **`proposed`** **`SupplierCustomRequestResponse`** with **`request_id`** equal to the parent request; cross-request IDs rejected with **400**.
+- **Admin contract:** terminal commercial statuses (**`supplier_selected`**, **`closed_assisted`**, **`closed_external`**, legacy **`fulfilled`**) are **422** on **`PATCH /admin/custom-requests/{id}`**; use **`POST .../resolution`**. **`open`** / **`cancelled`** / notes remain on **`PATCH`** ( **`open`** and **`cancelled`** clear selection + resolution kind).
+- **Supplier mutations:** **`PUT .../response`** allowed only for **`open`** and **`under_review`** — not after **`supplier_selected`** / **`closed_*`** / **`cancelled`**.
+- **Customer surface:** list/detail endpoints do **not** expose other suppliers’ quotes — summaries are fixed strings from **`customer_visible_summary()`** (English-only MVP text).
+
+### Residual debt / forward hooks
+- **Enum downgrade:** **`downgrade`** drops FK columns and **`commercial_resolution_kind`** type but **cannot** remove **`ALTER TYPE ... ADD VALUE`** entries from **`custom_marketplace_request_status`** (PostgreSQL limitation) — documented in migration file comment; plan environments accordingly.
+- **PATCH `under_review`:** **`PATCH`** may set **`under_review`** without the stricter field rules enforced on **`POST .../resolution`** (resolution **`under_review`** rejects `selected_supplier_response_id` / `commercial_resolution_kind`). If product needs a strict state machine, align **`PATCH`** with resolution rules or disallow **`under_review`** on **`PATCH`** in a future narrow slice.
+- **Track 5 forward:** RFQ → **`Order`** / reservation / payment integration, customer-facing multi-quote UX, notifications — **postponed** until explicit Track **5** bridge scope.
+
+### Status
+closed for **Track 5a** scope (selection + resolution recording + review); **no** Layer A semantic change attributed to this track

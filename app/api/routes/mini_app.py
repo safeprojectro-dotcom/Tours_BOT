@@ -3,11 +3,17 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.session import get_db
+from app.schemas.custom_marketplace import (
+    MiniAppCustomRequestCreate,
+    MiniAppCustomRequestCreatedRead,
+    MiniAppCustomRequestCustomerDetailRead,
+    MiniAppCustomRequestCustomerListRead,
+)
 from app.schemas.mini_app import (
     MiniAppBookingDetailRead,
     MiniAppBookingsListRead,
@@ -44,6 +50,11 @@ from app.services.mini_app_mock_payment import MiniAppMockPaymentCompletionServi
 from app.services.mini_app_tour_detail import MiniAppTourDetailService
 from app.services.mini_app_waitlist import MiniAppWaitlistService
 from app.services.tour_sales_mode_policy import TourSalesModePolicyService
+from app.services.custom_marketplace_request_service import (
+    CustomMarketplaceRequestNotFoundError,
+    CustomMarketplaceRequestService,
+    CustomMarketplaceUserNotFoundError,
+)
 
 router = APIRouter(prefix="/mini-app", tags=["mini-app"])
 
@@ -88,6 +99,70 @@ def get_mini_app_help(
     language_code: str | None = Query(default=None, max_length=16),
 ) -> MiniAppHelpRead:
     return MiniAppHelpSettingsService().get_help_read(language_code=language_code)
+
+
+@router.post("/custom-requests", response_model=MiniAppCustomRequestCreatedRead, status_code=status.HTTP_201_CREATED)
+def post_mini_app_custom_request(
+    payload: MiniAppCustomRequestCreate,
+    session: Session = Depends(get_db),
+) -> MiniAppCustomRequestCreatedRead:
+    """Structured RFQ intake (Layer C). Does not create an order or reservation."""
+    try:
+        row = CustomMarketplaceRequestService().create_from_mini_app(session, payload=payload)
+    except CustomMarketplaceUserNotFoundError:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unknown telegram_user_id — open the bot once or complete a catalog action first.",
+        ) from None
+    except ValueError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
+    session.commit()
+    return MiniAppCustomRequestCreatedRead(id=row.id, status=row.status)
+
+
+@router.get("/custom-requests", response_model=MiniAppCustomRequestCustomerListRead)
+def list_mini_app_custom_requests_for_customer(
+    telegram_user_id: int = Query(gt=0),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_db),
+) -> MiniAppCustomRequestCustomerListRead:
+    """Minimal RFQ status for the requester (Track 5a) — no supplier quote comparison."""
+    try:
+        return CustomMarketplaceRequestService().list_for_customer_mini_app(
+            session,
+            telegram_user_id=telegram_user_id,
+            limit=limit,
+            offset=offset,
+        )
+    except CustomMarketplaceUserNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unknown telegram_user_id — open the bot once or complete a catalog action first.",
+        ) from None
+
+
+@router.get("/custom-requests/{request_id}", response_model=MiniAppCustomRequestCustomerDetailRead)
+def get_mini_app_custom_request_for_customer(
+    request_id: int,
+    telegram_user_id: int = Query(gt=0),
+    session: Session = Depends(get_db),
+) -> MiniAppCustomRequestCustomerDetailRead:
+    try:
+        return CustomMarketplaceRequestService().get_customer_detail_mini_app(
+            session,
+            request_id=request_id,
+            telegram_user_id=telegram_user_id,
+        )
+    except CustomMarketplaceUserNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unknown telegram_user_id — open the bot once or complete a catalog action first.",
+        ) from None
+    except CustomMarketplaceRequestNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found.") from None
 
 
 @router.post("/support-request", response_model=MiniAppSupportRequestResponse)
