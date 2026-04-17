@@ -39,6 +39,7 @@ from app.services.admin_order_lifecycle import (
     sql_predicate_for_lifecycle_kind,
 )
 from app.services.admin_handoff_queue import (
+    compute_full_bus_sales_assistance_visibility,
     compute_group_followup_assignment_visibility,
     compute_group_followup_queue_state,
     compute_group_followup_resolution_label,
@@ -195,6 +196,11 @@ class AdminReadService:
                 status=h.status,
                 assigned_operator_id=h.assigned_operator_id,
             )
+            is_fb, fb_lbl, fb_parsed = compute_full_bus_sales_assistance_visibility(reason=h.reason)
+            assist_tc = None
+            if is_fb and fb_parsed:
+                raw_tc = (fb_parsed.get("tour") or "").strip()
+                assist_tc = raw_tc or None
             handoffs.append(
                 AdminHandoffSummaryItem(
                     id=h.id,
@@ -209,6 +215,9 @@ class AdminReadService:
                     group_followup_work_label=work_lbl,
                     group_followup_resolution_label=res_lbl,
                     group_followup_queue_state=q_state,
+                    is_full_bus_sales_assistance=is_fb,
+                    full_bus_sales_assistance_label=fb_lbl,
+                    assistance_context_tour_code=assist_tc,
                 )
             )
         t = order.tour
@@ -286,6 +295,11 @@ class AdminReadService:
             status=h.status,
             assigned_operator_id=h.assigned_operator_id,
         )
+        is_fb, fb_lbl, fb_parsed = compute_full_bus_sales_assistance_visibility(reason=h.reason)
+        assist_tc = None
+        if is_fb and fb_parsed:
+            raw_tc = (fb_parsed.get("tour") or "").strip()
+            assist_tc = raw_tc or None
         return AdminHandoffRead(
             id=h.id,
             status=h.status,
@@ -308,6 +322,9 @@ class AdminReadService:
             group_followup_work_label=work_lbl,
             group_followup_resolution_label=res_lbl,
             group_followup_queue_state=q_state,
+            is_full_bus_sales_assistance=is_fb,
+            full_bus_sales_assistance_label=fb_lbl,
+            assistance_context_tour_code=assist_tc,
         )
 
     def list_handoffs(

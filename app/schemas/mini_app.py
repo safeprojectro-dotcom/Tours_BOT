@@ -139,6 +139,11 @@ class MiniAppSupportRequest(BaseModel):
         default=None,
         description="Optional order scope; must belong to the Telegram user.",
     )
+    tour_code: str | None = Field(
+        default=None,
+        max_length=64,
+        description="When set for a non-self-service tour, handoff reason is tagged as full-bus assistance.",
+    )
     screen_hint: str | None = Field(
         default=None,
         max_length=64,

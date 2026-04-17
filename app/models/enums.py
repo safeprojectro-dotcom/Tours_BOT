@@ -50,6 +50,32 @@ class TourSalesMode(StrEnum):
     FULL_BUS = "full_bus"
 
 
+class SupplierServiceComposition(StrEnum):
+    """Layer B: what the supplier bundles with transport (marketplace formation)."""
+
+    TRANSPORT_ONLY = "transport_only"
+    TRANSPORT_GUIDE = "transport_guide"
+    TRANSPORT_WATER = "transport_water"
+    TRANSPORT_GUIDE_WATER = "transport_guide_water"
+
+
+class SupplierOfferPaymentMode(StrEnum):
+    """Commercial handling intent for a supplier offer (narrow Track 2 — no new payment execution)."""
+
+    PLATFORM_CHECKOUT = "platform_checkout"
+    ASSISTED_CLOSURE = "assisted_closure"
+
+
+class SupplierOfferLifecycle(StrEnum):
+    """Supplier offer lifecycle: supplier steps + platform moderation + showcase (Track 3)."""
+
+    DRAFT = "draft"
+    READY_FOR_MODERATION = "ready_for_moderation"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    PUBLISHED = "published"
+
+
 def sqlalchemy_enum(enum_cls: type[StrEnum], *, name: str) -> SQLAlchemyEnum:
     return SQLAlchemyEnum(
         enum_cls,

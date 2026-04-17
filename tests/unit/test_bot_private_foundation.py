@@ -3,7 +3,11 @@ from __future__ import annotations
 import unittest
 from datetime import UTC, datetime
 
-from app.bot.constants import DATE_OPTION_NEXT_30_DAYS, DATE_OPTION_WEEKEND, REQUEST_BOOKING_ASSISTANCE_CALLBACK
+from app.bot.constants import (
+    DATE_OPTION_NEXT_30_DAYS,
+    DATE_OPTION_WEEKEND,
+    REQUEST_BOOKING_ASSISTANCE_CALLBACK_PREFIX,
+)
 from app.bot.keyboards import build_tour_detail_keyboard
 from app.bot.messages import (
     format_catalog_message,
@@ -433,7 +437,7 @@ class PrivateBotSalesModeReadTests(FoundationDBTestCase):
         )
         prep_data = [b.callback_data for row in prep.inline_keyboard for b in row]
         self.assertIn("prepare:tour:42", prep_data)
-        self.assertNotIn(REQUEST_BOOKING_ASSISTANCE_CALLBACK, prep_data)
+        self.assertFalse(any(x.startswith(f"{REQUEST_BOOKING_ASSISTANCE_CALLBACK_PREFIX}:") for x in prep_data))
 
         assisted = build_tour_detail_keyboard(
             language_code="en",
@@ -442,5 +446,5 @@ class PrivateBotSalesModeReadTests(FoundationDBTestCase):
             per_seat_self_service_allowed=False,
         )
         asst_data = [b.callback_data for row in assisted.inline_keyboard for b in row]
-        self.assertIn(REQUEST_BOOKING_ASSISTANCE_CALLBACK, asst_data)
+        self.assertIn(f"{REQUEST_BOOKING_ASSISTANCE_CALLBACK_PREFIX}:42", asst_data)
         self.assertFalse(any(x and x.startswith("prepare:tour:") for x in asst_data))

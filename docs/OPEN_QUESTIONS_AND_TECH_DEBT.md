@@ -548,6 +548,8 @@ open (informational snapshot)
 ### Current decision / current lesson
 - **Production schema may lag behind deployed code** when Alembic migrations are **not** applied before or alongside a release that already uses new ORM columns. Example (resolved): Phase 6 / Step 6 added `tours.cover_media_reference` in code while production Postgres had not yet run the migration → `sqlalchemy.exc.ProgrammingError` / `psycopg.errors.UndefinedColumn`, breaking any path that loads `Tour` (e.g. **`/mini-app/catalog`**, **`/mini-app/bookings`**) until the schema matched.
 - **Phase 7.1 — same class of failure:** code that maps **`Tour.sales_mode`** shipped while Postgres **lacked** **`tours.sales_mode`** (migration **`20260416_06`** not applied) → **`psycopg.errors.UndefinedColumn: column tours.sales_mode does not exist`** on any route or worker that loads **`Tour`**. **Recovery:** apply **`python -m alembic upgrade head`** (reachable DB URL) **before** treating the stack as healthy; **do not** mask with app-only “fixes.” **Release gate:** Phase **7.1** deploys **must** include migration apply — see **`COMMIT_PUSH_DEPLOY.md`** (**Deploy-critical**).
+- **V2 Track 2 — analogous class of failure:** application code expects **`suppliers`**, **`supplier_api_credentials`**, **`supplier_offers`**, and related enums (Alembic **`20260417_07`**) while Postgres has not applied that revision → failures on **`/admin/suppliers*`**, **`/supplier-admin/*`**, or ORM loads of **`Supplier*`** models (**not** on core **`Tour`** / Mini App catalog **unless** something incorrectly joins supplier tables). **Gate:** same **`alembic current` == `heads`** rule before deploy; see **`COMMIT_PUSH_DEPLOY.md`** (Track **2** note).
+- **V2 Track 3 — analogous class of failure:** code expects extended **`supplier_offer_lifecycle`** values and new **`supplier_offers`** columns (**`20260418_08`**) while DB is still at **`20260417_07`** → ORM/API errors on moderation/publish paths and possibly on **`SupplierOffer`** loads. **Gate:** apply **`20260418_08`** before or with deploy that ships Track **3**; see **`COMMIT_PUSH_DEPLOY.md`** (Track **3** note).
 - **`railway shell`** (or shell on the platform) does not by itself fix **local** migration runs: internal DB hostnames such as **`*.railway.internal`** are **not resolvable** from a developer machine, so “run Alembic from my laptop against prod” typically requires the **public** Railway Postgres URL (or another supported access path).
 
 ### Why accepted now
@@ -616,11 +618,11 @@ open (narrow rule shipped; **order-sum validation** not implemented)
 - **Phase 7 / Step 17** adds **narrow private followup history/readiness** on repeat **`/start grp_followup`**: **`HandoffEntryService.group_followup_private_intro_key`** → **`start_grp_followup_readiness_pending`** / **`_assigned`** / **`_in_progress`**, **`start_grp_followup_resolved_intro`**, or **`start_grp_followup_intro`**; **read-only**; **no** operator IDs in copy; tests **`test_handoff_entry`**, **`test_private_entry_grp_followup_chain`**.
 - **Phase 7 final followup/operator consolidation block** — **safe polish only**: unified short private **`grp_followup`** wording, **`/contact`** / **`/human`** + browse-tours CTAs where applicable, admin **`group_followup_work_label`** / **`group_followup_resolution_label`** aligned to the same **queue/work** state model as private copy; tests include **`test_group_followup_phase7_consolidation`** and updates to existing **`grp_followup`** / admin visibility tests; **no** new persistence, **no** mutation/enum/API shape changes, **no** public booking/payment/waitlist/Mini App changes.
 - **Continuity note:** **group** chat path (Steps **3–4**) remains **reply-only** (no DB handoff from group messages); **private** **`grp_followup`** chain persists intent (Step **7**), is **test-covered** (Step **8**), is **operator-visible in admin reads** (Steps **9–11** + Step **15** queue bucket), can be **narrow-assigned** via **`assign-operator`** (Step **10**), **taken in-work** via **`mark-in-work`** (Step **12**) after assignment, **resolved** via **`resolve-group-followup`** (Steps **13–14**), with **read-side triage labels** (Step **11**), **resolved** label (Steps **13–14**), **queue-state** (Step **15**), **private** **resolved** acknowledgment (Step **16**), **private** **readiness** copy for repeat entries (Step **17**), and **consolidation-aligned** wording (private + admin reads). **Phase 7** **implementation + consolidation + review** — **`docs/PHASE_7_REVIEW.md`** — is **closed** for this chain; **two-way operator chat** / **handoff push notifications** remain **postponed**.
-- **Forward (documented):** **`docs/CHAT_HANDOFF.md` Next Safe Step** — **Phase 7.1** **Step 3** (read-side adaptation for Mini App/private bot) — **separate** from Phase **7** **`group_followup_*`**; **do not** add sales-mode behavior **ad hoc** into handoff code. **Steps 1–2** shipped: admin **`tour.sales_mode`**, **`TourSalesModePolicyService`**. Optional **later** slices: **i18n** polish, group **rate limits**.
+- **Forward (documented):** **`docs/CHAT_HANDOFF.md`** — **Phase 7.1** **Steps 1–5** shipped; **Step 6** (direct whole-bus self-service **design gate**) remains the **product** next step where applicable; **separate** from Phase **7** **`group_followup_*`**. **V2 supplier marketplace:** **Track 0**–**3** complete (**Track 3** = moderated publication + showcase — **implementation** + stabilization review); **Track 4** (request marketplace) is the next **implementation** track when scheduled — see **`docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md`**. Optional **later** slices: **i18n** polish, group **rate limits**.
 - **Still postponed:** **broad** operator **assignment/claim** redesign, **full** **operator workflow engine**, **full** group assistant; **live** Telegram validation **may** still depend on **Railway** / bot deploy health — **product scope** unchanged. Optional later: **i18n** acks, **rate limits**, **structured logging** — product-scoped.
 
 ### Status
-closed for Phase **7** narrative (**`docs/PHASE_7_REVIEW.md`**) — Steps **4–17** + **final consolidation** **shipped** (group + private **`grp_*`** + **`grp_followup`** persistence + tests + admin visibility + narrow assign / in-work / resolve + queue/read labels + aligned wording). **Postponed:** **operator chat**, **handoff push notifications**, **full** operator workflow — unchanged. **Next track:** **Phase 7.1** **Step 3+** (consumer read-side / enforcement) — see **`docs/CHAT_HANDOFF.md` Next Safe Step** (**not** mixed into Phase **7** handoff logic **ad hoc**).
+closed for Phase **7** narrative (**`docs/PHASE_7_REVIEW.md`**) — Steps **4–17** + **final consolidation** **shipped** (group + private **`grp_*`** + **`grp_followup`** persistence + tests + admin visibility + narrow assign / in-work / resolve + queue/read labels + aligned wording). **Postponed:** **operator chat**, **handoff push notifications**, **full** operator workflow — unchanged. **Related active work:** **Phase 7.1** (**`docs/CHAT_HANDOFF.md`**); **V2** supplier marketplace — **Track 0**–**3** shipped (**Layer B** + moderated publication); **Track 4** next — **`docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md`** (**not** mixed into Phase **7** handoff logic **ad hoc**).
 
 ---
 
@@ -630,9 +632,67 @@ closed for Phase **7** narrative (**`docs/PHASE_7_REVIEW.md`**) — Steps **4–
 - **Tour sales mode** is an active **Phase 7.1** sub-track (**separate** from closed Phase **7** **`group_followup_*`** work).
 - The design source is **`docs/TOUR_SALES_MODE_DESIGN.md`**.
 - Implementation follows the design rollout order: **(1)** admin/source-of-truth → **(2)** backend policy → **(3)** read-side adaptation → **(4)** operator-assisted full-bus → **(5)** optional direct whole-bus self-service — **not** as ad hoc changes inside booking, Mini App, private bot, or Phase **7** handoff flows without an explicit slice.
-- **`tour.sales_mode`** (Postgres + ORM) is the **commercial source of truth**; **`TourSalesModePolicyService`** in **`app/services/tour_sales_mode_policy.py`** is the **single service-layer interpretation** for **`per_seat` / `full_bus`** (read-only **`TourSalesModePolicyRead`**; policy is driven **only** by the enum — **not** by **`seats_total`** / **`seats_available`**). **Step 2** does **not** wire policy into reservation, payment, Mini App, or private bot handlers (guarded by tests).
+- **`tour.sales_mode`** (Postgres + ORM) is the **commercial source of truth**; **`TourSalesModePolicyService`** in **`app/services/tour_sales_mode_policy.py`** is the **single service-layer interpretation** for **`per_seat` / `full_bus`** (read-only **`TourSalesModePolicyRead`**; policy is driven **only** by the enum — **not** by **`seats_total`** / **`seats_available`**). **Steps 3–4** wire **read-side** policy into Mini App and private bot; **Step 5** adds operator-assisted full-bus handoff context — see **`docs/CHAT_HANDOFF.md`** **Completed Steps**.
 - **`per_seat` / `full_bus`** remains a **tour-level** product/domain concern, not a UI-only tweak.
 - **Operations / schema:** Deploying Phase **7.1** tour code without applying **`alembic/versions/20260416_06_add_tour_sales_mode.py`** causes **`column tours.sales_mode does not exist`** — **not** a product logic bug. **Gate:** **`python -m alembic upgrade head`** on the target DB before or with the release (**`COMMIT_PUSH_DEPLOY.md`**, **§17** here).
 
 ### Status
-open (design + **Phase 7.1 / Step 1** admin field + **Step 2** backend policy **shipped**; **Step 3** read-side adaptation for Mini App/private bot and enforcement at reservation **postponed** until explicitly scoped — see **`docs/CHAT_HANDOFF.md` Next Safe Step**)
+open (**Phase 7.1 / Steps 1–5** shipped — admin field, policy service, Mini App + private bot read-side, operator-assisted full-bus path; **Step 6** optional direct whole-bus self-service — **design gate only** until approved — see **`docs/CHAT_HANDOFF.md` Next Safe Step**)
+
+---
+
+## 21. V2 Track 0 — Core Booking Platform freeze (supplier marketplace prep)
+
+### Current decision
+- **Track 0** documents the **frozen Layer A** (Core Booking Platform) so **V2** supplier-marketplace tracks do not break existing booking, payment, Mini App, private bot, Phase **7** handoff baseline, or Phase **7.1** **`sales_mode`** behavior by accident.
+- **Source of truth:** **`docs/TRACK_0_CORE_BOOKING_PLATFORM_BASELINE.md`** (frozen core, compatibility contracts, must-not-break checklist, baseline smoke, migration/deploy guardrails).
+- **Schema drift guardrail:** deploy must not outpace DB migrations (**`tours.cover_media_reference`**, **`tours.sales_mode`** / **`20260416_06`**, **V2 Track 2** **`20260417_07`**, **V2 Track 3** **`20260418_08`**, and any future DDL) — see **`COMMIT_PUSH_DEPLOY.md`** and **§17**.
+
+### Status
+closed (documentation/guardrails for Track **0**; **no** supplier marketplace implementation in Track **0**)
+
+---
+
+## 22. V2 Track 1 — Supplier marketplace design acceptance / alignment
+
+### Current decision
+- **Track 1** is a **documentation-only** gate: confirm the supplier-admin + request-marketplace **design package** aligns with **`docs/TRACK_0_CORE_BOOKING_PLATFORM_BASELINE.md`** before **Track 2** code.
+- **Aligned:** Layers **B/C** are **extensions** on **Layer A**; **no** silent redefinition of booking/payment/reservation semantics; **no** default broadening of **Phase 7** **`grp_followup_*`**; **moderated** supplier publication; **RFQ** domain **separate** from normal order lifecycle until explicit bridge; **direct whole-bus self-service** **not** auto-approved (Phase **7.1** Step **6** / V2 **Track 6**).
+- **Record:** **`docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md`** (Track **1** section) + **`docs/SUPPLIER_ADMIN_AND_REQUEST_MARKETPLACE_DESIGN.md`** §13a.
+
+### Status
+closed (documentation acceptance / alignment; **no** application code in Track **1**)
+
+---
+
+## 23. V2 Track 2 — Supplier admin foundation (Layer B) — implementation closure
+
+### Current decision
+- **Track 2** adds **only** new persistence and APIs: **`suppliers`**, **`supplier_api_credentials`** (SHA-256 hashed API tokens), **`supplier_offers`** with service composition, payment mode, lifecycle (**`draft`** / **`ready_for_moderation`**), commercial/timing/capacity fields; **`supplier_offers.sales_mode`** uses the **existing** PostgreSQL enum **`tour_sales_mode`** (same values as core **`tours.sales_mode`** — **reuse at DDL level**, not a change to **`tours`**).
+- **Central admin** (`ADMIN_API_TOKEN`): additive **`POST /admin/suppliers`** (bootstrap + one-time plaintext token), **`GET /admin/suppliers`**, **`GET /admin/suppliers/{id}`**, **`GET /admin/suppliers/{id}/offers`**, **`GET /admin/supplier-offers/{offer_id}`** — **does not** replace or redefine existing admin tour/order/handoff semantics.
+- **Supplier admin:** **`/supplier-admin/offers`** (list/detail/create/update) authenticated by **supplier bearer token** (DB lookup); scoped so a supplier cannot read or mutate another supplier’s offers (**404** on cross-tenant access).
+- **Explicitly not in Track 2:** customer catalog/checkout changes, request marketplace, publication/moderation workflow beyond supplier-side **`ready_for_moderation`** flag, direct whole-bus self-service, order lifecycle replacement, payment execution changes, Phase **7** **`grp_followup_*`** expansion.
+
+### Residual debt / forward hooks
+- **Credential rotation**, multiple active credentials per supplier policy, and full RBAC are **postponed** (bootstrap path is intentional minimum).
+- **Tests:** **`tests/unit/base.py`** gained **`create_supplier`**, **`create_supplier_credential`**, **`create_supplier_offer`** helpers for supplier-focused tests; existing **`create_tour` / `create_order`** behavior **unchanged** — see stabilization review (**`docs/CURSOR_PROMPT_TRACK_2_STABILIZATION_AND_REVIEW_V2.md`**).
+
+### Status
+closed for **Track 2** scope (foundation + stabilization review); **Track 3** delivered moderation/publication on top (see **§24**)
+
+---
+
+## 24. V2 Track 3 — Supplier offer publication / moderation — implementation + stabilization
+
+### Current decision
+- **Track 3** is **additive** on **Track 2**: extends **`supplier_offer_lifecycle`** (**`approved`**, **`rejected`**, **`published`**), adds **`moderation_rejection_reason`**, **`published_at`**, **`showcase_chat_id`**, **`showcase_message_id`** (**`20260418_08`**). **No** **`tours` / `orders` / `payments`** DDL changes.
+- **Moderation enforcement:** **`POST /admin/supplier-offers/{id}/publish`** is **only** under **`ADMIN_API_TOKEN`**; **`SupplierOfferModerationService.publish`** accepts **`approved`** only; **rejected** / **draft** / **ready_for_moderation** cannot publish. **Suppliers** cannot call publish (no route on **`/supplier-admin/*`**) and **`SupplierOfferService`** rejects setting **`approved`**, **`rejected`**, or **`published`** on update; **`approved`**/**`published`** rows are **immutable** via supplier API.
+- **Telegram:** channel post via Bot API **`sendMessage`** (HTML) to **`TELEGRAM_OFFER_SHOWCASE_CHANNEL_ID`**; **no** supplier direct-to-channel path in code.
+- **CTA:** channel HTML includes bot deep link **`supoffer_<id>`**; private **`/start`** resolves **`published`** offers to intro + existing catalog/Mini App home keyboard (**no** new booking semantics).
+- **Stabilization review:** no RFQ, bidding, whole-bus self-service, Mini App route churn, or group-gating redesign observed in Track **3** touchpoints; see **`docs/CURSOR_PROMPT_TRACK_3_STABILIZATION_AND_REVIEW_V2.md`**.
+
+### Residual debt / forward hooks
+- **Unpublish**, edit/delete channel messages, and linking showcase offers to core **`Tour`** SKUs remain **postponed**.
+
+### Status
+closed for **Track 3** scope (publication layer + stabilization review); **Track 4** owns request marketplace when scheduled

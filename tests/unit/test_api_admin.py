@@ -1508,6 +1508,36 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertIsNone(row["tour_id"])
         self.assertIsNone(row["tour_code"])
         self.assertTrue(row["is_open"])
+        self.assertFalse(row["is_full_bus_sales_assistance"])
+        self.assertIsNone(row["full_bus_sales_assistance_label"])
+        self.assertIsNone(row["assistance_context_tour_code"])
+
+    def test_handoffs_list_full_bus_sales_assistance_exposes_context(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        user = self.create_user()
+        reason = HandoffEntryService.build_full_bus_sales_assistance_reason(
+            tour_code="ADM-FB-HO",
+            sales_mode="full_bus",
+            channel="private",
+        )
+        h = Handoff(
+            user_id=user.id,
+            order_id=None,
+            reason=reason,
+            priority="normal",
+            status="open",
+        )
+        self.session.add(h)
+        self.session.commit()
+
+        r = self.client.get("/admin/handoffs", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        row = next(x for x in r.json()["items"] if x["id"] == h.id)
+        self.assertTrue(row["is_full_bus_sales_assistance"])
+        self.assertIsNotNone(row["full_bus_sales_assistance_label"])
+        self.assertIn("ADM-FB-HO", row["full_bus_sales_assistance_label"] or "")
+        self.assertEqual(row["assistance_context_tour_code"], "ADM-FB-HO")
+        self.assertFalse(row["is_group_followup"])
 
     def test_handoffs_list_filter_closed(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}

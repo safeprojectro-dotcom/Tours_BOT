@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.admin_auth import require_admin_api_token
 from app.db.session import get_db
-from app.models.enums import TourStatus
+from app.models.enums import SupplierOfferLifecycle, TourStatus
+from app.models.supplier import Supplier
 from app.schemas.admin import (
     AdminBoardingPointCreate,
     AdminBoardingPointTranslationUpsert,
@@ -25,6 +27,10 @@ from app.schemas.admin import (
     AdminTourCreate,
     AdminTourDetailRead,
     AdminTourListRead,
+    AdminSupplierCreate,
+    AdminSupplierCreatedRead,
+    AdminSupplierListRead,
+    AdminSupplierRead,
     AdminTourTranslationUpsert,
 )
 from app.services.admin_handoff_write import (
@@ -54,6 +60,21 @@ from app.services.admin_order_write import (
 )
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
 from app.services.admin_read import AdminReadService
+from app.services.supplier_offer_moderation_service import (
+    SupplierOfferModerationNotFoundError,
+    SupplierOfferModerationService,
+    SupplierOfferModerationStateError,
+    SupplierOfferPublicationConfigError,
+)
+from app.services.supplier_offer_service import SupplierOfferService
+from app.schemas.supplier_admin import (
+    AdminSupplierOfferPublishResult,
+    AdminSupplierOfferRejectBody,
+    SupplierOfferListRead,
+    SupplierOfferRead,
+)
+from app.repositories.supplier import SupplierOfferRepository
+from app.services.admin_supplier_write import AdminSupplierDuplicateCodeError, AdminSupplierWriteService
 from app.services.admin_tour_write import (
     AdminBoardingPointInUseError,
     AdminBoardingPointNotFoundError,
@@ -781,3 +802,124 @@ def post_admin_handoff_reopen(
     if detail is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Handoff not found.")
     return detail
+
+
+@router.post("/suppliers", response_model=AdminSupplierCreatedRead, status_code=status.HTTP_201_CREATED)
+def post_admin_supplier(
+    db: Session = Depends(get_db),
+    payload: AdminSupplierCreate = Body(...),
+) -> AdminSupplierCreatedRead:
+    """Bootstrap a supplier account + API credential (central admin only)."""
+    try:
+        supplier, api_token = AdminSupplierWriteService().create_supplier_with_credential(
+            db,
+            code=payload.code,
+            display_name=payload.display_name,
+            credential_label=payload.credential_label,
+        )
+    except AdminSupplierDuplicateCodeError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Supplier code already exists.") from None
+    db.commit()
+    return AdminSupplierCreatedRead(supplier=AdminSupplierRead.model_validate(supplier), api_token=api_token)
+
+
+@router.get("/suppliers", response_model=AdminSupplierListRead)
+def get_admin_suppliers(
+    db: Session = Depends(get_db),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> AdminSupplierListRead:
+    stmt = select(Supplier).order_by(Supplier.created_at.desc(), Supplier.id.desc()).offset(offset).limit(limit)
+    rows = list(db.scalars(stmt).all())
+    return AdminSupplierListRead(
+        items=[AdminSupplierRead.model_validate(r) for r in rows],
+        total_returned=len(rows),
+    )
+
+
+@router.get("/suppliers/{supplier_id}", response_model=AdminSupplierRead)
+def get_admin_supplier(supplier_id: int, db: Session = Depends(get_db)) -> AdminSupplierRead:
+    row = db.get(Supplier, supplier_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found.")
+    return AdminSupplierRead.model_validate(row)
+
+
+@router.get("/suppliers/{supplier_id}/offers", response_model=SupplierOfferListRead)
+def get_admin_supplier_offers(
+    supplier_id: int,
+    db: Session = Depends(get_db),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> SupplierOfferListRead:
+    if db.get(Supplier, supplier_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found.")
+    svc = SupplierOfferService()
+    items = svc.list_offers(db, supplier_id=supplier_id, limit=limit, offset=offset)
+    return SupplierOfferListRead(items=items, total_returned=len(items))
+
+
+@router.get("/supplier-offers", response_model=SupplierOfferListRead)
+def list_admin_supplier_offers_moderation(
+    db: Session = Depends(get_db),
+    lifecycle_status: SupplierOfferLifecycle | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> SupplierOfferListRead:
+    items = SupplierOfferModerationService().list_offers(
+        db,
+        lifecycle_status=lifecycle_status,
+        limit=limit,
+        offset=offset,
+    )
+    return SupplierOfferListRead(items=items, total_returned=len(items))
+
+
+@router.get("/supplier-offers/{offer_id}", response_model=SupplierOfferRead)
+def get_admin_supplier_offer_by_id(offer_id: int, db: Session = Depends(get_db)) -> SupplierOfferRead:
+    row = SupplierOfferRepository().get_any(db, offer_id=offer_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.")
+    return SupplierOfferRead.model_validate(row, from_attributes=True)
+
+
+@router.post("/supplier-offers/{offer_id}/moderation/approve", response_model=SupplierOfferRead)
+def post_admin_supplier_offer_approve(offer_id: int, db: Session = Depends(get_db)) -> SupplierOfferRead:
+    try:
+        row = SupplierOfferModerationService().approve(db, offer_id=offer_id)
+    except SupplierOfferModerationNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    except SupplierOfferModerationStateError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return row
+
+
+@router.post("/supplier-offers/{offer_id}/moderation/reject", response_model=SupplierOfferRead)
+def post_admin_supplier_offer_reject(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminSupplierOfferRejectBody = Body(...),
+) -> SupplierOfferRead:
+    try:
+        row = SupplierOfferModerationService().reject(db, offer_id=offer_id, reason=payload.reason)
+    except SupplierOfferModerationNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    except SupplierOfferModerationStateError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return row
+
+
+@router.post("/supplier-offers/{offer_id}/publish", response_model=AdminSupplierOfferPublishResult)
+def post_admin_supplier_offer_publish(offer_id: int, db: Session = Depends(get_db)) -> AdminSupplierOfferPublishResult:
+    try:
+        offer_read, message_id = SupplierOfferModerationService().publish(db, offer_id=offer_id)
+    except SupplierOfferModerationNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    except SupplierOfferPublicationConfigError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=exc.message) from None
+    except SupplierOfferModerationStateError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return AdminSupplierOfferPublishResult(offer=offer_read, telegram_message_id=message_id)

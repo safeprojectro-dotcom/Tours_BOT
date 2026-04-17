@@ -36,12 +36,14 @@ from app.services.mini_app_booking import (
 )
 from app.services.mini_app_bookings import MiniAppBookingsService
 from app.services.mini_app_catalog import MiniAppCatalogService
+from app.repositories.tour import TourRepository
 from app.services.handoff_entry import HandoffEntryService
 from app.services.mini_app_help_settings import MiniAppHelpSettingsService
 from app.services.mini_app_reservation_preparation import MiniAppReservationPreparationService
 from app.services.mini_app_mock_payment import MiniAppMockPaymentCompletionService
 from app.services.mini_app_tour_detail import MiniAppTourDetailService
 from app.services.mini_app_waitlist import MiniAppWaitlistService
+from app.services.tour_sales_mode_policy import TourSalesModePolicyService
 
 router = APIRouter(prefix="/mini-app", tags=["mini-app"])
 
@@ -96,6 +98,18 @@ def post_mini_app_support_request(
     service = HandoffEntryService()
     hint = (payload.screen_hint or "unknown").replace("|", " ").strip()[:40] or "unknown"
     reason = f"{HandoffEntryService.REASON_MINI_APP_PREFIX}|{hint}"[:255]
+    tour_code = (payload.tour_code or "").strip()
+    if tour_code:
+        tour = TourRepository().get_by_code(session, code=tour_code)
+        if tour is not None and not TourSalesModePolicyService.policy_for_sales_mode(
+            tour.sales_mode
+        ).per_seat_self_service_allowed:
+            reason = HandoffEntryService.build_full_bus_sales_assistance_reason(
+                tour_code=tour.code,
+                sales_mode=tour.sales_mode.value,
+                channel="mini_app",
+                screen_hint=payload.screen_hint,
+            )
     handoff_id = service.create_for_telegram_user(
         session,
         telegram_user_id=payload.telegram_user_id,

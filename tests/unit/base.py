@@ -9,11 +9,21 @@ from sqlalchemy.orm import Session
 
 from app.db.session import engine
 from app.models.content_item import ContentItem
-from app.models.enums import BookingStatus, PaymentStatus, TourStatus
+from app.api.supplier_admin_auth import hash_supplier_api_token
+from app.models.enums import (
+    BookingStatus,
+    PaymentStatus,
+    SupplierOfferLifecycle,
+    SupplierOfferPaymentMode,
+    SupplierServiceComposition,
+    TourSalesMode,
+    TourStatus,
+)
 from app.models.handoff import Handoff
 from app.models.knowledge_base import KnowledgeBaseEntry
 from app.models.message import Message
 from app.models.order import Order
+from app.models.supplier import Supplier, SupplierApiCredential, SupplierOffer
 from app.models.payment import Payment
 from app.models.tour import BoardingPoint, Tour, TourTranslation
 from app.models.user import User
@@ -128,6 +138,58 @@ class FoundationDBTestCase(unittest.TestCase):
         self.session.add(order)
         self.session.flush()
         return order
+
+    def create_supplier(self, **overrides) -> Supplier:
+        index = self._next()
+        supplier = Supplier(
+            code=overrides.pop("code", f"SUP-{index}"),
+            display_name=overrides.pop("display_name", f"Supplier {index}"),
+            is_active=overrides.pop("is_active", True),
+            **overrides,
+        )
+        self.session.add(supplier)
+        self.session.flush()
+        return supplier
+
+    def create_supplier_credential(self, supplier: Supplier, plaintext_token: str, **overrides) -> SupplierApiCredential:
+        cred = SupplierApiCredential(
+            supplier_id=supplier.id,
+            token_hash=hash_supplier_api_token(plaintext_token),
+            label=overrides.pop("label", None),
+            created_at=overrides.pop("created_at", datetime.now(UTC)),
+            revoked_at=overrides.pop("revoked_at", None),
+            **overrides,
+        )
+        self.session.add(cred)
+        self.session.flush()
+        return cred
+
+    def create_supplier_offer(self, supplier: Supplier, **overrides) -> SupplierOffer:
+        index = self._next()
+        departure = overrides.pop("departure_datetime", datetime.now(UTC) + timedelta(days=7))
+        ret = overrides.pop("return_datetime", departure + timedelta(days=1))
+        offer = SupplierOffer(
+            supplier_id=supplier.id,
+            supplier_reference=overrides.pop("supplier_reference", None),
+            title=overrides.pop("title", f"Offer {index}"),
+            description=overrides.pop("description", "Description"),
+            program_text=overrides.pop("program_text", "Program"),
+            departure_datetime=departure,
+            return_datetime=ret,
+            transport_notes=overrides.pop("transport_notes", "Bus details"),
+            vehicle_label=overrides.pop("vehicle_label", "Coach 50"),
+            seats_total=overrides.pop("seats_total", 50),
+            base_price=overrides.pop("base_price", Decimal("120.00")),
+            currency=overrides.pop("currency", "EUR"),
+            service_composition=overrides.pop("service_composition", SupplierServiceComposition.TRANSPORT_ONLY),
+            sales_mode=overrides.pop("sales_mode", TourSalesMode.PER_SEAT),
+            payment_mode=overrides.pop("payment_mode", SupplierOfferPaymentMode.PLATFORM_CHECKOUT),
+            lifecycle_status=overrides.pop("lifecycle_status", SupplierOfferLifecycle.DRAFT),
+            **overrides,
+        )
+        self.session.add(offer)
+        self.session.flush()
+        return offer
 
     def create_payment(self, order: Order, **overrides) -> Payment:
         index = self._next()

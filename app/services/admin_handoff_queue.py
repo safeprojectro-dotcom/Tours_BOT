@@ -10,6 +10,26 @@ from datetime import UTC, datetime
 from app.services.handoff_entry import HandoffEntryService
 
 
+def compute_full_bus_sales_assistance_visibility(
+    *, reason: str
+) -> tuple[bool, str | None, dict[str, str] | None]:
+    """
+    Phase 7.1 / Step 5 — distinguish full-bus commercial assistance from generic support handoffs.
+
+    Returns (is_full_bus_sales_assistance, operator_label, parsed_key_values).
+    """
+    parsed = HandoffEntryService.parse_full_bus_sales_assistance(reason)
+    if parsed is None:
+        return False, None, None
+    tour = parsed.get("tour") or "—"
+    channel = parsed.get("channel") or "—"
+    sm = parsed.get("sales_mode", "")
+    label = f"Full-bus commercial assistance — tour {tour}, channel {channel}"
+    if sm:
+        label = f"{label}, sales_mode={sm}"
+    return True, label, parsed
+
+
 def compute_group_followup_visibility(*, reason: str) -> tuple[bool, str | None]:
     """
     Phase 7 / Step 9 — derived read-only labels for the group → private follow-up chain.

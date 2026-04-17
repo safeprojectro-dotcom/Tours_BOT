@@ -1,8 +1,16 @@
 # Commit / push / deploy — Phase 7.1 (Sales Mode)
 
-Two narrow slices: **Step 1** (admin + migration) and **Step 2** (backend policy — **no** migration).
+Operational checkpoints in this file: **Part A — Step 1** (admin + migration **`20260416_06`**); **Part B — Step 2** (backend policy — **no** migration); **Part C — Step 5** (operator-assisted full-bus path — structured handoff **`reason`** — **no** migration).
 
 **Handoff / continuity:** `docs/CHAT_HANDOFF.md` (**Current continuity state**, **Completed Steps** → Phase **7.1**, **Next Safe Step**).
+
+**V2 supplier marketplace — Track 0 (freeze):** before/after each future V2 track that touches booking, payments, ORM, Mini App, or bot, run the **must-not-break checklist** and **baseline smoke** in **`docs/TRACK_0_CORE_BOOKING_PLATFORM_BASELINE.md`**. Track **0** does **not** add features; it only documents compatibility and deploy guardrails.
+
+**V2 Track 1 (design acceptance):** documentation gate complete — see **`docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md`**. **Track 2+** implementation must still obey **migrate → deploy → smoke** and Track **0** §4–§5.
+
+**V2 Track 2 (Supplier Admin Foundation):** adds Alembic revision **`20260417_07`** (`suppliers`, `supplier_api_credentials`, `supplier_offers`, new enums; **no** DDL changes to **`tours`**, **`orders`**, or **`payments`**). **Do not** deploy application code that imports or routes to these models until **`python -m alembic upgrade head`** has been run on the target database (verify **`alembic current`** matches **`heads`**). After deploy, smoke **`/health`**, existing **`/mini-app/*`** catalog/booking paths, and **new** **`/admin/suppliers`** / **`/supplier-admin/offers`** if that environment uses Layer B. **Schema drift** on Track **2** surfaces as missing-relation errors on supplier routes, not necessarily on core catalog — still a release blocker. Details: **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** §17, §23.
+
+**V2 Track 3 (Supplier offer publication / moderation):** adds Alembic revision **`20260418_08`** (extends **`supplier_offer_lifecycle`** with **`approved`**, **`rejected`**, **`published`**; adds moderation/showcase columns on **`supplier_offers`**). **Env:** optional **`TELEGRAM_OFFER_SHOWCASE_CHANNEL_ID`** (and existing **`TELEGRAM_BOT_TOKEN`**, **`TELEGRAM_BOT_USERNAME`**, **`TELEGRAM_MINI_APP_URL`**) required for **`POST /admin/supplier-offers/{id}/publish`** to succeed. Same **migrate → deploy → smoke** gate; verify **`heads`** includes **`20260418_08`** when Track **3** code is deployed. **Stabilization:** publication is **admin-only** and **`publish`** requires **`approved`**; suppliers have **no** channel post path — see **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** §24 and **`docs/CURSOR_PROMPT_TRACK_3_STABILIZATION_AND_REVIEW_V2.md`**.
 
 ---
 
@@ -16,7 +24,7 @@ Two narrow slices: **Step 1** (admin + migration) and **Step 2** (backend policy
 python -m alembic upgrade head
 ```
 
-(Use a **reachable** `DATABASE_URL` for that environment — often the Railway **public** Postgres URL and a driver form such as **`postgresql+psycopg://...`** if running Alembic from a local shell.) **Do not** treat Mini App, private bot, or API fixes as the next step until **`alembic current`** on that database matches **`alembic heads`** (including **`20260416_06`** or later). Then redeploy if needed and smoke **`/health`**, catalog, and any tour-loading routes.
+(Use a **reachable** `DATABASE_URL` for that environment — often the Railway **public** Postgres URL and a driver form such as **`postgresql+psycopg://...`** if running Alembic from a local shell.) **Do not** treat Mini App, private bot, or API fixes as the next step until **`alembic current`** on that database matches **`alembic heads`** (including **`20260416_06`**, **`20260417_07`**, **`20260418_08`** as applicable when V2 Track **2** / **3** code is deployed). Then redeploy if needed and smoke **`/health`**, catalog, and any tour-loading routes.
 
 ---
 
@@ -243,10 +251,139 @@ Same non-goals as Step **1** for customer-visible behavior: booking creation sem
 
 ## B10. Explicitly postponed (not Step 2)
 
-- **Step 3** — Mini App + private bot **read-side** adaptation
+- **Step 3** — Mini App + private bot **read-side** adaptation (historical at Step **2** closure; see **`docs/CHAT_HANDOFF.md`** for Steps **3–4** + **5**)
 - **Reservation enforcement** for **`full_bus`**
 - **`full_bus_price`**, **`bus_capacity`**
-- Operator-assisted / direct whole-bus booking
+- **Direct** whole-bus **self-service** booking / payment *(Step **5** / **Part C** is **operator-assisted** handoff context only.)*
+
+---
+
+# Part C — Step 5 (operator-assisted full-bus path)
+
+**No database migration.** Narrow slice: structured **`full_bus_sales_assistance`** context in **`handoffs.reason`**, tour-aware private bot + Mini App assistance entry points, admin read triage fields. **Not** direct whole-bus booking or payment.
+
+---
+
+## C1. Step identity
+
+- **Phase 7.1 / Sales Mode / Step 5** — operator-assisted full-bus path (structured assistance / handoff **`reason`**).
+- **No migration** — context is encoded in existing **`handoffs.reason`** (varchar **255**).
+
+---
+
+## C2. What changed
+
+- **Structured assistance `reason`:** full-bus assistance uses a compact **`full_bus_sales_assistance|…`** encoding in **`handoffs.reason`** instead of only generic **`private_chat_contact`** / **`mini_app_support|…`** on those paths.
+- **Private bot:** **Request booking assistance** callback is **tour-scoped**; when policy disallows per-seat self-service, persisted handoff **`reason`** includes **tour code** and **`sales_mode`** (**`channel=private`**).
+- **Mini App:** optional **`tour_code`** on **`POST /mini-app/support-request`**; for non-self-service tours per policy, the same structured **`reason`** is used (**`channel=mini_app`**); assisted tour detail includes **Request full-bus assistance**.
+- **Admin handoff DTOs** (list, detail, order-embedded **`handoffs`**): **`is_full_bus_sales_assistance`**, **`full_bus_sales_assistance_label`**, **`assistance_context_tour_code`** — triage without requiring **`order_id`**.
+
+### Files changed
+
+- `app/services/handoff_entry.py`
+- `app/services/admin_handoff_queue.py`
+- `app/schemas/admin.py`
+- `app/services/admin_read.py`
+- `app/bot/constants.py`
+- `app/bot/keyboards.py`
+- `app/bot/handlers/private_entry.py`
+- `app/schemas/mini_app.py`
+- `app/api/routes/mini_app.py`
+- `mini_app/api_client.py`
+- `mini_app/app.py`
+- `mini_app/ui_strings.py`
+- `tests/unit/test_handoff_entry.py`
+- `tests/unit/test_admin_handoff_group_followup_visibility.py`
+- `tests/unit/test_api_admin.py`
+- `tests/unit/test_api_mini_app.py`
+- `tests/unit/test_bot_private_foundation.py`
+
+### Tests run (reference — focused slice, **passed**)
+
+From repo root (venv if applicable):
+
+```bash
+python -m pytest tests/unit/test_handoff_entry.py tests/unit/test_admin_handoff_group_followup_visibility.py tests/unit/test_api_admin.py::AdminRouteTests::test_handoffs_list_no_order_stable_shape tests/unit/test_api_admin.py::AdminRouteTests::test_handoffs_list_full_bus_sales_assistance_exposes_context tests/unit/test_api_mini_app.py::MiniAppCatalogRouteTests::test_support_request_with_full_bus_tour_code_uses_structured_reason tests/unit/test_api_mini_app.py::MiniAppCatalogRouteTests::test_support_request_per_seat_tour_code_stays_generic_mini_app tests/unit/test_bot_private_foundation.py::PrivateBotSalesModeReadTests::test_tour_detail_keyboard_prepare_vs_assistance -q
+```
+
+**Result:** **39 passed** (includes full **`test_handoff_entry`** and **`test_admin_handoff_group_followup_visibility`** modules in that invocation).
+
+**Optional broader check:** `python -m pytest tests/unit -q`
+
+---
+
+## C3. What did NOT change
+
+- **Direct whole-bus booking** — no self-service whole-bus reservation flow.
+- **Whole-bus payment** — no new payment path for charter/full-bus checkout.
+- **`TemporaryReservationService`** — not modified for this step.
+- **`reservation_creation.py`** — not modified for this step.
+- **Pricing engine** — no **`full_bus_price`** or commercial pricing expansion.
+- **Capacity model** — no **`bus_capacity`** or inventory semantics change.
+- **Broad operator workflow** — no Phase **7** **`grp_followup_*`** rewrite; no separate operator subsystem.
+- **Alembic / DDL** — no new revision for Step **5**.
+
+---
+
+## C4. Pre-commit checklist
+
+1. `python -m compileall app alembic tests`
+2. Run the focused pytest command in **§C2** (or full `tests/unit` if policy requires).
+3. If environment allows: `uvicorn app.main:app --reload` — **`GET /health`**, **`GET /healthz`** OK.
+4. Confirm **no migration** is required for Step **5** alone — target DB must **already** have **`tours.sales_mode`** (**Part A** / **`20260416_06`**) for Phase **7.1** code to run safely (see **Deploy-critical** at top).
+
+---
+
+## C5. Suggested commit message
+
+1. `feat(handoff): add structured full-bus assistance context`
+2. `feat: complete phase 7.1 operator-assisted full-bus path`
+3. `feat(admin): expose structured full-bus assistance context`
+
+---
+
+## C6. Push steps
+
+1. `git status` — confirm only intended paths (see **§C2** file list + any doc updates).
+2. `git add` the Step **5** files (adjust if paths differ).
+3. `git commit -m "<message from §C5>"`
+4. `git push` (current branch per team practice).
+
+---
+
+## C7. Deploy notes
+
+- **No new migration** in Step **5** — deploy **does not** add Alembic revisions for this slice.
+- **Prerequisite:** target environment must **already** have Phase **7.1** **`tours.sales_mode`** DDL applied (**`20260416_06`** or later per **`alembic heads`**) — same **Deploy-critical** gate as existing Phase **7.1** releases.
+- After deploy: verify **private bot**, **Mini App**, and **admin** handoff reads behave as expected (see **§C8**).
+
+---
+
+## C8. Post-deploy smoke
+
+- **Private bot:** open a **`full_bus`** tour → **Request booking assistance** → handoff row **`reason`** starts with **`full_bus_sales_assistance`** (not only **`private_chat_contact`** when tour/policy path applies).
+- **Mini App:** **`full_bus`** tour detail → **Request full-bus assistance** (or **`POST /mini-app/support-request`** with **`tour_code`**) → structured **`reason`** with **`channel=mini_app`**.
+- **Admin:** **`GET /admin/handoffs`** / detail — **`is_full_bus_sales_assistance`** true and **`assistance_context_tour_code`** set for those rows; **`full_bus_sales_assistance_label`** present.
+- **Per-seat:** **`per_seat`** tours — self-service and generic **`mini_app_support|…`** support requests **unchanged**; no regression on prepare/reservation where policy allows.
+
+---
+
+## C9. Rollback note
+
+- Revert the Step **5** commit(s) (code only). **No** Alembic downgrade tied to this slice.
+- Rollback **only** removes structured **`reason`** encoding and admin triage fields — existing **`handoffs`** rows written with **`full_bus_sales_assistance`** may remain in DB until closed/archived; operators should expect older clients not to show **`is_full_bus_sales_assistance`** if reverted.
+
+---
+
+## C10. Explicitly postponed (Step 5+ / product)
+
+- **Direct whole-bus reservation flow**
+- **Whole-bus payment flow**
+- **`full_bus_price`**, **`bus_capacity`**
+- **Pricing expansion**
+- **`TemporaryReservationService` / reservation engine refactor**
+- **Broad operator workflow rewrite**
+- Any **“many seats ⇒ whole bus”** heuristic
 
 ---
 

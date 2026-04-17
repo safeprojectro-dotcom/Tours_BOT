@@ -17,6 +17,7 @@ class HandoffEntryService:
     REASON_PRIVATE_HUMAN = "private_chat_human_request"
     REASON_GROUP_FOLLOWUP_START = "group_followup_start"
     REASON_MINI_APP_PREFIX = "mini_app_support"
+    REASON_FULL_BUS_SALES_ASSISTANCE = "full_bus_sales_assistance"
 
     def __init__(
         self,
@@ -24,6 +25,60 @@ class HandoffEntryService:
         handoff_repository: HandoffRepository | None = None,
     ) -> None:
         self._handoffs = handoff_repository or HandoffRepository()
+
+    @staticmethod
+    def _sanitize_reason_token(value: str, *, max_len: int) -> str:
+        return (value or "").replace("|", "_").strip()[:max_len]
+
+    @classmethod
+    def build_full_bus_sales_assistance_reason(
+        cls,
+        *,
+        tour_code: str,
+        sales_mode: str,
+        channel: str,
+        screen_hint: str | None = None,
+    ) -> str:
+        """
+        Compact structured reason for operator-assisted full-bus paths (Phase 7.1 / Step 5).
+
+        Stored in ``handoffs.reason`` (varchar 255); no extra DB columns.
+        """
+        tc = cls._sanitize_reason_token(tour_code, max_len=64) or "unknown"
+        sm = cls._sanitize_reason_token(sales_mode, max_len=24) or "full_bus"
+        ch = cls._sanitize_reason_token(channel, max_len=24) or "unknown"
+        parts = [
+            cls.REASON_FULL_BUS_SALES_ASSISTANCE,
+            f"tour={tc}",
+            f"sales_mode={sm}",
+            f"channel={ch}",
+        ]
+        if screen_hint:
+            hint = cls._sanitize_reason_token(screen_hint.replace("|", " "), max_len=36)
+            if hint:
+                parts.append(f"hint={hint}")
+        return "|".join(parts)[:255]
+
+    @staticmethod
+    def parse_full_bus_sales_assistance(reason: str) -> dict[str, str] | None:
+        prefix = HandoffEntryService.REASON_FULL_BUS_SALES_ASSISTANCE
+        if reason == prefix:
+            return {"tour": "", "sales_mode": "", "channel": ""}
+        if not reason.startswith(prefix + "|"):
+            return None
+        out: dict[str, str] = {}
+        for part in reason.split("|")[1:]:
+            if "=" not in part:
+                continue
+            key, _, val = part.partition("=")
+            key, val = key.strip(), val.strip()
+            if key:
+                out[key] = val
+        return out
+
+    @staticmethod
+    def is_full_bus_sales_assistance_reason(reason: str) -> bool:
+        return HandoffEntryService.parse_full_bus_sales_assistance(reason) is not None
 
     def _user_sync(self) -> TelegramUserContextService:
         settings = get_settings()

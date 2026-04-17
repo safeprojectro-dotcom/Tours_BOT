@@ -40,12 +40,15 @@ class MiniAppApiClient:
         telegram_user_id: int,
         order_id: int | None,
         screen_hint: str,
+        tour_code: str | None = None,
     ) -> MiniAppSupportRequestResponse:
-        body = {
+        body: dict[str, object] = {
             "telegram_user_id": telegram_user_id,
             "order_id": order_id,
             "screen_hint": screen_hint,
         }
+        if tour_code is not None:
+            body["tour_code"] = tour_code
         async with httpx.AsyncClient(base_url=self.base_url, timeout=15.0) as client:
             response = await client.post("/mini-app/support-request", json=body)
             response.raise_for_status()

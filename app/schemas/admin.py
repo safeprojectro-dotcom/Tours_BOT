@@ -383,6 +383,18 @@ class AdminHandoffSummaryItem(BaseModel):
         default=None,
         description="Phase 7 / Step 15: single queue bucket for group_followup_start only; None for other reasons.",
     )
+    is_full_bus_sales_assistance: bool = Field(
+        default=False,
+        description="True when reason is structured full_bus_sales_assistance (Phase 7.1 / Step 5).",
+    )
+    full_bus_sales_assistance_label: str | None = Field(
+        default=None,
+        description="Operator-facing label for full-bus commercial assistance; None when not applicable.",
+    )
+    assistance_context_tour_code: str | None = Field(
+        default=None,
+        description="Tour code from full_bus_sales_assistance reason payload when present.",
+    )
 
 
 class AdminHandoffAssignBody(BaseModel):
@@ -436,6 +448,18 @@ class AdminHandoffRead(BaseModel):
     group_followup_queue_state: GroupFollowupQueueState | None = Field(
         default=None,
         description="Phase 7 / Step 15: single queue bucket for group_followup_start only; None for other reasons.",
+    )
+    is_full_bus_sales_assistance: bool = Field(
+        default=False,
+        description="True when reason is structured full_bus_sales_assistance (Phase 7.1 / Step 5).",
+    )
+    full_bus_sales_assistance_label: str | None = Field(
+        default=None,
+        description="Operator-facing label for full-bus commercial assistance; None when not applicable.",
+    )
+    assistance_context_tour_code: str | None = Field(
+        default=None,
+        description="Tour code from full_bus_sales_assistance reason payload when present.",
     )
 
 
@@ -579,3 +603,44 @@ class AdminOverviewRead(BaseModel):
     orders_total_approx: int
     open_handoffs_count: int
     active_waitlist_entries_count: int
+
+
+class AdminSupplierRead(BaseModel):
+    """Central-admin visibility for Layer B suppliers (Track 2)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    code: str
+    display_name: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class AdminSupplierCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=1, max_length=64)
+    display_name: str = Field(min_length=1, max_length=255)
+    credential_label: str | None = Field(default=None, max_length=128)
+
+    @field_validator("code", "display_name", "credential_label")
+    @classmethod
+    def strip_ws(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        if not s:
+            raise ValueError("must not be empty or whitespace-only")
+        return s
+
+
+class AdminSupplierCreatedRead(BaseModel):
+    supplier: AdminSupplierRead
+    api_token: str = Field(description="Returned once; store securely (hashed at rest in DB).")
+
+
+class AdminSupplierListRead(BaseModel):
+    items: list[AdminSupplierRead]
+    total_returned: int

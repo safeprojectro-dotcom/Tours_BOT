@@ -270,6 +270,25 @@ class HandoffEntryServiceTests(FoundationDBTestCase):
             "start_grp_followup_resolved_intro",
         )
 
+    def test_full_bus_sales_assistance_reason_build_and_parse(self) -> None:
+        reason = HandoffEntryService.build_full_bus_sales_assistance_reason(
+            tour_code="CHARTER-1",
+            sales_mode="full_bus",
+            channel="private",
+            screen_hint="detail",
+        )
+        self.assertLessEqual(len(reason), 255)
+        self.assertTrue(reason.startswith(HandoffEntryService.REASON_FULL_BUS_SALES_ASSISTANCE + "|"))
+        parsed = HandoffEntryService.parse_full_bus_sales_assistance(reason)
+        self.assertIsNotNone(parsed)
+        assert parsed is not None
+        self.assertEqual(parsed.get("tour"), "CHARTER-1")
+        self.assertEqual(parsed.get("sales_mode"), "full_bus")
+        self.assertEqual(parsed.get("channel"), "private")
+        self.assertEqual(parsed.get("hint"), "detail")
+        self.assertTrue(HandoffEntryService.is_full_bus_sales_assistance_reason(reason))
+        self.assertFalse(HandoffEntryService.is_full_bus_sales_assistance_reason("private_chat_contact"))
+
     def test_group_followup_private_intro_key_other_reason_only(self) -> None:
         user = self.create_user(telegram_user_id=77_035)
         self.session.add(

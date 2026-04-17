@@ -483,6 +483,39 @@ class TourDetailScreen:
             self._set_loading(False)
             self.page.update()
 
+    async def _request_full_bus_assistance_from_detail(self) -> None:
+        lg = self.language_code
+        code = self.current_tour_code
+        if not code:
+            return
+        try:
+            r = await self.api_client.post_support_request(
+                telegram_user_id=self._dev_telegram_user_id,
+                order_id=None,
+                screen_hint="tour_detail_full_bus",
+                tour_code=code,
+            )
+        except Exception:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "support_request_error")),
+                action="OK",
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
+        if r.recorded and r.handoff_id is not None:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "support_request_success", ref=str(r.handoff_id))),
+                action="OK",
+            )
+        else:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "support_request_error")),
+                action="OK",
+            )
+        self.page.snack_bar.open = True
+        self.page.update()
+
     def _render_detail(
         self,
         detail: MiniAppTourDetailRead | None,
@@ -591,6 +624,10 @@ class TourDetailScreen:
                     [
                         ft.Text(shell(lg, "detail_assisted_booking_title"), weight=ft.FontWeight.W_600),
                         ft.Text(shell(lg, "detail_assisted_booking_body"), color=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.FilledButton(
+                            shell(lg, "btn_request_full_bus_assistance"),
+                            on_click=lambda _: self.page.run_task(self._request_full_bus_assistance_from_detail),
+                        ),
                     ],
                     spacing=6,
                 ),

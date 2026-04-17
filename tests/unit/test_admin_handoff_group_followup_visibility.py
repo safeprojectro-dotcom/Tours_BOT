@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 
 from app.services.admin_handoff_queue import (
+    compute_full_bus_sales_assistance_visibility,
     compute_group_followup_assignment_visibility,
     compute_group_followup_queue_state,
     compute_group_followup_resolution_label,
@@ -145,6 +146,31 @@ class ComputeGroupFollowupResolutionLabelTests(unittest.TestCase):
     def test_other_reason_closed_no_resolution_label(self) -> None:
         lbl = compute_group_followup_resolution_label(reason="private_contact", status="closed")
         self.assertIsNone(lbl)
+
+
+class ComputeFullBusSalesAssistanceVisibilityTests(unittest.TestCase):
+    def test_structured_reason_exposes_label(self) -> None:
+        reason = HandoffEntryService.build_full_bus_sales_assistance_reason(
+            tour_code="T-9",
+            sales_mode="full_bus",
+            channel="mini_app",
+        )
+        is_fb, label, parsed = compute_full_bus_sales_assistance_visibility(reason=reason)
+        self.assertTrue(is_fb)
+        self.assertIsNotNone(label)
+        self.assertIn("T-9", label or "")
+        self.assertIn("mini_app", label or "")
+        self.assertIsNotNone(parsed)
+        assert parsed is not None
+        self.assertEqual(parsed.get("tour"), "T-9")
+
+    def test_private_contact_not_flagged(self) -> None:
+        is_fb, label, parsed = compute_full_bus_sales_assistance_visibility(
+            reason=HandoffEntryService.REASON_PRIVATE_CONTACT,
+        )
+        self.assertFalse(is_fb)
+        self.assertIsNone(label)
+        self.assertIsNone(parsed)
 
 
 if __name__ == "__main__":

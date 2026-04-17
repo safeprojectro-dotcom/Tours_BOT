@@ -1,0 +1,127 @@
+"""Central-admin moderation + showcase publication for supplier offers (Track 3)."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+from sqlalchemy.orm import Session
+
+from app.core.config import Settings, get_settings
+from app.models.enums import SupplierOfferLifecycle
+from app.models.supplier import SupplierOffer
+from app.repositories.supplier import SupplierOfferRepository
+from app.schemas.supplier_admin import SupplierOfferRead
+from app.services.supplier_offer_showcase_message import format_supplier_offer_showcase_html
+from app.services.telegram_showcase_client import TelegramShowcaseSendError, send_channel_html_message
+
+
+class SupplierOfferModerationNotFoundError(Exception):
+    pass
+
+
+class SupplierOfferModerationStateError(Exception):
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__(message)
+
+
+class SupplierOfferPublicationConfigError(Exception):
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__(message)
+
+
+class SupplierOfferModerationService:
+    def __init__(self) -> None:
+        self._offers = SupplierOfferRepository()
+
+    def _row(self, session: Session, offer_id: int) -> SupplierOffer:
+        row = self._offers.get_any(session, offer_id=offer_id)
+        if row is None:
+            raise SupplierOfferModerationNotFoundError
+        return row
+
+    def _to_read(self, row: SupplierOffer) -> SupplierOfferRead:
+        return SupplierOfferRead.model_validate(row, from_attributes=True)
+
+    def approve(self, session: Session, *, offer_id: int) -> SupplierOfferRead:
+        row = self._row(session, offer_id)
+        if row.lifecycle_status != SupplierOfferLifecycle.READY_FOR_MODERATION:
+            raise SupplierOfferModerationStateError(
+                "Only offers in ready_for_moderation can be approved.",
+            )
+        row.lifecycle_status = SupplierOfferLifecycle.APPROVED
+        row.moderation_rejection_reason = None
+        session.add(row)
+        session.flush()
+        session.refresh(row)
+        return self._to_read(row)
+
+    def reject(self, session: Session, *, offer_id: int, reason: str) -> SupplierOfferRead:
+        row = self._row(session, offer_id)
+        if row.lifecycle_status != SupplierOfferLifecycle.READY_FOR_MODERATION:
+            raise SupplierOfferModerationStateError(
+                "Only offers in ready_for_moderation can be rejected.",
+            )
+        row.lifecycle_status = SupplierOfferLifecycle.REJECTED
+        row.moderation_rejection_reason = reason.strip()
+        session.add(row)
+        session.flush()
+        session.refresh(row)
+        return self._to_read(row)
+
+    def publish(
+        self,
+        session: Session,
+        *,
+        offer_id: int,
+        settings: Settings | None = None,
+    ) -> tuple[SupplierOfferRead, int]:
+        cfg = settings or get_settings()
+        row = self._row(session, offer_id)
+        if row.lifecycle_status == SupplierOfferLifecycle.PUBLISHED:
+            raise SupplierOfferModerationStateError("Offer is already published.")
+        if row.lifecycle_status != SupplierOfferLifecycle.APPROVED:
+            raise SupplierOfferModerationStateError(
+                "Only approved offers can be published to the showcase.",
+            )
+        channel_id = (cfg.telegram_offer_showcase_channel_id or "").strip()
+        token = (cfg.telegram_bot_token or "").strip()
+        if not channel_id or not token:
+            raise SupplierOfferPublicationConfigError(
+                "Set TELEGRAM_OFFER_SHOWCASE_CHANNEL_ID and TELEGRAM_BOT_TOKEN to publish.",
+            )
+        html_text = format_supplier_offer_showcase_html(row, cfg)
+        try:
+            message_id = send_channel_html_message(
+                bot_token=token,
+                chat_id=channel_id,
+                text=html_text,
+            )
+        except TelegramShowcaseSendError as exc:
+            raise SupplierOfferModerationStateError(f"Telegram publish failed: {exc}") from exc
+
+        row.lifecycle_status = SupplierOfferLifecycle.PUBLISHED
+        row.published_at = datetime.now(UTC)
+        row.showcase_chat_id = channel_id
+        row.showcase_message_id = message_id
+        session.add(row)
+        session.flush()
+        session.refresh(row)
+        return self._to_read(row), message_id
+
+    def list_offers(
+        self,
+        session: Session,
+        *,
+        lifecycle_status: SupplierOfferLifecycle | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[SupplierOfferRead]:
+        rows = self._offers.list_for_admin(
+            session,
+            lifecycle_status=lifecycle_status,
+            limit=limit,
+            offset=offset,
+        )
+        return [self._to_read(r) for r in rows]

@@ -16,7 +16,7 @@ from app.bot.constants import (
     CHANGE_PREPARED_SEATS_CALLBACK,
     CHANGE_LANGUAGE_CALLBACK,
     CREATE_TEMPORARY_RESERVATION_CALLBACK,
-    REQUEST_BOOKING_ASSISTANCE_CALLBACK,
+    REQUEST_BOOKING_ASSISTANCE_CALLBACK_PREFIX,
     FILTER_BUDGET_CALLBACK_PREFIX,
     FILTER_BY_BUDGET_CALLBACK,
     FILTER_BY_DATE_CALLBACK,
@@ -73,13 +73,17 @@ from app.bot.transient_messages import (
 )
 from app.core.config import get_settings
 from app.db.session import SessionLocal
+from app.models.tour import Tour
 from app.repositories.tour import TourRepository
 from app.services.handoff_entry import HandoffEntryService
+from app.models.enums import SupplierOfferLifecycle
+from app.models.supplier import SupplierOffer
 from app.services.group_private_cta import (
     START_PAYLOAD_GRP_FOLLOWUP,
     START_PAYLOAD_GRP_PRIVATE,
     match_group_cta_start_payload,
 )
+from app.services.supplier_offer_deep_link import parse_supplier_offer_start_arg
 from app.services.order_summary import OrderSummaryService
 from app.services.payment_entry import PaymentEntryService
 from app.services.reservation_creation import TemporaryReservationService
@@ -140,6 +144,29 @@ async def handle_start(
                 await _persist_group_followup_handoff(
                     message,
                     telegram_language_code=message.from_user.language_code,
+                )
+            await _send_catalog_overview(
+                message,
+                language_code=user.preferred_language,
+                prefer_edit=True,
+            )
+            return
+
+        showcase_offer_id = parse_supplier_offer_start_arg(raw_start)
+        if showcase_offer_id is not None:
+            sup_offer = session.get(SupplierOffer, showcase_offer_id)
+            if sup_offer is None or sup_offer.lifecycle_status != SupplierOfferLifecycle.PUBLISHED:
+                await message.answer(translate(user.preferred_language, "sup_offer_not_available"))
+            else:
+                intro = translate(user.preferred_language, "start_sup_offer_intro").format(
+                    title=sup_offer.title,
+                )
+                await message.answer(
+                    intro,
+                    reply_markup=build_private_home_keyboard(
+                        language_code=user.preferred_language,
+                        mini_app_url=settings.telegram_mini_app_url,
+                    ),
                 )
             await _send_catalog_overview(
                 message,
@@ -554,7 +581,7 @@ async def handle_language_selected(callback: CallbackQuery, state: FSMContext) -
     await _send_catalog_overview(callback.message, language_code=language_code)
 
 
-@router.callback_query(F.data == REQUEST_BOOKING_ASSISTANCE_CALLBACK)
+@router.callback_query(F.data.startswith(f"{REQUEST_BOOKING_ASSISTANCE_CALLBACK_PREFIX}:"))
 async def handle_request_booking_assistance(callback: CallbackQuery, state: FSMContext) -> None:
     language_code = await _resolve_callback_language(callback)
     await callback.answer()
@@ -581,10 +608,31 @@ async def handle_request_booking_assistance(callback: CallbackQuery, state: FSMC
         translate(language_code, "contact_command_reply"),
         reply_markup=markup,
     )
+    handoff_reason = HandoffEntryService.REASON_PRIVATE_CONTACT
+    raw_id = (
+        callback.data.removeprefix(f"{REQUEST_BOOKING_ASSISTANCE_CALLBACK_PREFIX}:")
+        if callback.data
+        else ""
+    )
+    try:
+        assistance_tour_id = int(raw_id)
+    except ValueError:
+        assistance_tour_id = 0
+    if assistance_tour_id > 0:
+        with SessionLocal() as session:
+            tour = session.get(Tour, assistance_tour_id)
+            if tour is not None and not TourSalesModePolicyService.policy_for_sales_mode(
+                tour.sales_mode
+            ).per_seat_self_service_allowed:
+                handoff_reason = HandoffEntryService.build_full_bus_sales_assistance_reason(
+                    tour_code=tour.code,
+                    sales_mode=tour.sales_mode.value,
+                    channel="private",
+                )
     await _send_handoff_follow_up(
         callback.message,
         language_code=language_code,
-        reason=HandoffEntryService.REASON_PRIVATE_CONTACT,
+        reason=handoff_reason,
     )
 
 

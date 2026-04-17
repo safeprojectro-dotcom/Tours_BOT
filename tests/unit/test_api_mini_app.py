@@ -10,7 +10,9 @@ from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
 from app.models.enums import TourSalesMode, TourStatus
+from app.models.handoff import Handoff
 from app.models.waitlist import WaitlistEntry
+from app.services.handoff_entry import HandoffEntryService
 from app.repositories.user import UserRepository
 from tests.unit.base import FoundationDBTestCase
 
@@ -465,6 +467,67 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertTrue(len(body["categories"]) >= 1)
         self.assertIn("operator_notice", body)
         self.assertIn("not implemented", body["operator_notice"].lower())
+
+    def test_support_request_with_full_bus_tour_code_uses_structured_reason(self) -> None:
+        self.create_user(telegram_user_id=888_101)
+        tour = self.create_tour(
+            code="MINI-FB-SUPPORT",
+            title_default="Charter API",
+            departure_datetime=datetime(2026, 9, 1, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 9, 2, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.create_boarding_point(tour)
+        self.session.commit()
+
+        response = self.client.post(
+            "/mini-app/support-request",
+            json={
+                "telegram_user_id": 888_101,
+                "order_id": None,
+                "tour_code": tour.code,
+                "screen_hint": "tour_detail",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        hid = response.json()["handoff_id"]
+        self.assertIsNotNone(hid)
+        row = self.session.get(Handoff, hid)
+        self.assertIsNotNone(row)
+        assert row is not None
+        self.assertTrue(HandoffEntryService.is_full_bus_sales_assistance_reason(row.reason))
+        self.assertIn("MINI-FB-SUPPORT", row.reason)
+        self.assertIn("mini_app", row.reason)
+
+    def test_support_request_per_seat_tour_code_stays_generic_mini_app(self) -> None:
+        self.create_user(telegram_user_id=888_102)
+        tour = self.create_tour(
+            code="MINI-PS-SUPPORT",
+            title_default="Per seat API",
+            departure_datetime=datetime(2026, 9, 2, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 9, 3, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+        )
+        self.create_boarding_point(tour)
+        self.session.commit()
+
+        response = self.client.post(
+            "/mini-app/support-request",
+            json={
+                "telegram_user_id": 888_102,
+                "order_id": None,
+                "tour_code": tour.code,
+                "screen_hint": "help",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        hid = response.json()["handoff_id"]
+        row = self.session.get(Handoff, hid)
+        self.assertIsNotNone(row)
+        assert row is not None
+        self.assertFalse(HandoffEntryService.is_full_bus_sales_assistance_reason(row.reason))
+        self.assertTrue(row.reason.startswith(f"{HandoffEntryService.REASON_MINI_APP_PREFIX}|"))
 
     def test_mini_app_settings_route_returns_supported_languages(self) -> None:
         response = self.client.get("/mini-app/settings")

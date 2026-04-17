@@ -40,8 +40,9 @@ _STR: dict[str, dict[str, str]] = {
         "prepare_reservation": "Prepare reservation",
         "catalog_card_assisted_notice": "Whole-bus / charter offer — open details. Seat-by-seat self-booking is not available here.",
         "detail_assisted_booking_title": "Assistance required",
-        "detail_assisted_booking_body": "This tour is sold as a whole-bus / charter style offer. Use Help in the header to contact us. "
+        "detail_assisted_booking_body": "This tour is sold as a whole-bus / charter style offer. Tap the button below to send a structured assistance request to the team, or use Help in the header. "
         "The standard seat reservation flow is not available in this app for this departure.",
+        "btn_request_full_bus_assistance": "Request full-bus assistance",
         "preparation_assisted_title": "Self-service reservation not available",
         "preparation_assisted_body": "This tour uses a whole-bus / charter style offer. Use Help to reach the team. "
         "You cannot complete a seat hold from this screen.",
@@ -196,8 +197,9 @@ _STR: dict[str, dict[str, str]] = {
         "prepare_reservation": "Pregateste rezervarea",
         "catalog_card_assisted_notice": "Oferta autocar complet — vezi detalii. Rezervare loc cu loc nu e disponibila aici.",
         "detail_assisted_booking_title": "Este nevoie de asistenta",
-        "detail_assisted_booking_body": "Acest tur este oferit ca inchiriere autocar / grup complet. Foloseste Ajutor din antet pentru contact. "
+        "detail_assisted_booking_body": "Acest tur este oferit ca inchiriere autocar / grup complet. Apasa butonul de mai jos pentru o cerere structurata catre echipa sau foloseste Ajutor din antet. "
         "Fluxul standard de rezervare loc cu loc nu e disponibil in aplicatie pentru aceasta plecare.",
+        "btn_request_full_bus_assistance": "Solicita asistenta autocar complet",
         "preparation_assisted_title": "Rezervare self-service indisponibila",
         "preparation_assisted_body": "Acest tur foloseste o oferta tip autocar complet. Foloseste Ajutor pentru echipa. "
         "Nu poti finaliza un hold de locuri din acest ecran.",
