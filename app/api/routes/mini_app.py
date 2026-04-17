@@ -17,6 +17,7 @@ from app.schemas.custom_marketplace import (
 from app.schemas.mini_app import (
     MiniAppBookingDetailRead,
     MiniAppBookingsListRead,
+    MiniAppBridgeExecutionPreparationResponse,
     MiniAppCatalogFiltersRead,
     MiniAppCatalogRead,
     MiniAppCreateReservationRequest,
@@ -54,6 +55,14 @@ from app.services.custom_marketplace_request_service import (
     CustomMarketplaceRequestNotFoundError,
     CustomMarketplaceRequestService,
     CustomMarketplaceUserNotFoundError,
+)
+from app.services.custom_request_booking_bridge_execution import (
+    BridgeExecutionBlocked,
+    CustomRequestBookingBridgeExecutionService,
+)
+from app.services.custom_request_booking_bridge_service import (
+    BookingBridgeNotFoundError,
+    BookingBridgeValidationError,
 )
 
 router = APIRouter(prefix="/mini-app", tags=["mini-app"])
@@ -163,6 +172,78 @@ def get_mini_app_custom_request_for_customer(
         ) from None
     except CustomMarketplaceRequestNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found.") from None
+
+
+@router.get(
+    "/custom-requests/{request_id}/booking-bridge/preparation",
+    response_model=MiniAppBridgeExecutionPreparationResponse,
+)
+def get_custom_request_booking_bridge_preparation(
+    request_id: int,
+    telegram_user_id: int = Query(gt=0),
+    language_code: str | None = Query(default=None),
+    session: Session = Depends(get_db),
+) -> MiniAppBridgeExecutionPreparationResponse:
+    """Track 5b.2: explicit bridge execution entry — reuse Layer A preparation (no hold, no payment)."""
+    try:
+        return CustomRequestBookingBridgeExecutionService().get_execution_preparation(
+            session,
+            request_id=request_id,
+            telegram_user_id=telegram_user_id,
+            language_code=language_code,
+        )
+    except BookingBridgeNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=exc.message,
+        ) from None
+    except BookingBridgeValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=exc.message,
+        ) from None
+
+
+@router.post(
+    "/custom-requests/{request_id}/booking-bridge/reservations",
+    response_model=OrderSummaryRead,
+)
+def create_custom_request_booking_bridge_reservation(
+    request_id: int,
+    payload: MiniAppCreateReservationRequest,
+    language_code: str | None = Query(default=None),
+    session: Session = Depends(get_db),
+) -> OrderSummaryRead:
+    """Track 5b.2: explicit bridge execution — reuse existing temporary reservation path (no new payment)."""
+    try:
+        summary = CustomRequestBookingBridgeExecutionService().create_execution_reservation(
+            session,
+            request_id=request_id,
+            telegram_user_id=payload.telegram_user_id,
+            seats_count=payload.seats_count,
+            boarding_point_id=payload.boarding_point_id,
+            language_code=language_code,
+        )
+    except BookingBridgeNotFoundError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=exc.message,
+        ) from None
+    except BookingBridgeValidationError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=exc.message,
+        ) from None
+    except BridgeExecutionBlocked as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": exc.code, "message": exc.message},
+        ) from None
+    session.commit()
+    return summary
 
 
 @router.post("/support-request", response_model=MiniAppSupportRequestResponse)

@@ -1,7 +1,11 @@
-"""Track 5b.1: admin-triggered RFQ booking bridge — no reservation or payment."""
+"""Track 5b.1: admin-triggered RFQ booking bridge — no reservation or payment.
+
+Track 5b.2 adds customer execution context resolution (orchestration only — Layer A holds unchanged).
+"""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
@@ -15,7 +19,10 @@ from app.models.enums import (
     TourStatus,
 )
 from app.models.tour import Tour
+from app.models.user import User
 from app.repositories.custom_request_booking_bridge import CustomRequestBookingBridgeRepository
+from app.repositories.user import UserRepository
+from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
 from app.schemas.custom_marketplace import (
     AdminCustomRequestBookingBridgeCreate,
     AdminCustomRequestBookingBridgePatch,
@@ -39,6 +46,17 @@ class BookingBridgeConflictError(BookingBridgeError):
 
 class BookingBridgeNotFoundError(BookingBridgeError):
     pass
+
+
+@dataclass(frozen=True)
+class CustomerBridgeExecutionContext:
+    """Validated RFQ bridge + request + tour + customer for explicit Layer A entry (Track 5b.2)."""
+
+    bridge: CustomRequestBookingBridge
+    request: CustomMarketplaceRequest
+    response: SupplierCustomRequestResponse
+    tour: Tour
+    user: User
 
 
 _ALLOWED_REQUEST_STATUSES: frozenset[CustomMarketplaceRequestStatus] = frozenset(
@@ -70,6 +88,60 @@ class CustomRequestBookingBridgeService:
         if tour.seats_available < 1:
             raise BookingBridgeValidationError("Tour must have at least one available seat for future booking.")
         return tour
+
+    def load_tour_validated_for_customer_execution(self, session: Session, *, tour_id: int) -> Tour:
+        """Same window checks as bridge link time, plus customer-facing catalog visibility (time only)."""
+        tour = self._validate_tour_for_future_execution(session, tour_id=tour_id)
+        if not tour_is_customer_catalog_visible(
+            departure_datetime=tour.departure_datetime,
+            sales_deadline=tour.sales_deadline,
+        ):
+            raise BookingBridgeValidationError(
+                "Tour is not in a customer-bookable window (departure or sales deadline).",
+            )
+        return tour
+
+    def resolve_customer_execution_context(
+        self,
+        session: Session,
+        *,
+        request_id: int,
+        telegram_user_id: int,
+    ) -> CustomerBridgeExecutionContext:
+        """Explicit execution gate: active bridge, linked tour, request/selection integrity, owning user."""
+        user = UserRepository().get_by_telegram_user_id(session, telegram_user_id=telegram_user_id)
+        if user is None:
+            raise BookingBridgeNotFoundError("User not found.")
+        req = session.get(CustomMarketplaceRequest, request_id)
+        if req is None:
+            raise BookingBridgeNotFoundError("Request not found.")
+        if req.user_id != user.id:
+            raise BookingBridgeValidationError("Request does not belong to this user.")
+        bridge = self._bridges.get_active_for_request(session, request_id=request_id)
+        if bridge is None:
+            raise BookingBridgeNotFoundError("No active booking bridge for this request.")
+        if bridge.user_id != user.id:
+            raise BookingBridgeValidationError("Booking bridge does not match this user.")
+        if bridge.tour_id is None:
+            raise BookingBridgeValidationError(
+                "Booking bridge has no linked tour. Ask the team to link a tour before continuing.",
+            )
+        resp = self._validate_eligibility(session, req=req)
+        if (
+            bridge.selected_supplier_response_id != resp.id
+            or req.selected_supplier_response_id != resp.id
+        ):
+            raise BookingBridgeValidationError(
+                "Booking bridge is out of sync with the current request selection.",
+            )
+        tour = self.load_tour_validated_for_customer_execution(session, tour_id=bridge.tour_id)
+        return CustomerBridgeExecutionContext(
+            bridge=bridge,
+            request=req,
+            response=resp,
+            tour=tour,
+            user=user,
+        )
 
     def _validate_eligibility(
         self,

@@ -13,7 +13,8 @@ Deliver supplier-admin and request-marketplace capabilities as a major platform 
 | **3** — Supplier offer publication | **Completed (implementation)** — moderation (`approved`/`rejected`), showcase publish to Telegram channel (`published`), `supoffer_<id>` private `/start` CTA; Alembic **`20260418_08`** | — |
 | **4** — Request marketplace foundation | **Completed (implementation)** — Layer C RFQ intake (Mini App + `/custom_request`), supplier list/respond (`declined`/`proposed`), admin list/detail/patch; Alembic **`20260421_10`**; stabilization **`docs/CURSOR_PROMPT_TRACK_4_STABILIZATION_AND_REVIEW_V2.md`** | **Track 5a** (below) |
 | **5a** — Commercial resolution selection foundation | **Completed (implementation)** — admin **`POST /admin/custom-requests/{id}/resolution`**, selection FK + resolution kind + statuses; customer minimal status reads; **no** order/reservation/payment bridge; Alembic **`20260422_11`**; **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** §26 | **Track 5b.1** (below) |
-| **5b.1** — RFQ booking bridge record | **Completed (implementation)** — **`custom_request_booking_bridges`**, admin **`POST/PATCH .../booking-bridge`**, detail read; **no** hold/payment; Alembic **`20260423_12`**; §27 | **Track 5b.2+** — customer continue + Layer A execution (when approved) |
+| **5b.1** — RFQ booking bridge record | **Completed (implementation)** — **`custom_request_booking_bridges`**, admin **`POST/PATCH .../booking-bridge`**, detail read; **no** hold/payment; Alembic **`20260423_12`**; §27 | **Track 5b.2** (below) |
+| **5b.2** — RFQ bridge execution entry | **Completed (implementation + stabilization reviewed)** — Mini App **`GET/POST .../custom-requests/{id}/booking-bridge/preparation|reservations`**; policy gate; reuse Layer A prep + hold; **no** migration; §28 | **5b.3+** — payment-entry UX from bridge context (existing **`payment-entry`** only) |
 
 ## Scope Guardrails
 - no code implementation in this document
@@ -214,9 +215,19 @@ Deliver supplier-admin and request-marketplace capabilities as a major platform 
 **Stabilization review (closure)**
 - **Additive / isolated:** bridge table is separate from **`orders`**; FKs **`RESTRICT`** / **`SET NULL`** on **`tour_id`** only; resolution endpoint does **not** create bridges.
 - **Uniqueness:** one **active** bridge per request (**409** on duplicate **POST**); see **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** §27 for optional future DB uniqueness if needed.
-- **Tour link:** validates sellable **time + inventory** for **`open_for_sale`** only; **does not** call **`TourSalesModePolicyService`** — **`full_bus`** link is **non-executing** until **Track 5b.2+** explicitly invokes Layer A with policy checks.
+- **Tour link:** validates sellable **time + inventory** for **`open_for_sale`** only; **does not** call **`TourSalesModePolicyService`** at link time — **`Track 5b.2`** applies policy on **customer execution** ( **`full_bus`** → blocked / assisted).
 
-**Next safe track:** **Track 5b.2+** (explicit scope) — customer “continue to booking”, **`TourSalesModePolicyService`** on execution path, hold/payment via existing Layer A services only when approved; or continue **Phase 7.1 Step 6** / Track **0** baseline work if marketplace execution is not next.
+**Next safe track:** **Track 5b.3+** — bridge-scoped payment entry (**existing** `POST .../payment-entry` only), RFQ UI wiring, supersede/cancel bridge; or **Phase 7.1 Step 6** / Track **0** baseline if product pauses marketplace execution.
+
+## Track 5b.2 - RFQ bridge execution entry (preparation + hold)
+**Status (implementation):** **completed** — explicit Mini App routes; **`CustomRequestBookingBridgeExecutionService`** orchestrates into **`MiniAppReservationPreparationService`** + **`MiniAppBookingService`**; **`TourSalesModePolicyService`** enforced; **no** new payment provider behavior.
+
+**Implementation record**
+- **Routes:** **`GET /mini-app/custom-requests/{id}/booking-bridge/preparation`**, **`POST /mini-app/custom-requests/{id}/booking-bridge/reservations`**.
+- **Context:** **`CustomRequestBookingBridgeService.resolve_customer_execution_context`**, **`load_tour_validated_for_customer_execution`** (catalog visibility).
+- **Non-goals:** no **`payment-entry`** in this slice; no implicit execution on resolution/bridge admin actions.
+
+**Stabilization review (closure):** **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** §28 — no payment side effects; **`full_bus`** non-self-serve; standard **`/mini-app/tours/...`** booking paths unchanged; optional follow-up: **404** vs **400** for unknown **`telegram_user_id`** on bridge routes.
 
 ## Track 5 - Commercial Resolution Layer
 **Goal**

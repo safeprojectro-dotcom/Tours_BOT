@@ -79,6 +79,17 @@ class MiniAppReservationPreparationRead(BaseModel):
     sales_mode_policy: TourSalesModePolicyRead
 
 
+class MiniAppBridgeExecutionPreparationResponse(BaseModel):
+    """Track 5b.2: bridge-scoped preparation — self-service or explicit blocked/assisted result."""
+
+    self_service_available: bool
+    blocked_code: str | None = None
+    blocked_message: str | None = None
+    preparation: MiniAppReservationPreparationRead | None = None
+    tour_code: str
+    sales_mode_policy: TourSalesModePolicyRead
+
+
 class MiniAppCreateReservationRequest(BaseModel):
     """Body for Mini App temporary reservation until Telegram init-data auth exists."""
 

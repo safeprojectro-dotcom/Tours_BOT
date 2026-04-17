@@ -748,7 +748,7 @@ closed for **Track 5a** scope (selection + resolution recording + review); **no*
 - **Admin read:** **`GET /admin/custom-requests/{id}`** includes **`booking_bridge`** (latest row for that request).
 
 ### Residual debt / forward hooks
-- **Track 5b.2+:** customer “continue to booking”, invoke prepare/hold/payment via existing Layer A services; supersede/cancel bridge workflows; handoff integration — **explicit** slices only.
+- **Track 5b.3+:** payment entry UX from bridge context (reuse existing **`payment-entry`** only); supersede/cancel bridge workflows; handoff integration; optional admin “open booking for customer” — **explicit** slices only.
 - **Concurrency (low priority):** duplicate active bridge prevention is enforced in **`CustomRequestBookingBridgeService.create_bridge`** before insert (**409**). A rare double-**POST** race could still insert two rows until a **partial unique index** (one active status per **`request_id`**) is added — only if ops reports issues.
 
 ### Stabilization review (Track 5b.1 — closure)
@@ -759,4 +759,30 @@ closed for **Track 5a** scope (selection + resolution recording + review); **no*
 - **Supplier / customer reads:** **`get_open_for_supplier`** builds detail **without** **`booking_bridge`** (remains **admin-only** inspection in **5b.1**).
 
 ### Status
-closed for **Track 5b.1** scope (bridge persistence + admin API + tests + stabilization review); execution remains **postponed**
+closed for **Track 5b.1** scope (bridge persistence + admin API + tests + stabilization review); explicit customer execution entry — **§28**
+
+---
+
+## 28. V2 Track 5b.2 — RFQ bridge execution entry (preparation + existing hold)
+
+### Current decision
+- **No new migration** — orchestration + Mini App routes only.
+- **Explicit customer entry:** **`GET /mini-app/custom-requests/{id}/booking-bridge/preparation`**, **`POST /mini-app/custom-requests/{id}/booking-bridge/reservations`** — **not** side effects of **5a** resolution or **5b.1** admin bridge create/patch.
+- **Gates:** **`CustomRequestBookingBridgeService.resolve_customer_execution_context`** — active bridge, **`tour_id`** set, request/selection/bridge integrity, owning **`telegram_user_id`**, execution-time tour + **`tour_is_customer_catalog_visible`**.
+- **Policy:** **`TourSalesModePolicyService`** before hold; **`full_bus`** / non-self-serve → **200** blocked envelope on preparation **`GET`**; **`400`** **`operator_assistance_required`** on **`POST`** hold — **no** silent whole-bus self-serve.
+- **Layer A reuse:** **`MiniAppReservationPreparationService.get_preparation`**, **`MiniAppBookingService.create_temporary_reservation`** — **no** new payment path; **no** payment rows created by this slice.
+- **Bridge status:** after successful hold, active bridge → **`customer_notified`** (minimal progression).
+
+### Residual debt / forward hooks
+- Customer Mini App UX copy/CTA wiring from RFQ detail to these routes; **`POST .../payment-entry`** after hold using existing order id; **`closed_external`** guardrails if needed on execution routes.
+
+### Stabilization review (Track 5b.2 — closure)
+- **Scope creep:** **None found** — **`custom_request_booking_bridge_execution.py`**, **`mini_app.py`** bridge routes, **`custom_request_booking_bridge_service.py`** execution context: **no** **`PaymentEntryService`**, **no** **`start_payment_entry`**, **no** implicit calls from **`admin_apply_resolution`** or **`create_bridge`** / **`patch_bridge`** (verified **`custom_marketplace_request_service`** still only **`read_for_admin_detail`** for bridges).
+- **Policy:** **`TourSalesModePolicyService.policy_for_tour`** in **`get_execution_preparation`** and **`create_execution_reservation`** before Layer A prep/hold; **`MiniAppBookingService.create_temporary_reservation`** still enforces policy internally (**defense in depth**).
+- **Layer A:** **`TemporaryReservationService`** only via existing **`MiniAppBookingService`**; **no** parallel reservation engine.
+- **`full_bus`:** preparation returns **200** blocked envelope; reservation **400** **`operator_assistance_required`** — **no** self-serve hold.
+- **Bridge status:** **`customer_notified`** only after **successful** hold (**acceptable** minimal slice); preparation **GET** does **not** mutate bridge.
+- **HTTP nuance (deferrable):** unknown **`telegram_user_id`** raises **`BookingBridgeNotFoundError`** → **404** `"User not found."` — slightly coarse vs **`400`** on other RFQ routes; **narrow later** only if clients need distinct **`unknown_user`** vs **`no_bridge`**.
+
+### Status
+closed for **Track 5b.2** scope (explicit preparation + hold orchestration + tests + stabilization review); payment initiation from bridge context **postponed** (**5b.3+**)
