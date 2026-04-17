@@ -39,6 +39,31 @@ def _verify_webhook_secret(header_token: str | None, expected: str | None) -> bo
     return secrets.compare_digest(header_token, expected)
 
 
+def _log_temp_channel_post_chat_debug(payload: dict[str, Any]) -> None:
+    """
+    TEMPORARY — remove after TELEGRAM_OFFER_SHOWCASE_CHANNEL_ID is confirmed.
+
+    Logs channel identity for `channel_post` / `edited_channel_post` updates only.
+    Does not branch on content or alter dispatch.
+    """
+    for update_type in ("channel_post", "edited_channel_post"):
+        if update_type not in payload:
+            continue
+        inner = payload.get(update_type)
+        if not isinstance(inner, dict):
+            continue
+        chat = inner.get("chat")
+        if not isinstance(chat, dict):
+            continue
+        logger.info(
+            "TEMP_DEBUG_SHOWCASE_CHANNEL update_type=%s chat.id=%s chat.title=%r chat.type=%s",
+            update_type,
+            chat.get("id"),
+            chat.get("title"),
+            chat.get("type"),
+        )
+
+
 async def _process_update(dispatcher: Dispatcher, bot: Bot, payload: dict[str, Any]) -> None:
     try:
         result = await dispatcher.feed_raw_update(bot=bot, update=payload)
@@ -80,6 +105,8 @@ async def receive_telegram_webhook(
 
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Update payload must be a JSON object.")
+
+    _log_temp_channel_post_chat_debug(payload)
 
     background_tasks.add_task(_process_update, dispatcher, bot, payload)
     return TelegramWebhookAck()
