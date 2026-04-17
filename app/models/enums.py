@@ -117,6 +117,17 @@ class SupplierCustomRequestResponseKind(StrEnum):
     PROPOSED = "proposed"
 
 
+class CustomRequestBookingBridgeStatus(StrEnum):
+    """Layer C → Layer A execution intent (Track 5b.1) — not an order lifecycle."""
+
+    PENDING_VALIDATION = "pending_validation"
+    READY = "ready"
+    LINKED_TOUR = "linked_tour"
+    CUSTOMER_NOTIFIED = "customer_notified"
+    SUPERSEDED = "superseded"
+    CANCELLED = "cancelled"
+
+
 def sqlalchemy_enum(enum_cls: type[StrEnum], *, name: str) -> SQLAlchemyEnum:
     return SQLAlchemyEnum(
         enum_cls,

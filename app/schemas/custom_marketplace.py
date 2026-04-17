@@ -12,6 +12,7 @@ from app.models.enums import (
     CustomMarketplaceRequestSource,
     CustomMarketplaceRequestStatus,
     CustomMarketplaceRequestType,
+    CustomRequestBookingBridgeStatus,
     SupplierCustomRequestResponseKind,
 )
 
@@ -113,10 +114,63 @@ class SupplierCustomRequestResponseRead(BaseModel):
     updated_at: datetime
 
 
+class CustomRequestBookingBridgeRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    request_id: int
+    selected_supplier_response_id: int
+    user_id: int
+    tour_id: int | None
+    bridge_status: CustomRequestBookingBridgeStatus
+    admin_note: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class CustomMarketplaceRequestDetailRead(BaseModel):
     request: CustomMarketplaceRequestRead
     responses: list[SupplierCustomRequestResponseRead]
     customer_telegram_user_id: int | None = None
+    booking_bridge: CustomRequestBookingBridgeRead | None = None
+
+
+class AdminCustomRequestBookingBridgeCreate(BaseModel):
+    """Track 5b.1: admin explicitly creates execution intent — no Layer A side effects."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tour_id: int | None = Field(default=None, gt=0)
+    admin_note: str | None = Field(default=None, max_length=8000)
+
+    @field_validator("admin_note")
+    @classmethod
+    def strip_note(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s or None
+
+
+class AdminCustomRequestBookingBridgePatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tour_id: int | None = Field(default=None, gt=0)
+    admin_note: str | None = Field(default=None, max_length=8000)
+
+    @field_validator("admin_note")
+    @classmethod
+    def strip_note(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s or None
+
+    @model_validator(mode="after")
+    def at_least_one(self) -> AdminCustomRequestBookingBridgePatch:
+        if self.tour_id is None and self.admin_note is None:
+            raise ValueError("Provide tour_id and/or admin_note.")
+        return self
 
 
 class SupplierCustomRequestResponseUpsert(BaseModel):

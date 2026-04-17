@@ -72,12 +72,21 @@ from app.services.custom_marketplace_request_service import (
     CustomMarketplaceRequestService,
     CustomMarketplaceValidationError,
 )
+from app.services.custom_request_booking_bridge_service import (
+    BookingBridgeConflictError,
+    BookingBridgeNotFoundError,
+    BookingBridgeValidationError,
+    CustomRequestBookingBridgeService,
+)
 from app.schemas.custom_marketplace import (
+    AdminCustomRequestBookingBridgeCreate,
+    AdminCustomRequestBookingBridgePatch,
     AdminCustomRequestPatch,
     AdminCustomRequestResolutionApply,
     CustomMarketplaceRequestDetailRead,
     CustomMarketplaceRequestListRead,
     CustomMarketplaceRequestRead,
+    CustomRequestBookingBridgeRead,
 )
 from app.schemas.supplier_admin import (
     AdminSupplierOfferPublishResult,
@@ -991,6 +1000,56 @@ def post_admin_custom_request_resolution(
     except CustomMarketplaceRequestNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found.") from None
     except CustomMarketplaceValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return row
+
+
+@router.post(
+    "/custom-requests/{request_id}/booking-bridge",
+    response_model=CustomRequestBookingBridgeRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def post_admin_custom_request_booking_bridge(
+    request_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminCustomRequestBookingBridgeCreate = Body(...),
+) -> CustomRequestBookingBridgeRead:
+    """Track 5b.1: explicit admin trigger — persists intent only (no reservation/payment)."""
+    try:
+        row = CustomRequestBookingBridgeService().create_bridge(
+            db,
+            request_id=request_id,
+            payload=payload,
+        )
+    except BookingBridgeNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from None
+    except BookingBridgeConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from None
+    except BookingBridgeValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return row
+
+
+@router.patch(
+    "/custom-requests/{request_id}/booking-bridge",
+    response_model=CustomRequestBookingBridgeRead,
+)
+def patch_admin_custom_request_booking_bridge(
+    request_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminCustomRequestBookingBridgePatch = Body(...),
+) -> CustomRequestBookingBridgeRead:
+    try:
+        row = CustomRequestBookingBridgeService().patch_bridge(
+            db,
+            request_id=request_id,
+            payload=payload,
+        )
+    except BookingBridgeNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from None
+    except BookingBridgeValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     db.commit()
     return row

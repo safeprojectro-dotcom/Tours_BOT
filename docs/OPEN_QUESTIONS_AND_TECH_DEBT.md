@@ -731,7 +731,32 @@ closed for **Track 4** scope (foundation + stabilization review); **Track 5a** r
 ### Residual debt / forward hooks
 - **Enum downgrade:** **`downgrade`** drops FK columns and **`commercial_resolution_kind`** type but **cannot** remove **`ALTER TYPE ... ADD VALUE`** entries from **`custom_marketplace_request_status`** (PostgreSQL limitation) — documented in migration file comment; plan environments accordingly.
 - **PATCH `under_review`:** **`PATCH`** may set **`under_review`** without the stricter field rules enforced on **`POST .../resolution`** (resolution **`under_review`** rejects `selected_supplier_response_id` / `commercial_resolution_kind`). If product needs a strict state machine, align **`PATCH`** with resolution rules or disallow **`under_review`** on **`PATCH`** in a future narrow slice.
-- **Track 5 forward:** RFQ → **`Order`** / reservation / payment integration, customer-facing multi-quote UX, notifications — **postponed** until explicit Track **5** bridge scope.
+- **Track 5 forward:** RFQ → **`Order`** / reservation / payment integration (**5b.2+**), customer-facing multi-quote UX, notifications — **postponed**; **5b.1** bridge record only — see **§27**.
 
 ### Status
 closed for **Track 5a** scope (selection + resolution recording + review); **no** Layer A semantic change attributed to this track
+
+---
+
+## 27. V2 Track 5b.1 — RFQ booking bridge record (Layer C) — implementation
+
+### Current decision
+- **Additive only:** Alembic **`20260423_12`** — table **`custom_request_booking_bridges`** (`request_id`, `selected_supplier_response_id`, `user_id`, nullable `tour_id`, `bridge_status`, `admin_note`, timestamps); enum **`custom_request_booking_bridge_status`**. **No** DDL on **`orders`** / **`payments`**; **no** calls to **`TemporaryReservationService`** or payment entry from bridge code.
+- **Admin-only explicit trigger:** **`POST /admin/custom-requests/{id}/booking-bridge`** (optional `tour_id`, `admin_note`); **`PATCH .../booking-bridge`** narrows to `tour_id` / `admin_note` updates. **Not** a side effect of Track **5a** resolution.
+- **Eligibility:** request **`supplier_selected`** or **`closed_assisted`**; **`selected_supplier_response_id`** set; response **`proposed`** and same **`request_id`**. **Active bridge** uniqueness: at most one row in **`pending_validation`**, **`ready`**, **`linked_tour`**, **`customer_notified`** per request — second **`POST` → 409**.
+- **Tour link (optional):** if `tour_id` set, Tour must exist, **`open_for_sale`**, future **`departure_datetime`**, **`sales_deadline`** null or future, **`seats_available` ≥ 1** — validation for **future** Layer A execution only; **no** hold.
+- **Admin read:** **`GET /admin/custom-requests/{id}`** includes **`booking_bridge`** (latest row for that request).
+
+### Residual debt / forward hooks
+- **Track 5b.2+:** customer “continue to booking”, invoke prepare/hold/payment via existing Layer A services; supersede/cancel bridge workflows; handoff integration — **explicit** slices only.
+- **Concurrency (low priority):** duplicate active bridge prevention is enforced in **`CustomRequestBookingBridgeService.create_bridge`** before insert (**409**). A rare double-**POST** race could still insert two rows until a **partial unique index** (one active status per **`request_id`**) is added — only if ops reports issues.
+
+### Stabilization review (Track 5b.1 — closure)
+- **Scope creep:** **None found** in **`app/services/custom_request_booking_bridge_service.py`**, **`app/repositories/custom_request_booking_bridge.py`**, **`app/api/routes/admin.py`** (booking-bridge routes), **`app/models/custom_request_booking_bridge.py`**, Alembic **`20260423_12`**: **no** `Order` / hold / payment-session writes; **no** **`TemporaryReservationService`**; **no** auto-**`Tour`** creation; **no** customer bridge routes; **no** auth/handoff/marketplace redesign.
+- **Track 5a unchanged:** **`admin_apply_resolution`** (**`custom_marketplace_request_service.py`**) updates request/selection fields only — **does not** call **`CustomRequestBookingBridgeService.create_bridge`** or **`patch_bridge`**.
+- **Selected response:** Bridge row stores **`selected_supplier_response_id`** from the validated **`SupplierCustomRequestResponse`** (same **`request_id`**, **`proposed`**); not a free-form id.
+- **PATCH safety:** **`AdminCustomRequestBookingBridgePatch`** allows **`tour_id`** / **`admin_note`** only; **no** status transitions to execution states in **5b.1**; **no** checkout side effects.
+- **Supplier / customer reads:** **`get_open_for_supplier`** builds detail **without** **`booking_bridge`** (remains **admin-only** inspection in **5b.1**).
+
+### Status
+closed for **Track 5b.1** scope (bridge persistence + admin API + tests + stabilization review); execution remains **postponed**

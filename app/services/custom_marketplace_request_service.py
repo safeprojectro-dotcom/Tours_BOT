@@ -29,6 +29,7 @@ from app.schemas.custom_marketplace import (
     SupplierCustomRequestResponseRead,
     SupplierCustomRequestResponseUpsert,
 )
+from app.services.custom_request_booking_bridge_service import CustomRequestBookingBridgeService
 
 
 class CustomMarketplaceUserNotFoundError(Exception):
@@ -145,10 +146,12 @@ class CustomMarketplaceRequestService:
         sel_id = row.selected_supplier_response_id
         responses = [_response_read(r, selected_supplier_response_id=sel_id) for r in row.supplier_responses]
         tg = row.user.telegram_user_id if row.user is not None else None
+        bridge = CustomRequestBookingBridgeService().read_for_admin_detail(session, request_id=request_id)
         return CustomMarketplaceRequestDetailRead(
             request=CustomMarketplaceRequestRead.model_validate(row, from_attributes=True),
             responses=responses,
             customer_telegram_user_id=tg,
+            booking_bridge=bridge,
         )
 
     def admin_patch(
