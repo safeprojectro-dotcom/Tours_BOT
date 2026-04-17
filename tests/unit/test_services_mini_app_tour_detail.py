@@ -14,8 +14,8 @@ class MiniAppTourDetailServiceTests(FoundationDBTestCase):
             title_default="Belgrade Default",
             short_description_default="Default short",
             full_description_default="Default full",
-            departure_datetime=datetime(2026, 4, 5, 8, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 4, 6, 20, 0, tzinfo=UTC),
+            departure_datetime=datetime(2027, 6, 15, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 20, 0, tzinfo=UTC),
             status=TourStatus.OPEN_FOR_SALE,
             seats_available=5,
         )
@@ -45,6 +45,26 @@ class MiniAppTourDetailServiceTests(FoundationDBTestCase):
         self.assertTrue(result.is_available)
         self.assertEqual(len(result.boarding_points), 1)
         self.assertTrue(result.sales_mode_policy.per_seat_self_service_allowed)
+
+    def test_get_tour_detail_returns_none_for_past_departure_open_tour(self) -> None:
+        tour = self.create_tour(
+            code="BELGRADE-PAST-DETAIL",
+            title_default="Belgrade Past",
+            departure_datetime=datetime(2015, 4, 5, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2015, 4, 6, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=3,
+        )
+        self.create_translation(tour, language_code="ro", title="Belgrad trecut")
+        self.create_boarding_point(tour)
+
+        self.assertIsNone(
+            MiniAppTourDetailService().get_tour_detail(
+                self.session,
+                code=tour.code,
+                language_code="ro",
+            )
+        )
 
     def test_get_tour_detail_returns_none_for_non_open_tour_or_unknown_code(self) -> None:
         collecting_group = self.create_tour(

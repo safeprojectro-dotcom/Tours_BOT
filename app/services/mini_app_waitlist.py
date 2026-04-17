@@ -13,6 +13,7 @@ from app.models.enums import TourStatus
 from app.models.waitlist import WaitlistEntry
 from app.repositories.waitlist import WaitlistRepository
 from app.services.catalog import CatalogLookupService
+from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
 from app.services.waitlist_ops_actions import (
     WAITLIST_STATUS_ACTIVE,
     WAITLIST_STATUS_CLOSED,
@@ -48,6 +49,11 @@ class MiniAppWaitlistService:
     def _tour_waitlist_eligible(self, session: Session, *, tour_code: str) -> tuple[object | None, bool]:
         tour = self._catalog.get_tour_by_code(session, code=tour_code)
         if tour is None or tour.status != TourStatus.OPEN_FOR_SALE:
+            return None, False
+        if not tour_is_customer_catalog_visible(
+            departure_datetime=tour.departure_datetime,
+            sales_deadline=tour.sales_deadline,
+        ):
             return None, False
         if tour.seats_available > 0:
             return tour, False

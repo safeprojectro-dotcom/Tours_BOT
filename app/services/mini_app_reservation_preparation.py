@@ -7,6 +7,7 @@ from app.models.enums import TourStatus
 from app.schemas.mini_app import MiniAppReservationPreparationRead
 from app.schemas.prepared import ReservationPreparationSummaryRead, ReservationPreparationTourRead
 from app.services.catalog import CatalogLookupService
+from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
 from app.services.tour_sales_mode_policy import TourSalesModePolicyService
 
 
@@ -76,6 +77,11 @@ class MiniAppReservationPreparationService:
     ) -> ReservationPreparationSummaryRead | None:
         tour = self.catalog_lookup_service.get_tour_by_code(session, code=code)
         if tour is None or tour.status not in self.STATUS_SCOPE:
+            return None
+        if not tour_is_customer_catalog_visible(
+            departure_datetime=tour.departure_datetime,
+            sales_deadline=tour.sales_deadline,
+        ):
             return None
         if not TourSalesModePolicyService.policy_for_sales_mode(tour.sales_mode).per_seat_self_service_allowed:
             return None

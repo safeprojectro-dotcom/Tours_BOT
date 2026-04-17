@@ -25,6 +25,7 @@ from app.schemas.prepared import (
 from app.schemas.user import UserRead
 from app.services.catalog import CatalogLookupService
 from app.services.catalog_preparation import CatalogPreparationService
+from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
 from app.services.language_aware_tour import LanguageAwareTourReadService
 from app.services.reservation_expiry import lazy_expire_due_reservations
 from app.services.tour_sales_mode_policy import TourSalesModePolicyService
@@ -181,11 +182,19 @@ class PrivateTourBrowseService:
         tour_id: int,
         language_code: str | None,
     ) -> PreparedTourDetailRead | None:
-        return self.language_aware_tour_service.get_localized_tour_detail(
+        detail = self.language_aware_tour_service.get_localized_tour_detail(
             session,
             tour_id=tour_id,
             language_code=language_code,
         )
+        if detail is None:
+            return None
+        if not tour_is_customer_catalog_visible(
+            departure_datetime=detail.tour.departure_datetime,
+            sales_deadline=detail.tour.sales_deadline,
+        ):
+            return None
+        return detail
 
     def get_tour_detail_from_start_arg(
         self,
@@ -203,6 +212,11 @@ class PrivateTourBrowseService:
 
         tour = self.catalog_lookup_service.get_tour_by_code(session, code=tour_code)
         if tour is None:
+            return None
+        if not tour_is_customer_catalog_visible(
+            departure_datetime=tour.departure_datetime,
+            sales_deadline=tour.sales_deadline,
+        ):
             return None
 
         return self.get_tour_detail(session, tour_id=tour.id, language_code=language_code)

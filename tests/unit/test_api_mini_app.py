@@ -47,24 +47,24 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         matching = self.create_tour(
             code="BELGRADE-API",
             title_default="Belgrade City Break",
-            departure_datetime=datetime(2026, 4, 5, 8, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 4, 6, 20, 0, tzinfo=UTC),
+            departure_datetime=datetime(2027, 6, 15, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 20, 0, tzinfo=UTC),
             base_price="140.00",
             status=TourStatus.OPEN_FOR_SALE,
         )
         other = self.create_tour(
             code="BUDAPEST-API",
             title_default="Budapest Weekend",
-            departure_datetime=datetime(2026, 4, 5, 9, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 4, 6, 21, 0, tzinfo=UTC),
+            departure_datetime=datetime(2027, 6, 15, 9, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 21, 0, tzinfo=UTC),
             base_price="110.00",
             status=TourStatus.OPEN_FOR_SALE,
         )
         collecting_group = self.create_tour(
             code="BELGRADE-GROUP-API",
             title_default="Belgrade Group Build",
-            departure_datetime=datetime(2026, 4, 5, 10, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 4, 6, 22, 0, tzinfo=UTC),
+            departure_datetime=datetime(2027, 6, 15, 10, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 22, 0, tzinfo=UTC),
             base_price="115.00",
             status=TourStatus.COLLECTING_GROUP,
         )
@@ -78,8 +78,8 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
             params={
                 "language_code": "ro",
                 "destination_query": "Belgrade",
-                "departure_date_from": "2026-04-05",
-                "departure_date_to": "2026-04-05",
+                "departure_date_from": "2027-06-15",
+                "departure_date_to": "2027-06-15",
                 "max_price": "150.00",
             },
         )
@@ -91,6 +91,43 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(payload["applied_filters"]["destination_query"], "Belgrade")
         self.assertEqual(payload["items"][0]["sales_mode_policy"]["effective_sales_mode"], "per_seat")
         self.assertTrue(payload["items"][0]["sales_mode_policy"]["per_seat_self_service_allowed"])
+
+    def test_customer_catalog_hides_past_departure_but_shows_future_open_tour(self) -> None:
+        future = self.create_tour(
+            code="MINI-CAT-FUTURE-VIS",
+            title_default="Future Catalog Tour",
+            departure_datetime=datetime(2028, 3, 1, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2028, 3, 3, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+        )
+        past = self.create_tour(
+            code="MINI-CAT-PAST-VIS",
+            title_default="Past Catalog Tour",
+            departure_datetime=datetime(2018, 3, 1, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2018, 3, 3, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+        )
+        smoke_style = self.create_tour(
+            code="MINI-SMOKE-STYLE-VISIBLE",
+            title_default="Smoke style future",
+            departure_datetime=datetime(2028, 4, 1, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2028, 4, 3, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+        )
+        for tour in (future, past, smoke_style):
+            self.create_translation(tour, language_code="en", title=tour.title_default)
+            self.create_boarding_point(tour)
+        self.session.commit()
+
+        response = self.client.get("/mini-app/catalog", params={"language_code": "en"})
+        self.assertEqual(response.status_code, 200)
+        codes = {item["code"] for item in response.json()["items"]}
+        self.assertIn("MINI-CAT-FUTURE-VIS", codes)
+        self.assertIn("MINI-SMOKE-STYLE-VISIBLE", codes)
+        self.assertNotIn("MINI-CAT-PAST-VIS", codes)
+
+        past_detail = self.client.get("/mini-app/tours/MINI-CAT-PAST-VIS", params={"language_code": "en"})
+        self.assertEqual(past_detail.status_code, 404)
 
     def test_catalog_route_rejects_invalid_date_range(self) -> None:
         response = self.client.get(
@@ -110,8 +147,8 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
             title_default="Belgrade Default",
             short_description_default="Default short",
             full_description_default="Default full",
-            departure_datetime=datetime(2026, 4, 5, 8, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 4, 6, 20, 0, tzinfo=UTC),
+            departure_datetime=datetime(2027, 6, 15, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 20, 0, tzinfo=UTC),
             status=TourStatus.OPEN_FOR_SALE,
             seats_available=6,
         )
@@ -163,8 +200,8 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         tour = self.create_tour(
             code="BELGRADE-PREP-API",
             title_default="Belgrade Prep",
-            departure_datetime=datetime(2026, 4, 5, 8, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 4, 6, 20, 0, tzinfo=UTC),
+            departure_datetime=datetime(2027, 6, 15, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 20, 0, tzinfo=UTC),
             status=TourStatus.OPEN_FOR_SALE,
             seats_available=3,
         )
@@ -190,8 +227,8 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         tour = self.create_tour(
             code="BELGRADE-PREP-SUMMARY-API",
             title_default="Belgrade Prep Summary",
-            departure_datetime=datetime(2026, 4, 5, 8, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 4, 6, 20, 0, tzinfo=UTC),
+            departure_datetime=datetime(2027, 6, 15, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 20, 0, tzinfo=UTC),
             status=TourStatus.OPEN_FOR_SALE,
             seats_available=4,
             base_price="95.00",

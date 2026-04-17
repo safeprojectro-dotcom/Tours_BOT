@@ -105,6 +105,27 @@ class PrivateTourBrowseServiceTests(FoundationDBTestCase):
         self.assertEqual(detail.localized_content.title, "Belgrad")
         self.assertEqual(detail.boarding_points[0].city, "Timisoara")
 
+    def test_get_tour_detail_from_start_arg_returns_none_when_departed(self) -> None:
+        service = PrivateTourBrowseService()
+        tour = self.create_tour(
+            code="DEPARTED-START-ARG",
+            title_default="Departed tour",
+            departure_datetime=datetime(2014, 6, 1, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2014, 6, 3, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+        )
+        self.create_translation(tour, language_code="ro", title="Tur plecat")
+        self.create_boarding_point(tour)
+        self.session.commit()
+
+        self.assertIsNone(
+            service.get_tour_detail_from_start_arg(
+                self.session,
+                start_arg="tour_DEPARTED-START-ARG",
+                language_code="ro",
+            )
+        )
+
     def test_list_entry_tours_filtered_by_destination_query(self) -> None:
         service = PrivateTourBrowseService()
         matching = self.create_tour(code="BELGRADE-1", title_default="Belgrade Escape")

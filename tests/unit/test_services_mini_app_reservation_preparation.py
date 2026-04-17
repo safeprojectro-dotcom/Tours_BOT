@@ -12,8 +12,8 @@ class MiniAppReservationPreparationServiceTests(FoundationDBTestCase):
         tour = self.create_tour(
             code="BELGRADE-PREP",
             title_default="Belgrade Default",
-            departure_datetime=datetime(2026, 4, 5, 8, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 4, 6, 20, 0, tzinfo=UTC),
+            departure_datetime=datetime(2027, 6, 15, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 20, 0, tzinfo=UTC),
             status=TourStatus.OPEN_FOR_SALE,
             seats_available=4,
         )
@@ -38,8 +38,8 @@ class MiniAppReservationPreparationServiceTests(FoundationDBTestCase):
         tour = self.create_tour(
             code="FULL-BUS-PREP-SVC",
             title_default="Charter",
-            departure_datetime=datetime(2026, 4, 5, 8, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 4, 6, 20, 0, tzinfo=UTC),
+            departure_datetime=datetime(2027, 6, 15, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 20, 0, tzinfo=UTC),
             status=TourStatus.OPEN_FOR_SALE,
             seats_available=8,
             sales_mode=TourSalesMode.FULL_BUS,
@@ -61,8 +61,8 @@ class MiniAppReservationPreparationServiceTests(FoundationDBTestCase):
         tour = self.create_tour(
             code="BELGRADE-PREP-SUMMARY",
             title_default="Belgrade Summary",
-            departure_datetime=datetime(2026, 4, 5, 8, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 4, 6, 20, 0, tzinfo=UTC),
+            departure_datetime=datetime(2027, 6, 15, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 20, 0, tzinfo=UTC),
             status=TourStatus.OPEN_FOR_SALE,
             seats_available=5,
             base_price="90.00",
@@ -89,8 +89,8 @@ class MiniAppReservationPreparationServiceTests(FoundationDBTestCase):
     def test_build_preparation_summary_none_for_full_bus(self) -> None:
         tour = self.create_tour(
             code="FULL-BUS-SUMMARY-SVC",
-            departure_datetime=datetime(2026, 4, 5, 8, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 4, 6, 20, 0, tzinfo=UTC),
+            departure_datetime=datetime(2027, 6, 15, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 20, 0, tzinfo=UTC),
             status=TourStatus.OPEN_FOR_SALE,
             seats_available=5,
             sales_mode=TourSalesMode.FULL_BUS,

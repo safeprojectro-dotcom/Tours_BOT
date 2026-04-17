@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from sqlalchemy.orm import Session
 
 from app.models.enums import TourStatus
@@ -28,6 +30,25 @@ class CatalogLookupService:
                 limit=limit,
                 offset=offset,
             )
+        return [TourRead.model_validate(tour) for tour in tours]
+
+    def list_tours_for_customer_catalog(
+        self,
+        session: Session,
+        *,
+        status: TourStatus,
+        limit: int = 100,
+        offset: int = 0,
+        now_utc: datetime | None = None,
+    ) -> list[TourRead]:
+        ref = now_utc or datetime.now(UTC)
+        tours = self.tour_repository.list_by_status_customer_catalog_visible(
+            session,
+            status=status,
+            now_utc=ref,
+            limit=limit,
+            offset=offset,
+        )
         return [TourRead.model_validate(tour) for tour in tours]
 
     def get_tour_by_code(self, session: Session, *, code: str) -> TourRead | None:

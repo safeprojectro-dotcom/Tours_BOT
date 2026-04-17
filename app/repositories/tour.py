@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import time as time_type
+from datetime import UTC, datetime, time as time_type
 from typing import Any, Mapping
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.enums import TourStatus
@@ -81,6 +81,29 @@ class TourRepository(SQLAlchemyRepository[Tour]):
         stmt = (
             select(Tour)
             .where(Tour.status == status)
+            .order_by(Tour.departure_datetime, Tour.id)
+            .offset(offset)
+            .limit(limit)
+        )
+        return list(session.scalars(stmt).all())
+
+    def list_by_status_customer_catalog_visible(
+        self,
+        session: Session,
+        *,
+        status: TourStatus,
+        now_utc: datetime,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[Tour]:
+        """Open (or other) status tours that are still sellable by time window — customer catalog only."""
+        ref = now_utc if now_utc.tzinfo else now_utc.replace(tzinfo=UTC)
+        ref = ref.astimezone(UTC)
+        stmt = (
+            select(Tour)
+            .where(Tour.status == status)
+            .where(Tour.departure_datetime >= ref)
+            .where(or_(Tour.sales_deadline.is_(None), Tour.sales_deadline >= ref))
             .order_by(Tour.departure_datetime, Tour.id)
             .offset(offset)
             .limit(limit)

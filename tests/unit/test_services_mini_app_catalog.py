@@ -13,32 +13,32 @@ class MiniAppCatalogServiceTests(FoundationDBTestCase):
         matching = self.create_tour(
             code="BELGRADE-MINI",
             title_default="Belgrade Mini Break",
-            departure_datetime=datetime(2026, 4, 5, 8, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 4, 6, 20, 0, tzinfo=UTC),
+            departure_datetime=datetime(2027, 6, 15, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 20, 0, tzinfo=UTC),
             base_price="140.00",
             status=TourStatus.OPEN_FOR_SALE,
         )
         collecting_group = self.create_tour(
             code="BELGRADE-GROUP",
             title_default="Belgrade Collecting Group",
-            departure_datetime=datetime(2026, 4, 5, 9, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 4, 6, 21, 0, tzinfo=UTC),
+            departure_datetime=datetime(2027, 6, 15, 9, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 21, 0, tzinfo=UTC),
             base_price="120.00",
             status=TourStatus.COLLECTING_GROUP,
         )
         different_destination = self.create_tour(
             code="BUDAPEST-MINI",
             title_default="Budapest Weekend",
-            departure_datetime=datetime(2026, 4, 5, 10, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 4, 6, 22, 0, tzinfo=UTC),
+            departure_datetime=datetime(2027, 6, 15, 10, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 22, 0, tzinfo=UTC),
             base_price="130.00",
             status=TourStatus.OPEN_FOR_SALE,
         )
         over_budget = self.create_tour(
             code="BELGRADE-PREMIUM",
             title_default="Belgrade Premium",
-            departure_datetime=datetime(2026, 4, 5, 11, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 4, 6, 23, 0, tzinfo=UTC),
+            departure_datetime=datetime(2027, 6, 15, 11, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 23, 0, tzinfo=UTC),
             base_price="240.00",
             status=TourStatus.OPEN_FOR_SALE,
         )
@@ -51,8 +51,8 @@ class MiniAppCatalogServiceTests(FoundationDBTestCase):
             self.session,
             language_code="ro",
             filters=MiniAppCatalogFiltersRead(
-                departure_date_from=date(2026, 4, 5),
-                departure_date_to=date(2026, 4, 5),
+                departure_date_from=date(2027, 6, 15),
+                departure_date_to=date(2027, 6, 15),
                 destination_query="Belgrade",
                 max_price="150.00",
             ),

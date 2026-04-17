@@ -126,28 +126,28 @@ class PreparationServiceTests(FoundationDBTestCase):
         self.assertEqual(by_code[tour.code].seats_available, 7)
 
     def test_catalog_preparation_filters_by_destination_date_and_budget(self) -> None:
-        matching_departure = datetime(2026, 4, 5, 8, 0, tzinfo=UTC)
+        matching_departure = datetime(2027, 6, 15, 8, 0, tzinfo=UTC)
         matching = self.create_tour(
             code="BELGRADE-APR",
             title_default="Belgrade Escape",
             departure_datetime=matching_departure,
-            return_datetime=datetime(2026, 4, 6, 22, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 22, 0, tzinfo=UTC),
             base_price="120.00",
             status=TourStatus.OPEN_FOR_SALE,
         )
         other_destination = self.create_tour(
             code="BUDAPEST-APR",
             title_default="Budapest Weekend",
-            departure_datetime=datetime(2026, 4, 5, 9, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 4, 6, 21, 0, tzinfo=UTC),
+            departure_datetime=datetime(2027, 6, 15, 9, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 21, 0, tzinfo=UTC),
             base_price="110.00",
             status=TourStatus.OPEN_FOR_SALE,
         )
         over_budget = self.create_tour(
             code="BELGRADE-PREMIUM",
             title_default="Belgrade Premium",
-            departure_datetime=datetime(2026, 4, 5, 10, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 4, 6, 20, 0, tzinfo=UTC),
+            departure_datetime=datetime(2027, 6, 15, 10, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 6, 16, 20, 0, tzinfo=UTC),
             base_price="220.00",
             status=TourStatus.OPEN_FOR_SALE,
         )
@@ -163,14 +163,61 @@ class PreparationServiceTests(FoundationDBTestCase):
             language_code="ro",
             status=TourStatus.OPEN_FOR_SALE,
             filters=CatalogBrowseFiltersRead(
-                departure_from=datetime(2026, 4, 5, 0, 0, tzinfo=UTC),
-                departure_to=datetime(2026, 4, 5, 23, 59, tzinfo=UTC),
+                departure_from=datetime(2027, 6, 15, 0, 0, tzinfo=UTC),
+                departure_to=datetime(2027, 6, 15, 23, 59, tzinfo=UTC),
                 destination_query="belgrad",
                 max_price="150.00",
             ),
         )
 
         self.assertEqual([card.code for card in cards], ["BELGRADE-APR"])
+
+    def test_list_catalog_cards_excludes_past_departure_open_tour(self) -> None:
+        future = self.create_tour(
+            code="PREP-CAT-FUTURE",
+            title_default="Future trip",
+            departure_datetime=datetime(2029, 1, 10, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2029, 1, 12, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+        )
+        past = self.create_tour(
+            code="PREP-CAT-PAST",
+            title_default="Past trip",
+            departure_datetime=datetime(2017, 1, 10, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2017, 1, 12, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+        )
+        for tour in (future, past):
+            self.create_translation(tour, language_code="ro", title=tour.title_default)
+            self.create_boarding_point(tour)
+
+        cards = CatalogPreparationService().list_catalog_cards(
+            self.session,
+            language_code="ro",
+            status=TourStatus.OPEN_FOR_SALE,
+        )
+        codes = {c.code for c in cards}
+        self.assertIn("PREP-CAT-FUTURE", codes)
+        self.assertNotIn("PREP-CAT-PAST", codes)
+
+    def test_list_catalog_cards_excludes_when_sales_deadline_in_past(self) -> None:
+        tour = self.create_tour(
+            code="PREP-SD-PAST",
+            title_default="Sales window closed",
+            departure_datetime=datetime(2031, 1, 10, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2031, 1, 12, 20, 0, tzinfo=UTC),
+            sales_deadline=datetime(2020, 6, 1, 12, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+        )
+        self.create_translation(tour, language_code="en", title="Closed sales")
+        self.create_boarding_point(tour)
+
+        cards = CatalogPreparationService().list_catalog_cards(
+            self.session,
+            language_code="en",
+            status=TourStatus.OPEN_FOR_SALE,
+        )
+        self.assertNotIn("PREP-SD-PAST", {c.code for c in cards})
 
     def test_order_summary_prepares_localized_tour_and_boarding_point(self) -> None:
         user = self.create_user()

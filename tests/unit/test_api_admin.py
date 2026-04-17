@@ -97,6 +97,24 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(row["lifecycle_kind"], "expired_unpaid_hold")
         self.assertIn("Not an active reservation", row["lifecycle_summary"])
 
+    def test_admin_tour_list_includes_past_departure_tour(self) -> None:
+        """Admin read paths are not filtered by customer catalog time windows."""
+        past = self.create_tour(
+            code="ADM-PAST-DEP-CAT",
+            title_default="Legacy departed tour",
+            departure_datetime=datetime(2018, 2, 1, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2018, 2, 3, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+        )
+        self.create_boarding_point(past)
+        self.session.commit()
+
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        r = self.client.get("/admin/tours", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        codes = {item["code"] for item in r.json()["items"]}
+        self.assertIn("ADM-PAST-DEP-CAT", codes)
+
     def test_order_detail_not_found(self) -> None:
         headers = {"Authorization": "Bearer test-admin-secret"}
         r = self.client.get("/admin/orders/999999", headers=headers)

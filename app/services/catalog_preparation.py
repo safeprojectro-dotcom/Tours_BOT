@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
 from app.models.enums import TourStatus
 from app.schemas.prepared import CatalogBrowseFiltersRead, CatalogTourCardRead
 from app.services.catalog import CatalogLookupService
+from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
 from app.services.language_aware_tour import LanguageAwareTourReadService
 from app.services.reservation_expiry import lazy_expire_due_reservations
 from app.services.tour_sales_mode_policy import TourSalesModePolicyService
@@ -31,15 +33,31 @@ class CatalogPreparationService:
         offset: int = 0,
     ) -> list[CatalogTourCardRead]:
         lazy_expire_due_reservations(session)
-        tours = self.catalog_lookup_service.list_tours(
-            session,
-            status=status,
-            limit=limit,
-            offset=offset,
-        )
+        now_ref = datetime.now(UTC)
+        if status is None:
+            tours = self.catalog_lookup_service.list_tours(
+                session,
+                status=status,
+                limit=limit,
+                offset=offset,
+            )
+        else:
+            tours = self.catalog_lookup_service.list_tours_for_customer_catalog(
+                session,
+                status=status,
+                limit=limit,
+                offset=offset,
+                now_utc=now_ref,
+            )
         cards: list[CatalogTourCardRead] = []
 
         for tour in tours:
+            if not tour_is_customer_catalog_visible(
+                departure_datetime=tour.departure_datetime,
+                sales_deadline=tour.sales_deadline,
+                now=now_ref,
+            ):
+                continue
             prepared_detail = self.language_aware_tour_service.get_localized_tour_detail(
                 session,
                 tour_id=tour.id,
