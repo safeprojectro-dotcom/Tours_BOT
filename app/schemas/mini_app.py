@@ -6,7 +6,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import TourStatus
+from app.models.enums import CustomerCommercialMode, TourStatus
 from app.schemas.prepared import CatalogTourCardRead, LocalizedTourContentRead, OrderSummaryRead, ReservationPreparationTourRead
 from app.schemas.tour import BoardingPointRead, TourRead
 from app.schemas.effective_commercial_execution_policy import EffectiveCommercialExecutionPolicyRead
@@ -69,6 +69,9 @@ class MiniAppTourDetailRead(BaseModel):
     localized_content: LocalizedTourContentRead
     boarding_points: list[BoardingPointRead]
     is_available: bool
+    commercial_mode: CustomerCommercialMode = Field(
+        description="Track 5g.1: derived from catalog tour sales_mode (supplier_route_*).",
+    )
     sales_mode_policy: TourSalesModePolicyRead
 
 

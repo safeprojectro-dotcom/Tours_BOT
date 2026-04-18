@@ -924,7 +924,7 @@ closed for **Track 5b.2** scope (explicit preparation + hold orchestration + tes
 - **No** auto-supersede on winner change, **no** `superseded_by_bridge_id`, **no** refund/cancel-order from bridge, **no** new payment/booking **routes** or provider flows, **no** auth/handoff redesign, **no** RFQ request lifecycle redesign.
 
 ### Additive read contract
-- **`MiniAppCustomRequestCustomerDetailRead`:** **`latest_booking_bridge_status`**, **`latest_booking_bridge_tour_code`** (nullable) — JSON clients that ignore unknown keys remain safe; strict clients must accept new optional fields on this response type. **Track 5f v1** adds **`proposed_response_count`**, **`offers_received_hint`**, **`selected_offer_summary`** — see **§34**.
+- **`MiniAppCustomRequestCustomerDetailRead`:** **`latest_booking_bridge_status`**, **`latest_booking_bridge_tour_code`** (nullable) — JSON clients that ignore unknown keys remain safe; strict clients must accept new optional fields on this response type. **Track 5f v1** adds **`proposed_response_count`**, **`offers_received_hint`**, **`selected_offer_summary`** — see **§34**. **Track 5g.1** adds **`commercial_mode`** — see **§35**.
 
 ### Residual / forward
 - Partial unique index (one **active** bridge per **`request_id`**) if ops reports rare double-**POST** races (**§27**); structured closure reason / audit columns — **explicit** slices only.
@@ -966,3 +966,31 @@ closed for **Track 5b.2** scope (explicit preparation + hold orchestration + tes
 
 ### Status
 **closed** for **Track 5f v1** scope (aggregate + allowlisted selected snippet + My Requests detail read-only copy + tests + documentation) — **stabilization reviewed**.
+
+---
+
+## 35. V2 Track 5g.1 — Commercial mode classification (read-side only)
+
+### Intent (Track 5g design gate)
+- Explicit **presentation-level** distinction between **Mode 1** (**`supplier_route_per_seat`**), **Mode 2** (**`supplier_route_full_bus`** — catalog full-bus, not RFQ by default), and **Mode 3** (**`custom_bus_rental_request`** — Layer C RFQ).
+- **Authoritative derivation:** catalog modes from **`Tour.sales_mode`** only; RFQ detail mode is **constant** **`custom_bus_rental_request`** for **`CustomMarketplaceRequest`** customer reads (no hybrid modes in this slice).
+
+### Implementation surface
+- **`CustomerCommercialMode`** (`app/models/enums.py`).
+- **`commercial_mode_for_catalog_tour_sales_mode`** (`app/services/customer_commercial_mode_read.py`).
+- **`MiniAppTourDetailRead.commercial_mode`** (`app/schemas/mini_app.py`; composed in **`MiniAppTourDetailService`**).
+- **`MiniAppCustomRequestCustomerDetailRead.commercial_mode`** (`app/schemas/custom_marketplace.py`; set in **`CustomMarketplaceRequestService.get_customer_detail_mini_app`**).
+
+### Explicit non-goals (verified)
+- **No** booking/reserve/payment/bridge execution changes; **no** **`EffectiveCommercialExecutionPolicyService`** / **`PaymentEntryService`** behavior change; **no** RFQ resolution or supplier-response rules change; **no** Mini App CTA or bot routing driven by **`commercial_mode`** in this slice; **no** admin workflow; **no** reopening **Track 5f v1** semantics (**`proposed_response_count`**, hints, snippet unchanged in meaning).
+
+### Additive read contract
+- New JSON keys on two existing GET responses; clients that ignore unknown keys remain safe; strict clients must accept **`commercial_mode`** (string enum values as above).
+
+### Stabilization review (Track 5g.1 — closure)
+- **Scope creep:** **None found** — grep-confined to enums, mapper, **`mini_app`** / **`custom_marketplace`** schemas, **`mini_app_tour_detail`**, **`custom_marketplace_request_service`** (customer detail only), and focused tests; **no** edits to bridge services, payment entry, or order lifecycle.
+- **Classification:** **`per_seat` → `supplier_route_per_seat`**, **`full_bus` → `supplier_route_full_bus`**, customer RFQ detail **`custom_bus_rental_request`** — matches Track **5g** three-mode model; **Mode 2** remains catalog (**Layer A**), **Mode 3** remains RFQ (**Layer C**).
+- **Tests:** **`test_customer_commercial_mode_read`**, **`test_services_mini_app_tour_detail`** (incl. full-bus), **`test_api_mini_app`** (tour detail), **`test_custom_marketplace_track5f_v1`** (**`commercial_mode`** on detail); regressions **`test_custom_marketplace_track5a`**, **`test_custom_request_booking_bridge_track5e`**, **`test_custom_marketplace_track4`** — **pass** (focused acceptance run).
+
+### Status
+**closed** for **Track 5g.1** scope (read-side classification + documentation) — **stabilization reviewed**.

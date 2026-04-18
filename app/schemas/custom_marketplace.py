@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.models.enums import (
     CommercialResolutionKind,
+    CustomerCommercialMode,
     CustomMarketplaceRequestSource,
     CustomMarketplaceRequestStatus,
     CustomMarketplaceRequestType,
@@ -327,6 +328,10 @@ class MiniAppCustomRequestCustomerDetailRead(BaseModel):
     id: int
     status: CustomMarketplaceRequestStatus
     customer_visible_summary: str
+    commercial_mode: CustomerCommercialMode = Field(
+        default=CustomerCommercialMode.CUSTOM_BUS_RENTAL_REQUEST,
+        description="Track 5g.1: RFQ / custom marketplace request (Mode 3).",
+    )
     request_type: CustomMarketplaceRequestType
     travel_date_start: date
     travel_date_end: date | None

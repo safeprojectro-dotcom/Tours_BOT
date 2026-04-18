@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from app.models.enums import TourStatus
+from app.models.enums import CustomerCommercialMode, TourSalesMode, TourStatus
 from app.services.mini_app_tour_detail import MiniAppTourDetailService
 from tests.unit.base import FoundationDBTestCase
 
@@ -45,6 +45,29 @@ class MiniAppTourDetailServiceTests(FoundationDBTestCase):
         self.assertTrue(result.is_available)
         self.assertEqual(len(result.boarding_points), 1)
         self.assertTrue(result.sales_mode_policy.per_seat_self_service_allowed)
+        self.assertEqual(result.commercial_mode, CustomerCommercialMode.SUPPLIER_ROUTE_PER_SEAT)
+
+    def test_get_tour_detail_commercial_mode_full_bus_catalog(self) -> None:
+        tour = self.create_tour(
+            code="BELGRADE-FULLBUS-DETAIL",
+            title_default="Charter",
+            departure_datetime=datetime(2027, 8, 1, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 8, 2, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=40,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.create_translation(tour, language_code="en", title="Charter EN")
+        self.create_boarding_point(tour)
+
+        result = MiniAppTourDetailService().get_tour_detail(
+            self.session,
+            code=tour.code,
+            language_code="en",
+        )
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.commercial_mode, CustomerCommercialMode.SUPPLIER_ROUTE_FULL_BUS)
 
     def test_get_tour_detail_returns_none_for_past_departure_open_tour(self) -> None:
         tour = self.create_tour(

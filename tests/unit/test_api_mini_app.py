@@ -177,6 +177,7 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertTrue(payload["is_available"])
         self.assertEqual(payload["sales_mode_policy"]["effective_sales_mode"], "per_seat")
         self.assertTrue(payload["sales_mode_policy"]["per_seat_self_service_allowed"])
+        self.assertEqual(payload["commercial_mode"], "supplier_route_per_seat")
 
     def test_tour_detail_route_returns_not_found_for_unknown_or_non_open_tour(self) -> None:
         collecting_group = self.create_tour(
@@ -324,6 +325,7 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         payload = response.json()
         self.assertFalse(payload["sales_mode_policy"]["per_seat_self_service_allowed"])
         self.assertEqual(payload["tour"]["sales_mode"], "full_bus")
+        self.assertEqual(payload["commercial_mode"], "supplier_route_full_bus")
 
     def test_preparation_routes_reject_invalid_or_unavailable_inputs(self) -> None:
         sold_out = self.create_tour(

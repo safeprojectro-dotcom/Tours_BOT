@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.models.enums import TourStatus
 from app.schemas.mini_app import MiniAppTourDetailRead
 from app.services.catalog import CatalogLookupService
+from app.services.customer_commercial_mode_read import commercial_mode_for_catalog_tour_sales_mode
 from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
 from app.services.language_aware_tour import LanguageAwareTourReadService
 from app.services.reservation_expiry import lazy_expire_due_reservations
@@ -49,10 +50,12 @@ class MiniAppTourDetailService:
             return None
 
         mode_policy = TourSalesModePolicyService.policy_for_sales_mode(detail.tour.sales_mode)
+        commercial_mode = commercial_mode_for_catalog_tour_sales_mode(detail.tour.sales_mode)
         return MiniAppTourDetailRead(
             tour=detail.tour,
             localized_content=detail.localized_content,
             boarding_points=detail.boarding_points,
             is_available=detail.tour.seats_available > 0,
+            commercial_mode=commercial_mode,
             sales_mode_policy=mode_policy,
         )

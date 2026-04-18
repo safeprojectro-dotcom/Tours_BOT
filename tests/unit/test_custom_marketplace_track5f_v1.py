@@ -76,6 +76,7 @@ class CustomMarketplaceTrack5F_V1Tests(FoundationDBTestCase):
         self.assertEqual(body["proposed_response_count"], 0)
         self.assertIn("No supplier proposals", body["offers_received_hint"])
         self.assertIsNone(body["selected_offer_summary"])
+        self.assertEqual(body["commercial_mode"], "custom_bus_rental_request")
 
     def test_proposed_count_excludes_declined(self) -> None:
         rid = self._create_rfq()

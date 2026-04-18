@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.custom_marketplace_request import CustomMarketplaceRequest, SupplierCustomRequestResponse
 from app.models.enums import (
     CommercialResolutionKind,
+    CustomerCommercialMode,
     CustomMarketplaceRequestSource,
     CustomMarketplaceRequestStatus,
     SupplierCustomRequestResponseKind,
@@ -502,6 +503,7 @@ class CustomMarketplaceRequestService:
             id=row.id,
             status=row.status,
             customer_visible_summary=customer_visible_summary(row),
+            commercial_mode=CustomerCommercialMode.CUSTOM_BUS_RENTAL_REQUEST,
             request_type=row.request_type,
             travel_date_start=row.travel_date_start,
             travel_date_end=row.travel_date_end,

@@ -50,6 +50,14 @@ class TourSalesMode(StrEnum):
     FULL_BUS = "full_bus"
 
 
+class CustomerCommercialMode(StrEnum):
+    """Track 5g read-side commercial journey — catalog per-seat, catalog full-bus, or RFQ (custom request)."""
+
+    SUPPLIER_ROUTE_PER_SEAT = "supplier_route_per_seat"
+    SUPPLIER_ROUTE_FULL_BUS = "supplier_route_full_bus"
+    CUSTOM_BUS_RENTAL_REQUEST = "custom_bus_rental_request"
+
+
 class SupplierServiceComposition(StrEnum):
     """Layer B: what the supplier bundles with transport (marketplace formation)."""
 

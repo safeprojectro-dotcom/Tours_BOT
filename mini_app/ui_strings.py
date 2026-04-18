@@ -38,14 +38,14 @@ _STR: dict[str, dict[str, str]] = {
         "back_to_catalog": "Back to catalog",
         "settings": "Settings",
         "prepare_reservation": "Prepare reservation",
-        "catalog_card_assisted_notice": "Whole-bus / charter offer — open details. Seat-by-seat self-booking is not available here.",
-        "detail_assisted_booking_title": "Assistance required",
-        "detail_assisted_booking_body": "This tour is sold as a whole-bus / charter style offer. Tap the button below to send a structured assistance request to the team, or use Help in the header. "
-        "The standard seat reservation flow is not available in this app for this departure.",
-        "btn_request_full_bus_assistance": "Request full-bus assistance",
-        "preparation_assisted_title": "Self-service reservation not available",
-        "preparation_assisted_body": "This tour uses a whole-bus / charter style offer. Use Help to reach the team. "
-        "You cannot complete a seat hold from this screen.",
+        "catalog_card_assisted_notice": "Catalog charter (whole bus) for this departure — open details for how to book with our team. Seat-by-seat self-booking in the app is not available for this listing.",
+        "detail_assisted_booking_title": "Catalog charter — book with our team",
+        "detail_assisted_booking_body": "This is a ready-made whole-bus / charter listing from our catalog. Tap below to contact us about booking this trip (your message is tied to this tour), or use Help in the header. "
+        "The usual seat-by-seat reservation flow in this app is not available for this departure.",
+        "btn_request_full_bus_assistance": "Contact us about this charter listing",
+        "preparation_assisted_title": "This catalog charter is not self-serve here",
+        "preparation_assisted_body": "This departure is a whole-bus / charter listing from our catalog. Use Help to reach the team about booking it. "
+        "You cannot place a seat hold yourself from this screen.",
         "waitlist_intro_sold_out": "This tour is sold out. You can join the waitlist to record interest — "
         "this is not a confirmed booking or a guaranteed seat.",
         "waitlist_join_cta": "Join waitlist",
@@ -263,14 +263,14 @@ _STR: dict[str, dict[str, str]] = {
         "back_to_catalog": "Inapoi la catalog",
         "settings": "Setari",
         "prepare_reservation": "Pregateste rezervarea",
-        "catalog_card_assisted_notice": "Oferta autocar complet — vezi detalii. Rezervare loc cu loc nu e disponibila aici.",
-        "detail_assisted_booking_title": "Este nevoie de asistenta",
-        "detail_assisted_booking_body": "Acest tur este oferit ca inchiriere autocar / grup complet. Apasa butonul de mai jos pentru o cerere structurata catre echipa sau foloseste Ajutor din antet. "
-        "Fluxul standard de rezervare loc cu loc nu e disponibil in aplicatie pentru aceasta plecare.",
-        "btn_request_full_bus_assistance": "Solicita asistenta autocar complet",
-        "preparation_assisted_title": "Rezervare self-service indisponibila",
-        "preparation_assisted_body": "Acest tur foloseste o oferta tip autocar complet. Foloseste Ajutor pentru echipa. "
-        "Nu poti finaliza un hold de locuri din acest ecran.",
+        "catalog_card_assisted_notice": "Charter din catalog (autocar complet) pentru această plecare — vezi detaliile pentru cum poți rezerva cu echipa. Rezervarea loc cu loc în aplicație nu e disponibilă pentru această ofertă.",
+        "detail_assisted_booking_title": "Charter din catalog — rezervare cu echipa",
+        "detail_assisted_booking_body": "Aceasta este o ofertă charter / autocar complet din catalogul nostru. Apasă mai jos pentru a ne contacta despre rezervarea acestui tur (mesajul este legat de acest tur), sau folosește Ajutor din antet. "
+        "Fluxul obișnuit de rezervare loc cu loc în această aplicație nu este disponibil pentru această plecare.",
+        "btn_request_full_bus_assistance": "Contactează-ne despre această ofertă charter",
+        "preparation_assisted_title": "Acest charter din catalog nu este self-service aici",
+        "preparation_assisted_body": "Această plecare este o ofertă autocar complet din catalogul nostru. Folosește Ajutor pentru a contacta echipa despre rezervare. "
+        "Nu poți plasa singur un hold de locuri din acest ecran.",
         "waitlist_intro_sold_out": "Acest tur este epuizat. Poti intra pe lista de asteptare pentru a inregistra interesul — "
         "aceasta nu este o rezervare confirmata sau un loc garantat.",
         "waitlist_join_cta": "Intră pe lista de așteptare",
