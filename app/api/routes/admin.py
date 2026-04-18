@@ -79,8 +79,10 @@ from app.services.custom_request_booking_bridge_service import (
     CustomRequestBookingBridgeService,
 )
 from app.schemas.custom_marketplace import (
+    AdminCustomRequestBookingBridgeClose,
     AdminCustomRequestBookingBridgeCreate,
     AdminCustomRequestBookingBridgePatch,
+    AdminCustomRequestBookingBridgeReplace,
     AdminCustomRequestPatch,
     AdminCustomRequestResolutionApply,
     CustomMarketplaceRequestDetailRead,
@@ -1049,6 +1051,57 @@ def patch_admin_custom_request_booking_bridge(
         )
     except BookingBridgeNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from None
+    except BookingBridgeValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return row
+
+
+@router.post(
+    "/custom-requests/{request_id}/booking-bridge/close",
+    response_model=CustomRequestBookingBridgeRead,
+)
+def post_admin_custom_request_booking_bridge_close(
+    request_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminCustomRequestBookingBridgeClose = Body(...),
+) -> CustomRequestBookingBridgeRead:
+    """Track 5e: supersede or cancel the active bridge — no order/payment changes."""
+    try:
+        row = CustomRequestBookingBridgeService().close_active_bridge(
+            db,
+            request_id=request_id,
+            payload=payload,
+        )
+    except BookingBridgeNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from None
+    except BookingBridgeValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return row
+
+
+@router.post(
+    "/custom-requests/{request_id}/booking-bridge/replace",
+    response_model=CustomRequestBookingBridgeRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def post_admin_custom_request_booking_bridge_replace(
+    request_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminCustomRequestBookingBridgeReplace = Body(...),
+) -> CustomRequestBookingBridgeRead:
+    """Track 5e: supersede active bridge (if any) and create a new bridge in one transaction."""
+    try:
+        row = CustomRequestBookingBridgeService().replace_bridge(
+            db,
+            request_id=request_id,
+            payload=payload,
+        )
+    except BookingBridgeNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from None
+    except BookingBridgeConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from None
     except BookingBridgeValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     db.commit()

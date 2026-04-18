@@ -8,7 +8,12 @@ from decimal import Decimal, InvalidOperation
 import flet as ft
 import httpx
 
-from app.models.enums import PaymentStatus, TourStatus
+from app.models.enums import CustomRequestBookingBridgeStatus, PaymentStatus, TourStatus
+from app.schemas.custom_marketplace import (
+    MiniAppCustomRequestCustomerDetailRead,
+    MiniAppCustomRequestCustomerListRead,
+    MiniAppCustomRequestCustomerSummaryRead,
+)
 from app.schemas.mini_app import (
     MiniAppBookingDetailRead,
     MiniAppBookingFacadeState,
@@ -35,6 +40,15 @@ from mini_app.booking_grouping import partition_bookings_for_my_bookings_ui
 from mini_app.config import get_mini_app_settings
 from mini_app.presentation_notes import booking_detail_context_note
 from mini_app.rfq_bridge_logic import rfq_bridge_continue_to_payment_allowed
+from mini_app.rfq_hub_cta import (
+    DetailPrimaryCtaKind,
+    detail_context_line_keys,
+    pick_booking_for_bridge_tour,
+    request_status_lists_action_followup,
+    request_status_user_label,
+    request_type_user_label,
+    resolve_detail_primary_cta,
+)
 from mini_app.ui_strings import hold_timer_hint as _hold_timer_hint_i18n
 from mini_app.ui_strings import booking_facade_labels, payment_status_label, shell
 
@@ -78,6 +92,7 @@ class CatalogScreen:
         default_language_code: str,
         on_open_detail: Callable[[str], None],
         on_my_bookings: Callable[[], None],
+        on_my_requests: Callable[[], None],
         on_open_settings: Callable[[], None],
         on_help: Callable[[], None],
     ) -> None:
@@ -86,6 +101,7 @@ class CatalogScreen:
         self.language_code = default_language_code
         self.on_open_detail = on_open_detail
         self.on_my_bookings = on_my_bookings
+        self.on_my_requests = on_my_requests
         self.on_open_settings = on_open_settings
         self.on_help = on_help
 
@@ -150,6 +166,7 @@ class CatalogScreen:
             ft.Row(
                 [
                     ft.OutlinedButton(shell(lg, "btn_my_bookings"), on_click=lambda _: self.on_my_bookings()),
+                    ft.OutlinedButton(shell(lg, "btn_my_requests"), on_click=lambda _: self.on_my_requests()),
                     ft.OutlinedButton(shell(lg, "btn_language_settings"), on_click=lambda _: self.on_open_settings()),
                     ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help()),
                 ],
@@ -1413,8 +1430,26 @@ class RfqBridgeExecutionScreen:
                 language_code=self.language_code,
             )
         except httpx.HTTPStatusError as exc:
+            closed_msg: str | None = None
+            if exc.response is not None and exc.response.status_code == 404:
+                try:
+                    cd = await self.api_client.get_custom_request_for_customer(
+                        request_id=self.request_id,
+                        telegram_user_id=self.dev_telegram_user_id,
+                    )
+                    if cd.latest_booking_bridge_status in (
+                        CustomRequestBookingBridgeStatus.SUPERSEDED,
+                        CustomRequestBookingBridgeStatus.CANCELLED,
+                    ):
+                        closed_msg = shell(self.language_code, "rfq_bridge_closed_booking_path")
+                except Exception:
+                    closed_msg = None
             self._show_error(
-                CatalogScreen._http_error_message(exc, default="Unable to load bridge booking for this request.")
+                closed_msg
+                or CatalogScreen._http_error_message(
+                    exc,
+                    default="Unable to load bridge booking for this request.",
+                ),
             )
             self._render_empty_flow()
         except Exception:
@@ -2564,6 +2599,400 @@ class BookingDetailScreen:
         self.error_text.visible = True
 
 
+class MyRequestsListScreen:
+    """Track 5d: customer RFQ list — read-only summaries from Layer C."""
+
+    def __init__(
+        self,
+        page: ft.Page,
+        *,
+        api_client: MiniAppApiClient,
+        language_code: str,
+        dev_telegram_user_id: int,
+        on_back_catalog: Callable[[], None],
+        on_open_detail: Callable[[int], None],
+        on_help: Callable[[], None],
+        on_open_settings: Callable[[], None],
+    ) -> None:
+        self.page = page
+        self.api_client = api_client
+        self.language_code = language_code
+        self.dev_telegram_user_id = dev_telegram_user_id
+        self.on_back_catalog = on_back_catalog
+        self.on_open_detail = on_open_detail
+        self.on_help = on_help
+        self.on_open_settings = on_open_settings
+        lg = language_code
+        self.nav_back = ft.TextButton(
+            shell(lg, "back_to_catalog"),
+            icon=ft.Icons.ARROW_BACK,
+            on_click=lambda _: self.on_back_catalog(),
+        )
+        self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
+        self._title = ft.Text(shell(lg, "my_requests_title"), size=24, weight=ft.FontWeight.BOLD)
+        self._subtitle = ft.Text(shell(lg, "my_requests_subtitle"), size=13, color=ft.Colors.ON_SURFACE_VARIANT)
+        self.loading_row = ft.Row(
+            [
+                ft.ProgressRing(width=18, height=18, stroke_width=2),
+                ft.Text(shell(lg, "my_requests_loading")),
+            ],
+            visible=False,
+            spacing=10,
+        )
+        self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
+        self.items_column = ft.Column(spacing=12)
+
+    def sync_shell_labels(self) -> None:
+        lg = self.language_code
+        self.nav_back.text = shell(lg, "back_to_catalog")
+        self.nav_help.text = shell(lg, "btn_help")
+        self.nav_settings.text = shell(lg, "settings")
+        self._title.value = shell(lg, "my_requests_title")
+        self._subtitle.value = shell(lg, "my_requests_subtitle")
+        if self.loading_row.controls:
+            self.loading_row.controls[1].value = shell(lg, "my_requests_loading")
+
+    def build(self) -> ft.Control:
+        return scrollable_page(
+            ft.Row(
+                [self.nav_back, self.nav_help, self.nav_settings],
+                alignment=ft.MainAxisAlignment.START,
+                wrap=True,
+            ),
+            self._title,
+            self._subtitle,
+            self.loading_row,
+            self.error_text,
+            self.items_column,
+        )
+
+    async def load_list(self) -> None:
+        self.sync_shell_labels()
+        self.loading_row.visible = True
+        self.error_text.visible = False
+        self.items_column.controls.clear()
+        self.page.update()
+        try:
+            data = await self.api_client.list_custom_requests_for_customer(
+                telegram_user_id=self.dev_telegram_user_id,
+            )
+        except httpx.HTTPStatusError as exc:
+            self.error_text.value = CatalogScreen._http_error_message(exc, default="Unable to load requests.")
+            self.error_text.visible = True
+            self._render(None)
+        except Exception:
+            self.error_text.value = "Unable to load requests."
+            self.error_text.visible = True
+            self._render(None)
+        else:
+            self._render(data)
+        finally:
+            self.loading_row.visible = False
+            self.page.update()
+
+    def _render(self, data: MiniAppCustomRequestCustomerListRead | None) -> None:
+        self.items_column.controls.clear()
+        if data is None:
+            return
+        lg = self.language_code
+        if not data.items:
+            self.items_column.controls.append(
+                ft.Text(shell(lg, "my_requests_empty"), color=ft.Colors.ON_SURFACE_VARIANT)
+            )
+            return
+        for item in data.items:
+            self.items_column.controls.append(self._request_card(item))
+
+    def _request_card(self, item: MiniAppCustomRequestCustomerSummaryRead) -> ft.Control:
+        lg = self.language_code
+        st_label = request_status_user_label(lg, item.status)
+        follow = request_status_lists_action_followup(item.status)
+        hint = shell(lg, "my_requests_row_followup_hint" if follow else "my_requests_row_review_hint")
+        return ft.Container(
+            bgcolor=ft.Colors.SURFACE_CONTAINER_LOW,
+            border_radius=16,
+            padding=16,
+            content=ft.Column(
+                [
+                    ft.Text(st_label, weight=ft.FontWeight.W_600),
+                    ft.Text(item.customer_visible_summary, size=14, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Text(hint, size=12, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Row(
+                        [
+                            ft.FilledButton(
+                                shell(lg, "my_requests_row_view"),
+                                on_click=lambda _, rid=item.id: self.on_open_detail(rid),
+                            )
+                        ],
+                        alignment=ft.MainAxisAlignment.END,
+                    ),
+                ],
+                spacing=6,
+            ),
+        )
+
+
+class MyRequestDetailScreen:
+    """Track 5d: single RFQ detail + dominant CTA from existing APIs only."""
+
+    def __init__(
+        self,
+        page: ft.Page,
+        *,
+        api_client: MiniAppApiClient,
+        language_code: str,
+        dev_telegram_user_id: int,
+        on_back_list: Callable[[], None],
+        on_open_bridge: Callable[[int], None],
+        on_continue_payment: Callable[[str, int], None],
+        on_open_booking: Callable[[int], None],
+        on_help: Callable[[], None],
+        on_open_settings: Callable[[], None],
+    ) -> None:
+        self.page = page
+        self.api_client = api_client
+        self.language_code = language_code
+        self.dev_telegram_user_id = dev_telegram_user_id
+        self.on_back_list = on_back_list
+        self.on_open_bridge = on_open_bridge
+        self.on_continue_payment = on_continue_payment
+        self.on_open_booking = on_open_booking
+        self.on_help = on_help
+        self.on_open_settings = on_open_settings
+        self.request_id: int | None = None
+        self._payment_tour_code: str | None = None
+        self._cta_kind: DetailPrimaryCtaKind = DetailPrimaryCtaKind.NONE
+        self._cta_order_id: int | None = None
+
+        lg = language_code
+        self.nav_back = ft.TextButton(
+            shell(lg, "my_requests_detail_back"),
+            icon=ft.Icons.ARROW_BACK,
+            on_click=lambda _: self.on_back_list(),
+        )
+        self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
+        self.loading_row = ft.Row(
+            [
+                ft.ProgressRing(width=18, height=18, stroke_width=2),
+                ft.Text(shell(lg, "my_requests_loading")),
+            ],
+            visible=False,
+            spacing=10,
+        )
+        self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
+        self.body_column = ft.Column(spacing=12)
+        self._primary_cta_button = ft.FilledButton(visible=False, on_click=lambda _: self._on_primary_cta())
+
+    def set_request_id(self, request_id: int) -> None:
+        self.request_id = request_id
+
+    def sync_shell_labels(self) -> None:
+        lg = self.language_code
+        self.nav_back.text = shell(lg, "my_requests_detail_back")
+        self.nav_help.text = shell(lg, "btn_help")
+        self.nav_settings.text = shell(lg, "settings")
+        if self.loading_row.controls:
+            self.loading_row.controls[1].value = shell(lg, "my_requests_loading")
+
+    def build(self) -> ft.Control:
+        return scrollable_page(
+            ft.Row(
+                [self.nav_back, self.nav_help, self.nav_settings],
+                alignment=ft.MainAxisAlignment.START,
+                wrap=True,
+            ),
+            self.loading_row,
+            self.error_text,
+            self.body_column,
+            ft.Row([self._primary_cta_button], alignment=ft.MainAxisAlignment.START),
+        )
+
+    def _on_primary_cta(self) -> None:
+        rid = self.request_id
+        if rid is None:
+            return
+        kind = self._cta_kind
+        oid = self._cta_order_id
+        tc = self._payment_tour_code
+        if kind == DetailPrimaryCtaKind.CONTINUE_TO_PAYMENT and tc is not None and oid is not None:
+            self.on_continue_payment(tc, oid)
+        elif kind == DetailPrimaryCtaKind.CONTINUE_BOOKING:
+            self.on_open_bridge(rid)
+        elif kind == DetailPrimaryCtaKind.OPEN_BOOKING and oid is not None:
+            self.on_open_booking(oid)
+
+    async def load_detail(self) -> None:
+        self.sync_shell_labels()
+        self.body_column.controls.clear()
+        self._primary_cta_button.visible = False
+        self.error_text.visible = False
+        self._cta_kind = DetailPrimaryCtaKind.NONE
+        self._cta_order_id = None
+        self._payment_tour_code = None
+        if self.request_id is None:
+            return
+        self.loading_row.visible = True
+        self.page.update()
+        detail: MiniAppCustomRequestCustomerDetailRead | None = None
+        bookings: MiniAppBookingsListRead | None = None
+        prep: MiniAppBridgeExecutionPreparationResponse | None = None
+        prep_http_not_found = False
+        try:
+            detail = await self.api_client.get_custom_request_for_customer(
+                request_id=self.request_id,
+                telegram_user_id=self.dev_telegram_user_id,
+            )
+        except httpx.HTTPStatusError as exc:
+            self.error_text.value = CatalogScreen._http_error_message(exc, default="Unable to load this request.")
+            self.error_text.visible = True
+        except Exception:
+            self.error_text.value = "Unable to load this request."
+            self.error_text.visible = True
+        try:
+            bookings = await self.api_client.list_my_bookings(
+                telegram_user_id=self.dev_telegram_user_id,
+                language_code=self.language_code,
+            )
+        except Exception:
+            bookings = None
+        if detail is not None:
+            try:
+                prep = await self.api_client.get_booking_bridge_preparation(
+                    request_id=self.request_id,
+                    telegram_user_id=self.dev_telegram_user_id,
+                    language_code=self.language_code,
+                )
+            except httpx.HTTPStatusError as exc:
+                if exc.response is not None and exc.response.status_code == 404:
+                    prep_http_not_found = True
+                prep = None
+            except Exception:
+                prep = None
+
+        matching: MiniAppBookingListItemRead | None = None
+        hold_order_id: int | None = None
+        elig: MiniAppBridgePaymentEligibilityRead | None = None
+        tour_code_for_match: str | None = None
+        if prep is not None:
+            tour_code_for_match = prep.tour_code
+        elif detail is not None:
+            tour_code_for_match = detail.latest_booking_bridge_tour_code
+        if tour_code_for_match is not None and bookings is not None:
+            matching = pick_booking_for_bridge_tour(bookings.items, tour_code_for_match)
+            if (
+                matching is not None
+                and matching.facade_state == MiniAppBookingFacadeState.ACTIVE_TEMPORARY_RESERVATION
+            ):
+                hold_order_id = matching.summary.order.id
+        if prep is not None and hold_order_id is not None:
+            try:
+                elig = await self.api_client.get_booking_bridge_payment_eligibility(
+                    request_id=self.request_id,
+                    telegram_user_id=self.dev_telegram_user_id,
+                    order_id=hold_order_id,
+                )
+            except Exception:
+                elig = None
+
+        if prep is not None:
+            self._payment_tour_code = prep.tour_code
+        elif matching is not None:
+            self._payment_tour_code = matching.summary.tour.code
+        else:
+            self._payment_tour_code = tour_code_for_match
+
+        if detail is not None:
+            self._cta_kind, self._cta_order_id = resolve_detail_primary_cta(
+                prep=prep,
+                payment_elig=elig,
+                hold_order_id=hold_order_id,
+                matching_booking=matching,
+                latest_booking_bridge_status=detail.latest_booking_bridge_status,
+            )
+        else:
+            self._cta_kind, self._cta_order_id = DetailPrimaryCtaKind.NONE, None
+
+        if detail is not None:
+            self._render_body(detail, prep, prep_http_not_found, matching)
+        self._sync_primary_cta_button()
+        self.loading_row.visible = False
+        self.page.update()
+
+    def _render_body(
+        self,
+        detail: MiniAppCustomRequestCustomerDetailRead,
+        prep: MiniAppBridgeExecutionPreparationResponse | None,
+        prep_http_not_found: bool,
+        matching: MiniAppBookingListItemRead | None,
+    ) -> None:
+        lg = self.language_code
+        st = request_status_user_label(lg, detail.status)
+        type_l = request_type_user_label(lg, detail.request_type)
+        end_part = (
+            shell(lg, "my_requests_detail_date_end", end=str(detail.travel_date_end))
+            if detail.travel_date_end
+            else ""
+        )
+        lines: list[ft.Control] = [
+            ft.Text(shell(lg, "my_requests_detail_title"), size=22, weight=ft.FontWeight.BOLD),
+            ft.Text(shell(lg, "my_requests_detail_status", label=st)),
+            ft.Text(shell(lg, "my_requests_detail_type", label=type_l)),
+            ft.Text(
+                shell(
+                    lg,
+                    "my_requests_detail_dates",
+                    start=str(detail.travel_date_start),
+                    end=end_part,
+                )
+            ),
+            ft.Text(shell(lg, "my_requests_detail_summary"), weight=ft.FontWeight.W_600),
+            ft.Text(detail.customer_visible_summary, color=ft.Colors.ON_SURFACE_VARIANT),
+        ]
+        ctx_key, _ = detail_context_line_keys(
+            prep=prep,
+            prep_http_not_found=prep_http_not_found,
+            latest_booking_bridge_status=detail.latest_booking_bridge_status,
+        )
+        if ctx_key:
+            lines.append(ft.Text(shell(lg, ctx_key), color=ft.Colors.ON_SURFACE_VARIANT))
+        if prep is not None and not prep.self_service_available:
+            bm = (prep.blocked_message or "").strip()
+            if bm:
+                lines.append(
+                    ft.Container(
+                        padding=ft.padding.only(top=4),
+                        content=ft.Text(bm, size=13, color=ft.Colors.ON_SURFACE_VARIANT),
+                    )
+                )
+        if matching is not None:
+            t = matching.summary.tour.localized_content.title
+            oid = matching.summary.order.id
+            lines.append(
+                ft.Text(
+                    shell(lg, "my_requests_detail_bridge_line", line=f"{t} · #{oid}"),
+                    size=13,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                )
+            )
+        self.body_column.controls = lines
+
+    def _sync_primary_cta_button(self) -> None:
+        lg = self.language_code
+        kind = self._cta_kind
+        if kind == DetailPrimaryCtaKind.NONE:
+            self._primary_cta_button.visible = False
+            return
+        self._primary_cta_button.visible = True
+        if kind == DetailPrimaryCtaKind.CONTINUE_TO_PAYMENT:
+            self._primary_cta_button.text = shell(lg, "my_requests_cta_continue_payment")
+        elif kind == DetailPrimaryCtaKind.CONTINUE_BOOKING:
+            self._primary_cta_button.text = shell(lg, "my_requests_cta_continue_booking")
+        else:
+            self._primary_cta_button.text = shell(lg, "my_requests_cta_open_booking")
+
+
 class CustomRequestScreen:
     """Track 4: structured RFQ from Mini App (no order created)."""
 
@@ -2940,6 +3369,7 @@ class MiniAppShell:
             default_language_code=settings.mini_app_default_language,
             on_open_detail=self.open_tour_detail,
             on_my_bookings=self.open_bookings,
+            on_my_requests=self.open_my_requests,
             on_open_settings=self.open_settings,
             on_help=self.open_help,
         )
@@ -2949,6 +3379,28 @@ class MiniAppShell:
             language_code=settings.mini_app_default_language,
             dev_telegram_user_id=self._dev_telegram_user_id,
             on_back_catalog=self.open_catalog,
+            on_open_booking=self.open_booking_detail,
+            on_help=self.open_help,
+            on_open_settings=self.open_settings,
+        )
+        self.my_requests_list_screen = MyRequestsListScreen(
+            page,
+            api_client=self.api_client,
+            language_code=settings.mini_app_default_language,
+            dev_telegram_user_id=self._dev_telegram_user_id,
+            on_back_catalog=self.open_catalog,
+            on_open_detail=self.open_my_request_detail,
+            on_help=self.open_help,
+            on_open_settings=self.open_settings,
+        )
+        self.my_request_detail_screen = MyRequestDetailScreen(
+            page,
+            api_client=self.api_client,
+            language_code=settings.mini_app_default_language,
+            dev_telegram_user_id=self._dev_telegram_user_id,
+            on_back_list=self.open_my_requests,
+            on_open_bridge=self.open_rfq_bridge_booking,
+            on_continue_payment=self.open_payment_entry,
             on_open_booking=self.open_booking_detail,
             on_help=self.open_help,
             on_open_settings=self.open_settings,
@@ -3045,6 +3497,8 @@ class MiniAppShell:
         self.reservation_preparation_screen.language_code = code
         self.reservation_success_screen.language_code = code
         self.my_bookings_screen.language_code = code
+        self.my_requests_list_screen.language_code = code
+        self.my_request_detail_screen.language_code = code
         self.booking_detail_screen.language_code = code
         self.payment_entry_screen.language_code = code
         self.help_screen.language_code = code
@@ -3058,6 +3512,8 @@ class MiniAppShell:
         self.reservation_success_screen.sync_shell_labels()
         self.payment_entry_screen.sync_shell_labels()
         self.my_bookings_screen.sync_shell_labels()
+        self.my_requests_list_screen.sync_shell_labels()
+        self.my_request_detail_screen.sync_shell_labels()
         self.booking_detail_screen.sync_shell_labels()
         self.help_screen.sync_shell_labels()
         self.custom_request_screen.sync_shell_labels()
@@ -3090,6 +3546,12 @@ class MiniAppShell:
 
     def open_rfq_bridge_booking(self, request_id: int) -> None:
         self.page.go(f"/custom-requests/{request_id}/bridge")
+
+    def open_my_requests(self) -> None:
+        self.page.go("/my-requests")
+
+    def open_my_request_detail(self, request_id: int) -> None:
+        self.page.go(f"/my-requests/{request_id}")
 
     def close_modal(self) -> None:
         target = self._modal_return_route or "/"
@@ -3132,6 +3594,47 @@ class MiniAppShell:
             )
             self.page.update()
             self.page.run_task(self.rfq_bridge_execution_screen.load_initial)
+            return
+
+        my_request_detail_id = MiniAppShell._extract_my_request_detail_id(self.page.route)
+        if my_request_detail_id is not None:
+            self.my_request_detail_screen.set_request_id(my_request_detail_id)
+            self.page.views.append(
+                ft.View(
+                    route="/my-requests",
+                    controls=[self.my_requests_list_screen.build()],
+                    padding=0,
+                    spacing=0,
+                )
+            )
+            self.page.views.append(
+                ft.View(
+                    route=(self.page.route or "/").strip() or "/",
+                    controls=[self.my_request_detail_screen.build()],
+                    padding=0,
+                    spacing=0,
+                )
+            )
+            self.page.update()
+
+            async def _load_my_request_stack() -> None:
+                await self.my_requests_list_screen.load_list()
+                await self.my_request_detail_screen.load_detail()
+
+            self.page.run_task(_load_my_request_stack)
+            return
+
+        if self._is_my_requests_list_route(self.page.route):
+            self.page.views.append(
+                ft.View(
+                    route="/my-requests",
+                    controls=[self.my_requests_list_screen.build()],
+                    padding=0,
+                    spacing=0,
+                )
+            )
+            self.page.update()
+            self.page.run_task(self.my_requests_list_screen.load_list)
             return
 
         if self._is_settings_route(self.page.route):
@@ -3363,6 +3866,22 @@ class MiniAppShell:
         if not route:
             return None
         m = re.match(r"^/custom-requests/(\d+)/bridge/?$", route.strip())
+        if not m:
+            return None
+        return int(m.group(1))
+
+    @staticmethod
+    def _is_my_requests_list_route(route: str | None) -> bool:
+        if not route:
+            return False
+        normalized = route.strip()
+        return normalized == "/my-requests" or normalized == "/my-requests/"
+
+    @staticmethod
+    def _extract_my_request_detail_id(route: str | None) -> int | None:
+        if not route:
+            return None
+        m = re.match(r"^/my-requests/(\d+)/?$", route.strip())
         if not m:
             return None
         return int(m.group(1))

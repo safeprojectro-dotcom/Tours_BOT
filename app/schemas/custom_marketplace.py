@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -14,7 +15,11 @@ from app.models.enums import (
     CustomMarketplaceRequestType,
     CustomRequestBookingBridgeStatus,
     SupplierCustomRequestResponseKind,
+    SupplierOfferPaymentMode,
+    TourSalesMode,
 )
+from app.schemas.effective_commercial_execution_policy import EffectiveCommercialExecutionPolicyRead
+from app.services.effective_commercial_execution_policy import validate_supplier_declared_rfq_commercial_pair
 
 
 class MiniAppCustomRequestCreate(BaseModel):
@@ -109,6 +114,8 @@ class SupplierCustomRequestResponseRead(BaseModel):
     supplier_message: str | None
     quoted_price: Decimal | None
     quoted_currency: str | None
+    supplier_declared_sales_mode: TourSalesMode | None = None
+    supplier_declared_payment_mode: SupplierOfferPaymentMode | None = None
     is_selected: bool = False
     created_at: datetime
     updated_at: datetime
@@ -133,6 +140,7 @@ class CustomMarketplaceRequestDetailRead(BaseModel):
     responses: list[SupplierCustomRequestResponseRead]
     customer_telegram_user_id: int | None = None
     booking_bridge: CustomRequestBookingBridgeRead | None = None
+    effective_execution_policy: EffectiveCommercialExecutionPolicyRead | None = None
 
 
 class AdminCustomRequestBookingBridgeCreate(BaseModel):
@@ -173,11 +181,44 @@ class AdminCustomRequestBookingBridgePatch(BaseModel):
         return self
 
 
+class AdminCustomRequestBookingBridgeClose(BaseModel):
+    """Track 5e: close the active bridge only — no Layer A side effects."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    terminal_status: Literal["superseded", "cancelled"]
+    admin_note: str | None = Field(default=None, max_length=8000)
+
+    @field_validator("admin_note")
+    @classmethod
+    def strip_note(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s or None
+
+
+class AdminCustomRequestBookingBridgeReplace(AdminCustomRequestBookingBridgeCreate):
+    """Track 5e: supersede active bridge (if any) and create a new bridge row in one transaction."""
+
+    supersede_note: str | None = Field(default=None, max_length=8000)
+
+    @field_validator("supersede_note")
+    @classmethod
+    def strip_supersede_note(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s or None
+
+
 class SupplierCustomRequestResponseUpsert(BaseModel):
     response_kind: SupplierCustomRequestResponseKind
     supplier_message: str | None = Field(default=None, max_length=8000)
     quoted_price: Decimal | None = Field(default=None, ge=0)
     quoted_currency: str | None = Field(default=None, max_length=8)
+    supplier_declared_sales_mode: TourSalesMode | None = None
+    supplier_declared_payment_mode: SupplierOfferPaymentMode | None = None
 
     @field_validator("supplier_message", "quoted_currency")
     @classmethod
@@ -189,11 +230,23 @@ class SupplierCustomRequestResponseUpsert(BaseModel):
 
     @model_validator(mode="after")
     def proposed_rules(self) -> SupplierCustomRequestResponseUpsert:
+        if self.response_kind == SupplierCustomRequestResponseKind.DECLINED:
+            if self.supplier_declared_sales_mode is not None or self.supplier_declared_payment_mode is not None:
+                raise ValueError("Declined responses must not set supplier_declared sales/payment fields.")
+            return self
         if self.response_kind == SupplierCustomRequestResponseKind.PROPOSED:
             if not (self.supplier_message or "").strip():
                 raise ValueError("supplier_message is required when response_kind is proposed.")
             if self.quoted_price is not None and not (self.quoted_currency or "").strip():
                 raise ValueError("quoted_currency is required when quoted_price is set.")
+            if self.supplier_declared_sales_mode is None or self.supplier_declared_payment_mode is None:
+                raise ValueError(
+                    "supplier_declared_sales_mode and supplier_declared_payment_mode are required when proposed.",
+                )
+            validate_supplier_declared_rfq_commercial_pair(
+                sales_mode=self.supplier_declared_sales_mode,
+                payment_mode=self.supplier_declared_payment_mode,
+            )
         return self
 
 
@@ -267,6 +320,8 @@ class MiniAppCustomRequestCustomerDetailRead(BaseModel):
     request_type: CustomMarketplaceRequestType
     travel_date_start: date
     travel_date_end: date | None
+    latest_booking_bridge_status: CustomRequestBookingBridgeStatus | None = None
+    latest_booking_bridge_tour_code: str | None = None
 
 
 class MiniAppCustomRequestCreatedRead(BaseModel):

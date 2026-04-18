@@ -24,8 +24,10 @@ from app.repositories.custom_request_booking_bridge import CustomRequestBookingB
 from app.repositories.user import UserRepository
 from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
 from app.schemas.custom_marketplace import (
+    AdminCustomRequestBookingBridgeClose,
     AdminCustomRequestBookingBridgeCreate,
     AdminCustomRequestBookingBridgePatch,
+    AdminCustomRequestBookingBridgeReplace,
     CustomRequestBookingBridgeRead,
 )
 
@@ -65,7 +67,6 @@ _ALLOWED_REQUEST_STATUSES: frozenset[CustomMarketplaceRequestStatus] = frozenset
         CustomMarketplaceRequestStatus.CLOSED_ASSISTED,
     },
 )
-
 
 class CustomRequestBookingBridgeService:
     def __init__(self) -> None:
@@ -163,6 +164,51 @@ class CustomRequestBookingBridgeService:
         if resp.response_kind != SupplierCustomRequestResponseKind.PROPOSED:
             raise BookingBridgeValidationError("Selected response must be proposed for a booking bridge.")
         return resp
+
+    def close_active_bridge(
+        self,
+        session: Session,
+        *,
+        request_id: int,
+        payload: AdminCustomRequestBookingBridgeClose,
+    ) -> CustomRequestBookingBridgeRead:
+        """Track 5e: transition active bridge to superseded or cancelled (no orders/payments touched)."""
+        active = self._bridges.get_active_for_request(session, request_id=request_id)
+        if active is None:
+            raise BookingBridgeNotFoundError("No active booking bridge for this request.")
+        target = (
+            CustomRequestBookingBridgeStatus.SUPERSEDED
+            if payload.terminal_status == "superseded"
+            else CustomRequestBookingBridgeStatus.CANCELLED
+        )
+        active.bridge_status = target
+        if payload.admin_note is not None:
+            active.admin_note = payload.admin_note
+        session.add(active)
+        session.flush()
+        session.refresh(active)
+        return self.to_read(active)
+
+    def replace_bridge(
+        self,
+        session: Session,
+        *,
+        request_id: int,
+        payload: AdminCustomRequestBookingBridgeReplace,
+    ) -> CustomRequestBookingBridgeRead:
+        """Supersede the active bridge (if any) and create a new bridge — single call, no 409 window."""
+        active = self._bridges.get_active_for_request(session, request_id=request_id)
+        if active is not None:
+            active.bridge_status = CustomRequestBookingBridgeStatus.SUPERSEDED
+            if payload.supersede_note is not None:
+                active.admin_note = payload.supersede_note
+            session.add(active)
+            session.flush()
+        create_payload = AdminCustomRequestBookingBridgeCreate(
+            tour_id=payload.tour_id,
+            admin_note=payload.admin_note,
+        )
+        return self.create_bridge(session, request_id=request_id, payload=create_payload)
 
     def create_bridge(
         self,

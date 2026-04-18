@@ -870,7 +870,7 @@ closed for **Track 5b.2** scope (explicit preparation + hold orchestration + tes
 - **No** second reservation or payment architecture in UI; **no** bypass of **`EffectiveCommercialExecutionPolicyService`** / **`PaymentEntryService`**; **no** **`full_bus`** self-serve enablement.
 
 ### Residual / forward
-- Customer **multi-quote** comparison UI, bridge **supersede/cancel**, richer **“my requests”** hub in Mini App, bot deep-link templates — **not** **5c**.
+- Customer **multi-quote** comparison UI, bridge **supersede/cancel**, bot deep-link templates — **not** **5c**; **My Requests** hub — **Track 5d** (**§32**).
 
 ### Stabilization review (Track 5c — closure)
 - **Scope creep:** **None found** — changes are confined to **`mini_app/`** (**`api_client`**, **`app.py`**, **`ui_strings`**, **`rfq_bridge_logic`**, unit test); **no** edits to **`app/services/*`** booking/payment, **no** new FastAPI routes, **no** provider/session model, **no** quote-comparison UI, **no** bridge lifecycle/admin/auth/handoff redesign (repo grep + file review).
@@ -882,3 +882,57 @@ closed for **Track 5b.2** scope (explicit preparation + hold orchestration + tes
 
 ### Status
 **closed** for **Track 5c** scope (Flet wiring + CTA gating test + documentation) — **stabilization reviewed**.
+
+---
+
+## 32. V2 Track 5d — Mini App “My Requests” / RFQ status hub
+
+### Intent
+- **Mini App only:** **`/my-requests`** list + **`/my-requests/{id}`** detail — consumes **existing** **`GET /mini-app/custom-requests`**, **`GET .../{id}`**, **`GET .../booking-bridge/preparation`**, **`GET /mini-app/bookings`**, and **`GET .../booking-bridge/payment-eligibility`** (when an active temporary hold exists on the bridge **`tour_code`**).
+- **Dominant CTA** (detail): **`Continue to payment`** only when eligibility allows; else **`Continue booking`** when **`self_service_available`**; else **`Open booking`** when a **Layer A** row exists for the linked tour (e.g. confirmed); else **no** CTA — **no** new commercial predicates beyond composing existing reads.
+
+### Explicit non-goals
+- **No** multi-quote comparison, **no** bridge supersede/cancel, **no** backend RFQ schema changes, **no** new payment/booking execution paths.
+
+### Residual / forward
+- Richer admin/customer notifications, bot deep links to **`/my-requests/{id}`**, quote comparison — **not** **5d**.
+
+### Stabilization review (Track 5d — closure)
+- **Scope creep:** **None found** — implementation is confined to **`mini_app/`** (**`app.py`**, **`rfq_hub_cta.py`**, **`ui_strings`**, unit test); **no** new **`app/api/*`** routes, **no** service-layer booking/payment changes, **no** quote comparison, bridge supersede/cancel, notifications, auth, or handoff redesign (grep **`app/api`**, **`app/services`**).
+- **Backend/API composition:** **`MiniAppApiClient`** unchanged for new endpoints — hub uses existing **`GET /mini-app/custom-requests`**, **`GET /mini-app/custom-requests/{id}`**, **`GET .../booking-bridge/preparation`**, **`GET /mini-app/bookings`**, **`GET .../booking-bridge/payment-eligibility`** (same query/body contracts as Tracks **5b.2** / **5b.3b** / bookings list); **no** client-side contract widening.
+- **Routing:** **`/my-requests`** and **`/my-requests/{id}`** are Flet-only paths; **`_extract_my_request_detail_id`** regex does not collide with **`/custom-requests/{id}/bridge`** or **`/custom-request`**; detail stack mirrors **`/bookings/{id}`** pattern (catalog + list + detail views).
+- **CTA resolution:** **`resolve_detail_primary_cta`** returns a **single** dominant kind (payment → confirmed/in-trip open booking → continue booking → any matching tour open booking → none); **`MyRequestDetailScreen`** exposes at most one **`FilledButton`** — mutually exclusive by construction.
+- **Bridge/payment reuse:** **`Continue booking`** → **`on_open_bridge` → `open_rfq_bridge_booking` → `/custom-requests/{id}/bridge`** (Track **5c**); **`Continue to payment`** → **`on_continue_payment` → `open_payment_entry`** → standard payment stack + **`POST .../payment-entry`**; **`Open booking`** → **`open_booking_detail`** → **`/bookings/{order_id}`** — **no** parallel RFQ payment or hold UI.
+- **Accepted limitation (documented):** **`pick_booking_for_bridge_tour`** runs only when **`prep` is not None** (linked **`tour_code`** from bridge). If preparation returns **404**, the hub does **not** infer **`Open booking`** from generic bookings alone — avoids false links between unrelated orders and RFQs; users still have **My bookings**.
+- **Tests:** **`test_mini_app_rfq_hub_cta`**; regressions **`test_mini_app_rfq_bridge_wiring`**, **`test_api_mini_app`**, **`test_custom_marketplace_track5a`** — **pass** (focused acceptance run).
+
+### Status
+**closed** for **Track 5d** scope (Flet hub + **`mini_app/rfq_hub_cta`** + tests + documentation) — **stabilization reviewed**.
+
+**Track 5e follow-on (hub):** **`MyRequestDetailScreen`** now uses **`latest_booking_bridge_tour_code`** from **`GET /mini-app/custom-requests/{id}`** when preparation is unavailable so **`pick_booking_for_bridge_tour`** can still align **Layer A** bookings to the linked tour after a terminal bridge — see **§33**.
+
+---
+
+## 33. V2 Track 5e — Bridge supersede / cancel lifecycle
+
+### Intent
+- **Admin-only** transitions: active bridge → **`superseded`** or **`cancelled`** (**`POST .../booking-bridge/close`**); **replace** path (**`POST .../booking-bridge/replace`**) sets active row to **`superseded`** (if any) then **`create_bridge`** in the **same** DB transaction — avoids the **409** window between close and recreate.
+- **Orchestration only:** bridge rows remain **non-authoritative** for orders/payments; close/replace **must not** touch **`orders`** / **`payments`** or **`CustomMarketplaceRequest.status`**.
+- **Customer fail-closed:** **`resolve_customer_execution_context`** uses **`get_active_for_request`** (terminal statuses excluded); preparation / reservations / payment-eligibility return **404** when no active bridge.
+
+### Explicit non-goals (verified)
+- **No** auto-supersede on winner change, **no** `superseded_by_bridge_id`, **no** refund/cancel-order from bridge, **no** new payment/booking **routes** or provider flows, **no** auth/handoff redesign, **no** RFQ request lifecycle redesign.
+
+### Additive read contract
+- **`MiniAppCustomRequestCustomerDetailRead`:** **`latest_booking_bridge_status`**, **`latest_booking_bridge_tour_code`** (nullable) — JSON clients that ignore unknown keys remain safe; strict clients must accept new optional fields on this response type.
+
+### Residual / forward
+- Partial unique index (one **active** bridge per **`request_id`**) if ops reports rare double-**POST** races (**§27**); structured closure reason / audit columns — **explicit** slices only.
+
+### Stabilization review (Track 5e — closure)
+- **Scope creep:** **None found** — changes are confined to bridge service/admin routes, customer detail enrichment, Mini App hub/bridge copy + **`rfq_hub_cta`**, **`ui_strings`**, **`tests/unit/test_custom_request_booking_bridge_track5e.py`**, **`test_mini_app_rfq_hub_cta`**; **no** order/payment write services invoked from close/replace; **no** **`TemporaryReservationService`** / **`PaymentEntryService`** mutations from bridge lifecycle.
+- **Layer A:** holds and payment validity remain enforced by existing Layer A services; bridge close does not expire or cancel reservations; **Continue to payment** on terminal bridge + active hold uses **`order_id`** via existing **`open_payment_entry`** stack (**`POST .../payment-entry`** still authoritative).
+- **Tests:** **`test_custom_request_booking_bridge_track5e`** (close, replace, 404 on execution paths, request status + order unchanged); **`test_mini_app_rfq_hub_cta`** (terminal + hold CTA); regressions **`test_custom_request_booking_bridge_execution_track5b2`**, **`test_custom_request_booking_bridge_payment_eligibility_track5b3b`**, **`test_custom_request_booking_bridge_track5b1`** — **pass** (focused acceptance run).
+
+### Status
+**closed** for **Track 5e** scope (admin close/replace + fail-closed customer bridge endpoints + hub/detail additive fields + tests + documentation) — **stabilization reviewed**.

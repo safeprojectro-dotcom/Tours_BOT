@@ -10,12 +10,15 @@ from app.models.enums import (
     CustomMarketplaceRequestSource,
     CustomMarketplaceRequestStatus,
     SupplierCustomRequestResponseKind,
+    SupplierOfferPaymentMode,
+    TourSalesMode,
 )
 from app.models.supplier import Supplier
 from app.repositories.custom_marketplace import (
     CustomMarketplaceRequestRepository,
     SupplierCustomRequestResponseRepository,
 )
+from app.repositories.custom_request_booking_bridge import CustomRequestBookingBridgeRepository
 from app.repositories.user import UserRepository
 from app.schemas.custom_marketplace import (
     AdminCustomRequestResolutionApply,
@@ -29,7 +32,9 @@ from app.schemas.custom_marketplace import (
     SupplierCustomRequestResponseRead,
     SupplierCustomRequestResponseUpsert,
 )
+from app.models.tour import Tour
 from app.services.custom_request_booking_bridge_service import CustomRequestBookingBridgeService
+from app.services.effective_commercial_execution_policy import EffectiveCommercialExecutionPolicyService
 
 
 class CustomMarketplaceUserNotFoundError(Exception):
@@ -147,11 +152,22 @@ class CustomMarketplaceRequestService:
         responses = [_response_read(r, selected_supplier_response_id=sel_id) for r in row.supplier_responses]
         tg = row.user.telegram_user_id if row.user is not None else None
         bridge = CustomRequestBookingBridgeService().read_for_admin_detail(session, request_id=request_id)
+        effective = None
+        if bridge is not None and bridge.tour_id is not None and sel_id is not None:
+            tour = session.get(Tour, bridge.tour_id)
+            sel_resp = session.get(SupplierCustomRequestResponse, sel_id)
+            if tour is not None and sel_resp is not None:
+                effective = EffectiveCommercialExecutionPolicyService.resolve(
+                    tour=tour,
+                    request=row,
+                    response=sel_resp,
+                )
         return CustomMarketplaceRequestDetailRead(
             request=CustomMarketplaceRequestRead.model_validate(row, from_attributes=True),
             responses=responses,
             customer_telegram_user_id=tg,
             booking_bridge=bridge,
+            effective_execution_policy=effective,
         )
 
     def admin_patch(
@@ -322,8 +338,13 @@ class CustomMarketplaceRequestService:
         ):
             raise CustomMarketplaceRequestNotOpenError
         msg = payload.supplier_message
+        decl_sales: TourSalesMode | None = None
+        decl_pay: SupplierOfferPaymentMode | None = None
         if payload.response_kind == SupplierCustomRequestResponseKind.DECLINED:
             msg = (msg or "").strip() or None
+        else:
+            decl_sales = payload.supplier_declared_sales_mode
+            decl_pay = payload.supplier_declared_payment_mode
         row = self._responses.upsert(
             session,
             request_id=request_id,
@@ -332,6 +353,8 @@ class CustomMarketplaceRequestService:
             supplier_message=msg,
             quoted_price=payload.quoted_price,
             quoted_currency=payload.quoted_currency,
+            supplier_declared_sales_mode=decl_sales,
+            supplier_declared_payment_mode=decl_pay,
         )
         session.refresh(row)
         sup = session.get(Supplier, supplier_id)
@@ -377,6 +400,18 @@ class CustomMarketplaceRequestService:
         row = self._requests.get_for_customer_user(session, request_id=request_id, user_id=user.id)
         if row is None:
             raise CustomMarketplaceRequestNotFoundError
+        latest_bridge = CustomRequestBookingBridgeRepository().get_latest_for_request(
+            session,
+            request_id=row.id,
+        )
+        bridge_status = None
+        bridge_tour_code: str | None = None
+        if latest_bridge is not None:
+            bridge_status = latest_bridge.bridge_status
+            if latest_bridge.tour_id is not None:
+                tour = session.get(Tour, latest_bridge.tour_id)
+                if tour is not None:
+                    bridge_tour_code = tour.code
         return MiniAppCustomRequestCustomerDetailRead(
             id=row.id,
             status=row.status,
@@ -384,6 +419,8 @@ class CustomMarketplaceRequestService:
             request_type=row.request_type,
             travel_date_start=row.travel_date_start,
             travel_date_end=row.travel_date_end,
+            latest_booking_bridge_status=bridge_status,
+            latest_booking_bridge_tour_code=bridge_tour_code,
         )
 
 
@@ -412,6 +449,8 @@ def _response_read(
         supplier_message=row.supplier_message,
         quoted_price=row.quoted_price,
         quoted_currency=row.quoted_currency,
+        supplier_declared_sales_mode=row.supplier_declared_sales_mode,
+        supplier_declared_payment_mode=row.supplier_declared_payment_mode,
         is_selected=is_selected,
         created_at=row.created_at,
         updated_at=row.updated_at,
