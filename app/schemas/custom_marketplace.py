@@ -78,6 +78,29 @@ class BotCustomRequestCreate(BaseModel):
         return self
 
 
+class CustomMarketplaceRequestOperationalListHintsRead(BaseModel):
+    """V1: admin/ops scan line + handling hints — English, read-only; not shown to customers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    lifecycle_stage_label: str
+    is_terminal: bool
+    scan_summary_line: str
+    proposed_supplier_response_count: int
+    has_selected_supplier_response: bool
+    handling_hint: str
+
+
+class CustomMarketplaceRequestOperationalDetailHintsRead(CustomMarketplaceRequestOperationalListHintsRead):
+    """V1: extends list hints with booking-bridge context for admin detail only."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    booking_bridge_present: bool
+    booking_bridge_operational_label: str | None = None
+    continuation_summary: str
+
+
 class CustomMarketplaceRequestRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -96,6 +119,7 @@ class CustomMarketplaceRequestRead(BaseModel):
     commercial_resolution_kind: CommercialResolutionKind | None = None
     created_at: datetime
     updated_at: datetime
+    operational_hints: CustomMarketplaceRequestOperationalListHintsRead | None = None
 
 
 class CustomMarketplaceRequestListRead(BaseModel):
@@ -142,6 +166,7 @@ class CustomMarketplaceRequestDetailRead(BaseModel):
     customer_telegram_user_id: int | None = None
     booking_bridge: CustomRequestBookingBridgeRead | None = None
     effective_execution_policy: EffectiveCommercialExecutionPolicyRead | None = None
+    operational_hints: CustomMarketplaceRequestOperationalDetailHintsRead | None = None
 
 
 class AdminCustomRequestBookingBridgeCreate(BaseModel):

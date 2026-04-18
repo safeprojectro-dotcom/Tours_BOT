@@ -88,12 +88,18 @@ class CustomMarketplaceTrack4Tests(FoundationDBTestCase):
 
         lst = self.client.get("/admin/custom-requests", headers=self._headers_admin())
         self.assertEqual(lst.status_code, 200)
-        ids = {x["id"] for x in lst.json()["items"]}
+        lst_body = lst.json()
+        ids = {x["id"] for x in lst_body["items"]}
         self.assertIn(rid, ids)
+        adm_item = next(x for x in lst_body["items"] if x["id"] == rid)
+        self.assertIsNotNone(adm_item.get("operational_hints"))
+        self.assertIn("Custom route", adm_item["operational_hints"]["scan_summary_line"])
 
         detail = self.client.get(f"/admin/custom-requests/{rid}", headers=self._headers_admin())
         self.assertEqual(detail.status_code, 200)
         body = detail.json()
+        self.assertIsNotNone(body.get("operational_hints"))
+        self.assertIn("continuation_summary", body["operational_hints"])
         self.assertEqual(body["request"]["id"], rid)
         self.assertEqual(body["request"]["source_channel"], "mini_app")
         self.assertEqual(body["customer_telegram_user_id"], 120_001)
@@ -103,10 +109,14 @@ class CustomMarketplaceTrack4Tests(FoundationDBTestCase):
         sh = {"Authorization": f"Bearer {token}"}
         sup_list = self.client.get("/supplier-admin/custom-requests", headers=sh)
         self.assertEqual(sup_list.status_code, 200)
-        self.assertIn(rid, {x["id"] for x in sup_list.json()["items"]})
+        sup_items = sup_list.json()["items"]
+        self.assertIn(rid, {x["id"] for x in sup_items})
+        sup_row = next(x for x in sup_items if x["id"] == rid)
+        self.assertIsNone(sup_row.get("operational_hints"))
 
         sup_detail = self.client.get(f"/supplier-admin/custom-requests/{rid}", headers=sh)
         self.assertEqual(sup_detail.status_code, 200)
+        self.assertIsNone(sup_detail.json().get("operational_hints"))
 
         put = self.client.put(
             f"/supplier-admin/custom-requests/{rid}/response",

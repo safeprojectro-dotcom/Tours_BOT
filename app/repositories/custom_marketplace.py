@@ -249,3 +249,29 @@ class SupplierCustomRequestResponseRepository:
             )
         )
         return int(session.scalar(stmt) or 0)
+
+    def count_proposed_for_requests(
+        self,
+        session: Session,
+        *,
+        request_ids: list[int],
+    ) -> dict[int, int]:
+        """V1: batch counts for admin list (avoid N+1)."""
+        if not request_ids:
+            return {}
+        stmt = (
+            select(
+                SupplierCustomRequestResponse.request_id,
+                func.count().label("cnt"),
+            )
+            .where(
+                SupplierCustomRequestResponse.request_id.in_(request_ids),
+                SupplierCustomRequestResponse.response_kind == SupplierCustomRequestResponseKind.PROPOSED,
+            )
+            .group_by(SupplierCustomRequestResponse.request_id)
+        )
+        rows = session.execute(stmt).all()
+        out = {int(r[0]): int(r[1]) for r in rows}
+        for rid in request_ids:
+            out.setdefault(rid, 0)
+        return out

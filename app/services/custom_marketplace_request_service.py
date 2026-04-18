@@ -39,6 +39,10 @@ from app.schemas.custom_marketplace import (
 from app.models.tour import Tour
 from app.services.custom_request_booking_bridge_service import CustomRequestBookingBridgeService
 from app.services.effective_commercial_execution_policy import EffectiveCommercialExecutionPolicyService
+from app.services.operational_custom_request_hints import (
+    build_operational_detail_hints,
+    build_operational_list_hints,
+)
 
 
 class CustomMarketplaceUserNotFoundError(Exception):
@@ -167,6 +171,21 @@ class CustomMarketplaceRequestService:
         self._responses = SupplierCustomRequestResponseRepository()
         self._users = UserRepository()
 
+    def _read_with_operational_list_hints(self, row: CustomMarketplaceRequest, session: Session) -> CustomMarketplaceRequestRead:
+        counts = self._responses.count_proposed_for_requests(session, request_ids=[row.id])
+        hints = build_operational_list_hints(
+            status=row.status,
+            request_type=row.request_type,
+            travel_date_start=row.travel_date_start,
+            travel_date_end=row.travel_date_end,
+            group_size=row.group_size,
+            route_notes=row.route_notes,
+            proposed_supplier_response_count=counts.get(row.id, 0),
+            selected_supplier_response_id=row.selected_supplier_response_id,
+        )
+        base = CustomMarketplaceRequestRead.model_validate(row, from_attributes=True)
+        return base.model_copy(update={"operational_hints": hints})
+
     def create_from_mini_app(
         self,
         session: Session,
@@ -226,7 +245,23 @@ class CustomMarketplaceRequestService:
         offset: int = 0,
     ) -> list[CustomMarketplaceRequestRead]:
         rows = self._requests.list_for_admin(session, status=status, limit=limit, offset=offset)
-        return [CustomMarketplaceRequestRead.model_validate(r, from_attributes=True) for r in rows]
+        ids = [r.id for r in rows]
+        counts = self._responses.count_proposed_for_requests(session, request_ids=ids)
+        out: list[CustomMarketplaceRequestRead] = []
+        for r in rows:
+            hints = build_operational_list_hints(
+                status=r.status,
+                request_type=r.request_type,
+                travel_date_start=r.travel_date_start,
+                travel_date_end=r.travel_date_end,
+                group_size=r.group_size,
+                route_notes=r.route_notes,
+                proposed_supplier_response_count=counts.get(r.id, 0),
+                selected_supplier_response_id=r.selected_supplier_response_id,
+            )
+            base = CustomMarketplaceRequestRead.model_validate(r, from_attributes=True)
+            out.append(base.model_copy(update={"operational_hints": hints}))
+        return out
 
     def get_admin_detail(self, session: Session, *, request_id: int) -> CustomMarketplaceRequestDetailRead:
         row = self._requests.get_with_responses(session, request_id=request_id)
@@ -246,12 +281,25 @@ class CustomMarketplaceRequestService:
                     request=row,
                     response=sel_resp,
                 )
+        proposed_count = self._responses.count_proposed_for_request(session, request_id=row.id)
+        op_detail = build_operational_detail_hints(
+            status=row.status,
+            request_type=row.request_type,
+            travel_date_start=row.travel_date_start,
+            travel_date_end=row.travel_date_end,
+            group_size=row.group_size,
+            route_notes=row.route_notes,
+            proposed_supplier_response_count=proposed_count,
+            selected_supplier_response_id=row.selected_supplier_response_id,
+            booking_bridge=bridge,
+        )
         return CustomMarketplaceRequestDetailRead(
             request=CustomMarketplaceRequestRead.model_validate(row, from_attributes=True),
             responses=responses,
             customer_telegram_user_id=tg,
             booking_bridge=bridge,
             effective_execution_policy=effective,
+            operational_hints=op_detail,
         )
 
     def admin_patch(
@@ -278,7 +326,7 @@ class CustomMarketplaceRequestService:
         session.add(row)
         session.flush()
         session.refresh(row)
-        return CustomMarketplaceRequestRead.model_validate(row, from_attributes=True)
+        return self._read_with_operational_list_hints(row, session)
 
     def admin_apply_resolution(
         self,
@@ -359,7 +407,7 @@ class CustomMarketplaceRequestService:
         session.add(row)
         session.flush()
         session.refresh(row)
-        return CustomMarketplaceRequestRead.model_validate(row, from_attributes=True)
+        return self._read_with_operational_list_hints(row, session)
 
     def list_open_for_supplier(
         self,
