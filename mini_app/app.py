@@ -2837,6 +2837,15 @@ class MyRequestsListScreen:
         lg = self.language_code
         st_label = request_status_user_label(lg, item.status)
         hint = shell(lg, my_requests_row_hint_key(item.status))
+        preview_line: list[ft.Control] = []
+        if (item.activity_preview_title or "").strip():
+            preview_line.append(
+                ft.Text(
+                    f"{shell(lg, 'my_requests_list_activity_prefix')} {item.activity_preview_title.strip()}",
+                    size=12,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                )
+            )
         return ft.Container(
             bgcolor=ft.Colors.SURFACE_CONTAINER_LOW,
             border_radius=16,
@@ -2845,6 +2854,7 @@ class MyRequestsListScreen:
                 [
                     ft.Text(st_label, weight=ft.FontWeight.W_600),
                     ft.Text(item.customer_visible_summary, size=14, color=ft.Colors.ON_SURFACE_VARIANT),
+                    *preview_line,
                     ft.Text(hint, size=12, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Row(
                         [
@@ -3109,6 +3119,30 @@ class MyRequestDetailScreen:
                         detail.offers_received_hint.strip(),
                         size=13,
                         color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                )
+            )
+        if detail.activity_preview is not None:
+            ap = detail.activity_preview
+            lines.append(
+                ft.Container(
+                    padding=ft.padding.only(top=10),
+                    content=ft.Column(
+                        [
+                            ft.Text(
+                                shell(lg, "my_requests_activity_heading"),
+                                weight=ft.FontWeight.W_600,
+                                size=13,
+                            ),
+                            ft.Text(ap.title, size=14, weight=ft.FontWeight.W_500),
+                            ft.Text(ap.message, size=13, color=ft.Colors.ON_SURFACE_VARIANT),
+                            ft.Text(
+                                ap.preview_disclaimer,
+                                size=11,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                        ],
+                        spacing=6,
                     ),
                 )
             )

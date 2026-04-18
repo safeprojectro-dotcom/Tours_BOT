@@ -38,11 +38,13 @@ from app.schemas.custom_marketplace import (
 )
 from app.models.tour import Tour
 from app.services.custom_request_booking_bridge_service import CustomRequestBookingBridgeService
+from app.services.custom_request_lifecycle_preview import CustomRequestLifecyclePreviewService
 from app.services.effective_commercial_execution_policy import EffectiveCommercialExecutionPolicyService
 from app.services.operational_custom_request_hints import (
     build_operational_detail_hints,
     build_operational_list_hints,
 )
+from app.services.supplier_custom_request_portal_hints import build_supplier_portal_hints
 
 
 class CustomMarketplaceUserNotFoundError(Exception):
@@ -294,6 +296,14 @@ class CustomMarketplaceRequestService:
             booking_bridge=bridge,
             commercial_resolution_kind=row.commercial_resolution_kind,
         )
+        bridge_status_for_preview = bridge.bridge_status if bridge is not None else None
+        preferred_lang = row.user.preferred_language if row.user is not None else None
+        prepared_msg = CustomRequestLifecyclePreviewService().admin_prepared_lifecycle_message(
+            session,
+            request_id=row.id,
+            bridge_status=bridge_status_for_preview,
+            language_code=preferred_lang,
+        )
         return CustomMarketplaceRequestDetailRead(
             request=CustomMarketplaceRequestRead.model_validate(row, from_attributes=True),
             responses=responses,
@@ -301,6 +311,7 @@ class CustomMarketplaceRequestService:
             booking_bridge=bridge,
             effective_execution_policy=effective,
             operational_hints=op_detail,
+            prepared_customer_lifecycle_message=prepared_msg,
         )
 
     def admin_patch(
@@ -424,7 +435,17 @@ class CustomMarketplaceRequestService:
             limit=limit,
             offset=offset,
         )
-        return [CustomMarketplaceRequestRead.model_validate(r, from_attributes=True) for r in rows]
+        out: list[CustomMarketplaceRequestRead] = []
+        for r in rows:
+            hints = build_supplier_portal_hints(
+                session,
+                row=r,
+                supplier_id=supplier_id,
+                response_repository=self._responses,
+            )
+            base = CustomMarketplaceRequestRead.model_validate(r, from_attributes=True)
+            out.append(base.model_copy(update={"supplier_portal_hints": hints}))
+        return out
 
     def get_open_for_supplier(
         self,
@@ -448,8 +469,17 @@ class CustomMarketplaceRequestService:
             else []
         )
         tg = row.user.telegram_user_id if row.user is not None else None
+        hints = build_supplier_portal_hints(
+            session,
+            row=row,
+            supplier_id=supplier_id,
+            response_repository=self._responses,
+        )
+        req_read = CustomMarketplaceRequestRead.model_validate(row, from_attributes=True).model_copy(
+            update={"supplier_portal_hints": hints},
+        )
         return CustomMarketplaceRequestDetailRead(
-            request=CustomMarketplaceRequestRead.model_validate(row, from_attributes=True),
+            request=req_read,
             responses=responses,
             customer_telegram_user_id=tg,
         )
@@ -510,11 +540,17 @@ class CustomMarketplaceRequestService:
             limit=limit,
             offset=offset,
         )
+        preview = CustomRequestLifecyclePreviewService()
         items = [
             MiniAppCustomRequestCustomerSummaryRead(
                 id=r.id,
                 status=r.status,
                 customer_visible_summary=customer_visible_summary(r),
+                activity_preview_title=preview.list_activity_title(
+                    session,
+                    request_id=r.id,
+                    language_code=user.preferred_language,
+                ),
             )
             for r in rows
         ]
@@ -548,6 +584,12 @@ class CustomMarketplaceRequestService:
         proposed_count = self._responses.count_proposed_for_request(session, request_id=row.id)
         offers_hint = _customer_offers_received_hint(status=row.status, proposed_count=proposed_count)
         selected_snippet = _customer_selected_offer_summary(session, row=row)
+        activity = CustomRequestLifecyclePreviewService().detail_activity_preview(
+            session,
+            request_id=row.id,
+            bridge_status=bridge_status,
+            language_code=user.preferred_language,
+        )
         return MiniAppCustomRequestCustomerDetailRead(
             id=row.id,
             status=row.status,
@@ -561,6 +603,7 @@ class CustomMarketplaceRequestService:
             proposed_response_count=proposed_count,
             offers_received_hint=offers_hint,
             selected_offer_summary=selected_snippet,
+            activity_preview=activity,
         )
 
 

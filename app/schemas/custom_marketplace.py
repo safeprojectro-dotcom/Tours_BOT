@@ -20,6 +20,10 @@ from app.models.enums import (
     SupplierOfferPaymentMode,
     TourSalesMode,
 )
+from app.schemas.custom_request_notification import (
+    AdminPreparedCustomRequestLifecycleMessageRead,
+    MiniAppCustomRequestActivityPreviewRead,
+)
 from app.schemas.effective_commercial_execution_policy import EffectiveCommercialExecutionPolicyRead
 from app.services.effective_commercial_execution_policy import validate_supplier_declared_rfq_commercial_pair
 
@@ -168,6 +172,51 @@ class CustomMarketplaceRequestOperationalDetailHintsRead(CustomMarketplaceReques
     follow_through_summary: str
 
 
+class SupplierPortalResponseWorkflowHintsRead(BaseModel):
+    """X2: supplier’s own response context — readable state, editability, next step (no rule changes)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    your_response_state: Literal[
+        "none_yet",
+        "proposal_on_file",
+        "decline_on_file",
+        "proposal_was_selected",
+        "decline_or_other_read_only",
+    ]
+    response_presence_one_liner: str
+    response_kind_explained: str
+    editability_one_liner: str
+    selection_meaning_for_supplier: str
+    what_happens_next: str
+
+
+class SupplierPortalRequestHintsRead(BaseModel):
+    """X1 scan/action + X2 response-workflow clarity — supplier-safe; not admin operational copy (V1–V4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    request_summary_line: str = Field(description="Type, dates, group, route excerpt for quick scanning.")
+    supplier_visible_headline: str = Field(description="Short headline for list/detail — actionability-focused.")
+    customer_need_summary: str = Field(
+        description="Plain description of what the customer asked for (from request fields only).",
+    )
+    supplier_has_responded: bool
+    supplier_last_response_kind: Literal["proposed", "declined"] | None = None
+    your_response_was_selected: bool = False
+    can_submit_or_update_response: bool
+    portal_action_state: Literal[
+        "open_actionable_no_response_yet",
+        "open_actionable_has_response",
+        "under_review_actionable",
+        "read_only_selection_recorded",
+        "read_only_closed",
+    ]
+    portal_action_state_label: str
+    portal_action_state_detail: str
+    response_workflow: SupplierPortalResponseWorkflowHintsRead
+
+
 class CustomMarketplaceRequestRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -187,6 +236,10 @@ class CustomMarketplaceRequestRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     operational_hints: CustomMarketplaceRequestOperationalListHintsRead | None = None
+    supplier_portal_hints: SupplierPortalRequestHintsRead | None = Field(
+        default=None,
+        description="X1/X2: supplier portal list/detail only — request scan + response workflow clarity (supplier-safe).",
+    )
 
 
 class CustomMarketplaceRequestListRead(BaseModel):
@@ -234,6 +287,10 @@ class CustomMarketplaceRequestDetailRead(BaseModel):
     booking_bridge: CustomRequestBookingBridgeRead | None = None
     effective_execution_policy: EffectiveCommercialExecutionPolicyRead | None = None
     operational_hints: CustomMarketplaceRequestOperationalDetailHintsRead | None = None
+    prepared_customer_lifecycle_message: AdminPreparedCustomRequestLifecycleMessageRead | None = Field(
+        default=None,
+        description="W3: W1-prepared Mode 3 copy for internal/manual use — not sent, not outbox, not receipt proof.",
+    )
 
 
 class AdminCustomRequestBookingBridgeCreate(BaseModel):
@@ -399,6 +456,7 @@ class MiniAppCustomRequestCustomerSummaryRead(BaseModel):
     id: int
     status: CustomMarketplaceRequestStatus
     customer_visible_summary: str
+    activity_preview_title: str | None = None
 
 
 class MiniAppCustomRequestCustomerListRead(BaseModel):
@@ -432,6 +490,7 @@ class MiniAppCustomRequestCustomerDetailRead(BaseModel):
     proposed_response_count: int = 0
     offers_received_hint: str = ""
     selected_offer_summary: MiniAppSelectedOfferSummaryRead | None = None
+    activity_preview: MiniAppCustomRequestActivityPreviewRead | None = None
 
 
 class MiniAppCustomRequestCreatedRead(BaseModel):

@@ -93,6 +93,7 @@ class CustomMarketplaceTrack4Tests(FoundationDBTestCase):
         self.assertIn(rid, ids)
         adm_item = next(x for x in lst_body["items"] if x["id"] == rid)
         self.assertIsNotNone(adm_item.get("operational_hints"))
+        self.assertIsNone(adm_item.get("supplier_portal_hints"))
         self.assertIn("Custom route", adm_item["operational_hints"]["scan_summary_line"])
         self.assertIn("action_focus", adm_item["operational_hints"])
         self.assertIn("primary_action_hint", adm_item["operational_hints"])
@@ -124,10 +125,16 @@ class CustomMarketplaceTrack4Tests(FoundationDBTestCase):
         self.assertIn(rid, {x["id"] for x in sup_items})
         sup_row = next(x for x in sup_items if x["id"] == rid)
         self.assertIsNone(sup_row.get("operational_hints"))
+        self.assertIsNotNone(sup_row.get("supplier_portal_hints"))
+        self.assertEqual(
+            sup_row["supplier_portal_hints"]["portal_action_state"],
+            "open_actionable_no_response_yet",
+        )
 
         sup_detail = self.client.get(f"/supplier-admin/custom-requests/{rid}", headers=sh)
         self.assertEqual(sup_detail.status_code, 200)
         self.assertIsNone(sup_detail.json().get("operational_hints"))
+        self.assertIsNotNone(sup_detail.json()["request"].get("supplier_portal_hints"))
 
         put = self.client.put(
             f"/supplier-admin/custom-requests/{rid}/response",
