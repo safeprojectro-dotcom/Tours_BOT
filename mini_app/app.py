@@ -15,6 +15,8 @@ from app.schemas.mini_app import (
     MiniAppBookingListItemRead,
     MiniAppBookingPrimaryCta,
     MiniAppBookingsListRead,
+    MiniAppBridgeExecutionPreparationResponse,
+    MiniAppBridgePaymentEligibilityRead,
     MiniAppCatalogRead,
     MiniAppReservationPreparationRead,
     MiniAppTourDetailRead,
@@ -32,6 +34,7 @@ from mini_app.api_client import MiniAppApiClient
 from mini_app.booking_grouping import partition_bookings_for_my_bookings_ui
 from mini_app.config import get_mini_app_settings
 from mini_app.presentation_notes import booking_detail_context_note
+from mini_app.rfq_bridge_logic import rfq_bridge_continue_to_payment_allowed
 from mini_app.ui_strings import hold_timer_hint as _hold_timer_hint_i18n
 from mini_app.ui_strings import booking_facade_labels, payment_status_label, shell
 
@@ -1281,6 +1284,514 @@ class ReservationSuccessScreen:
         self.loading_row.visible = is_loading
 
 
+class RfqBridgeExecutionScreen:
+    """Track 5c: bridge preparation → hold → payment eligibility → existing payment-entry navigation."""
+
+    def __init__(
+        self,
+        page: ft.Page,
+        *,
+        api_client: MiniAppApiClient,
+        language_code: str,
+        dev_telegram_user_id: int,
+        on_back: Callable[[], None],
+        on_continue_to_payment: Callable[[str, int], None],
+        on_help: Callable[[], None],
+        on_open_settings: Callable[[], None],
+    ) -> None:
+        self.page = page
+        self.api_client = api_client
+        self.language_code = language_code
+        self.dev_telegram_user_id = dev_telegram_user_id
+        self.on_back = on_back
+        self.on_continue_to_payment = on_continue_to_payment
+        self.on_help = on_help
+        self.on_open_settings = on_open_settings
+        self.request_id: int | None = None
+        self._bridge_prep: MiniAppBridgeExecutionPreparationResponse | None = None
+        self._tour_code: str | None = None
+        self._order_id: int | None = None
+        self._payment_elig: MiniAppBridgePaymentEligibilityRead | None = None
+
+        lg = language_code
+        self.nav_back = ft.TextButton(
+            shell(lg, "back"),
+            icon=ft.Icons.ARROW_BACK,
+            on_click=lambda _: self.on_back(),
+        )
+        self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
+        self._title = ft.Text(shell(lg, "rfq_bridge_screen_title"), size=24, weight=ft.FontWeight.BOLD)
+        self._intro = ft.Text(shell(lg, "rfq_bridge_intro"), size=13, color=ft.Colors.ON_SURFACE_VARIANT)
+        self._request_ref = ft.Text("", size=13, color=ft.Colors.ON_SURFACE_VARIANT, visible=False)
+        self.loading_row = ft.Row(
+            [
+                ft.ProgressRing(width=18, height=18, stroke_width=2),
+                ft.Text(shell(lg, "rfq_bridge_loading")),
+            ],
+            visible=False,
+            spacing=10,
+        )
+        self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
+        self.flow_column = ft.Column(spacing=12)
+        self.seats_dropdown = ft.Dropdown(label=shell(lg, "label_seats"), dense=True, options=[])
+        self.boarding_dropdown = ft.Dropdown(label=shell(lg, "label_boarding"), dense=True, options=[])
+        self.preview_button = ft.OutlinedButton(shell(lg, "btn_preview_summary"), on_click=self._on_preview_summary)
+        self.confirm_reserve_button = ft.ElevatedButton(
+            shell(lg, "btn_confirm_reservation"),
+            disabled=True,
+            on_click=lambda _: self.page.run_task(self._confirm_bridge_reservation),
+        )
+        self.summary_container = ft.Column(spacing=12)
+        self.continue_payment_button = ft.FilledButton(
+            shell(lg, "continue_to_payment"),
+            visible=False,
+            disabled=True,
+            on_click=lambda _: self._on_continue_payment(),
+        )
+
+    def set_request_id(self, request_id: int) -> None:
+        self.request_id = request_id
+
+    def sync_shell_labels(self) -> None:
+        lg = self.language_code
+        self.nav_back.text = shell(lg, "back")
+        self.nav_help.text = shell(lg, "btn_help")
+        self.nav_settings.text = shell(lg, "settings")
+        self._title.value = shell(lg, "rfq_bridge_screen_title")
+        self._intro.value = shell(lg, "rfq_bridge_intro")
+        self.seats_dropdown.label = shell(lg, "label_seats")
+        self.boarding_dropdown.label = shell(lg, "label_boarding")
+        self.preview_button.text = shell(lg, "btn_preview_summary")
+        self.confirm_reserve_button.text = shell(lg, "btn_confirm_reservation")
+        self.continue_payment_button.text = shell(lg, "continue_to_payment")
+        if self.loading_row.controls:
+            self.loading_row.controls[1].value = shell(lg, "rfq_bridge_loading")
+        if self.request_id is not None:
+            self._request_ref.value = shell(lg, "rfq_bridge_request_ref", id=str(self.request_id))
+
+    def build(self) -> ft.Control:
+        return scrollable_page(
+            ft.Row(
+                [self.nav_back, self.nav_help, self.nav_settings],
+                alignment=ft.MainAxisAlignment.START,
+                wrap=True,
+            ),
+            self._title,
+            self._intro,
+            self._request_ref,
+            self.loading_row,
+            self.error_text,
+            self.flow_column,
+        )
+
+    async def load_initial(self) -> None:
+        self.sync_shell_labels()
+        self._payment_elig = None
+        self._order_id = None
+        self._tour_code = None
+        self._bridge_prep = None
+        self.confirm_reserve_button.visible = True
+        self.preview_button.disabled = False
+        self.flow_column.controls.clear()
+        self.summary_container.controls.clear()
+        self.continue_payment_button.visible = False
+        self.continue_payment_button.disabled = True
+        self.error_text.visible = False
+        if self.request_id is None:
+            self._show_error("Missing request reference.")
+            return
+
+        self._request_ref.visible = True
+        self._set_flow_loading(True)
+        self.page.update()
+
+        try:
+            prep = await self.api_client.get_booking_bridge_preparation(
+                request_id=self.request_id,
+                telegram_user_id=self.dev_telegram_user_id,
+                language_code=self.language_code,
+            )
+        except httpx.HTTPStatusError as exc:
+            self._show_error(
+                CatalogScreen._http_error_message(exc, default="Unable to load bridge booking for this request.")
+            )
+            self._render_empty_flow()
+        except Exception:
+            self._show_error("Unable to load bridge booking for this request.")
+            self._render_empty_flow()
+        else:
+            self._bridge_prep = prep
+            self._tour_code = prep.tour_code
+            self.error_text.visible = False
+            if not prep.self_service_available:
+                self._render_blocked_preparation(prep)
+            elif prep.preparation is None:
+                self._show_error("Preparation is not available.")
+                self._render_empty_flow()
+            else:
+                self._render_self_service_preparation(prep.preparation)
+        finally:
+            self._set_flow_loading(False)
+            self.page.update()
+
+    def _render_empty_flow(self) -> None:
+        self.flow_column.controls.clear()
+
+    def _render_blocked_preparation(self, prep: MiniAppBridgeExecutionPreparationResponse) -> None:
+        lg = self.language_code
+        msg = (prep.blocked_message or "").strip() or shell(lg, "rfq_bridge_payment_blocked_generic")
+        code = prep.blocked_code or ""
+        heading = (
+            shell(lg, "rfq_bridge_platform_blocked_heading")
+            if code in ("external_record", "supplier_policy_incomplete") or "policy" in code
+            else shell(lg, "rfq_bridge_assisted_heading")
+        )
+        self.flow_column.controls = [
+            ft.Container(
+                bgcolor=ft.Colors.SURFACE_CONTAINER_HIGH,
+                border_radius=12,
+                padding=16,
+                content=ft.Column(
+                    [
+                        ft.Text(heading, weight=ft.FontWeight.W_600),
+                        ft.Text(msg, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ],
+                    spacing=8,
+                ),
+            ),
+        ]
+
+    def _render_self_service_preparation(self, preparation: MiniAppReservationPreparationRead) -> None:
+        self.summary_container.controls.clear()
+        self.confirm_reserve_button.disabled = True
+        self.flow_column.controls.clear()
+
+        lg = self.language_code
+        localized = preparation.tour.localized_content
+        header_rows: list[ft.Control] = [
+            ft.Text(localized.title, size=22, weight=ft.FontWeight.BOLD),
+            ft.Text(
+                f"{CatalogScreen._format_datetime(preparation.tour.departure_datetime)} | "
+                f"{CatalogScreen._format_price(preparation.tour.base_price)} {preparation.tour.currency}",
+                color=ft.Colors.ON_SURFACE_VARIANT,
+            ),
+            ft.Text(
+                f"Seats available for preparation: {preparation.tour.seats_available_snapshot}",
+                color=ft.Colors.ON_SURFACE_VARIANT,
+            ),
+        ]
+
+        if not preparation.sales_mode_policy.per_seat_self_service_allowed:
+            self.flow_column.controls.extend(
+                header_rows
+                + [
+                    ft.Container(
+                        padding=ft.padding.only(top=8),
+                        content=ft.Column(
+                            [
+                                ft.Text(shell(lg, "preparation_assisted_title"), weight=ft.FontWeight.W_600),
+                                ft.Text(shell(lg, "preparation_assisted_body"), color=ft.Colors.ON_SURFACE_VARIANT),
+                            ],
+                            spacing=6,
+                        ),
+                    ),
+                ]
+            )
+            self.seats_dropdown.options = []
+            self.seats_dropdown.value = None
+            self.boarding_dropdown.options = []
+            self.boarding_dropdown.value = None
+            return
+
+        self.seats_dropdown.options = [
+            ft.dropdown.Option(str(option), str(option)) for option in preparation.seat_count_options
+        ]
+        self.seats_dropdown.value = str(preparation.seat_count_options[0]) if preparation.seat_count_options else None
+        self.boarding_dropdown.options = [
+            ft.dropdown.Option(str(point.id), f"{point.city} - {point.address}")
+            for point in preparation.boarding_points
+        ]
+        self.boarding_dropdown.value = (
+            str(preparation.boarding_points[0].id) if preparation.boarding_points else None
+        )
+
+        self.flow_column.controls.extend(
+            header_rows
+            + [
+                self.seats_dropdown,
+                self.boarding_dropdown,
+                ft.Row([self.preview_button], alignment=ft.MainAxisAlignment.START),
+                self.summary_container,
+            ]
+        )
+
+    def _on_preview_summary(self, _: ft.ControlEvent) -> None:
+        self.page.run_task(self._load_summary_async)
+
+    async def _load_summary_async(self) -> None:
+        if self._tour_code is None:
+            self._show_error("Tour not found.")
+            return
+        if not self.seats_dropdown.value or not self.boarding_dropdown.value:
+            self._show_error("Choose seats and a boarding point to preview the summary.")
+            return
+        self._set_flow_loading(True)
+        self.error_text.visible = False
+        self.page.update()
+        try:
+            summary = await self.api_client.get_preparation_summary(
+                tour_code=self._tour_code,
+                seats_count=int(self.seats_dropdown.value),
+                boarding_point_id=int(self.boarding_dropdown.value),
+                language_code=self.language_code,
+            )
+        except httpx.HTTPStatusError as exc:
+            self._show_error(
+                CatalogScreen._http_error_message(
+                    exc,
+                    default="Unable to build the reservation summary right now.",
+                )
+            )
+            self._render_summary_block(None)
+        except Exception:
+            self._show_error("Unable to build the reservation summary right now.")
+            self._render_summary_block(None)
+        else:
+            self._render_summary_block(summary)
+        finally:
+            self._set_flow_loading(False)
+            self.page.update()
+
+    def _render_summary_block(self, summary: ReservationPreparationSummaryRead | None) -> None:
+        self.summary_container.controls.clear()
+        if summary is None:
+            self.confirm_reserve_button.disabled = True
+            return
+        lg = self.language_code
+        self.confirm_reserve_button.disabled = False
+        self.summary_container.controls.extend(
+            [
+                ft.Text(shell(lg, "prep_summary_title"), size=18, weight=ft.FontWeight.W_600),
+                ft.Container(
+                    bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
+                    border_radius=16,
+                    padding=16,
+                    content=ft.Column(
+                        [
+                            ft.Text(summary.tour.localized_content.title, size=16, weight=ft.FontWeight.BOLD),
+                            ft.Text(shell(lg, "prep_line_seats", n=str(summary.seats_count))),
+                            ft.Text(
+                                shell(
+                                    lg,
+                                    "prep_line_boarding",
+                                    city=summary.boarding_point.city,
+                                    addr=summary.boarding_point.address,
+                                )
+                            ),
+                            ft.Text(
+                                shell(
+                                    lg,
+                                    "prep_line_boarding_time",
+                                    t=summary.boarding_point.time.strftime("%H:%M"),
+                                )
+                            ),
+                            ft.Text(
+                                shell(
+                                    lg,
+                                    "prep_line_estimated",
+                                    amount=CatalogScreen._format_price(summary.estimated_total_amount),
+                                    currency=summary.tour.currency,
+                                )
+                            ),
+                            ft.Text(
+                                shell(lg, "prep_hold_note"),
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                        ],
+                        spacing=8,
+                    ),
+                ),
+                ft.Row([self.confirm_reserve_button], alignment=ft.MainAxisAlignment.START),
+            ]
+        )
+
+    async def _confirm_bridge_reservation(self) -> None:
+        if self.request_id is None or self._tour_code is None:
+            self._show_error("Missing request or tour.")
+            return
+        if not self.seats_dropdown.value or not self.boarding_dropdown.value:
+            self._show_error("Choose seats and a boarding point before confirming.")
+            return
+        self._set_flow_loading(True)
+        self.error_text.visible = False
+        self.page.update()
+        try:
+            summary = await self.api_client.create_booking_bridge_reservation(
+                request_id=self.request_id,
+                telegram_user_id=self.dev_telegram_user_id,
+                seats_count=int(self.seats_dropdown.value),
+                boarding_point_id=int(self.boarding_dropdown.value),
+                language_code=self.language_code,
+            )
+        except httpx.HTTPStatusError as exc:
+            self._show_error(
+                CatalogScreen._http_error_message(
+                    exc,
+                    default="Unable to create a temporary reservation right now.",
+                )
+            )
+        except Exception:
+            self._show_error("Unable to create a temporary reservation right now.")
+        else:
+            self._order_id = summary.order.id
+            self._tour_code = self._bridge_prep.tour_code if self._bridge_prep else self._tour_code
+            await self._load_post_hold_async()
+        finally:
+            self._set_flow_loading(False)
+            self.page.update()
+
+    async def _load_post_hold_async(self) -> None:
+        if self.request_id is None or self._order_id is None:
+            return
+        self._set_flow_loading(True)
+        self.error_text.visible = False
+        self.page.update()
+        overview: OrderSummaryRead | None = None
+        elig: MiniAppBridgePaymentEligibilityRead | None = None
+        try:
+            overview = await self.api_client.get_reservation_overview(
+                order_id=self._order_id,
+                telegram_user_id=self.dev_telegram_user_id,
+                language_code=self.language_code,
+            )
+        except Exception:
+            overview = None
+        try:
+            elig = await self.api_client.get_booking_bridge_payment_eligibility(
+                request_id=self.request_id,
+                telegram_user_id=self.dev_telegram_user_id,
+                order_id=self._order_id,
+            )
+        except Exception:
+            elig = None
+            self._show_error(shell(self.language_code, "rfq_bridge_eligibility_error"))
+        self._payment_elig = elig
+        self._render_post_hold(overview, elig)
+        self._set_flow_loading(False)
+        self.page.update()
+
+    def _render_post_hold(
+        self,
+        overview: OrderSummaryRead | None,
+        elig: MiniAppBridgePaymentEligibilityRead | None,
+    ) -> None:
+        lg = self.language_code
+        self.flow_column.controls.clear()
+        self.summary_container.controls.clear()
+        self.preview_button.disabled = True
+        self.confirm_reserve_button.visible = False
+
+        hold_active = False
+        if overview is not None:
+            order = overview.order
+            expires = order.reservation_expires_at
+            now = datetime.now(UTC)
+            end = expires if expires is None or expires.tzinfo else expires.replace(tzinfo=UTC)
+            hold_active = expires is not None and end > now
+
+        pay_ok = bool(elig and elig.payment_entry_allowed)
+        show_pay_cta = rfq_bridge_continue_to_payment_allowed(
+            hold_active=hold_active,
+            payment_entry_allowed=pay_ok,
+        )
+
+        blocks: list[ft.Control] = [
+            ft.Text(shell(lg, "rfq_bridge_hold_section_title"), weight=ft.FontWeight.W_600),
+        ]
+        if overview is None:
+            blocks.append(
+                ft.Text(
+                    shell(lg, "payment_screen_unavailable_hold"),
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                )
+            )
+        else:
+            order = overview.order
+            blocks.append(
+                ft.Container(
+                    bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
+                    border_radius=16,
+                    padding=16,
+                    content=ft.Column(
+                        [
+                            ft.Text(overview.tour.localized_content.title, size=18, weight=ft.FontWeight.BOLD),
+                            ft.Text(shell(lg, "line_reservation_ref", id=str(order.id))),
+                            ft.Text(
+                                shell(
+                                    lg,
+                                    "line_amount_to_pay",
+                                    amount=CatalogScreen._format_price(order.total_amount),
+                                    currency=order.currency,
+                                )
+                            ),
+                            ft.Text(
+                                shell(
+                                    lg,
+                                    "line_payment_status",
+                                    status=_payment_status_user_label(order.payment_status, self.language_code),
+                                ),
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                            ft.Text(_hold_timer_hint(order.reservation_expires_at, self.language_code)),
+                        ],
+                        spacing=8,
+                    ),
+                )
+            )
+
+        if overview is not None and hold_active and elig is not None and not pay_ok:
+            reason = (elig.blocked_reason or "").strip() or shell(lg, "rfq_bridge_hold_active_pay_blocked")
+            blocks.append(ft.Text(reason, size=13, color=ft.Colors.ON_SURFACE_VARIANT))
+        elif overview is not None and hold_active and elig is None:
+            blocks.append(
+                ft.Text(
+                    shell(lg, "rfq_bridge_eligibility_error"),
+                    size=13,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                )
+            )
+        elif overview is not None and not hold_active:
+            blocks.append(
+                ft.Text(
+                    shell(lg, "rfq_bridge_expired_hold"),
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                )
+            )
+
+        self.continue_payment_button.visible = True
+        self.continue_payment_button.disabled = not show_pay_cta
+        blocks.append(ft.Row([self.continue_payment_button], alignment=ft.MainAxisAlignment.START))
+        self.flow_column.controls.extend(blocks)
+
+    def _on_continue_payment(self) -> None:
+        if self._tour_code is not None and self._order_id is not None:
+            self.on_continue_to_payment(self._tour_code, self._order_id)
+
+    def _show_error(self, message: str) -> None:
+        self.error_text.value = message
+        self.error_text.visible = True
+
+    def _set_flow_loading(self, is_loading: bool) -> None:
+        self.loading_row.visible = is_loading
+        self.preview_button.disabled = is_loading
+        if is_loading:
+            self.confirm_reserve_button.disabled = True
+        else:
+            has_summary = bool(self.summary_container.controls)
+            self.confirm_reserve_button.disabled = not has_summary
+
+
 class PaymentEntryScreen:
     def __init__(
         self,
@@ -2064,11 +2575,13 @@ class CustomRequestScreen:
         dev_telegram_user_id: int,
         on_close: Callable[[], None],
         language_code: str,
+        on_continue_rfq_booking: Callable[[int], None] | None = None,
     ) -> None:
         self.page = page
         self.api_client = api_client
         self._dev_telegram_user_id = dev_telegram_user_id
         self.on_close = on_close
+        self.on_continue_rfq_booking = on_continue_rfq_booking
         self.language_code = language_code
         lg = language_code
         self.nav_back = ft.TextButton(shell(lg, "back"), icon=ft.Icons.ARROW_BACK, on_click=lambda _: self.on_close())
@@ -2172,15 +2685,46 @@ class CustomRequestScreen:
             )
             self.page.snack_bar.open = True
         else:
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(shell(lg, "custom_request_success", id=str(r.id))),
-                action="OK",
-            )
-            self.page.snack_bar.open = True
-            self.on_close()
+            self._show_success_dialog(r.id)
         finally:
             self.submit_btn.disabled = False
             self.page.update()
+
+    def _dismiss_dialog(self) -> None:
+        self.page.dialog = None
+        self.page.update()
+
+    def _show_success_dialog(self, request_id: int) -> None:
+        lg = self.language_code
+        actions: list[ft.Control] = [
+            ft.TextButton(shell(lg, "btn_done"), on_click=self._on_success_done),
+        ]
+        if self.on_continue_rfq_booking is not None:
+            actions.append(
+                ft.FilledButton(
+                    shell(lg, "rfq_bridge_cta_from_success"),
+                    on_click=lambda e: self._on_success_continue_bridge(request_id, e),
+                )
+            )
+        dlg = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(shell(lg, "custom_request_success_title")),
+            content=ft.Text(shell(lg, "custom_request_success", id=str(request_id))),
+            actions=actions,
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        self.page.dialog = dlg
+        dlg.open = True
+        self.page.update()
+
+    def _on_success_done(self, _: ft.ControlEvent) -> None:
+        self._dismiss_dialog()
+        self.on_close()
+
+    def _on_success_continue_bridge(self, request_id: int, _: ft.ControlEvent) -> None:
+        self._dismiss_dialog()
+        if self.on_continue_rfq_booking is not None:
+            self.on_continue_rfq_booking(request_id)
 
 
 class HelpScreen:
@@ -2468,12 +3012,23 @@ class MiniAppShell:
             on_open_custom_request=self.open_custom_request_from_help,
             language_code=settings.mini_app_default_language,
         )
+        self.rfq_bridge_execution_screen = RfqBridgeExecutionScreen(
+            page,
+            api_client=self.api_client,
+            language_code=settings.mini_app_default_language,
+            dev_telegram_user_id=self._dev_telegram_user_id,
+            on_back=self.open_catalog,
+            on_continue_to_payment=self.open_payment_entry,
+            on_help=self.open_help,
+            on_open_settings=self.open_settings,
+        )
         self.custom_request_screen = CustomRequestScreen(
             page,
             api_client=self.api_client,
             dev_telegram_user_id=self._dev_telegram_user_id,
             on_close=self.close_custom_request,
             language_code=settings.mini_app_default_language,
+            on_continue_rfq_booking=self.open_rfq_bridge_booking,
         )
         self.settings_screen = SettingsScreen(
             page,
@@ -2494,6 +3049,7 @@ class MiniAppShell:
         self.payment_entry_screen.language_code = code
         self.help_screen.language_code = code
         self.custom_request_screen.language_code = code
+        self.rfq_bridge_execution_screen.language_code = code
         self.settings_screen.language_code = code
         self.catalog_screen.sync_shell_labels()
         self.settings_screen.sync_shell_labels()
@@ -2505,6 +3061,7 @@ class MiniAppShell:
         self.booking_detail_screen.sync_shell_labels()
         self.help_screen.sync_shell_labels()
         self.custom_request_screen.sync_shell_labels()
+        self.rfq_bridge_execution_screen.sync_shell_labels()
 
     async def hydrate_language_from_server(self) -> None:
         try:
@@ -2530,6 +3087,9 @@ class MiniAppShell:
 
     def close_custom_request(self) -> None:
         self.page.go(self._custom_request_return_route or "/")
+
+    def open_rfq_bridge_booking(self, request_id: int) -> None:
+        self.page.go(f"/custom-requests/{request_id}/bridge")
 
     def close_modal(self) -> None:
         target = self._modal_return_route or "/"
@@ -2557,6 +3117,21 @@ class MiniAppShell:
                 )
             )
             self.page.update()
+            return
+
+        bridge_request_id = MiniAppShell._extract_custom_request_bridge_request_id(self.page.route)
+        if bridge_request_id is not None:
+            self.rfq_bridge_execution_screen.set_request_id(bridge_request_id)
+            self.page.views.append(
+                ft.View(
+                    route=(self.page.route or "/").strip() or "/",
+                    controls=[self.rfq_bridge_execution_screen.build()],
+                    padding=0,
+                    spacing=0,
+                )
+            )
+            self.page.update()
+            self.page.run_task(self.rfq_bridge_execution_screen.load_initial)
             return
 
         if self._is_settings_route(self.page.route):
@@ -2782,6 +3357,15 @@ class MiniAppShell:
             return False
         normalized = route.strip()
         return normalized == "/custom-request" or normalized == "/custom-request/"
+
+    @staticmethod
+    def _extract_custom_request_bridge_request_id(route: str | None) -> int | None:
+        if not route:
+            return None
+        m = re.match(r"^/custom-requests/(\d+)/bridge/?$", route.strip())
+        if not m:
+            return None
+        return int(m.group(1))
 
     @staticmethod
     def _is_settings_route(route: str | None) -> bool:

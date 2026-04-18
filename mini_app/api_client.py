@@ -12,6 +12,8 @@ from app.schemas.custom_marketplace import (
 from app.schemas.mini_app import (
     MiniAppBookingDetailRead,
     MiniAppBookingsListRead,
+    MiniAppBridgeExecutionPreparationResponse,
+    MiniAppBridgePaymentEligibilityRead,
     MiniAppCatalogRead,
     MiniAppHelpRead,
     MiniAppLanguagePreferenceResponse,
@@ -73,6 +75,67 @@ class MiniAppApiClient:
             response = await client.get(f"/mini-app/custom-requests/{request_id}", params=params)
             response.raise_for_status()
             return MiniAppCustomRequestCustomerDetailRead.model_validate(response.json())
+
+    async def get_booking_bridge_preparation(
+        self,
+        *,
+        request_id: int,
+        telegram_user_id: int,
+        language_code: str | None = None,
+    ) -> MiniAppBridgeExecutionPreparationResponse:
+        params: dict[str, object] = {"telegram_user_id": telegram_user_id}
+        if language_code:
+            params["language_code"] = language_code
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=15.0) as client:
+            response = await client.get(
+                f"/mini-app/custom-requests/{request_id}/booking-bridge/preparation",
+                params=params,
+            )
+            response.raise_for_status()
+            return MiniAppBridgeExecutionPreparationResponse.model_validate(response.json())
+
+    async def create_booking_bridge_reservation(
+        self,
+        *,
+        request_id: int,
+        telegram_user_id: int,
+        seats_count: int,
+        boarding_point_id: int,
+        language_code: str | None = None,
+    ) -> OrderSummaryRead:
+        params: dict[str, object] = {}
+        if language_code:
+            params["language_code"] = language_code
+        filtered_params = {k: v for k, v in params.items() if v not in (None, "")}
+        body = {
+            "telegram_user_id": telegram_user_id,
+            "seats_count": seats_count,
+            "boarding_point_id": boarding_point_id,
+        }
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=20.0) as client:
+            response = await client.post(
+                f"/mini-app/custom-requests/{request_id}/booking-bridge/reservations",
+                params=filtered_params or None,
+                json=body,
+            )
+            response.raise_for_status()
+            return OrderSummaryRead.model_validate(response.json())
+
+    async def get_booking_bridge_payment_eligibility(
+        self,
+        *,
+        request_id: int,
+        telegram_user_id: int,
+        order_id: int,
+    ) -> MiniAppBridgePaymentEligibilityRead:
+        params = {"telegram_user_id": telegram_user_id, "order_id": order_id}
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=15.0) as client:
+            response = await client.get(
+                f"/mini-app/custom-requests/{request_id}/booking-bridge/payment-eligibility",
+                params=params,
+            )
+            response.raise_for_status()
+            return MiniAppBridgePaymentEligibilityRead.model_validate(response.json())
 
     async def post_support_request(
         self,

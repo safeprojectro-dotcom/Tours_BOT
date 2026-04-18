@@ -785,4 +785,100 @@ closed for **Track 5b.1** scope (bridge persistence + admin API + tests + stabil
 - **HTTP nuance (deferrable):** unknown **`telegram_user_id`** raises **`BookingBridgeNotFoundError`** → **404** `"User not found."` — slightly coarse vs **`400`** on other RFQ routes; **narrow later** only if clients need distinct **`unknown_user`** vs **`no_bridge`**.
 
 ### Status
-closed for **Track 5b.2** scope (explicit preparation + hold orchestration + tests + stabilization review); payment initiation from bridge context **postponed** (**5b.3+**)
+closed for **Track 5b.2** scope (explicit preparation + hold orchestration + tests + stabilization review); payment initiation from bridge context **postponed** (**5b.3+**). **Execution gate composition** extended in **Track 5b.3a** — see **§29** (**`EffectiveCommercialExecutionPolicyService`** **in addition to** **`TourSalesModePolicyService`**; does not widen self-serve eligibility).
+
+---
+
+## 29. V2 Track 5b.3a — RFQ supplier policy + effective commercial execution resolver
+
+### Intent (scope)
+- **Additive DDL only:** **`20260424_13`** on **`supplier_custom_request_responses`** — **no** `orders` / `payments` / `tours` semantic rewrites.
+- **Supplier intent at RFQ response row:** declared **`tour_sales_mode`** + **`supplier_offer_payment_mode`** mirror offer-level vocabulary; **conservative** allowed pairs only.
+- **Single read-model resolver:** **`EffectiveCommercialExecutionPolicyService.resolve`** — composes Layer A **`TourSalesModePolicyService`**, supplier declaration, request **`closed_external`** / **`commercial_resolution_kind=external_record`** — **for gating reads and bridge execution only**; **does not** create payments or reservations.
+
+### Supplier policy validation (verified)
+- **Proposed:** both **`supplier_declared_sales_mode`** and **`supplier_declared_payment_mode`** **required** (**`SupplierCustomRequestResponseUpsert`**); invalid pairs rejected (**`full_bus` + `platform_checkout`**; no other exotic combos).
+- **Declined:** declaring either field **rejected** by schema; repository upsert passes **`None`** — **clears** stored policy on decline.
+- **Legacy / incomplete rows:** **`proposed`** with **NULL** policy columns → resolver treats as **`supplier_policy_incomplete`** — **blocks** self-serve (does **not** widen vs post-migration suppliers who must resubmit with fields).
+
+### Effective resolver (verified)
+- **`self_service_preparation_allowed`** / **`self_service_hold_allowed`** / **`platform_checkout_allowed`** are **True** only when: not external, not incomplete, supplier declared **`per_seat` + `platform_checkout`**, and **`TourSalesModePolicyService`** allows per-seat self-service — **conjunctive** (strict **narrowing** vs tour-only gate when supplier chose assisted/full-bus intent).
+- **Assisted supplier intent** (**`assisted_closure`**, **`full_bus` + `assisted_closure`**, etc.): **`supplier_platform_per_seat_intent`** false → self-serve and platform checkout **blocked**.
+- **External:** **`closed_external`** or **`external_record`** → **`external_only`**, checkout and self-serve **blocked**.
+- **Stability:** deterministic flags + **`blocked_code`** / **`blocked_reason`** / **`customer_blocked_code`**; no random widening paths identified.
+
+### Bridge execution + payment side effects (verified)
+- **`CustomRequestBookingBridgeExecutionService`:** calls resolver **before** prep/hold; **`create_temporary_reservation`** unchanged; **no** **`PaymentEntryService`** / payment-session code in execution module.
+- **`full_bus` tour:** still blocked via **`tour_sales_mode_blocks_self_service`** (same customer envelope family as before).
+- **Per-seat happy path:** unchanged when supplier declares **`per_seat` + `platform_checkout`** and tour allows per-seat self-service.
+
+### Read contracts (verified)
+- **Mini App bridge preparation:** **`effective_execution_policy`** added — JSON clients that ignore unknown keys **remain safe**; strict clients must accept new required field on this response type (additive contract on **one** response model).
+- **Admin detail:** **`effective_execution_policy`** nullable — present only when **`booking_bridge.tour_id`** and selected response exist; **`SupplierCustomRequestResponseRead`** includes supplier-declared fields for inspection.
+
+### Stabilization review (Track 5b.3a — closure)
+- **Scope creep:** **None found** — **no** new payment routes, **no** payment row creation from RFQ policy code paths, **no** quote-comparison UI, **no** portal/auth/handoff redesign (grep/service review: **`custom_request_booking_bridge_execution`**, **`effective_commercial_execution_policy`**, **`custom_marketplace_request_service`**, **`mini_app`** bridge routes).
+- **Layer A / Tracks 0–5b.2:** standard catalog booking, private bot booking, supplier publication, **5a** resolution, **5b.1** bridge persistence **unchanged** except **additive** supplier **`PUT`** payload requirement for **new/updated proposed** responses and additive API read fields; **migrate → deploy → smoke** discipline preserved (**`COMMIT_PUSH_DEPLOY.md`**).
+
+### Residual / forward
+- **Track 5b.3b** — bridge payment **eligibility** read (**§30**) — **completed**; actual payment session remains **`POST /mini-app/orders/{order_id}/payment-entry`** only.
+- **Track 5c** — Mini App RFQ bridge UX (**§31**) — **completed** (Flet wiring only; eligibility → existing payment stack).
+- **Forward:** optional thin delegate POST — **not** required when eligibility + existing route suffice; supersede/cancel bridge; **“my requests”** hub.
+
+### Status
+**closed** for **Track 5b.3a** scope (policy columns + validation + resolver + bridge integration + tests + stabilization review).
+
+---
+
+## 30. V2 Track 5b.3b — Bridge payment eligibility + existing payment-entry reuse
+
+### Intent
+- **Read-only gate:** **`GET /mini-app/custom-requests/{request_id}/booking-bridge/payment-eligibility`** (`telegram_user_id`, **`order_id`** required) — returns **`MiniAppBridgePaymentEligibilityRead`** (`payment_entry_allowed`, `order_id`, `effective_execution_policy`, `blocked_code`, `blocked_reason`).
+- **No new payment engine:** eligibility does **not** call **`PaymentEntryService.start_payment_entry`**; **`PaymentEntryService.is_order_valid_for_payment_entry`** (read-only) reuses the same rules as payment entry for order state.
+- **Anchor:** explicit **`order_id`** from the bridge hold response — **no** guessing among multiple orders.
+
+### Gate (all must hold for `payment_entry_allowed`)
+- Active bridge + **`resolve_customer_execution_context`** integrity (same as **5b.2**).
+- **`effective.platform_checkout_allowed`** (**5b.3a** resolver).
+- Order exists; **`order.user_id`** = bridge customer; **`order.tour_id`** = **`bridge.tour_id`**.
+- **`is_order_valid_for_payment_entry`** (reserved, awaiting payment, active cancellation, reservation not expired).
+
+### Explicit non-goals (verified)
+- **No** payment rows from eligibility GET; **no** bridge-authoritative payment lifecycle; **no** implicit payment on bridge create/patch/resolution.
+- **No** new provider or payment schema.
+
+### Stabilization review (Track 5b.3b — closure)
+- **Scope creep:** **None found** — **`get_payment_eligibility`**, **`mini_app`** eligibility route, **`PaymentEntryService.is_order_valid_for_payment_entry`**: **no** `PaymentRepository.create` from eligibility path; **no** `start_payment_entry` from eligibility; **no** bridge-specific payment POST; **no** auto payment after hold; **no** calls from admin bridge create/patch or **5a** resolution; **no** auth/handoff/RFQ UI redesign.
+- **Layer A:** **`start_payment_entry`** unchanged except additive read-only helper sharing **`_is_order_valid_for_payment_entry`**; catalog **`POST .../orders/{id}/payment-entry`**, private bot payment entry, **5b.2**/**5b.3a** unchanged in meaning.
+- **Payment gate:** **`platform_checkout_allowed`** first; then **`resolve_customer_execution_context`** (active bridge, **`tour_id`**, selection/bridge sync, owning user, tour execution validation); explicit **`order_id`** query param (**no** order guessing); order user/tour alignment; Layer A validity (expired / wrong status → **`order_not_valid_for_payment`**); assisted/external/incomplete policy → blocked before order checks.
+- **Read-only:** Eligibility route **no** `session.commit` in handler; service **no** flushes on bridge for eligibility; **`is_order_valid_for_payment_entry`** uses **`OrderRepository.get`** (no `FOR UPDATE`) — same predicate as **`start_payment_entry`** pre-check (**TOCTOU** between GET eligibility and POST payment-entry acceptable; **`start_payment_entry`** re-validates under lock).
+- **Read contract:** New **GET** path only — clients that never call it **unchanged**; blocked responses use stable **`blocked_code`** / **`blocked_reason`** for future Mini App wiring.
+- **Tests:** **`test_custom_request_booking_bridge_payment_eligibility_track5b3b`** (allowed path + **`payment-entry`** reuse, no payment rows on GET, assisted block, order_not_found / tour_mismatch / expired); regressions **5b.2**, **5b.3a**, **`PaymentEntryService`** — **pass** (acceptance run).
+
+### Status
+**closed** for **Track 5b.3b** scope (eligibility route + service + tests + stabilization review).
+
+---
+
+## 31. V2 Track 5c — RFQ Mini App UX wiring (bridge execution + payment continuation)
+
+### Intent
+- **Mini App only:** wire **`/custom-requests/{request_id}/bridge`** to **existing** Track **5b.2** preparation/reservation and Track **5b.3b** payment eligibility — **no** new backend payment or booking semantics.
+- **CTA policy:** **`Confirm reservation`** after preview when self-service preparation is allowed; **`Continue to payment`** only when overview shows an **active** hold **and** **`payment_entry_allowed`**; then navigate to the **standard** tour payment route so **`POST /mini-app/orders/{order_id}/payment-entry`** runs unchanged.
+
+### Explicit non-goals (verified in scope)
+- **No** second reservation or payment architecture in UI; **no** bypass of **`EffectiveCommercialExecutionPolicyService`** / **`PaymentEntryService`**; **no** **`full_bus`** self-serve enablement.
+
+### Residual / forward
+- Customer **multi-quote** comparison UI, bridge **supersede/cancel**, richer **“my requests”** hub in Mini App, bot deep-link templates — **not** **5c**.
+
+### Stabilization review (Track 5c — closure)
+- **Scope creep:** **None found** — changes are confined to **`mini_app/`** (**`api_client`**, **`app.py`**, **`ui_strings`**, **`rfq_bridge_logic`**, unit test); **no** edits to **`app/services/*`** booking/payment, **no** new FastAPI routes, **no** provider/session model, **no** quote-comparison UI, **no** bridge lifecycle/admin/auth/handoff redesign (repo grep + file review).
+- **Backend/API consumption:** **`MiniAppApiClient`** calls only **existing** **`GET/POST /mini-app/custom-requests/{id}/booking-bridge/preparation|reservations`**, **`GET .../payment-eligibility`**, plus **already-used** catalog helpers **`GET .../tours/{code}/preparation-summary`** and **`GET .../orders/{id}/reservation-overview`** — same shapes as Track **5b.2** / **5b.3b** / catalog; **no** client-side contract widening (no extra query/body fields beyond server-defined **`MiniAppCreateReservationRequest`** and eligibility params).
+- **UI branches:** **`self_service_available`** false → blocked envelope only (**no** seat/boarding, **no** reserve/pay CTAs); true + **`preparation`** → mirrors catalog **`per_seat_self_service_allowed`** gate (assisted copy, **no** confirm row when not per-seat); confirm appears only after successful **preview** (summary block); post-hold **`Continue to payment`** enabled only when **`rfq_bridge_continue_to_payment_allowed`** (active hold **and** **`payment_entry_allowed`**); hold active + pay blocked shows **`blocked_reason`** or safe fallback copy; expired/unknown overview uses existing hold messaging patterns.
+- **Payment reuse:** **`RfqBridgeExecutionScreen`** receives **`on_continue_to_payment=self.open_payment_entry`** → **`page.go(/tours/{tour_code}/prepare/payment/{order_id})`** → existing view stack loads **`PaymentEntryScreen.load_payment_entry`** → **`POST /mini-app/orders/{order_id}/payment-entry`** only — **no** parallel payment screen or bridge-specific payment POST.
+- **Standard flow:** Catalog **`/`**, **`/tours/...`**, **`/prepare`**, reserved/payment stacks, **`/custom-request`** (exact path) unchanged in ordering; bridge route **`/custom-requests/{id}/bridge`** matched only by dedicated regex **after** **`/custom-request`** branch — **no** path collision.
+- **Tests:** **`test_mini_app_rfq_bridge_wiring`** (CTA gating); **`test_custom_request_booking_bridge_execution_track5b2`**, **`test_custom_request_booking_bridge_payment_eligibility_track5b3b`**, **`test_api_mini_app`** — **pass** (focused acceptance run).
+
+### Status
+**closed** for **Track 5c** scope (Flet wiring + CTA gating test + documentation) — **stabilization reviewed**.
