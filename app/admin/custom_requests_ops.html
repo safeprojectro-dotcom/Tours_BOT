@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Mode 3 custom requests — operational view</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4d;
+      --text: #e7ecf3;
+      --muted: #9aa8bc;
+      --accent: #5b9fd4;
+      --warn: #c9a227;
+      --danger: #c44c4c;
+      --ok: #3d9a6e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 1rem 1.25rem 2rem;
+      line-height: 1.45;
+      font-size: 14px;
+    }
+    h1 { font-size: 1.25rem; margin: 0 0 0.5rem; font-weight: 600; }
+    .sub { color: var(--muted); font-size: 12px; max-width: 52rem; margin-bottom: 1rem; }
+    .toolbar {
+      display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
+      margin-bottom: 1rem; padding: 0.75rem; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px;
+    }
+    .toolbar input[type="password"], .toolbar input[type="text"] {
+      flex: 1; min-width: 12rem; padding: 0.4rem 0.5rem;
+      border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text);
+    }
+    button {
+      padding: 0.45rem 0.85rem; border-radius: 6px; border: 1px solid var(--accent);
+      background: rgba(91, 159, 212, 0.15); color: var(--text); cursor: pointer; font-size: 13px;
+    }
+    button:hover { background: rgba(91, 159, 212, 0.28); }
+    button.secondary { border-color: var(--border); background: transparent; }
+    .err { color: var(--danger); font-size: 13px; margin-top: 0.5rem; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 1rem; }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+    .panel {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 0.75rem 1rem; min-height: 200px;
+    }
+    .panel h2 { font-size: 0.95rem; margin: 0 0 0.75rem; color: var(--muted); font-weight: 600; }
+    .card {
+      border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.75rem; margin-bottom: 0.5rem;
+      cursor: pointer; transition: border-color 0.12s;
+    }
+    .card:hover { border-color: var(--accent); }
+    .card.active { border-color: var(--accent); background: rgba(91, 159, 212, 0.08); }
+    .card .id { font-weight: 600; }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.35rem; }
+    .chip {
+      font-size: 11px; padding: 0.15rem 0.45rem; border-radius: 4px;
+      background: rgba(255,255,255,0.06); color: var(--muted);
+    }
+    .chip.attn { background: rgba(201, 162, 39, 0.2); color: #e8d089; }
+    .chip.term { background: rgba(196, 76, 76, 0.2); color: #e8a0a0; }
+    .chip.okfocus { background: rgba(61, 154, 110, 0.18); color: #9dd4b5; }
+    .mono { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); }
+    section.block { margin-bottom: 1rem; }
+    section.block h3 {
+      font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em;
+      color: var(--muted); margin: 0 0 0.35rem; font-weight: 600;
+    }
+    .block-body {
+      background: rgba(0,0,0,0.2); padding: 0.5rem 0.65rem; border-radius: 6px; white-space: pre-wrap;
+    }
+    .disclaimer {
+      border-left: 3px solid var(--warn); padding: 0.5rem 0.75rem; margin-top: 0.35rem;
+      background: rgba(201, 162, 39, 0.08); font-size: 12px; color: #d4c9a8;
+    }
+    .empty { color: var(--muted); font-style: italic; }
+  </style>
+</head>
+<body>
+  <h1>Mode 3 custom requests — operational surfaces</h1>
+  <p class="sub">
+    Internal read-only layout over existing <span class="mono">/admin/custom-requests</span> JSON.
+    Uses the same operational hints (V1–V4) and prepared message payload (W3) as the API — no separate business rules in this page.
+    Prepared text is not proof of Telegram delivery or customer read.
+  </p>
+
+  <div class="toolbar">
+    <label class="mono" style="font-size:12px;">Admin API token</label>
+    <input type="password" id="token" placeholder="Paste token — stored in sessionStorage only" autocomplete="off"/>
+    <button type="button" id="saveToken">Save token</button>
+    <button type="button" class="secondary" id="loadList">Reload list</button>
+    <span class="mono" id="statusLine"></span>
+  </div>
+  <div id="loadErr" class="err"></div>
+
+  <div class="layout">
+    <div class="panel">
+      <h2>List</h2>
+      <div id="list"></div>
+    </div>
+    <div class="panel" id="detailPanel">
+      <h2>Detail</h2>
+      <p class="empty" id="detailPlaceholder">Select a request to load detail.</p>
+      <div id="detail" style="display:none;"></div>
+    </div>
+  </div>
+
+  <script>
+(function () {
+  const TOKEN_KEY = "tours_bot_admin_api_token";
+  const tokenEl = document.getElementById("token");
+  const saveBtn = document.getElementById("saveToken");
+  const loadBtn = document.getElementById("loadList");
+  const listEl = document.getElementById("list");
+  const loadErr = document.getElementById("loadErr");
+  const statusLine = document.getElementById("statusLine");
+  const detailEl = document.getElementById("detail");
+  const detailPh = document.getElementById("detailPlaceholder");
+
+  function getToken() {
+    return (sessionStorage.getItem(TOKEN_KEY) || "").trim();
+  }
+
+  tokenEl.value = getToken();
+
+  saveBtn.addEventListener("click", function () {
+    sessionStorage.setItem(TOKEN_KEY, tokenEl.value.trim());
+    tokenEl.value = getToken();
+    statusLine.textContent = "Token saved for this tab.";
+  });
+
+  function authHeaders() {
+    const t = getToken();
+    if (!t) throw new Error("Set admin API token first.");
+    return { "Authorization": "Bearer " + t, "Accept": "application/json" };
+  }
+
+  function esc(s) {
+    if (s == null) return "";
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  function chip(text, cls) {
+    return '<span class="chip ' + (cls || "") + '">' + esc(text) + '</span>';
+  }
+
+  let selectedId = null;
+  let lastItems = [];
+
+  function renderList(items) {
+    listEl.innerHTML = "";
+    if (!items.length) {
+      listEl.innerHTML = '<p class="empty">No items.</p>';
+      return;
+    }
+    items.forEach(function (row) {
+      const op = row.operational_hints || {};
+      const id = row.id;
+      const div = document.createElement("div");
+      div.className = "card" + (selectedId === id ? " active" : "");
+      const attn = op.needs_internal_ops_attention ? chip("Needs internal attention", "attn") : "";
+      const term = op.is_terminal ? chip("Terminal", "term") : "";
+      const focus = op.action_focus ? chip(op.action_focus, "okfocus") : "";
+      div.innerHTML =
+        '<div class="id">#' + esc(id) + ' · ' + esc(row.status) + '</div>' +
+        '<div class="mono" style="margin-top:4px;">' + esc(op.lifecycle_stage_label || "") + '</div>' +
+        '<div style="margin-top:6px;font-size:13px;">' + esc(op.scan_summary_line || "") + '</div>' +
+        '<div class="chips">' + attn + term + focus +
+        (op.follow_through_one_liner ? chip(op.follow_through_one_liner.substring(0, 42) + (op.follow_through_one_liner.length > 42 ? "…" : "")) : "") +
+        '</div>';
+      div.addEventListener("click", function () {
+        selectedId = id;
+        renderList(lastItems);
+        loadDetail(id);
+      });
+      listEl.appendChild(div);
+    });
+  }
+
+  function block(title, body) {
+    if (!body) return "";
+    return '<section class="block"><h3>' + esc(title) + '</h3><div class="block-body">' + body + '</div></section>';
+  }
+
+  function renderDetail(data) {
+    detailPh.style.display = "none";
+    detailEl.style.display = "block";
+    const req = data.request || {};
+    const op = data.operational_hints || {};
+    const pcm = data.prepared_customer_lifecycle_message || null;
+    const bridge = data.booking_bridge || null;
+
+    let html = "";
+    html += block("Request essentials",
+      "ID " + esc(req.id) + " · status " + esc(req.status) + " · type " + esc(req.request_type) + "\\n" +
+      "Travel: " + esc(req.travel_date_start) + (req.travel_date_end ? " → " + esc(req.travel_date_end) : "") + "\\n" +
+      "Route / notes: " + esc(req.route_notes)
+    );
+
+    html += block("Operational scan (V1)",
+      esc(op.scan_summary_line) + "\\n\\n" +
+      esc(op.handling_hint || "")
+    );
+
+    html += block("Action focus & next step (V2)",
+      "Action focus: " + esc(op.action_focus) + "\\n" +
+      esc(op.primary_action_hint || "")
+    );
+
+    html += block("Transition (V3)",
+      esc(op.transition_stage_one_liner || "") + "\\n\\n" +
+      esc(op.transition_chain_summary || "") + "\\n" +
+      "Selection link: " + esc(op.selection_link_state || "") + "\\n" +
+      "Customer path (ops view): " + esc(op.customer_path_visibility || "")
+    );
+
+    html += block("Follow-through (V4)",
+      esc(op.follow_through_one_liner || "") + "\\n\\n" +
+      esc(op.follow_through_summary || "") + "\\n" +
+      "Posture: " + esc(op.follow_through_posture || "") + "\\n" +
+      "Progression evidence (this API): " + esc(op.customer_progression_evidence || "")
+    );
+
+    html += block("Bridge & continuation",
+      (bridge
+        ? esc(JSON.stringify(bridge, null, 2))
+        : "(no booking bridge row)") +
+      "\\n\\n" + esc(op.continuation_summary || "") +
+      (op.bridge_continuation_interpretation ? "\\n\\n" + esc(op.bridge_continuation_interpretation) : "") +
+      (op.booking_bridge_operational_label ? "\\nLabel: " + esc(op.booking_bridge_operational_label) : "")
+    );
+
+    if (pcm) {
+      html += block("Prepared customer message (W3 — internal reference only)",
+        "Title: " + esc(pcm.title) + "\\n\\n" + esc(pcm.message) +
+        '\\n\\n<span class="mono">Event: ' + esc(pcm.notification_event) + " · lang " + esc(pcm.language_code) + "</span>"
+      );
+      html += '<div class="disclaimer">' +
+        "<strong>Prepared only — not delivery.</strong> " +
+        esc(pcm.internal_disclaimer || "") + "\\n" +
+        "Flags: not_sent_to_customer_channels=" + esc(pcm.not_sent_to_customer_channels) +
+        ", not_enqueued_to_order_notification_outbox=" + esc(pcm.not_enqueued_to_order_notification_outbox) + "." +
+        "</div>";
+    } else {
+      html += block("Prepared customer message (W3)", "(none — API returned null)");
+    }
+
+    const responses = data.responses || [];
+    html += block("Supplier responses (system record)",
+      responses.length ? esc(JSON.stringify(responses, null, 2)) : "(no responses in payload)"
+    );
+
+    detailEl.innerHTML = html;
+  }
+
+  async function loadDetail(id) {
+    loadErr.textContent = "";
+    statusLine.textContent = "Loading detail…";
+    try {
+      const r = await fetch("/admin/custom-requests/" + id, { headers: authHeaders() });
+      if (!r.ok) throw new Error("Detail HTTP " + r.status);
+      const data = await r.json();
+      renderDetail(data);
+      statusLine.textContent = "Detail #" + id;
+    } catch (e) {
+      loadErr.textContent = String(e.message || e);
+      statusLine.textContent = "";
+    }
+  }
+
+  async function loadList() {
+    loadErr.textContent = "";
+    listEl.innerHTML = '<p class="empty">Loading…</p>';
+    statusLine.textContent = "";
+    try {
+      const r = await fetch("/admin/custom-requests", { headers: authHeaders() });
+      if (!r.ok) throw new Error("List HTTP " + r.status);
+      const data = await r.json();
+      const items = data.items || [];
+      lastItems = items;
+      statusLine.textContent = items.length + " requests";
+      renderList(items);
+    } catch (e) {
+      listEl.innerHTML = "";
+      loadErr.textContent = String(e.message || e);
+    }
+  }
+
+  loadBtn.addEventListener("click", loadList);
+})();
+  </script>
+</body>
+</html>

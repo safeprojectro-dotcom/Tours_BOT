@@ -2927,7 +2927,12 @@ class MyRequestDetailScreen:
         )
         self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
         self.body_column = ft.Column(spacing=12)
-        self._primary_cta_button = ft.FilledButton(visible=False, on_click=lambda _: self._on_primary_cta())
+        # FilledButton requires non-empty content (or icon) even when hidden — else Flet raises on build.
+        self._primary_cta_button = ft.FilledButton(
+            shell(lg, "my_requests_cta_continue_booking"),
+            visible=False,
+            on_click=lambda _: self._on_primary_cta(),
+        )
         self._cta_caption = ft.Text("", size=12, color=ft.Colors.ON_SURFACE_VARIANT, visible=False)
         self._cta_block = ft.Column(
             spacing=6,
@@ -3124,28 +3129,29 @@ class MyRequestDetailScreen:
             )
         if detail.activity_preview is not None:
             ap = detail.activity_preview
-            lines.append(
-                ft.Container(
-                    padding=ft.padding.only(top=10),
-                    content=ft.Column(
-                        [
-                            ft.Text(
-                                shell(lg, "my_requests_activity_heading"),
-                                weight=ft.FontWeight.W_600,
-                                size=13,
-                            ),
-                            ft.Text(ap.title, size=14, weight=ft.FontWeight.W_500),
-                            ft.Text(ap.message, size=13, color=ft.Colors.ON_SURFACE_VARIANT),
-                            ft.Text(
-                                ap.preview_disclaimer,
-                                size=11,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                            ),
-                        ],
-                        spacing=6,
+            title_s = (ap.title or "").strip()
+            message_s = (ap.message or "").strip()
+            disc_s = (ap.preview_disclaimer or "").strip()
+            if title_s or message_s or disc_s:
+                ap_children: list[ft.Control] = [
+                    ft.Text(
+                        shell(lg, "my_requests_activity_heading"),
+                        weight=ft.FontWeight.W_600,
+                        size=13,
                     ),
+                ]
+                if title_s:
+                    ap_children.append(ft.Text(title_s, size=14, weight=ft.FontWeight.W_500))
+                if message_s:
+                    ap_children.append(ft.Text(message_s, size=13, color=ft.Colors.ON_SURFACE_VARIANT))
+                if disc_s:
+                    ap_children.append(ft.Text(disc_s, size=11, color=ft.Colors.ON_SURFACE_VARIANT))
+                lines.append(
+                    ft.Container(
+                        padding=ft.padding.only(top=10),
+                        content=ft.Column(ap_children, spacing=6),
+                    )
                 )
-            )
         if detail.selected_offer_summary is not None:
             sos = detail.selected_offer_summary
             lines.append(
@@ -3223,16 +3229,18 @@ class MyRequestDetailScreen:
                     )
                 )
         if matching is not None:
-            t = matching.summary.tour.localized_content.title
+            t = (matching.summary.tour.localized_content.title or "").strip()
             oid = matching.summary.order.id
+            line = f"{t} · #{oid}" if t else f"#{oid}"
             lines.append(
                 ft.Text(
-                    shell(lg, "my_requests_detail_bridge_line", line=f"{t} · #{oid}"),
+                    shell(lg, "my_requests_detail_bridge_line", line=line),
                     size=13,
                     color=ft.Colors.ON_SURFACE_VARIANT,
                 )
             )
         next_key = detail_next_step_key(status=detail.status, cta_kind=cta_kind)
+        next_body = (shell(lg, next_key) or "").strip() or shell(lg, "my_requests_detail_next_generic")
         lines.append(
             ft.Container(
                 padding=ft.padding.only(top=10),
@@ -3243,7 +3251,7 @@ class MyRequestDetailScreen:
                             weight=ft.FontWeight.W_600,
                             size=13,
                         ),
-                        ft.Text(shell(lg, next_key), size=13, color=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.Text(next_body, size=13, color=ft.Colors.ON_SURFACE_VARIANT),
                     ],
                     spacing=4,
                 ),
@@ -3263,13 +3271,13 @@ class MyRequestDetailScreen:
         self._primary_cta_button.visible = True
         self._cta_caption.visible = True
         if kind == DetailPrimaryCtaKind.CONTINUE_TO_PAYMENT:
-            self._primary_cta_button.text = shell(lg, "my_requests_cta_continue_payment")
+            self._primary_cta_button.content = shell(lg, "my_requests_cta_continue_payment")
             self._cta_caption.value = shell(lg, "my_requests_cta_caption_payment")
         elif kind == DetailPrimaryCtaKind.CONTINUE_BOOKING:
-            self._primary_cta_button.text = shell(lg, "my_requests_cta_continue_booking")
+            self._primary_cta_button.content = shell(lg, "my_requests_cta_continue_booking")
             self._cta_caption.value = shell(lg, "my_requests_cta_caption_booking")
         else:
-            self._primary_cta_button.text = shell(lg, "my_requests_cta_open_booking")
+            self._primary_cta_button.content = shell(lg, "my_requests_cta_open_booking")
             self._cta_caption.value = shell(lg, "my_requests_cta_caption_open_booking")
 
 
