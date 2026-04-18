@@ -90,8 +90,51 @@ class OperationalActionFocusRead(StrEnum):
     RECONCILE_CLOSED_BRIDGE = "reconcile_closed_bridge"
 
 
+class OperationalSelectionLinkRead(StrEnum):
+    """V3: how commercial selection relates to the request record (read-side)."""
+
+    PRE_COMMERCIAL_DECISION = "pre_commercial_decision"
+    SELECTED_RESPONSE_ON_FILE = "selected_response_on_file"
+    SELECTION_DATA_INCOMPLETE = "selection_data_incomplete"
+    CLOSED_RECORD = "closed_record"
+
+
+class OperationalCustomerPathVisibilityRead(StrEnum):
+    """V3: conservative customer-continuation visibility from ops perspective — not payment truth."""
+
+    NOT_YET_APPLICABLE = "not_yet_applicable"
+    NO_CUSTOMER_PATH_LINKED = "no_customer_path_linked"
+    BRIDGE_PREP_ONLY = "bridge_prep_only"
+    CUSTOMER_CONTINUATION_MAY_EXIST = "customer_continuation_may_exist"
+    BRIDGE_NOT_ACTIVE = "bridge_not_active"
+    TERMINAL_NO_FORWARD_PATH = "terminal_no_forward_path"
+
+
+class OperationalFollowThroughPostureRead(StrEnum):
+    """V4: where the case sits relative to real customer follow-through (RFQ/bridge snapshot only)."""
+
+    TERMINAL_CLOSED = "terminal_closed"
+    PRE_CUSTOMER_EXECUTION = "pre_customer_execution"
+    SELECTION_DATA_GAP = "selection_data_gap"
+    COMMERCIAL_WITHOUT_BRIDGE = "commercial_without_bridge"
+    BRIDGE_AWAITING_CLEARANCE = "bridge_awaiting_clearance"
+    PATH_MAY_EXIST_NO_PROGRESSION_EVIDENCE_HERE = "path_may_exist_no_progression_evidence_here"
+    NOTIFY_MILESTONE_NO_COMPLETION_EVIDENCE = "notify_milestone_no_completion_evidence"
+    BRIDGE_INACTIVE_STALLED = "bridge_inactive_stalled"
+
+
+class OperationalCustomerProgressionEvidenceRead(StrEnum):
+    """V4: what this API view can say about customer movement — not Layer A booking/payment truth."""
+
+    NOT_APPLICABLE = "not_applicable"
+    NO_CUSTOMER_PATH_VISIBLE = "no_customer_path_visible"
+    NO_BOOKING_OR_PAYMENT_EVIDENCE_IN_THIS_VIEW = "no_booking_or_payment_evidence_in_this_view"
+    NOTIFICATION_MILESTONE_ONLY = "notification_milestone_only"
+    TERMINAL_NO_FURTHER_EVIDENCE_EXPECTED = "terminal_no_further_evidence_expected"
+
+
 class CustomMarketplaceRequestOperationalListHintsRead(BaseModel):
-    """V1/V2: admin/ops scan line + handling + action clarity — English, read-only; not for customers."""
+    """V1–V4: admin/ops scan + handling + action + transition + light follow-through hint — not for customers."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -104,10 +147,12 @@ class CustomMarketplaceRequestOperationalListHintsRead(BaseModel):
     action_focus: OperationalActionFocusRead
     needs_internal_ops_attention: bool
     primary_action_hint: str
+    transition_stage_one_liner: str
+    follow_through_one_liner: str
 
 
 class CustomMarketplaceRequestOperationalDetailHintsRead(CustomMarketplaceRequestOperationalListHintsRead):
-    """V1/V2: extends list hints with booking-bridge context for admin detail only."""
+    """V1–V4: detail adds bridge, transition, and follow-through interpretation (read-side only)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -115,6 +160,12 @@ class CustomMarketplaceRequestOperationalDetailHintsRead(CustomMarketplaceReques
     booking_bridge_operational_label: str | None = None
     continuation_summary: str
     bridge_continuation_interpretation: str = ""
+    selection_link_state: OperationalSelectionLinkRead
+    customer_path_visibility: OperationalCustomerPathVisibilityRead
+    transition_chain_summary: str
+    follow_through_posture: OperationalFollowThroughPostureRead
+    customer_progression_evidence: OperationalCustomerProgressionEvidenceRead
+    follow_through_summary: str
 
 
 class CustomMarketplaceRequestRead(BaseModel):

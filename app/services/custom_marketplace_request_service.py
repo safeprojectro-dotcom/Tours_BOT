@@ -292,6 +292,7 @@ class CustomMarketplaceRequestService:
             proposed_supplier_response_count=proposed_count,
             selected_supplier_response_id=row.selected_supplier_response_id,
             booking_bridge=bridge,
+            commercial_resolution_kind=row.commercial_resolution_kind,
         )
         return CustomMarketplaceRequestDetailRead(
             request=CustomMarketplaceRequestRead.model_validate(row, from_attributes=True),

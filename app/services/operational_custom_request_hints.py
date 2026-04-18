@@ -1,6 +1,8 @@
-"""V1/V2: read-side operational hints for admin custom-request views (no new lifecycle semantics).
+"""V1–V4: read-side operational hints for admin custom-request views (no new lifecycle semantics).
 
-V2 adds action_focus, needs_internal_ops_attention, primary_action_hint, and (detail) bridge_continuation_interpretation.
+V2: action_focus, needs_internal_ops_attention, primary_action_hint, bridge_continuation_interpretation.
+V3: transition visibility — one-liner (list), selection_link_state, customer_path_visibility, transition_chain_summary (detail).
+V4: follow-through posture, progression evidence (not Layer A), follow_through_summary, list one-liner.
 """
 
 from __future__ import annotations
@@ -8,6 +10,7 @@ from __future__ import annotations
 from datetime import date
 
 from app.models.enums import (
+    CommercialResolutionKind,
     CustomMarketplaceRequestStatus,
     CustomMarketplaceRequestType,
     CustomRequestBookingBridgeStatus,
@@ -17,6 +20,10 @@ from app.schemas.custom_marketplace import (
     CustomMarketplaceRequestOperationalListHintsRead,
     CustomRequestBookingBridgeRead,
     OperationalActionFocusRead,
+    OperationalCustomerPathVisibilityRead,
+    OperationalCustomerProgressionEvidenceRead,
+    OperationalFollowThroughPostureRead,
+    OperationalSelectionLinkRead,
 )
 
 
@@ -65,6 +72,283 @@ def _route_preview(route_notes: str, *, max_len: int = 72) -> str:
     if len(one) <= max_len:
         return one or "—"
     return one[: max_len - 1] + "…"
+
+
+def _list_follow_through_one_liner(*, status: CustomMarketplaceRequestStatus) -> str:
+    """V4: lightweight list hint — detail has follow_through_summary."""
+    if operational_is_terminal_status(status):
+        return "Follow-through: terminal — no onward customer path expected in this record."
+    if status in (
+        CustomMarketplaceRequestStatus.OPEN,
+        CustomMarketplaceRequestStatus.UNDER_REVIEW,
+    ):
+        return "Follow-through: not at customer execution yet — commercial steps come first."
+    if status == CustomMarketplaceRequestStatus.SUPPLIER_SELECTED:
+        return "Follow-through: after selection — real progression only on detail (bridge + evidence level)."
+    return "Follow-through: see detail."
+
+
+def _follow_through_posture(
+    *,
+    status: CustomMarketplaceRequestStatus,
+    sel_link: OperationalSelectionLinkRead,
+    cust_vis: OperationalCustomerPathVisibilityRead,
+    bridge: CustomRequestBookingBridgeRead | None,
+) -> OperationalFollowThroughPostureRead:
+    """V4: stalled vs progressing vs terminal — from RFQ + bridge row only."""
+    if operational_is_terminal_status(status):
+        return OperationalFollowThroughPostureRead.TERMINAL_CLOSED
+    if sel_link == OperationalSelectionLinkRead.CLOSED_RECORD:
+        return OperationalFollowThroughPostureRead.TERMINAL_CLOSED
+    if sel_link == OperationalSelectionLinkRead.PRE_COMMERCIAL_DECISION:
+        return OperationalFollowThroughPostureRead.PRE_CUSTOMER_EXECUTION
+    if sel_link == OperationalSelectionLinkRead.SELECTION_DATA_INCOMPLETE:
+        return OperationalFollowThroughPostureRead.SELECTION_DATA_GAP
+    if sel_link == OperationalSelectionLinkRead.SELECTED_RESPONSE_ON_FILE:
+        if cust_vis == OperationalCustomerPathVisibilityRead.NO_CUSTOMER_PATH_LINKED:
+            return OperationalFollowThroughPostureRead.COMMERCIAL_WITHOUT_BRIDGE
+        if cust_vis == OperationalCustomerPathVisibilityRead.BRIDGE_NOT_ACTIVE:
+            return OperationalFollowThroughPostureRead.BRIDGE_INACTIVE_STALLED
+        if cust_vis == OperationalCustomerPathVisibilityRead.BRIDGE_PREP_ONLY:
+            return OperationalFollowThroughPostureRead.BRIDGE_AWAITING_CLEARANCE
+        if cust_vis == OperationalCustomerPathVisibilityRead.CUSTOMER_CONTINUATION_MAY_EXIST:
+            if (
+                bridge is not None
+                and bridge.bridge_status == CustomRequestBookingBridgeStatus.CUSTOMER_NOTIFIED
+            ):
+                return OperationalFollowThroughPostureRead.NOTIFY_MILESTONE_NO_COMPLETION_EVIDENCE
+            return OperationalFollowThroughPostureRead.PATH_MAY_EXIST_NO_PROGRESSION_EVIDENCE_HERE
+    return OperationalFollowThroughPostureRead.PRE_CUSTOMER_EXECUTION
+
+
+def _customer_progression_evidence(
+    *,
+    status: CustomMarketplaceRequestStatus,
+    sel_link: OperationalSelectionLinkRead,
+    cust_vis: OperationalCustomerPathVisibilityRead,
+    bridge: CustomRequestBookingBridgeRead | None,
+) -> OperationalCustomerProgressionEvidenceRead:
+    """V4: explicit separation of path availability vs proof of customer movement."""
+    if operational_is_terminal_status(status):
+        return OperationalCustomerProgressionEvidenceRead.TERMINAL_NO_FURTHER_EVIDENCE_EXPECTED
+    if sel_link == OperationalSelectionLinkRead.PRE_COMMERCIAL_DECISION:
+        return OperationalCustomerProgressionEvidenceRead.NOT_APPLICABLE
+    if sel_link == OperationalSelectionLinkRead.SELECTION_DATA_INCOMPLETE:
+        return OperationalCustomerProgressionEvidenceRead.NO_CUSTOMER_PATH_VISIBLE
+    if cust_vis == OperationalCustomerPathVisibilityRead.NOT_YET_APPLICABLE:
+        return OperationalCustomerProgressionEvidenceRead.NOT_APPLICABLE
+    if cust_vis == OperationalCustomerPathVisibilityRead.TERMINAL_NO_FORWARD_PATH:
+        return OperationalCustomerProgressionEvidenceRead.TERMINAL_NO_FURTHER_EVIDENCE_EXPECTED
+    if cust_vis == OperationalCustomerPathVisibilityRead.NO_CUSTOMER_PATH_LINKED:
+        return OperationalCustomerProgressionEvidenceRead.NO_CUSTOMER_PATH_VISIBLE
+    if cust_vis == OperationalCustomerPathVisibilityRead.BRIDGE_NOT_ACTIVE:
+        return OperationalCustomerProgressionEvidenceRead.NO_CUSTOMER_PATH_VISIBLE
+    if cust_vis == OperationalCustomerPathVisibilityRead.BRIDGE_PREP_ONLY:
+        return OperationalCustomerProgressionEvidenceRead.NO_BOOKING_OR_PAYMENT_EVIDENCE_IN_THIS_VIEW
+    if cust_vis == OperationalCustomerPathVisibilityRead.CUSTOMER_CONTINUATION_MAY_EXIST:
+        if (
+            bridge is not None
+            and bridge.bridge_status == CustomRequestBookingBridgeStatus.CUSTOMER_NOTIFIED
+        ):
+            return OperationalCustomerProgressionEvidenceRead.NOTIFICATION_MILESTONE_ONLY
+        return OperationalCustomerProgressionEvidenceRead.NO_BOOKING_OR_PAYMENT_EVIDENCE_IN_THIS_VIEW
+    return OperationalCustomerProgressionEvidenceRead.NO_BOOKING_OR_PAYMENT_EVIDENCE_IN_THIS_VIEW
+
+
+def _follow_through_summary(
+    *,
+    posture: OperationalFollowThroughPostureRead,
+) -> str:
+    """V4: concise ops narrative — never implies paid/completed booking."""
+    if posture == OperationalFollowThroughPostureRead.TERMINAL_CLOSED:
+        return (
+            "Follow-through is closed from this request record’s perspective — no further customer path is expected "
+            "here. Verify trip outcomes in Layer A / bookings if needed."
+        )
+    if posture == OperationalFollowThroughPostureRead.PRE_CUSTOMER_EXECUTION:
+        return (
+            "Not yet at linked customer execution: follow-through is still before a stable in-app path. "
+            "Commercial resolution and (when used) bridge creation are the usual prerequisites."
+        )
+    if posture == OperationalFollowThroughPostureRead.SELECTION_DATA_GAP:
+        return (
+            "Follow-through cannot be trusted until selection data is consistent — reconcile status vs selected "
+            "response id before judging stalls or customer movement."
+        )
+    if posture == OperationalFollowThroughPostureRead.COMMERCIAL_WITHOUT_BRIDGE:
+        return (
+            "Commercial selection exists without a booking bridge — a common stall: in-app customer follow-through "
+            "is not linked until a bridge exists or work moves off-platform explicitly."
+        )
+    if posture == OperationalFollowThroughPostureRead.BRIDGE_AWAITING_CLEARANCE:
+        return (
+            "Bridge is present but not clearance-complete — treat customer-facing follow-through as not reliably open "
+            "yet; expect no proven customer movement from this view alone."
+        )
+    if posture == OperationalFollowThroughPostureRead.BRIDGE_INACTIVE_STALLED:
+        return (
+            "Execution bridge is inactive (ended/replaced) — follow-through stalls for the linked in-app path until "
+            "a new bridge or an external continuation is established."
+        )
+    if posture == OperationalFollowThroughPostureRead.NOTIFY_MILESTONE_NO_COMPLETION_EVIDENCE:
+        return (
+            "A customer-notification milestone exists on the bridge; that records an ops step, not booking, hold, "
+            "or payment. Check Layer A for real customer progression."
+        )
+    if posture == OperationalFollowThroughPostureRead.PATH_MAY_EXIST_NO_PROGRESSION_EVIDENCE_HERE:
+        return (
+            "Customer path may be available in the app when policies allow, but this RFQ admin view carries no "
+            "booking or payment evidence — assume follow-through unproven until confirmed outside this snapshot."
+        )
+    return (
+        "Use posture, bridge status, and Layer A tooling together — this summary is interpretive read-side text only."
+    )
+
+
+def _list_transition_one_liner(*, status: CustomMarketplaceRequestStatus) -> str:
+    """V3: single scan-friendly line; detail carries full transition_chain_summary."""
+    if operational_is_terminal_status(status):
+        return (
+            "Transition: closed in system — use detail for audit; no forward in-app chain implied here."
+        )
+    if status in (
+        CustomMarketplaceRequestStatus.OPEN,
+        CustomMarketplaceRequestStatus.UNDER_REVIEW,
+    ):
+        return (
+            "Transition: before commercial selection — bridge and customer path follow resolution."
+        )
+    if status == CustomMarketplaceRequestStatus.SUPPLIER_SELECTED:
+        return "Transition: after selection — bridge + customer path on detail."
+    return "Transition: see detail for full chain."
+
+
+def _operational_selection_link(
+    *,
+    status: CustomMarketplaceRequestStatus,
+    selected_supplier_response_id: int | None,
+) -> OperationalSelectionLinkRead:
+    if operational_is_terminal_status(status):
+        return OperationalSelectionLinkRead.CLOSED_RECORD
+    if status in (
+        CustomMarketplaceRequestStatus.OPEN,
+        CustomMarketplaceRequestStatus.UNDER_REVIEW,
+    ):
+        return OperationalSelectionLinkRead.PRE_COMMERCIAL_DECISION
+    if status == CustomMarketplaceRequestStatus.SUPPLIER_SELECTED:
+        if selected_supplier_response_id is None:
+            return OperationalSelectionLinkRead.SELECTION_DATA_INCOMPLETE
+        return OperationalSelectionLinkRead.SELECTED_RESPONSE_ON_FILE
+    return OperationalSelectionLinkRead.PRE_COMMERCIAL_DECISION
+
+
+def _operational_customer_path_visibility(
+    *,
+    status: CustomMarketplaceRequestStatus,
+    selected_supplier_response_id: int | None,
+    bridge: CustomRequestBookingBridgeRead | None,
+) -> OperationalCustomerPathVisibilityRead:
+    if operational_is_terminal_status(status):
+        return OperationalCustomerPathVisibilityRead.TERMINAL_NO_FORWARD_PATH
+    if status in (
+        CustomMarketplaceRequestStatus.OPEN,
+        CustomMarketplaceRequestStatus.UNDER_REVIEW,
+    ):
+        return OperationalCustomerPathVisibilityRead.NOT_YET_APPLICABLE
+    if status != CustomMarketplaceRequestStatus.SUPPLIER_SELECTED:
+        return OperationalCustomerPathVisibilityRead.NOT_YET_APPLICABLE
+    if selected_supplier_response_id is None:
+        return OperationalCustomerPathVisibilityRead.NO_CUSTOMER_PATH_LINKED
+    if bridge is None:
+        return OperationalCustomerPathVisibilityRead.NO_CUSTOMER_PATH_LINKED
+    bst = bridge.bridge_status
+    if bst in (
+        CustomRequestBookingBridgeStatus.SUPERSEDED,
+        CustomRequestBookingBridgeStatus.CANCELLED,
+    ):
+        return OperationalCustomerPathVisibilityRead.BRIDGE_NOT_ACTIVE
+    if bst == CustomRequestBookingBridgeStatus.PENDING_VALIDATION:
+        return OperationalCustomerPathVisibilityRead.BRIDGE_PREP_ONLY
+    if bst in (
+        CustomRequestBookingBridgeStatus.READY,
+        CustomRequestBookingBridgeStatus.LINKED_TOUR,
+        CustomRequestBookingBridgeStatus.CUSTOMER_NOTIFIED,
+    ):
+        return OperationalCustomerPathVisibilityRead.CUSTOMER_CONTINUATION_MAY_EXIST
+    return OperationalCustomerPathVisibilityRead.BRIDGE_PREP_ONLY
+
+
+def _transition_chain_summary(
+    *,
+    status: CustomMarketplaceRequestStatus,
+    commercial_resolution_kind: CommercialResolutionKind | None,
+    selection_link: OperationalSelectionLinkRead,
+    customer_vis: OperationalCustomerPathVisibilityRead,
+    bridge: CustomRequestBookingBridgeRead | None,
+    proposed_count: int,
+) -> str:
+    """V3: narrative only — does not assert payment, customer action, or live bridge authority."""
+    if operational_is_terminal_status(status):
+        parts: list[str] = []
+        if status == CustomMarketplaceRequestStatus.CLOSED_ASSISTED:
+            parts.append("Terminal: assisted closure recorded.")
+        elif status == CustomMarketplaceRequestStatus.CLOSED_EXTERNAL:
+            parts.append("Terminal: external / off automated checkout record.")
+        elif status == CustomMarketplaceRequestStatus.CANCELLED:
+            parts.append("Terminal: cancelled — no forward commercial chain in this system.")
+        else:
+            parts.append("Terminal: legacy/fulfilled-style closed record.")
+        if commercial_resolution_kind is not None:
+            parts.append(f"Commercial resolution kind on file: {commercial_resolution_kind.value}.")
+        if bridge is not None:
+            parts.append(
+                "A booking bridge row may still appear — treat as potentially historical; confirm active path separately."
+            )
+        return " ".join(parts)
+
+    if status in (
+        CustomMarketplaceRequestStatus.OPEN,
+        CustomMarketplaceRequestStatus.UNDER_REVIEW,
+    ):
+        return (
+            f"Chain: intake/review — {proposed_count} proposed supplier offer(s). "
+            "Commercial selection and bridge are downstream; customer Mini App continuation is not in play yet."
+        )
+
+    if status == CustomMarketplaceRequestStatus.SUPPLIER_SELECTED:
+        if selection_link == OperationalSelectionLinkRead.SELECTION_DATA_INCOMPLETE:
+            return (
+                "Chain blocked for interpretation: status says selection but selected response id is missing — "
+                "reconcile before trusting bridge or customer visibility."
+            )
+        seg: list[str] = ["Chain: commercial selection applied (winning response id on file)."]
+        if bridge is None:
+            seg.append(
+                "Bridge: absent — selection is not yet linked to in-app customer execution; create bridge when intended."
+            )
+        else:
+            seg.append(
+                f"Bridge: row exists ({bridge.bridge_status.value}) — links intent to tour/user context; "
+                "Layer A hold/payment remains separate."
+            )
+        if customer_vis == OperationalCustomerPathVisibilityRead.CUSTOMER_CONTINUATION_MAY_EXIST:
+            seg.append(
+                "Customer: in-app continuation may be offered when existing prep APIs allow — not proof the customer "
+                "acted or paid."
+            )
+        elif customer_vis == OperationalCustomerPathVisibilityRead.BRIDGE_PREP_ONLY:
+            seg.append(
+                "Customer: still in bridge prep/validation — do not assume customer-visible next steps yet."
+            )
+        elif customer_vis == OperationalCustomerPathVisibilityRead.BRIDGE_NOT_ACTIVE:
+            seg.append(
+                "Customer: prior bridge inactive — replacement bridge or off-platform path must be explicit."
+            )
+        elif customer_vis == OperationalCustomerPathVisibilityRead.NO_CUSTOMER_PATH_LINKED:
+            seg.append("Customer: no linked in-app path from this record state yet.")
+        return " ".join(seg)
+
+    return "Chain: use lifecycle status, supplier responses, and bridge rows together."
 
 
 def operational_scan_summary_line(
@@ -377,6 +661,8 @@ def build_operational_list_hints(
         action_focus=focus,
         needs_internal_ops_attention=need_ops,
         primary_action_hint=primary,
+        transition_stage_one_liner=_list_transition_one_liner(status=status),
+        follow_through_one_liner=_list_follow_through_one_liner(status=status),
     )
 
 
@@ -391,6 +677,7 @@ def build_operational_detail_hints(
     proposed_supplier_response_count: int,
     selected_supplier_response_id: int | None,
     booking_bridge: CustomRequestBookingBridgeRead | None,
+    commercial_resolution_kind: CommercialResolutionKind | None = None,
 ) -> CustomMarketplaceRequestOperationalDetailHintsRead:
     list_part = build_operational_list_hints(
         status=status,
@@ -413,6 +700,36 @@ def build_operational_detail_hints(
         bridge=booking_bridge,
     )
     bridge_narrative = _bridge_continuation_interpretation(status=status, bridge=booking_bridge)
+    sel_link = _operational_selection_link(
+        status=status,
+        selected_supplier_response_id=selected_supplier_response_id,
+    )
+    cust_vis = _operational_customer_path_visibility(
+        status=status,
+        selected_supplier_response_id=selected_supplier_response_id,
+        bridge=booking_bridge,
+    )
+    chain_summary = _transition_chain_summary(
+        status=status,
+        commercial_resolution_kind=commercial_resolution_kind,
+        selection_link=sel_link,
+        customer_vis=cust_vis,
+        bridge=booking_bridge,
+        proposed_count=proposed_supplier_response_count,
+    )
+    ft_posture = _follow_through_posture(
+        status=status,
+        sel_link=sel_link,
+        cust_vis=cust_vis,
+        bridge=booking_bridge,
+    )
+    prog_evidence = _customer_progression_evidence(
+        status=status,
+        sel_link=sel_link,
+        cust_vis=cust_vis,
+        bridge=booking_bridge,
+    )
+    ft_summary = _follow_through_summary(posture=ft_posture)
     base = list_part.model_dump(
         exclude={"handling_hint", "action_focus", "needs_internal_ops_attention", "primary_action_hint"},
     )
@@ -435,4 +752,10 @@ def build_operational_detail_hints(
             has_selected_supplier_response=has_sel,
         ),
         bridge_continuation_interpretation=bridge_narrative,
+        selection_link_state=sel_link,
+        customer_path_visibility=cust_vis,
+        transition_chain_summary=chain_summary,
+        follow_through_posture=ft_posture,
+        customer_progression_evidence=prog_evidence,
+        follow_through_summary=ft_summary,
     )
