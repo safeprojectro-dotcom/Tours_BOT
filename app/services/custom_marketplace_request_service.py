@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from sqlalchemy.orm import Session
 
 from app.models.custom_marketplace_request import CustomMarketplaceRequest, SupplierCustomRequestResponse
@@ -29,6 +31,7 @@ from app.schemas.custom_marketplace import (
     MiniAppCustomRequestCustomerDetailRead,
     MiniAppCustomRequestCustomerListRead,
     MiniAppCustomRequestCustomerSummaryRead,
+    MiniAppSelectedOfferSummaryRead,
     SupplierCustomRequestResponseRead,
     SupplierCustomRequestResponseUpsert,
 )
@@ -75,6 +78,86 @@ def customer_visible_summary(row: CustomMarketplaceRequest) -> str:
     if s == CustomMarketplaceRequestStatus.CANCELLED:
         return "This request was cancelled."
     return "Your request status was updated."
+
+
+_CUSTOMER_OFFER_MESSAGE_EXCERPT_MAX = 200
+
+
+def _customer_offers_received_hint(
+    *,
+    status: CustomMarketplaceRequestStatus,
+    proposed_count: int,
+) -> str:
+    """Track 5f v1: neutral English copy for Mini App (matches customer_visible_summary MVP style)."""
+    if status in (
+        CustomMarketplaceRequestStatus.OPEN,
+        CustomMarketplaceRequestStatus.UNDER_REVIEW,
+    ):
+        if proposed_count == 0:
+            return "No supplier proposals are on file yet for this request."
+        if proposed_count == 1:
+            return "One supplier proposal has been received and may be under review."
+        return (
+            f"{proposed_count} supplier proposals have been received and may be under review."
+        )
+    if status == CustomMarketplaceRequestStatus.SUPPLIER_SELECTED:
+        return (
+            "The team has selected a supplier proposal. Next steps depend on your case and "
+            "any booking link from the team."
+        )
+    if status in (
+        CustomMarketplaceRequestStatus.CLOSED_ASSISTED,
+        CustomMarketplaceRequestStatus.FULFILLED,
+    ):
+        return "This request was handled with team assistance."
+    if status == CustomMarketplaceRequestStatus.CLOSED_EXTERNAL:
+        return "This request was closed outside the in-app checkout flow."
+    if status == CustomMarketplaceRequestStatus.CANCELLED:
+        return ""
+    return ""
+
+
+def _customer_selected_offer_summary(
+    session: Session,
+    *,
+    row: CustomMarketplaceRequest,
+) -> MiniAppSelectedOfferSummaryRead | None:
+    """Allowlisted snippet for the admin-selected proposed response only."""
+    sel_id = row.selected_supplier_response_id
+    if sel_id is None:
+        return None
+    if row.status not in (
+        CustomMarketplaceRequestStatus.SUPPLIER_SELECTED,
+        CustomMarketplaceRequestStatus.CLOSED_ASSISTED,
+        CustomMarketplaceRequestStatus.CLOSED_EXTERNAL,
+        CustomMarketplaceRequestStatus.FULFILLED,
+    ):
+        return None
+    resp = session.get(SupplierCustomRequestResponse, sel_id)
+    if resp is None or resp.request_id != row.id:
+        return None
+    if resp.response_kind != SupplierCustomRequestResponseKind.PROPOSED:
+        return None
+    excerpt: str | None = None
+    if resp.supplier_message:
+        one_line = " ".join(resp.supplier_message.split())
+        if one_line:
+            excerpt = one_line[:_CUSTOMER_OFFER_MESSAGE_EXCERPT_MAX]
+    price: Decimal | None = resp.quoted_price
+    currency = (resp.quoted_currency or "").strip() or None
+    return MiniAppSelectedOfferSummaryRead(
+        quoted_price=price,
+        quoted_currency=currency,
+        supplier_message_excerpt=excerpt,
+        declared_sales_mode=(
+            resp.supplier_declared_sales_mode.value if resp.supplier_declared_sales_mode else None
+        ),
+        declared_payment_mode=(
+            resp.supplier_declared_payment_mode.value
+            if resp.supplier_declared_payment_mode
+            else None
+        ),
+    )
 
 
 class CustomMarketplaceRequestService:
@@ -412,6 +495,9 @@ class CustomMarketplaceRequestService:
                 tour = session.get(Tour, latest_bridge.tour_id)
                 if tour is not None:
                     bridge_tour_code = tour.code
+        proposed_count = self._responses.count_proposed_for_request(session, request_id=row.id)
+        offers_hint = _customer_offers_received_hint(status=row.status, proposed_count=proposed_count)
+        selected_snippet = _customer_selected_offer_summary(session, row=row)
         return MiniAppCustomRequestCustomerDetailRead(
             id=row.id,
             status=row.status,
@@ -421,6 +507,9 @@ class CustomMarketplaceRequestService:
             travel_date_end=row.travel_date_end,
             latest_booking_bridge_status=bridge_status,
             latest_booking_bridge_tour_code=bridge_tour_code,
+            proposed_response_count=proposed_count,
+            offers_received_hint=offers_hint,
+            selected_offer_summary=selected_snippet,
         )
 
 

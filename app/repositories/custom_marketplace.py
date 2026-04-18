@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select, union
+from sqlalchemy import func, select, union
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.custom_marketplace_request import CustomMarketplaceRequest, SupplierCustomRequestResponse
-from app.models.enums import CustomMarketplaceRequestStatus, SupplierCustomRequestResponseKind
+from app.models.enums import (
+    CustomMarketplaceRequestStatus,
+    SupplierCustomRequestResponseKind,
+    SupplierOfferPaymentMode,
+    TourSalesMode,
+)
 from app.models.supplier import Supplier
 
 
@@ -206,6 +211,8 @@ class SupplierCustomRequestResponseRepository:
         supplier_message: str | None,
         quoted_price,
         quoted_currency: str | None,
+        supplier_declared_sales_mode: TourSalesMode | None,
+        supplier_declared_payment_mode: SupplierOfferPaymentMode | None,
     ) -> SupplierCustomRequestResponse:
         row = self.get_for_supplier(session, request_id=request_id, supplier_id=supplier_id)
         if row is None:
@@ -216,6 +223,8 @@ class SupplierCustomRequestResponseRepository:
                 supplier_message=supplier_message,
                 quoted_price=quoted_price,
                 quoted_currency=quoted_currency,
+                supplier_declared_sales_mode=supplier_declared_sales_mode,
+                supplier_declared_payment_mode=supplier_declared_payment_mode,
             )
             session.add(row)
         else:
@@ -223,6 +232,20 @@ class SupplierCustomRequestResponseRepository:
             row.supplier_message = supplier_message
             row.quoted_price = quoted_price
             row.quoted_currency = quoted_currency
+            row.supplier_declared_sales_mode = supplier_declared_sales_mode
+            row.supplier_declared_payment_mode = supplier_declared_payment_mode
         session.flush()
         session.refresh(row)
         return row
+
+    def count_proposed_for_request(self, session: Session, *, request_id: int) -> int:
+        """Track 5f v1: customer aggregate — proposed responses only (declined excluded)."""
+        stmt = (
+            select(func.count())
+            .select_from(SupplierCustomRequestResponse)
+            .where(
+                SupplierCustomRequestResponse.request_id == request_id,
+                SupplierCustomRequestResponse.response_kind == SupplierCustomRequestResponseKind.PROPOSED,
+            )
+        )
+        return int(session.scalar(stmt) or 0)

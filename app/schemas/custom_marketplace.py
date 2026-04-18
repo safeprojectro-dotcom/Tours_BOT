@@ -313,6 +313,16 @@ class MiniAppCustomRequestCustomerListRead(BaseModel):
     total_returned: int
 
 
+class MiniAppSelectedOfferSummaryRead(BaseModel):
+    """Track 5f v1: read-only snippet for admin-selected proposal only — no supplier identity."""
+
+    quoted_price: Decimal | None = None
+    quoted_currency: str | None = None
+    supplier_message_excerpt: str | None = Field(default=None, max_length=400)
+    declared_sales_mode: str | None = None
+    declared_payment_mode: str | None = None
+
+
 class MiniAppCustomRequestCustomerDetailRead(BaseModel):
     id: int
     status: CustomMarketplaceRequestStatus
@@ -322,6 +332,9 @@ class MiniAppCustomRequestCustomerDetailRead(BaseModel):
     travel_date_end: date | None
     latest_booking_bridge_status: CustomRequestBookingBridgeStatus | None = None
     latest_booking_bridge_tour_code: str | None = None
+    proposed_response_count: int = 0
+    offers_received_hint: str = ""
+    selected_offer_summary: MiniAppSelectedOfferSummaryRead | None = None
 
 
 class MiniAppCustomRequestCreatedRead(BaseModel):

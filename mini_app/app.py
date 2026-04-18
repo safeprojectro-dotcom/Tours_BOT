@@ -2950,6 +2950,77 @@ class MyRequestDetailScreen:
             ft.Text(shell(lg, "my_requests_detail_summary"), weight=ft.FontWeight.W_600),
             ft.Text(detail.customer_visible_summary, color=ft.Colors.ON_SURFACE_VARIANT),
         ]
+        if (detail.offers_received_hint or "").strip():
+            lines.append(
+                ft.Container(
+                    padding=ft.padding.only(top=6),
+                    content=ft.Text(
+                        detail.offers_received_hint.strip(),
+                        size=13,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                )
+            )
+        if detail.selected_offer_summary is not None:
+            sos = detail.selected_offer_summary
+            lines.append(
+                ft.Container(
+                    padding=ft.padding.only(top=10),
+                    content=ft.Column(
+                        [
+                            ft.Text(
+                                shell(lg, "my_requests_detail_selected_offer_title"),
+                                weight=ft.FontWeight.W_600,
+                                size=13,
+                            ),
+                            *(
+                                [
+                                    ft.Text(
+                                        shell(
+                                            lg,
+                                            "my_requests_detail_selected_price",
+                                            amount=str(sos.quoted_price),
+                                            currency=sos.quoted_currency or "",
+                                        ),
+                                        size=13,
+                                        color=ft.Colors.ON_SURFACE_VARIANT,
+                                    )
+                                ]
+                                if sos.quoted_price is not None and (sos.quoted_currency or "").strip()
+                                else []
+                            ),
+                            *(
+                                [
+                                    ft.Text(
+                                        shell(lg, "my_requests_detail_selected_message", text=sos.supplier_message_excerpt),
+                                        size=13,
+                                        color=ft.Colors.ON_SURFACE_VARIANT,
+                                    )
+                                ]
+                                if (sos.supplier_message_excerpt or "").strip()
+                                else []
+                            ),
+                            *(
+                                [
+                                    ft.Text(
+                                        shell(
+                                            lg,
+                                            "my_requests_detail_selected_modes",
+                                            sales=sos.declared_sales_mode or "—",
+                                            payment=sos.declared_payment_mode or "—",
+                                        ),
+                                        size=12,
+                                        color=ft.Colors.ON_SURFACE_VARIANT,
+                                    )
+                                ]
+                                if sos.declared_sales_mode or sos.declared_payment_mode
+                                else []
+                            ),
+                        ],
+                        spacing=4,
+                    ),
+                )
+            )
         ctx_key, _ = detail_context_line_keys(
             prep=prep,
             prep_http_not_found=prep_http_not_found,

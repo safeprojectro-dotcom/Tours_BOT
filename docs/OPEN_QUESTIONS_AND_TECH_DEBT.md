@@ -924,7 +924,7 @@ closed for **Track 5b.2** scope (explicit preparation + hold orchestration + tes
 - **No** auto-supersede on winner change, **no** `superseded_by_bridge_id`, **no** refund/cancel-order from bridge, **no** new payment/booking **routes** or provider flows, **no** auth/handoff redesign, **no** RFQ request lifecycle redesign.
 
 ### Additive read contract
-- **`MiniAppCustomRequestCustomerDetailRead`:** **`latest_booking_bridge_status`**, **`latest_booking_bridge_tour_code`** (nullable) — JSON clients that ignore unknown keys remain safe; strict clients must accept new optional fields on this response type.
+- **`MiniAppCustomRequestCustomerDetailRead`:** **`latest_booking_bridge_status`**, **`latest_booking_bridge_tour_code`** (nullable) — JSON clients that ignore unknown keys remain safe; strict clients must accept new optional fields on this response type. **Track 5f v1** adds **`proposed_response_count`**, **`offers_received_hint`**, **`selected_offer_summary`** — see **§34**.
 
 ### Residual / forward
 - Partial unique index (one **active** bridge per **`request_id`**) if ops reports rare double-**POST** races (**§27**); structured closure reason / audit columns — **explicit** slices only.
@@ -936,3 +936,33 @@ closed for **Track 5b.2** scope (explicit preparation + hold orchestration + tes
 
 ### Status
 **closed** for **Track 5e** scope (admin close/replace + fail-closed customer bridge endpoints + hub/detail additive fields + tests + documentation) — **stabilization reviewed**.
+
+---
+
+## 34. V2 Track 5f v1 — Customer multi-quote summary / aggregate visibility
+
+### Intent
+- **Read-only** customer visibility on **`GET /mini-app/custom-requests/{id}`**: **`proposed_response_count`**, **`offers_received_hint`**, **`selected_offer_summary`** (nullable nested model).
+- **Count:** **`proposed`** responses only — **`declined`** excluded (**`SupplierCustomRequestResponseRepository.count_proposed_for_request`**).
+- **Hint:** status-aware neutral English strings (**same MVP style** as **`customer_visible_summary`**); not a bidding or choice prompt.
+- **Selected snippet:** only when **`selected_supplier_response_id`** is set **and** request status is **`supplier_selected`**, **`closed_assisted`**, **`closed_external`**, or **`fulfilled`** **and** loaded row is **`proposed`** for the **same** **`request_id`** — allowlisted **`quoted_price`**, **`quoted_currency`**, truncated **`supplier_message_excerpt`** (200 chars), **`declared_sales_mode`**, **`declared_payment_mode`** — **no** supplier code/name/id.
+
+### Explicit non-goals (verified)
+- **No** customer winner choice, **no** comparison cards, **no** competing supplier UI, **no** new **`POST`** customer routes, **no** bridge/payment/booking execution changes, **no** request lifecycle redesign.
+
+### Mini App
+- **`MyRequestDetailScreen._render_body`** only — informational **`Text`** / **`Column`**; **no** changes to **`resolve_detail_primary_cta`** or hub primary button logic.
+
+### Additive read contract
+- **`MiniAppCustomRequestCustomerDetailRead`** extended per **§34**; strict JSON clients must accept new fields; ignores-unknown-keys clients remain safe.
+
+### Residual / forward
+- **5f v2+:** anonymized multi-card compare, localized **`offers_received_hint`**, list-row offer hints — **explicit** slices only.
+
+### Stabilization review (Track 5f v1 — closure)
+- **Scope creep:** **None found** — **`app/repositories/custom_marketplace.py`** (count), **`app/schemas/custom_marketplace.py`**, **`app/services/custom_marketplace_request_service.py`**, **`mini_app/app.py`** (detail body only), **`mini_app/ui_strings.py`**, **`tests/unit/test_custom_marketplace_track5f_v1.py`**; **no** edits to bridge execution, **`PaymentEntryService`**, or hub CTA helpers.
+- **5a authority:** snippet is **derived** from admin **`selected_supplier_response_id`** only; **no** alternate actionable offers.
+- **Tests:** **`test_custom_marketplace_track5f_v1`**; regressions **`test_custom_marketplace_track5a`**, **`test_mini_app_rfq_hub_cta`** — **pass** (focused acceptance run).
+
+### Status
+**closed** for **Track 5f v1** scope (aggregate + allowlisted selected snippet + My Requests detail read-only copy + tests + documentation) — **stabilization reviewed**.
