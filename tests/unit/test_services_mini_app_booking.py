@@ -7,6 +7,7 @@ from app.services.mini_app_booking import (
     MINI_APP_SOURCE_CHANNEL,
     MiniAppBookingService,
     MiniAppSelfServiceBookingNotAllowedError,
+    MiniAppCharterSeatsCountMismatchError,
 )
 from tests.unit.base import FoundationDBTestCase
 
@@ -187,3 +188,100 @@ class MiniAppBookingServiceTests(FoundationDBTestCase):
             language_code="en",
         )
         self.assertIsNone(overview)
+
+    def test_mode2_virgin_charter_payment_entry_reuses_pending_session(self) -> None:
+        user = self.create_user(telegram_user_id=77_310)
+        tour = self.create_tour(
+            code="MINI-BOOK-MODE2-PAY",
+            departure_datetime=datetime.now(UTC) + timedelta(days=14),
+            return_datetime=datetime.now(UTC) + timedelta(days=16),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=10,
+            seats_available=10,
+            base_price="60.00",
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.create_translation(tour, language_code="en", title="Mode2 Pay")
+        point = self.create_boarding_point(tour)
+        self.session.commit()
+
+        svc = MiniAppBookingService()
+        summary = svc.create_temporary_reservation(
+            self.session,
+            tour_code=tour.code,
+            telegram_user_id=user.telegram_user_id,
+            seats_count=10,
+            boarding_point_id=point.id,
+            language_code="en",
+        )
+        self.assertIsNotNone(summary)
+        assert summary is not None
+        self.session.commit()
+
+        entry1 = svc.start_payment_entry(
+            self.session,
+            order_id=summary.order.id,
+            telegram_user_id=user.telegram_user_id,
+        )
+        self.assertIsNotNone(entry1)
+        assert entry1 is not None
+        self.assertFalse(entry1.reused_existing_payment)
+        ref1 = entry1.payment_session_reference
+
+        entry2 = svc.start_payment_entry(
+            self.session,
+            order_id=summary.order.id,
+            telegram_user_id=user.telegram_user_id,
+        )
+        self.assertIsNotNone(entry2)
+        assert entry2 is not None
+        self.assertTrue(entry2.reused_existing_payment)
+        self.assertEqual(entry2.payment_session_reference, ref1)
+
+    def test_mode2_partial_charter_raises_not_allowed_not_seats_mismatch(self) -> None:
+        tour = self.create_tour(
+            code="MINI-BOOK-MODE2-PARTIAL",
+            departure_datetime=datetime.now(UTC) + timedelta(days=15),
+            return_datetime=datetime.now(UTC) + timedelta(days=17),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=20,
+            seats_available=7,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        point = self.create_boarding_point(tour)
+        self.session.commit()
+
+        svc = MiniAppBookingService()
+        with self.assertRaises(MiniAppSelfServiceBookingNotAllowedError):
+            svc.create_temporary_reservation(
+                self.session,
+                tour_code=tour.code,
+                telegram_user_id=77_311,
+                seats_count=20,
+                boarding_point_id=point.id,
+                language_code="en",
+            )
+
+    def test_mode2_virgin_wrong_seats_count_raises_mismatch_before_reservation(self) -> None:
+        tour = self.create_tour(
+            code="MINI-BOOK-MODE2-MISMATCH",
+            departure_datetime=datetime.now(UTC) + timedelta(days=16),
+            return_datetime=datetime.now(UTC) + timedelta(days=18),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=8,
+            seats_available=8,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        point = self.create_boarding_point(tour)
+        self.session.commit()
+
+        svc = MiniAppBookingService()
+        with self.assertRaises(MiniAppCharterSeatsCountMismatchError):
+            svc.create_temporary_reservation(
+                self.session,
+                tour_code=tour.code,
+                telegram_user_id=77_312,
+                seats_count=3,
+                boarding_point_id=point.id,
+                language_code="en",
+            )

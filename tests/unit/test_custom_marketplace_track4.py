@@ -116,6 +116,8 @@ class CustomMarketplaceTrack4Tests(FoundationDBTestCase):
                 "supplier_message": "We can offer coach 49 seats at 4200 EUR all-in.",
                 "quoted_price": "4200.00",
                 "quoted_currency": "EUR",
+                "supplier_declared_sales_mode": "per_seat",
+                "supplier_declared_payment_mode": "platform_checkout",
             },
         )
         self.assertEqual(put.status_code, 200, put.text)
@@ -124,6 +126,8 @@ class CustomMarketplaceTrack4Tests(FoundationDBTestCase):
         detail2 = self.client.get(f"/admin/custom-requests/{rid}", headers=self._headers_admin())
         self.assertEqual(len(detail2.json()["responses"]), 1)
         self.assertEqual(detail2.json()["responses"][0]["quoted_currency"], "EUR")
+        self.assertEqual(detail2.json()["responses"][0]["supplier_declared_sales_mode"], "per_seat")
+        self.assertEqual(detail2.json()["responses"][0]["supplier_declared_payment_mode"], "platform_checkout")
 
         patch = self.client.patch(
             f"/admin/custom-requests/{rid}",
@@ -167,6 +171,11 @@ class CustomMarketplaceTrack4Tests(FoundationDBTestCase):
         blocked = self.client.put(
             f"/supplier-admin/custom-requests/{rid}/response",
             headers=sh,
-            json={"response_kind": "proposed", "supplier_message": "Late offer"},
+            json={
+                "response_kind": "proposed",
+                "supplier_message": "Late offer",
+                "supplier_declared_sales_mode": "per_seat",
+                "supplier_declared_payment_mode": "platform_checkout",
+            },
         )
         self.assertEqual(blocked.status_code, 400)

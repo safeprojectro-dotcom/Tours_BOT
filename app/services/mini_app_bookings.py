@@ -11,7 +11,7 @@ from app.schemas.mini_app import (
     MiniAppBookingListItemRead,
     MiniAppBookingsListRead,
 )
-from app.services.mini_app_booking_facade import resolve_mini_app_booking_facade
+from app.services.mini_app_booking_facade import format_payment_session_hint, resolve_mini_app_booking_facade
 from app.services.order_read import OrderReadService
 from app.services.reservation_expiry import lazy_expire_due_reservations
 from app.services.order_summary import OrderSummaryService
@@ -114,7 +114,7 @@ class MiniAppBookingsService:
         pay_summary = self.payment_summary_service.get_order_payment_summary(session, order_id=order_id)
         if pay_summary and pay_summary.latest_payment is not None:
             lp = pay_summary.latest_payment
-            payment_hint = f"Latest payment record: {lp.status.value} ({lp.provider})"
+            payment_hint = format_payment_session_hint(status=lp.status, provider=lp.provider)
 
         return MiniAppBookingDetailRead(
             summary=summary,

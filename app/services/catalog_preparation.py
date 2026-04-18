@@ -67,7 +67,7 @@ class CatalogPreparationService:
                 continue
 
             localized_content = prepared_detail.localized_content
-            mode_policy = TourSalesModePolicyService.policy_for_sales_mode(tour.sales_mode)
+            mode_policy = TourSalesModePolicyService.policy_for_catalog_tour(tour)
             cards.append(
                 CatalogTourCardRead(
                     id=tour.id,

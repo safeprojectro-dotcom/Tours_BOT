@@ -15,6 +15,8 @@ from app.models.enums import (
     CustomMarketplaceRequestStatus,
     CustomMarketplaceRequestType,
     SupplierCustomRequestResponseKind,
+    SupplierOfferPaymentMode,
+    TourSalesMode,
     sqlalchemy_enum,
 )
 from app.models.mixins import TimestampMixin
@@ -100,6 +102,14 @@ class SupplierCustomRequestResponse(TimestampMixin, Base):
     supplier_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     quoted_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     quoted_currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    supplier_declared_sales_mode: Mapped[TourSalesMode | None] = mapped_column(
+        sqlalchemy_enum(TourSalesMode, name="tour_sales_mode"),
+        nullable=True,
+    )
+    supplier_declared_payment_mode: Mapped[SupplierOfferPaymentMode | None] = mapped_column(
+        sqlalchemy_enum(SupplierOfferPaymentMode, name="supplier_offer_payment_mode"),
+        nullable=True,
+    )
 
     request: Mapped["CustomMarketplaceRequest"] = relationship(
         back_populates="supplier_responses",

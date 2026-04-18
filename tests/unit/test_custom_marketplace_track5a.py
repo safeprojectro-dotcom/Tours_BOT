@@ -78,6 +78,8 @@ class CustomMarketplaceTrack5aTests(FoundationDBTestCase):
                 "supplier_message": "We can do it.",
                 "quoted_price": "1000.00",
                 "quoted_currency": "EUR",
+                "supplier_declared_sales_mode": "per_seat",
+                "supplier_declared_payment_mode": "platform_checkout",
             },
         )
         self.assertEqual(put.status_code, 200, put.text)
@@ -157,6 +159,8 @@ class CustomMarketplaceTrack5aTests(FoundationDBTestCase):
                 "supplier_message": "For A",
                 "quoted_price": "1.00",
                 "quoted_currency": "EUR",
+                "supplier_declared_sales_mode": "per_seat",
+                "supplier_declared_payment_mode": "platform_checkout",
             },
         )
         wrong_resp_id = put.json()["id"]
@@ -218,6 +222,8 @@ class CustomMarketplaceTrack5aTests(FoundationDBTestCase):
                 "supplier_message": "Ok",
                 "quoted_price": "10.00",
                 "quoted_currency": "EUR",
+                "supplier_declared_sales_mode": "per_seat",
+                "supplier_declared_payment_mode": "platform_checkout",
             },
         )
         self.assertEqual(put.status_code, 200, put.text)

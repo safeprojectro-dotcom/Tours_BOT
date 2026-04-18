@@ -5,15 +5,19 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.models.enums import CustomRequestBookingBridgeStatus
-from app.schemas.mini_app import MiniAppBridgeExecutionPreparationResponse
+from app.models.order import Order
+from app.schemas.mini_app import MiniAppBridgeExecutionPreparationResponse, MiniAppBridgePaymentEligibilityRead
 from app.schemas.prepared import OrderSummaryRead
 from app.services.custom_request_booking_bridge_service import (
     BookingBridgeNotFoundError,
     BookingBridgeValidationError,
     CustomRequestBookingBridgeService,
 )
+from app.schemas.effective_commercial_execution_policy import EffectiveCommercialExecutionPolicyRead
+from app.services.effective_commercial_execution_policy import EffectiveCommercialExecutionPolicyService
 from app.services.mini_app_booking import MiniAppBookingService, MiniAppSelfServiceBookingNotAllowedError
 from app.services.mini_app_reservation_preparation import MiniAppReservationPreparationService
+from app.services.payment_entry import PaymentEntryService
 from app.services.tour_sales_mode_policy import TourSalesModePolicyService
 
 
@@ -36,6 +40,17 @@ _MSG_PREPARATION_UNAVAILABLE = (
 )
 
 
+def _execution_blocked_message(effective: EffectiveCommercialExecutionPolicyRead) -> str:
+    if effective.blocked_code == "supplier_policy_incomplete":
+        return (
+            "This request is missing supplier commercial policy on the selected proposal. "
+            "Please contact support so the team can update the supplier response."
+        )
+    if effective.blocked_code == "external_record":
+        return "This request was closed outside the in-app booking flow."
+    return _MSG_OPERATOR_ASSISTANCE
+
+
 class CustomRequestBookingBridgeExecutionService:
     def __init__(
         self,
@@ -43,10 +58,12 @@ class CustomRequestBookingBridgeExecutionService:
         bridge_service: CustomRequestBookingBridgeService | None = None,
         preparation_service: MiniAppReservationPreparationService | None = None,
         booking_service: MiniAppBookingService | None = None,
+        payment_entry_service: PaymentEntryService | None = None,
     ) -> None:
         self._bridge = bridge_service or CustomRequestBookingBridgeService()
         self._preparation = preparation_service or MiniAppReservationPreparationService()
         self._booking = booking_service or MiniAppBookingService()
+        self._payment_entry = payment_entry_service or PaymentEntryService()
 
     def get_execution_preparation(
         self,
@@ -62,14 +79,20 @@ class CustomRequestBookingBridgeExecutionService:
             telegram_user_id=telegram_user_id,
         )
         policy = TourSalesModePolicyService.policy_for_tour(ctx.tour)
-        if not policy.per_seat_self_service_allowed:
+        effective = EffectiveCommercialExecutionPolicyService.resolve(
+            tour=ctx.tour,
+            request=ctx.request,
+            response=ctx.response,
+        )
+        if not effective.self_service_preparation_allowed:
             return MiniAppBridgeExecutionPreparationResponse(
                 self_service_available=False,
-                blocked_code="operator_assistance_required",
-                blocked_message=_MSG_OPERATOR_ASSISTANCE,
+                blocked_code=effective.customer_blocked_code or effective.blocked_code,
+                blocked_message=_execution_blocked_message(effective),
                 preparation=None,
                 tour_code=ctx.tour.code,
                 sales_mode_policy=policy,
+                effective_execution_policy=effective,
             )
 
         prep = self._preparation.get_preparation(
@@ -85,6 +108,7 @@ class CustomRequestBookingBridgeExecutionService:
                 preparation=None,
                 tour_code=ctx.tour.code,
                 sales_mode_policy=policy,
+                effective_execution_policy=effective,
             )
 
         return MiniAppBridgeExecutionPreparationResponse(
@@ -94,6 +118,7 @@ class CustomRequestBookingBridgeExecutionService:
             preparation=prep,
             tour_code=ctx.tour.code,
             sales_mode_policy=policy,
+            effective_execution_policy=effective,
         )
 
     def create_execution_reservation(
@@ -112,11 +137,15 @@ class CustomRequestBookingBridgeExecutionService:
             request_id=request_id,
             telegram_user_id=telegram_user_id,
         )
-        policy = TourSalesModePolicyService.policy_for_tour(ctx.tour)
-        if not policy.per_seat_self_service_allowed:
+        effective = EffectiveCommercialExecutionPolicyService.resolve(
+            tour=ctx.tour,
+            request=ctx.request,
+            response=ctx.response,
+        )
+        if not effective.self_service_hold_allowed:
             raise BridgeExecutionBlocked(
-                code="operator_assistance_required",
-                message=_MSG_OPERATOR_ASSISTANCE,
+                code=effective.customer_blocked_code or effective.blocked_code or "execution_blocked",
+                message=_execution_blocked_message(effective),
             )
         try:
             summary = self._booking.create_temporary_reservation(
@@ -141,6 +170,85 @@ class CustomRequestBookingBridgeExecutionService:
             session.add(ctx.bridge)
             session.flush()
         return summary
+
+    def get_payment_eligibility(
+        self,
+        session: Session,
+        *,
+        request_id: int,
+        telegram_user_id: int,
+        order_id: int,
+    ) -> MiniAppBridgePaymentEligibilityRead:
+        """Track 5b.3b: read-only gate — client must then call existing Layer A payment-entry (no payment rows here)."""
+        ctx = self._bridge.resolve_customer_execution_context(
+            session,
+            request_id=request_id,
+            telegram_user_id=telegram_user_id,
+        )
+        effective = EffectiveCommercialExecutionPolicyService.resolve(
+            tour=ctx.tour,
+            request=ctx.request,
+            response=ctx.response,
+        )
+        if not effective.platform_checkout_allowed:
+            return MiniAppBridgePaymentEligibilityRead(
+                payment_entry_allowed=False,
+                order_id=None,
+                effective_execution_policy=effective,
+                blocked_code=effective.blocked_code or "platform_checkout_not_allowed",
+                blocked_reason=effective.blocked_reason
+                or "Platform checkout is not allowed for this RFQ context.",
+            )
+
+        order = session.get(Order, order_id)
+        if order is None:
+            return MiniAppBridgePaymentEligibilityRead(
+                payment_entry_allowed=False,
+                order_id=None,
+                effective_execution_policy=effective,
+                blocked_code="order_not_found",
+                blocked_reason="Order not found.",
+            )
+        if order.user_id != ctx.user.id:
+            return MiniAppBridgePaymentEligibilityRead(
+                payment_entry_allowed=False,
+                order_id=None,
+                effective_execution_policy=effective,
+                blocked_code="order_user_mismatch",
+                blocked_reason="Order does not belong to this customer.",
+            )
+        if order.tour_id != ctx.tour.id:
+            return MiniAppBridgePaymentEligibilityRead(
+                payment_entry_allowed=False,
+                order_id=None,
+                effective_execution_policy=effective,
+                blocked_code="order_bridge_tour_mismatch",
+                blocked_reason="Order is not for the tour linked on this booking bridge.",
+            )
+
+        if not self._payment_entry.is_order_valid_for_payment_entry(
+            session,
+            order_id=order_id,
+            user_id=ctx.user.id,
+        ):
+            return MiniAppBridgePaymentEligibilityRead(
+                payment_entry_allowed=False,
+                order_id=None,
+                effective_execution_policy=effective,
+                blocked_code="order_not_valid_for_payment",
+                blocked_reason=(
+                    "This order is not in a valid temporary reserved state for payment "
+                    "(expired, wrong status, or already resolved)."
+                ),
+            )
+
+        return MiniAppBridgePaymentEligibilityRead(
+            payment_entry_allowed=True,
+            order_id=order_id,
+            effective_execution_policy=effective,
+            blocked_code=None,
+            blocked_reason=None,
+        )
 
 
 __all__ = [

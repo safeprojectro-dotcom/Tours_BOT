@@ -994,3 +994,20 @@ closed for **Track 5b.2** scope (explicit preparation + hold orchestration + tes
 
 ### Status
 **closed** for **Track 5g.1** scope (read-side classification + documentation) — **stabilization reviewed**.
+
+---
+
+## 36. V2 Tracks 5g.4a–5g.4e — Catalog Mode 2 Mini App path (closure)
+
+### Intent
+- Record **acceptance** that **standalone catalog Mode 2** (virgin whole-bus catalog self-serve on **Layer A**) is **implemented and closed** through **5g.4d**; **5g.4e** is documentation-only.
+- **Not** Mode 3 (RFQ), **not** bridge execution changes, **not** payment reconciliation redesign.
+
+### Single source of truth for scope
+- **`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`** — implemented slices, user behavior, non-goals, postponed items, test pointers.
+
+### Non-regression boundaries (verified by track constraints)
+- **Mode 1** per-seat semantics; **RFQ/bridge** execution; **`PaymentReconciliationService`**; supplier marketplace **admin/supplier** flows beyond shared **Layer A** reads; **charter pricing model**; **waitlist/handoff** workflows — **unchanged in meaning** by **5g.4** (presentation + narrow read/formatting only where documented in that summary).
+
+### Status
+**closed** for **Tracks 5g.4a–5g.4e** — reopen only for **regressions** or **security**; forward product work is **outside** this branch (see acceptance doc **Postponed**).

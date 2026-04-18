@@ -258,7 +258,7 @@ class CatalogScreen:
         )
         description = card.short_description or shell(lg, "catalog_card_no_description")
         assisted_line = None
-        if not card.sales_mode_policy.per_seat_self_service_allowed:
+        if not card.sales_mode_policy.mini_app_catalog_reservation_allowed:
             assisted_line = ft.Text(
                 shell(lg, "catalog_card_assisted_notice"),
                 color=ft.Colors.TERTIARY,
@@ -628,7 +628,7 @@ class TourDetailScreen:
     ) -> ft.Control:
         lg = self.language_code
         if detail.is_available:
-            if detail.sales_mode_policy.per_seat_self_service_allowed:
+            if detail.sales_mode_policy.mini_app_catalog_reservation_allowed:
                 return ft.Row(
                     [
                         ft.ElevatedButton(
@@ -987,7 +987,7 @@ class ReservationPreparationScreen:
             ),
         ]
 
-        if not preparation.sales_mode_policy.per_seat_self_service_allowed:
+        if not preparation.sales_mode_policy.mini_app_catalog_reservation_allowed:
             self.preparation_note.visible = False
             self.selection_container.controls.extend(
                 header_rows
@@ -1180,7 +1180,7 @@ class ReservationSuccessScreen:
         self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
         self.body_column = ft.Column(spacing=10)
         self.continue_button = ft.ElevatedButton(
-            shell(lg, "continue_to_payment"),
+            shell(lg, "pay_now"),
             disabled=True,
             on_click=lambda _: self._on_continue(),
         )
@@ -1196,7 +1196,7 @@ class ReservationSuccessScreen:
         self.nav_settings.text = shell(lg, "settings")
         self._heading.value = shell(lg, "reservation_confirmed_title")
         self._intro.value = shell(lg, "reservation_hold_intro")
-        self.continue_button.text = shell(lg, "continue_to_payment")
+        self.continue_button.text = shell(lg, "pay_now")
         if self.loading_row.controls:
             self.loading_row.controls[1].value = shell(lg, "loading_reservation")
 
@@ -1517,7 +1517,7 @@ class RfqBridgeExecutionScreen:
             ),
         ]
 
-        if not preparation.sales_mode_policy.per_seat_self_service_allowed:
+        if not preparation.sales_mode_policy.mini_app_catalog_reservation_allowed:
             self.flow_column.controls.extend(
                 header_rows
                 + [

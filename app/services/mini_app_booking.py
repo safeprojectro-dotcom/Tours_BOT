@@ -23,6 +23,12 @@ class MiniAppSelfServiceBookingNotAllowedError(Exception):
     code = "mini_app_self_service_booking_not_available"
 
 
+class MiniAppCharterSeatsCountMismatchError(Exception):
+    """Raised when charter catalog hold uses a seats_count other than the fixed whole-bus quantity."""
+
+    code = "mini_app_charter_seats_count_mismatch"
+
+
 class MiniAppBookingService:
     """Adapts existing reservation and payment-entry services for Mini App HTTP entry (no auth yet)."""
 
@@ -59,8 +65,12 @@ class MiniAppBookingService:
         tour = self.catalog_lookup_service.get_tour_by_code(session, code=tour_code)
         if tour is None:
             return None
-        if not TourSalesModePolicyService.policy_for_sales_mode(tour.sales_mode).per_seat_self_service_allowed:
+        policy = TourSalesModePolicyService.policy_for_catalog_tour(tour)
+        if not policy.mini_app_catalog_reservation_allowed:
             raise MiniAppSelfServiceBookingNotAllowedError
+        if policy.catalog_charter_fixed_seats_count is not None:
+            if seats_count != policy.catalog_charter_fixed_seats_count:
+                raise MiniAppCharterSeatsCountMismatchError
 
         user = self._user_sync().sync_private_user(
             session,

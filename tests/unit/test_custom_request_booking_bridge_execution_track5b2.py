@@ -86,6 +86,47 @@ class CustomRequestBookingBridgeExecutionTrack5B2Tests(FoundationDBTestCase):
                 "supplier_message": "Proposal",
                 "quoted_price": "1000.00",
                 "quoted_currency": "EUR",
+                "supplier_declared_sales_mode": "per_seat",
+                "supplier_declared_payment_mode": "platform_checkout",
+            },
+        )
+        self.assertEqual(put.status_code, 200, put.text)
+        resp_id = put.json()["id"]
+        sel = self.client.post(
+            f"/admin/custom-requests/{rid}/resolution",
+            headers=self._headers_admin(),
+            json={"status": "supplier_selected", "selected_supplier_response_id": resp_id},
+        )
+        self.assertEqual(sel.status_code, 200, sel.text)
+        return rid
+
+    def _rfq_selected_assisted_supplier(self) -> int:
+        """Per-seat tour capability later; supplier declares assisted closure (no platform self-serve)."""
+        self.create_user(telegram_user_id=self.TG)
+        self.session.commit()
+        r = self.client.post(
+            "/mini-app/custom-requests",
+            json={
+                "telegram_user_id": self.TG,
+                "request_type": "group_trip",
+                "travel_date_start": "2026-12-01",
+                "route_notes": "Exec test RFQ assisted",
+            },
+        )
+        self.assertEqual(r.status_code, 201, r.text)
+        rid = r.json()["id"]
+        _, token = self._bootstrap_supplier()
+        sh = {"Authorization": f"Bearer {token}"}
+        put = self.client.put(
+            f"/supplier-admin/custom-requests/{rid}/response",
+            headers=sh,
+            json={
+                "response_kind": "proposed",
+                "supplier_message": "We will close with your team.",
+                "quoted_price": "1000.00",
+                "quoted_currency": "EUR",
+                "supplier_declared_sales_mode": "per_seat",
+                "supplier_declared_payment_mode": "assisted_closure",
             },
         )
         self.assertEqual(put.status_code, 200, put.text)
@@ -190,6 +231,39 @@ class CustomRequestBookingBridgeExecutionTrack5B2Tests(FoundationDBTestCase):
         self.assertEqual(body["blocked_code"], "operator_assistance_required")
         self.assertIsNone(body["preparation"])
         self.assertFalse(body["sales_mode_policy"]["per_seat_self_service_allowed"])
+        eff = body["effective_execution_policy"]
+        self.assertFalse(eff["self_service_hold_allowed"])
+        self.assertFalse(eff["platform_checkout_allowed"])
+        self.assertEqual(eff["blocked_code"], "tour_sales_mode_blocks_self_service")
+
+    def test_preparation_blocked_when_supplier_declares_assisted_on_per_seat_tour(self) -> None:
+        rid = self._rfq_selected_assisted_supplier()
+        tour = self._make_tour(code="EX-ASSIST-BLOCK", sales_mode=TourSalesMode.PER_SEAT)
+        from datetime import time as time_type
+
+        self.session.add(
+            BoardingPoint(tour_id=tour.id, city="City", address="Addr", time=time_type(6, 0)),
+        )
+        self.session.flush()
+        br = self.client.post(
+            f"/admin/custom-requests/{rid}/booking-bridge",
+            headers=self._headers_admin(),
+            json={"tour_id": tour.id},
+        )
+        self.assertEqual(br.status_code, 201, br.text)
+        prep = self.client.get(
+            f"/mini-app/custom-requests/{rid}/booking-bridge/preparation",
+            params={"telegram_user_id": self.TG},
+        )
+        self.assertEqual(prep.status_code, 200, prep.text)
+        body = prep.json()
+        self.assertFalse(body["self_service_available"])
+        self.assertEqual(body["blocked_code"], "operator_assistance_required")
+        eff = body["effective_execution_policy"]
+        self.assertFalse(eff["self_service_hold_allowed"])
+        self.assertFalse(eff["platform_checkout_allowed"])
+        self.assertTrue(eff["assisted_only"])
+        self.assertEqual(eff["blocked_code"], "supplier_commercial_intent_blocks_self_service")
 
     def test_preparation_self_service_returns_layer_a_preparation(self) -> None:
         rid = self._rfq_selected()
@@ -216,6 +290,10 @@ class CustomRequestBookingBridgeExecutionTrack5B2Tests(FoundationDBTestCase):
         self.assertIsNotNone(body["preparation"])
         self.assertEqual(body["preparation"]["tour"]["code"], tour.code)
         self.assertTrue(body["sales_mode_policy"]["per_seat_self_service_allowed"])
+        eff = body["effective_execution_policy"]
+        self.assertTrue(eff["self_service_hold_allowed"])
+        self.assertTrue(eff["platform_checkout_allowed"])
+        self.assertFalse(eff["assisted_only"])
 
     def test_reservation_rejected_for_full_bus_no_hold(self) -> None:
         rid = self._rfq_selected()

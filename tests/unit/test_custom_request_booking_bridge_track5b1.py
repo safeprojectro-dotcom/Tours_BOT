@@ -83,6 +83,8 @@ class CustomRequestBookingBridgeTrack5B1Tests(FoundationDBTestCase):
                 "supplier_message": "We can run this charter.",
                 "quoted_price": "1500.00",
                 "quoted_currency": "EUR",
+                "supplier_declared_sales_mode": "per_seat",
+                "supplier_declared_payment_mode": "platform_checkout",
             },
         )
         self.assertEqual(put.status_code, 200, put.text)
@@ -118,6 +120,7 @@ class CustomRequestBookingBridgeTrack5B1Tests(FoundationDBTestCase):
         bb = detail.json().get("booking_bridge")
         self.assertIsNotNone(bb)
         self.assertEqual(bb["id"], body["id"])
+        self.assertIsNone(detail.json().get("effective_execution_policy"))
 
     def test_bridge_rejected_without_selection(self) -> None:
         self.create_user(telegram_user_id=140_002)
@@ -183,6 +186,13 @@ class CustomRequestBookingBridgeTrack5B1Tests(FoundationDBTestCase):
         self.assertEqual(br.status_code, 201, br.text)
         self.assertEqual(br.json()["bridge_status"], "linked_tour")
         self.assertEqual(br.json()["tour_id"], tour.id)
+
+        detail = self.client.get(f"/admin/custom-requests/{rid}", headers=self._headers_admin())
+        self.assertEqual(detail.status_code, 200, detail.text)
+        eff = detail.json().get("effective_execution_policy")
+        self.assertIsNotNone(eff)
+        self.assertTrue(eff["self_service_hold_allowed"])
+        self.assertTrue(eff["platform_checkout_allowed"])
 
     def test_bridge_rejects_stale_tour(self) -> None:
         rid, _ = self._rfq_with_selected_proposal()

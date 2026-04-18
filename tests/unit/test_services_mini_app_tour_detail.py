@@ -45,15 +45,17 @@ class MiniAppTourDetailServiceTests(FoundationDBTestCase):
         self.assertTrue(result.is_available)
         self.assertEqual(len(result.boarding_points), 1)
         self.assertTrue(result.sales_mode_policy.per_seat_self_service_allowed)
+        self.assertTrue(result.sales_mode_policy.mini_app_catalog_reservation_allowed)
         self.assertEqual(result.commercial_mode, CustomerCommercialMode.SUPPLIER_ROUTE_PER_SEAT)
 
-    def test_get_tour_detail_commercial_mode_full_bus_catalog(self) -> None:
+    def test_get_tour_detail_full_bus_virgin_allows_catalog_reservation(self) -> None:
         tour = self.create_tour(
             code="BELGRADE-FULLBUS-DETAIL",
             title_default="Charter",
             departure_datetime=datetime(2027, 8, 1, 8, 0, tzinfo=UTC),
             return_datetime=datetime(2027, 8, 2, 20, 0, tzinfo=UTC),
             status=TourStatus.OPEN_FOR_SALE,
+            seats_total=40,
             seats_available=40,
             sales_mode=TourSalesMode.FULL_BUS,
         )
@@ -68,6 +70,32 @@ class MiniAppTourDetailServiceTests(FoundationDBTestCase):
         self.assertIsNotNone(result)
         assert result is not None
         self.assertEqual(result.commercial_mode, CustomerCommercialMode.SUPPLIER_ROUTE_FULL_BUS)
+        self.assertTrue(result.sales_mode_policy.mini_app_catalog_reservation_allowed)
+        self.assertEqual(result.sales_mode_policy.catalog_charter_fixed_seats_count, 40)
+
+    def test_get_tour_detail_full_bus_partial_blocks_catalog_reservation(self) -> None:
+        tour = self.create_tour(
+            code="BELGRADE-FULLBUS-PARTIAL",
+            title_default="Charter P",
+            departure_datetime=datetime(2027, 8, 5, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 8, 6, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=40,
+            seats_available=12,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.create_translation(tour, language_code="en", title="Charter P EN")
+        self.create_boarding_point(tour)
+
+        result = MiniAppTourDetailService().get_tour_detail(
+            self.session,
+            code=tour.code,
+            language_code="en",
+        )
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertFalse(result.sales_mode_policy.mini_app_catalog_reservation_allowed)
+        self.assertIsNone(result.sales_mode_policy.catalog_charter_fixed_seats_count)
 
     def test_get_tour_detail_returns_none_for_past_departure_open_tour(self) -> None:
         tour = self.create_tour(

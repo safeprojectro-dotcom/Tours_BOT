@@ -1,20 +1,21 @@
 """Backend policy for `Tour.sales_mode` (Phase 7.1 / Step 2).
 
-Single boundary for commercial interpretation of sales mode. Policy is driven **only**
-by `TourSalesMode` — never by `seats_total`, `seats_available`, or order size.
-
-Not used by reservation, payment, Mini App, or private bot handlers in this step.
+`policy_for_sales_mode` is enum-only. Track 5g.4a adds `policy_for_catalog_tour` for Mini App
+catalog holds (full-bus virgin capacity) without changing RFQ bridge callers of `policy_for_tour`.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
 from app.models.enums import TourSalesMode
+from app.schemas.tour import TourRead
 from app.schemas.tour_sales_mode_policy import TourSalesModePolicyRead
 
 if TYPE_CHECKING:
     from app.models.tour import Tour
+
+CatalogTourPolicySource = Union["Tour", TourRead]
 
 
 class TourSalesModePolicyService:
@@ -29,6 +30,8 @@ class TourSalesModePolicyService:
                 per_seat_self_service_allowed=True,
                 direct_customer_booking_blocked_or_deferred=False,
                 operator_path_required=False,
+                mini_app_catalog_reservation_allowed=True,
+                catalog_charter_fixed_seats_count=None,
             )
         if sales_mode is TourSalesMode.FULL_BUS:
             return TourSalesModePolicyRead(
@@ -36,10 +39,31 @@ class TourSalesModePolicyService:
                 per_seat_self_service_allowed=False,
                 direct_customer_booking_blocked_or_deferred=True,
                 operator_path_required=True,
+                mini_app_catalog_reservation_allowed=False,
+                catalog_charter_fixed_seats_count=None,
             )
         raise ValueError(f"Unsupported tour sales mode: {sales_mode!r}")
 
     @classmethod
+    def policy_for_catalog_tour(cls, tour: CatalogTourPolicySource) -> TourSalesModePolicyRead:
+        """Mini App catalog path: full-bus self-serve only when virgin capacity (5g.4a).
+
+        Accepts ORM `Tour` or `TourRead` (private bot preparation uses the latter).
+        """
+        base = cls.policy_for_sales_mode(tour.sales_mode)
+        if tour.sales_mode is not TourSalesMode.FULL_BUS:
+            return base
+        virgin = tour.seats_total > 0 and tour.seats_available == tour.seats_total
+        if not virgin:
+            return base
+        return base.model_copy(
+            update={
+                "mini_app_catalog_reservation_allowed": True,
+                "catalog_charter_fixed_seats_count": tour.seats_total,
+            }
+        )
+
+    @classmethod
     def policy_for_tour(cls, tour: Tour) -> TourSalesModePolicyRead:
-        """Convenience: policy from `tour.sales_mode` only."""
+        """Enum-only policy (RFQ bridge, legacy); does not apply virgin-capacity catalog rules."""
         return cls.policy_for_sales_mode(tour.sales_mode)

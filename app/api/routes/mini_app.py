@@ -18,6 +18,7 @@ from app.schemas.mini_app import (
     MiniAppBookingDetailRead,
     MiniAppBookingsListRead,
     MiniAppBridgeExecutionPreparationResponse,
+    MiniAppBridgePaymentEligibilityRead,
     MiniAppCatalogFiltersRead,
     MiniAppCatalogRead,
     MiniAppCreateReservationRequest,
@@ -39,6 +40,7 @@ from app.schemas.prepared import OrderSummaryRead, PaymentEntryRead, Reservation
 from app.services.catalog import CatalogLookupService
 from app.services.mini_app_booking import (
     MiniAppBookingService,
+    MiniAppCharterSeatsCountMismatchError,
     MiniAppSelfServiceBookingNotAllowedError,
 )
 from app.services.mini_app_bookings import MiniAppBookingsService
@@ -244,6 +246,36 @@ def create_custom_request_booking_bridge_reservation(
         ) from None
     session.commit()
     return summary
+
+
+@router.get(
+    "/custom-requests/{request_id}/booking-bridge/payment-eligibility",
+    response_model=MiniAppBridgePaymentEligibilityRead,
+)
+def get_custom_request_booking_bridge_payment_eligibility(
+    request_id: int,
+    telegram_user_id: int = Query(gt=0),
+    order_id: int = Query(gt=0),
+    session: Session = Depends(get_db),
+) -> MiniAppBridgePaymentEligibilityRead:
+    """Track 5b.3b: read-only payment gate — reuse ``POST /mini-app/orders/{order_id}/payment-entry`` when allowed."""
+    try:
+        return CustomRequestBookingBridgeExecutionService().get_payment_eligibility(
+            session,
+            request_id=request_id,
+            telegram_user_id=telegram_user_id,
+            order_id=order_id,
+        )
+    except BookingBridgeNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=exc.message,
+        ) from None
+    except BookingBridgeValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=exc.message,
+        ) from None
 
 
 @router.post("/support-request", response_model=MiniAppSupportRequestResponse)
@@ -455,6 +487,15 @@ def create_temporary_reservation(
             detail={
                 "code": MiniAppSelfServiceBookingNotAllowedError.code,
                 "message": "Self-service reservation is not available for this tour sales mode.",
+            },
+        ) from None
+    except MiniAppCharterSeatsCountMismatchError:
+        session.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": MiniAppCharterSeatsCountMismatchError.code,
+                "message": "Whole-bus catalog reservation must use the full configured seat count.",
             },
         ) from None
     if summary is None:

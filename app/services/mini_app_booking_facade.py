@@ -25,8 +25,8 @@ def resolve_mini_app_booking_facade(order: OrderRead, *, now: datetime) -> tuple
         and o.cancellation_status == CancellationStatus.CANCELLED_NO_PAYMENT
     ):
         return (
-            "Hold released — not paid",
-            "No payment was received before the deadline.",
+            "Reservation expired",
+            "This reservation closed without payment after the hold ended.",
             MiniAppBookingFacadeState.CANCELLED_NO_PAYMENT,
             MiniAppBookingPrimaryCta.BROWSE_TOURS,
         )
@@ -41,14 +41,14 @@ def resolve_mini_app_booking_facade(order: OrderRead, *, now: datetime) -> tuple
             end = exp if exp.tzinfo else exp.replace(tzinfo=UTC)
             if end <= now_aware:
                 return (
-                    "Temporary reservation expired",
-                    "Payment was not completed before the hold ended.",
+                    "Reservation expired",
+                    "The payment deadline passed before checkout was completed.",
                     MiniAppBookingFacadeState.EXPIRED_TEMPORARY_RESERVATION,
                     MiniAppBookingPrimaryCta.BROWSE_TOURS,
                 )
         return (
-            "Temporary reservation (hold)",
-            "Awaiting payment to confirm your seats.",
+            "Reserved temporarily",
+            "Payment pending — complete checkout to confirm your seats.",
             MiniAppBookingFacadeState.ACTIVE_TEMPORARY_RESERVATION,
             MiniAppBookingPrimaryCta.PAY_NOW,
         )
@@ -95,12 +95,21 @@ def resolve_mini_app_booking_facade(order: OrderRead, *, now: datetime) -> tuple
     )
 
 
-def _fallback_payment_phrase(status: PaymentStatus) -> str:
+def format_payment_session_hint(*, status: PaymentStatus, provider: str) -> str:
+    """Short hint for booking detail — human phrases only (no raw enum tokens)."""
+    return f"Latest payment record: {_payment_status_phrase(status)} ({provider})."
+
+
+def _payment_status_phrase(status: PaymentStatus) -> str:
     mapping = {
-        PaymentStatus.UNPAID: "Payment status: not paid.",
-        PaymentStatus.AWAITING_PAYMENT: "Payment status: awaiting payment.",
-        PaymentStatus.PAID: "Payment status: paid.",
-        PaymentStatus.REFUNDED: "Payment status: refunded.",
-        PaymentStatus.PARTIAL_REFUND: "Payment status: partial refund.",
+        PaymentStatus.UNPAID: "Not paid yet",
+        PaymentStatus.AWAITING_PAYMENT: "Payment pending",
+        PaymentStatus.PAID: "Paid",
+        PaymentStatus.REFUNDED: "Refunded",
+        PaymentStatus.PARTIAL_REFUND: "Partial refund",
     }
-    return mapping.get(status, "See booking details below.")
+    return mapping.get(status, "Status update")
+
+
+def _fallback_payment_phrase(status: PaymentStatus) -> str:
+    return f"{_payment_status_phrase(status)} — see details below."

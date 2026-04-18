@@ -355,10 +355,15 @@ class PrivateReservationPreparationService:
         if detail is None:
             return None
 
-        if not TourSalesModePolicyService.policy_for_sales_mode(detail.tour.sales_mode).per_seat_self_service_allowed:
-            return None
-
-        if seats_count not in self.list_seat_count_options(detail):
+        cat_policy = TourSalesModePolicyService.policy_for_catalog_tour(detail.tour)
+        if cat_policy.per_seat_self_service_allowed:
+            if seats_count not in self.list_seat_count_options(detail):
+                return None
+        elif cat_policy.mini_app_catalog_reservation_allowed:
+            fixed = cat_policy.catalog_charter_fixed_seats_count
+            if fixed is None or seats_count != fixed:
+                return None
+        else:
             return None
 
         boarding_point = next(

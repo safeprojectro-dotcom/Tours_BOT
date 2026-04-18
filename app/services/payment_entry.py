@@ -82,6 +82,21 @@ class PaymentEntryService:
             reused_existing_payment=reused_existing_payment,
         )
 
+    def is_order_valid_for_payment_entry(
+        self,
+        session: Session,
+        *,
+        order_id: int,
+        user_id: int,
+        now: datetime | None = None,
+    ) -> bool:
+        """Read-only Layer A gate — same rules as ``start_payment_entry`` without creating payments."""
+        current_time = now or datetime.now(UTC)
+        order = self.order_repository.get(session, order_id)
+        if order is None:
+            return False
+        return self._is_order_valid_for_payment_entry(order=order, user_id=user_id, now=current_time)
+
     def _is_order_valid_for_payment_entry(self, *, order, user_id: int, now: datetime) -> bool:
         if order.user_id != user_id:
             return False

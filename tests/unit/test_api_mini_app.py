@@ -255,13 +255,14 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(payload["estimated_total_amount"], "190.00")
         self.assertTrue(payload["preparation_only"])
 
-    def test_full_bus_preparation_read_side_no_self_service_seats(self) -> None:
+    def test_full_bus_preparation_virgin_capacity_allows_fixed_whole_bus_seats(self) -> None:
         tour = self.create_tour(
             code="FULL-BUS-PREP-API",
             title_default="Charter Tour",
             departure_datetime=datetime(2026, 7, 1, 8, 0, tzinfo=UTC),
             return_datetime=datetime(2026, 7, 2, 20, 0, tzinfo=UTC),
             status=TourStatus.OPEN_FOR_SALE,
+            seats_total=40,
             seats_available=40,
             sales_mode=TourSalesMode.FULL_BUS,
         )
@@ -272,25 +273,57 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         prep = self.client.get(f"/mini-app/tours/{tour.code}/preparation", params={"language_code": "en"})
         self.assertEqual(prep.status_code, 200)
         body = prep.json()
-        self.assertEqual(body["seat_count_options"], [])
+        self.assertEqual(body["seat_count_options"], [40])
         self.assertFalse(body["sales_mode_policy"]["per_seat_self_service_allowed"])
+        self.assertTrue(body["sales_mode_policy"]["mini_app_catalog_reservation_allowed"])
+        self.assertEqual(body["sales_mode_policy"]["catalog_charter_fixed_seats_count"], 40)
         self.assertTrue(body["sales_mode_policy"]["operator_path_required"])
 
         point_id = body["boarding_points"][0]["id"]
-        summary = self.client.get(
+        bad = self.client.get(
             f"/mini-app/tours/{tour.code}/preparation-summary",
             params={"language_code": "en", "seats_count": 1, "boarding_point_id": point_id},
         )
-        self.assertEqual(summary.status_code, 400)
-        self.assertEqual(summary.json()["detail"], "invalid reservation preparation selection")
+        self.assertEqual(bad.status_code, 400)
+        self.assertEqual(bad.json()["detail"], "invalid reservation preparation selection")
 
-    def test_full_bus_reservation_post_rejected_with_policy_code(self) -> None:
+        summary = self.client.get(
+            f"/mini-app/tours/{tour.code}/preparation-summary",
+            params={"language_code": "en", "seats_count": 40, "boarding_point_id": point_id},
+        )
+        self.assertEqual(summary.status_code, 200)
+        self.assertEqual(summary.json()["seats_count"], 40)
+
+    def test_full_bus_preparation_partial_inventory_no_self_service_seats(self) -> None:
+        tour = self.create_tour(
+            code="FULL-BUS-PREP-PARTIAL-API",
+            title_default="Charter Partial",
+            departure_datetime=datetime(2026, 7, 3, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 7, 4, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=40,
+            seats_available=10,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.create_translation(tour, language_code="en", title="Charter Partial EN")
+        self.create_boarding_point(tour)
+        self.session.commit()
+
+        prep = self.client.get(f"/mini-app/tours/{tour.code}/preparation", params={"language_code": "en"})
+        self.assertEqual(prep.status_code, 200)
+        body = prep.json()
+        self.assertEqual(body["seat_count_options"], [])
+        self.assertFalse(body["sales_mode_policy"]["mini_app_catalog_reservation_allowed"])
+        self.assertIsNone(body["sales_mode_policy"]["catalog_charter_fixed_seats_count"])
+
+    def test_full_bus_reservation_post_rejected_when_partial_inventory(self) -> None:
         tour = self.create_tour(
             code="FULL-BUS-RES-API",
             title_default="Charter Reserve",
             departure_datetime=datetime(2026, 7, 5, 8, 0, tzinfo=UTC),
             return_datetime=datetime(2026, 7, 6, 20, 0, tzinfo=UTC),
             status=TourStatus.OPEN_FOR_SALE,
+            seats_total=40,
             seats_available=20,
             sales_mode=TourSalesMode.FULL_BUS,
         )
@@ -303,6 +336,141 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         )
         self.assertEqual(response.status_code, 400)
         detail = response.json()["detail"]
+        self.assertIsInstance(detail, dict)
+        self.assertEqual(detail["code"], "mini_app_self_service_booking_not_available")
+
+    def test_full_bus_reservation_post_rejected_wrong_seats_count_when_virgin(self) -> None:
+        tour = self.create_tour(
+            code="FULL-BUS-RES-VIRGIN-BAD-COUNT",
+            title_default="Charter Virgin Bad",
+            departure_datetime=datetime(2026, 7, 8, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 7, 9, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=25,
+            seats_available=25,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        point = self.create_boarding_point(tour)
+        self.session.commit()
+
+        response = self.client.post(
+            f"/mini-app/tours/{tour.code}/reservations",
+            json={"telegram_user_id": 90_002, "seats_count": 5, "boarding_point_id": point.id},
+        )
+        self.assertEqual(response.status_code, 400)
+        detail = response.json()["detail"]
+        self.assertIsInstance(detail, dict)
+        self.assertEqual(detail["code"], "mini_app_charter_seats_count_mismatch")
+
+    def test_full_bus_reservation_post_succeeds_virgin_capacity(self) -> None:
+        tour = self.create_tour(
+            code="FULL-BUS-RES-VIRGIN-OK",
+            title_default="Charter Virgin OK",
+            departure_datetime=datetime(2026, 7, 12, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 7, 13, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=15,
+            seats_available=15,
+            base_price="50.00",
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        point = self.create_boarding_point(tour)
+        self.session.commit()
+
+        response = self.client.post(
+            f"/mini-app/tours/{tour.code}/reservations",
+            json={"telegram_user_id": 90_003, "seats_count": 15, "boarding_point_id": point.id},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["order"]["seats_count"], 15)
+        self.assertEqual(str(body["order"]["total_amount"]), "750.00")
+
+    def test_full_bus_virgin_reservation_overview_and_payment_entry_reuses_pending_session(self) -> None:
+        """Track 5g.4b: Mode 2 virgin hold uses same Layer A payment-entry path and idempotent reuse."""
+        tour = self.create_tour(
+            code="FULL-BUS-5G4B-PAY",
+            title_default="Charter Pay Cont",
+            departure_datetime=datetime(2026, 7, 20, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 7, 21, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=12,
+            seats_available=12,
+            base_price="40.00",
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.create_translation(tour, language_code="en", title="Charter Pay EN")
+        point = self.create_boarding_point(tour)
+        self.session.commit()
+
+        telegram_user_id = 90_310
+        reserve = self.client.post(
+            f"/mini-app/tours/{tour.code}/reservations",
+            params={"language_code": "en"},
+            json={
+                "telegram_user_id": telegram_user_id,
+                "seats_count": 12,
+                "boarding_point_id": point.id,
+            },
+        )
+        self.assertEqual(reserve.status_code, 200, reserve.text)
+        order_id = reserve.json()["order"]["id"]
+
+        overview = self.client.get(
+            f"/mini-app/orders/{order_id}/reservation-overview",
+            params={"telegram_user_id": telegram_user_id, "language_code": "en"},
+        )
+        self.assertEqual(overview.status_code, 200)
+        ov = overview.json()
+        self.assertEqual(ov["order"]["id"], order_id)
+        self.assertIsNotNone(ov["order"]["reservation_expires_at"])
+        self.assertEqual(str(ov["order"]["total_amount"]), "480.00")
+
+        pay1 = self.client.post(
+            f"/mini-app/orders/{order_id}/payment-entry",
+            json={"telegram_user_id": telegram_user_id},
+        )
+        self.assertEqual(pay1.status_code, 200)
+        p1 = pay1.json()
+        self.assertEqual(p1["order"]["id"], order_id)
+        self.assertTrue(p1["payment_session_reference"])
+        self.assertFalse(p1["reused_existing_payment"])
+
+        pay2 = self.client.post(
+            f"/mini-app/orders/{order_id}/payment-entry",
+            json={"telegram_user_id": telegram_user_id},
+        )
+        self.assertEqual(pay2.status_code, 200)
+        p2 = pay2.json()
+        self.assertEqual(p2["payment_session_reference"], p1["payment_session_reference"])
+        self.assertTrue(p2["reused_existing_payment"])
+
+    def test_full_bus_partial_catalog_blocks_reserve_even_at_whole_bus_seat_count(self) -> None:
+        """Assisted-only Mode 2: catalog cannot create an order even with seats_count == seats_total."""
+        tour = self.create_tour(
+            code="FULL-BUS-5G4B-PARTIAL",
+            title_default="Charter Partial Pay Gate",
+            departure_datetime=datetime(2026, 7, 22, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 7, 23, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=40,
+            seats_available=18,
+            base_price="55.00",
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        point = self.create_boarding_point(tour)
+        self.session.commit()
+
+        reserve = self.client.post(
+            f"/mini-app/tours/{tour.code}/reservations",
+            json={
+                "telegram_user_id": 90_311,
+                "seats_count": 40,
+                "boarding_point_id": point.id,
+            },
+        )
+        self.assertEqual(reserve.status_code, 400)
+        detail = reserve.json()["detail"]
         self.assertIsInstance(detail, dict)
         self.assertEqual(detail["code"], "mini_app_self_service_booking_not_available")
 
@@ -324,6 +492,7 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertFalse(payload["sales_mode_policy"]["per_seat_self_service_allowed"])
+        self.assertFalse(payload["sales_mode_policy"]["mini_app_catalog_reservation_allowed"])
         self.assertEqual(payload["tour"]["sales_mode"], "full_bus")
         self.assertEqual(payload["commercial_mode"], "supplier_route_full_bus")
 
@@ -482,6 +651,9 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(items[0]["facade_state"], "active_temporary_reservation")
         self.assertEqual(items[0]["primary_cta"], "pay_now")
         self.assertIn("user_visible_booking_label", items[0])
+        self.assertEqual(items[0]["user_visible_booking_label"], "Reserved temporarily")
+        self.assertIn("Payment pending", items[0]["user_visible_payment_label"])
+        self.assertNotIn("awaiting_payment", items[0]["user_visible_payment_label"])
 
         detail_ok = self.client.get(
             f"/mini-app/orders/{order_id}/booking-status",
@@ -491,6 +663,7 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         detail_body = detail_ok.json()
         self.assertEqual(detail_body["summary"]["order"]["id"], order_id)
         self.assertEqual(detail_body["primary_cta"], "pay_now")
+        self.assertEqual(detail_body["user_visible_booking_label"], "Reserved temporarily")
 
         detail_other = self.client.get(
             f"/mini-app/orders/{order_id}/booking-status",

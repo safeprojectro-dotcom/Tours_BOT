@@ -44,12 +44,16 @@ class MiniAppReservationPreparationService:
         if detail is None:
             return None
 
-        mode_policy = TourSalesModePolicyService.policy_for_sales_mode(tour.sales_mode)
-        seat_count_options = (
-            list(self.reservation_preparation_service.list_seat_count_options(detail))
-            if mode_policy.per_seat_self_service_allowed
-            else []
-        )
+        mode_policy = TourSalesModePolicyService.policy_for_catalog_tour(tour)
+        if mode_policy.per_seat_self_service_allowed:
+            seat_count_options = list(self.reservation_preparation_service.list_seat_count_options(detail))
+        elif (
+            mode_policy.mini_app_catalog_reservation_allowed
+            and mode_policy.catalog_charter_fixed_seats_count is not None
+        ):
+            seat_count_options = [mode_policy.catalog_charter_fixed_seats_count]
+        else:
+            seat_count_options = []
         return MiniAppReservationPreparationRead(
             tour=ReservationPreparationTourRead(
                 id=detail.tour.id,
@@ -83,8 +87,12 @@ class MiniAppReservationPreparationService:
             sales_deadline=tour.sales_deadline,
         ):
             return None
-        if not TourSalesModePolicyService.policy_for_sales_mode(tour.sales_mode).per_seat_self_service_allowed:
+        mode_policy = TourSalesModePolicyService.policy_for_catalog_tour(tour)
+        if not mode_policy.mini_app_catalog_reservation_allowed:
             return None
+        if mode_policy.catalog_charter_fixed_seats_count is not None:
+            if seats_count != mode_policy.catalog_charter_fixed_seats_count:
+                return None
 
         return self.reservation_preparation_service.build_preparation_summary(
             session,

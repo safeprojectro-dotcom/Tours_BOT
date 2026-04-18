@@ -7,7 +7,10 @@ from decimal import Decimal
 from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus
 from app.schemas.mini_app import MiniAppBookingFacadeState, MiniAppBookingPrimaryCta
 from app.schemas.order import OrderRead
-from app.services.mini_app_booking_facade import resolve_mini_app_booking_facade
+from app.services.mini_app_booking_facade import (
+    format_payment_session_hint,
+    resolve_mini_app_booking_facade,
+)
 
 
 def _order(**kwargs) -> OrderRead:
@@ -39,8 +42,10 @@ class MiniAppBookingFacadeTests(unittest.TestCase):
         b, p, state, cta = resolve_mini_app_booking_facade(o, now=now)
         self.assertEqual(state, MiniAppBookingFacadeState.ACTIVE_TEMPORARY_RESERVATION)
         self.assertEqual(cta, MiniAppBookingPrimaryCta.PAY_NOW)
-        self.assertIn("Temporary reservation", b)
-        self.assertIn("Awaiting payment", p)
+        self.assertIn("Reserved temporarily", b)
+        self.assertIn("Payment pending", p)
+        self.assertNotIn("awaiting_payment", b.lower())
+        self.assertNotIn("awaiting_payment", p.lower())
 
     def test_expired_temporary_reservation_before_worker(self) -> None:
         now = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
@@ -49,6 +54,7 @@ class MiniAppBookingFacadeTests(unittest.TestCase):
         self.assertEqual(state, MiniAppBookingFacadeState.EXPIRED_TEMPORARY_RESERVATION)
         self.assertEqual(cta, MiniAppBookingPrimaryCta.BROWSE_TOURS)
         self.assertIn("expired", b.lower())
+        self.assertNotIn("cancelled_no_payment", b.lower())
 
     def test_cancelled_no_payment_after_worker(self) -> None:
         now = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
@@ -60,7 +66,8 @@ class MiniAppBookingFacadeTests(unittest.TestCase):
         b, p, state, cta = resolve_mini_app_booking_facade(o, now=now)
         self.assertEqual(state, MiniAppBookingFacadeState.CANCELLED_NO_PAYMENT)
         self.assertEqual(cta, MiniAppBookingPrimaryCta.BROWSE_TOURS)
-        self.assertTrue("released" in b.lower() or "not paid" in b.lower())
+        self.assertIn("expired", b.lower())
+        self.assertNotIn("cancelled_no_payment", b.lower())
 
     def test_confirmed_paid(self) -> None:
         now = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
@@ -72,3 +79,8 @@ class MiniAppBookingFacadeTests(unittest.TestCase):
         _, _, state, cta = resolve_mini_app_booking_facade(o, now=now)
         self.assertEqual(state, MiniAppBookingFacadeState.CONFIRMED)
         self.assertEqual(cta, MiniAppBookingPrimaryCta.BACK_TO_BOOKINGS)
+
+    def test_payment_session_hint_humanizes_status(self) -> None:
+        hint = format_payment_session_hint(status=PaymentStatus.AWAITING_PAYMENT, provider="mockpay")
+        self.assertIn("Payment pending", hint)
+        self.assertNotIn("awaiting_payment", hint.lower())

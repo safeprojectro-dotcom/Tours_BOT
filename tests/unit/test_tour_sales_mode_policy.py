@@ -20,6 +20,8 @@ class TourSalesModePolicyTests(FoundationDBTestCase):
         self.assertTrue(p.per_seat_self_service_allowed)
         self.assertFalse(p.direct_customer_booking_blocked_or_deferred)
         self.assertFalse(p.operator_path_required)
+        self.assertTrue(p.mini_app_catalog_reservation_allowed)
+        self.assertIsNone(p.catalog_charter_fixed_seats_count)
 
     def test_full_bus_policy_output(self) -> None:
         p = TourSalesModePolicyService.policy_for_sales_mode(TourSalesMode.FULL_BUS)
@@ -27,6 +29,8 @@ class TourSalesModePolicyTests(FoundationDBTestCase):
         self.assertFalse(p.per_seat_self_service_allowed)
         self.assertTrue(p.direct_customer_booking_blocked_or_deferred)
         self.assertTrue(p.operator_path_required)
+        self.assertFalse(p.mini_app_catalog_reservation_allowed)
+        self.assertIsNone(p.catalog_charter_fixed_seats_count)
 
     def test_large_seat_count_does_not_imply_full_bus(self) -> None:
         """Policy follows `sales_mode` only — never seat totals."""
@@ -55,6 +59,32 @@ class TourSalesModePolicyTests(FoundationDBTestCase):
         self.assertEqual(p.effective_sales_mode, TourSalesMode.FULL_BUS)
         self.assertFalse(p.per_seat_self_service_allowed)
         self.assertTrue(p.operator_path_required)
+
+    def test_policy_for_catalog_tour_full_bus_virgin_allows_mini_app_hold(self) -> None:
+        tour = self.create_tour(
+            code="POL-CAT-VIRGIN",
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=30,
+            seats_available=30,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.session.commit()
+        p = TourSalesModePolicyService.policy_for_catalog_tour(tour)
+        self.assertTrue(p.mini_app_catalog_reservation_allowed)
+        self.assertEqual(p.catalog_charter_fixed_seats_count, 30)
+
+    def test_policy_for_catalog_tour_full_bus_partial_blocks_mini_app_hold(self) -> None:
+        tour = self.create_tour(
+            code="POL-CAT-PARTIAL",
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=30,
+            seats_available=29,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.session.commit()
+        p = TourSalesModePolicyService.policy_for_catalog_tour(tour)
+        self.assertFalse(p.mini_app_catalog_reservation_allowed)
+        self.assertIsNone(p.catalog_charter_fixed_seats_count)
 
     def test_default_orm_tour_is_per_seat_policy(self) -> None:
         """Tours without explicit `sales_mode` in factory still get PER_SEAT policy (DB + ORM default)."""

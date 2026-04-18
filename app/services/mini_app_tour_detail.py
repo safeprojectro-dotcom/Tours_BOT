@@ -49,7 +49,7 @@ class MiniAppTourDetailService:
         if detail is None:
             return None
 
-        mode_policy = TourSalesModePolicyService.policy_for_sales_mode(detail.tour.sales_mode)
+        mode_policy = TourSalesModePolicyService.policy_for_catalog_tour(tour)
         commercial_mode = commercial_mode_for_catalog_tour_sales_mode(detail.tour.sales_mode)
         return MiniAppTourDetailRead(
             tour=detail.tour,
