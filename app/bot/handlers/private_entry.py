@@ -93,6 +93,9 @@ router = Router(name="private-entry")
 router.message.filter(F.chat.type == "private")
 router.callback_query.filter(F.message.chat.type == "private")
 
+# Deep-link /start args are stashed here when the user has no preferred_language yet (channel link first open).
+PENDING_PRIVATE_START_ARGS_KEY = "pending_private_start_args"
+
 
 @router.message(CommandStart())
 async def handle_start(
@@ -118,7 +121,11 @@ async def handle_start(
         )
         session.commit()
 
+        raw_start = (command.args.strip() if command is not None and command.args else None) or None
+
         if user.preferred_language is None:
+            if raw_start:
+                await state.update_data({PENDING_PRIVATE_START_ARGS_KEY: raw_start})
             await state.set_state(PrivateEntryState.choosing_language)
             await answer_and_register_language_prompt(
                 message,
@@ -128,7 +135,6 @@ async def handle_start(
             return
 
         await state.clear()
-        raw_start = command.args if command is not None else None
         grp_payload = match_group_cta_start_payload(raw_start)
         if grp_payload is not None:
             if grp_payload == START_PAYLOAD_GRP_PRIVATE:
@@ -158,8 +164,13 @@ async def handle_start(
             if sup_offer is None or sup_offer.lifecycle_status != SupplierOfferLifecycle.PUBLISHED:
                 await message.answer(translate(user.preferred_language, "sup_offer_not_available"))
             else:
-                intro = translate(user.preferred_language, "start_sup_offer_intro").format(
-                    title=sup_offer.title,
+                display_title = (sup_offer.title or "").strip()
+                if not display_title:
+                    display_title = translate(user.preferred_language, "sup_offer_intro_title_fallback")
+                intro = translate(
+                    user.preferred_language,
+                    "start_sup_offer_intro",
+                    title=display_title,
                 )
                 await message.answer(
                     intro,
@@ -569,6 +580,15 @@ async def handle_language_selected(callback: CallbackQuery, state: FSMContext) -
     if callback.message is None:
         return
 
+    data = await state.get_data()
+    raw_pending = data.get(PENDING_PRIVATE_START_ARGS_KEY)
+    pending_start: str | None
+    if isinstance(raw_pending, str):
+        p = raw_pending.strip()
+        pending_start = p if p else None
+    else:
+        pending_start = None
+
     language_code = updated_user.preferred_language if updated_user is not None else settings.telegram_default_language
     await state.clear()
     await callback.message.answer(
@@ -578,6 +598,11 @@ async def handle_language_selected(callback: CallbackQuery, state: FSMContext) -
             mini_app_url=settings.telegram_mini_app_url,
         ),
     )
+    if pending_start is not None:
+        cmd = CommandObject(prefix="/", command="start", mention=None, args=pending_start)
+        await handle_start(callback.message, state, cmd)
+        return
+
     await _send_catalog_overview(callback.message, language_code=language_code)
 
 
