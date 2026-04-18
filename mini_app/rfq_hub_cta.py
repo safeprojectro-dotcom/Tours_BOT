@@ -31,6 +31,75 @@ _TERMINAL_BRIDGE_STATUSES: frozenset[CustomRequestBookingBridgeStatus] = frozens
     },
 )
 
+_TERMINAL_CUSTOMER_REQUEST_STATUSES: frozenset[CustomMarketplaceRequestStatus] = frozenset(
+    {
+        CustomMarketplaceRequestStatus.CLOSED_ASSISTED,
+        CustomMarketplaceRequestStatus.CLOSED_EXTERNAL,
+        CustomMarketplaceRequestStatus.CANCELLED,
+        CustomMarketplaceRequestStatus.FULFILLED,
+    },
+)
+
+
+def is_request_status_terminal(status: object) -> bool:
+    """U2: customer list grouping — closed / cancelled / fulfilled (not booking terminal)."""
+    if not isinstance(status, CustomMarketplaceRequestStatus):
+        status = CustomMarketplaceRequestStatus(str(status))
+    return status in _TERMINAL_CUSTOMER_REQUEST_STATUSES
+
+
+def my_requests_list_summary_key(*, n_total: int, n_active: int, n_closed: int) -> str | None:
+    """U2: lightweight list-level lifecycle hint (copy only)."""
+    if n_total <= 0:
+        return None
+    if n_closed == n_total:
+        return "my_requests_list_summary_all_closed"
+    if n_active == n_total:
+        return "my_requests_list_summary_all_active"
+    return "my_requests_list_summary_mixed"
+
+
+def my_requests_row_hint_key(status: object) -> str:
+    """U2: per-row hint shell key (resolved via mini_app.ui_strings.shell)."""
+    if not isinstance(status, CustomMarketplaceRequestStatus):
+        status = CustomMarketplaceRequestStatus(str(status))
+    return {
+        CustomMarketplaceRequestStatus.OPEN: "my_requests_row_hint_open",
+        CustomMarketplaceRequestStatus.UNDER_REVIEW: "my_requests_row_hint_under_review",
+        CustomMarketplaceRequestStatus.SUPPLIER_SELECTED: "my_requests_row_hint_supplier_selected",
+        CustomMarketplaceRequestStatus.CLOSED_ASSISTED: "my_requests_row_hint_closed_assisted",
+        CustomMarketplaceRequestStatus.CLOSED_EXTERNAL: "my_requests_row_hint_closed_external",
+        CustomMarketplaceRequestStatus.CANCELLED: "my_requests_row_hint_cancelled",
+        CustomMarketplaceRequestStatus.FULFILLED: "my_requests_row_hint_fulfilled",
+    }.get(status, "my_requests_row_hint_open")
+
+
+def detail_next_step_key(*, status: object, cta_kind: DetailPrimaryCtaKind) -> str:
+    """U2: one conservative next-step line; when a CTA exists, align copy with that action only."""
+    if not isinstance(status, CustomMarketplaceRequestStatus):
+        status = CustomMarketplaceRequestStatus(str(status))
+    if cta_kind == DetailPrimaryCtaKind.CONTINUE_TO_PAYMENT:
+        return "my_requests_detail_next_pay_when_ready"
+    if cta_kind == DetailPrimaryCtaKind.CONTINUE_BOOKING:
+        return "my_requests_detail_next_continue_booking"
+    if cta_kind == DetailPrimaryCtaKind.OPEN_BOOKING:
+        return "my_requests_detail_next_open_booking"
+    if status == CustomMarketplaceRequestStatus.CANCELLED:
+        return "my_requests_detail_next_cancelled"
+    if status in (
+        CustomMarketplaceRequestStatus.CLOSED_ASSISTED,
+        CustomMarketplaceRequestStatus.CLOSED_EXTERNAL,
+        CustomMarketplaceRequestStatus.FULFILLED,
+    ):
+        return "my_requests_detail_next_closed"
+    if status == CustomMarketplaceRequestStatus.OPEN:
+        return "my_requests_detail_next_open"
+    if status == CustomMarketplaceRequestStatus.UNDER_REVIEW:
+        return "my_requests_detail_next_under_review"
+    if status == CustomMarketplaceRequestStatus.SUPPLIER_SELECTED:
+        return "my_requests_detail_next_supplier_selected"
+    return "my_requests_detail_next_generic"
+
 
 def request_status_lists_action_followup(status: CustomMarketplaceRequestStatus) -> bool:
     """List row hint: supplier-side resolution may allow a next step (detail + bridge checks)."""
@@ -138,7 +207,7 @@ _REQUEST_STATUS_SHELL_KEYS: dict[CustomMarketplaceRequestStatus, str] = {
     CustomMarketplaceRequestStatus.CLOSED_ASSISTED: "rfq_status_closed_assisted",
     CustomMarketplaceRequestStatus.CLOSED_EXTERNAL: "rfq_status_closed_external",
     CustomMarketplaceRequestStatus.CANCELLED: "rfq_status_cancelled",
-    CustomMarketplaceRequestStatus.FULFILLED: "rfq_status_closed_assisted",
+    CustomMarketplaceRequestStatus.FULFILLED: "rfq_status_fulfilled",
 }
 
 _REQUEST_TYPE_SHELL_KEYS: dict[CustomMarketplaceRequestType, str] = {

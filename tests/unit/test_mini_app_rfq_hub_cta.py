@@ -122,7 +122,10 @@ class RfqHubCtaTests(unittest.TestCase):
 
     def test_status_labels_resolve_en(self) -> None:
         self.assertIn("review", request_status_user_label("en", CustomMarketplaceRequestStatus.UNDER_REVIEW).lower())
-        self.assertIn("received", request_status_user_label("en", CustomMarketplaceRequestStatus.OPEN).lower())
+        open_l = request_status_user_label("en", CustomMarketplaceRequestStatus.OPEN).lower()
+        self.assertTrue("sent" in open_l or "waiting" in open_l)
+        fulfilled_l = request_status_user_label("en", CustomMarketplaceRequestStatus.FULFILLED).lower()
+        self.assertIn("completed", fulfilled_l)
 
 
 if __name__ == "__main__":

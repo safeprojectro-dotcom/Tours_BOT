@@ -44,13 +44,21 @@ from app.schemas.tour import BoardingPointRead
 from mini_app.api_client import MiniAppApiClient
 from mini_app.booking_grouping import partition_bookings_for_my_bookings_ui
 from mini_app.config import get_mini_app_settings
+from mini_app.custom_request_context import (
+    CustomRequestPrefill,
+    prefill_from_reservation_preparation,
+    prefill_from_tour_detail,
+)
 from mini_app.presentation_notes import booking_detail_context_note
 from mini_app.rfq_bridge_logic import rfq_bridge_continue_to_payment_allowed
 from mini_app.rfq_hub_cta import (
     DetailPrimaryCtaKind,
     detail_context_line_keys,
+    detail_next_step_key,
+    is_request_status_terminal,
+    my_requests_list_summary_key,
+    my_requests_row_hint_key,
     pick_booking_for_bridge_tour,
-    request_status_lists_action_followup,
     request_status_user_label,
     request_type_user_label,
     resolve_detail_primary_cta,
@@ -430,6 +438,7 @@ class TourDetailScreen:
         self.on_open_settings = on_open_settings
         self.on_open_custom_request = on_open_custom_request
         self.current_tour_code: str | None = None
+        self._last_detail: MiniAppTourDetailRead | None = None
 
         lg = default_language_code
         self.nav_back = ft.TextButton(
@@ -558,6 +567,7 @@ class TourDetailScreen:
         waitlist_status: MiniAppWaitlistStatusRead | None = None,
     ) -> None:
         self.content_column.controls.clear()
+        self._last_detail = detail
         if detail is None:
             return
 
@@ -878,6 +888,7 @@ class ReservationPreparationScreen:
         self.on_open_settings = on_open_settings
         self.on_open_custom_request = on_open_custom_request
         self.current_tour_code: str | None = None
+        self._last_preparation: MiniAppReservationPreparationRead | None = None
 
         lg = default_language_code
         self.loading_row = ft.Row(
@@ -1017,6 +1028,7 @@ class ReservationPreparationScreen:
         self.selection_container.controls.clear()
         self.summary_container.controls.clear()
         self.confirm_reserve_button.disabled = True
+        self._last_preparation = preparation
         if preparation is None:
             return
 
@@ -2803,14 +2815,28 @@ class MyRequestsListScreen:
                 ft.Text(shell(lg, "my_requests_empty"), color=ft.Colors.ON_SURFACE_VARIANT)
             )
             return
+        n = len(data.items)
+        n_closed = sum(1 for it in data.items if is_request_status_terminal(it.status))
+        n_active = n - n_closed
+        summary_key = my_requests_list_summary_key(n_total=n, n_active=n_active, n_closed=n_closed)
+        if summary_key is not None:
+            self.items_column.controls.append(
+                ft.Text(
+                    shell(lg, summary_key),
+                    size=13,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                )
+            )
+        self.items_column.controls.append(
+            ft.Text(shell(lg, "my_requests_list_expectation_note"), size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+        )
         for item in data.items:
             self.items_column.controls.append(self._request_card(item))
 
     def _request_card(self, item: MiniAppCustomRequestCustomerSummaryRead) -> ft.Control:
         lg = self.language_code
         st_label = request_status_user_label(lg, item.status)
-        follow = request_status_lists_action_followup(item.status)
-        hint = shell(lg, "my_requests_row_followup_hint" if follow else "my_requests_row_review_hint")
+        hint = shell(lg, my_requests_row_hint_key(item.status))
         return ft.Container(
             bgcolor=ft.Colors.SURFACE_CONTAINER_LOW,
             border_radius=16,
@@ -2892,6 +2918,12 @@ class MyRequestDetailScreen:
         self.error_text = ft.Text("", color=ft.Colors.ERROR, visible=False)
         self.body_column = ft.Column(spacing=12)
         self._primary_cta_button = ft.FilledButton(visible=False, on_click=lambda _: self._on_primary_cta())
+        self._cta_caption = ft.Text("", size=12, color=ft.Colors.ON_SURFACE_VARIANT, visible=False)
+        self._cta_block = ft.Column(
+            spacing=6,
+            visible=False,
+            controls=[self._cta_caption, self._primary_cta_button],
+        )
 
     def set_request_id(self, request_id: int) -> None:
         self.request_id = request_id
@@ -2915,7 +2947,7 @@ class MyRequestDetailScreen:
             self.loading_row,
             self.error_text,
             self.body_column,
-            ft.Row([self._primary_cta_button], alignment=ft.MainAxisAlignment.START),
+            self._cta_block,
         )
 
     def _on_primary_cta(self) -> None:
@@ -2936,6 +2968,8 @@ class MyRequestDetailScreen:
         self.sync_shell_labels()
         self.body_column.controls.clear()
         self._primary_cta_button.visible = False
+        self._cta_caption.visible = False
+        self._cta_block.visible = False
         self.error_text.visible = False
         self._cta_kind = DetailPrimaryCtaKind.NONE
         self._cta_order_id = None
@@ -3024,7 +3058,13 @@ class MyRequestDetailScreen:
             self._cta_kind, self._cta_order_id = DetailPrimaryCtaKind.NONE, None
 
         if detail is not None:
-            self._render_body(detail, prep, prep_http_not_found, matching)
+            self._render_body(
+                detail,
+                prep,
+                prep_http_not_found,
+                matching,
+                cta_kind=self._cta_kind,
+            )
         self._sync_primary_cta_button()
         self.loading_row.visible = False
         self.page.update()
@@ -3035,6 +3075,8 @@ class MyRequestDetailScreen:
         prep: MiniAppBridgeExecutionPreparationResponse | None,
         prep_http_not_found: bool,
         matching: MiniAppBookingListItemRead | None,
+        *,
+        cta_kind: DetailPrimaryCtaKind,
     ) -> None:
         lg = self.language_code
         st = request_status_user_label(lg, detail.status)
@@ -3156,6 +3198,23 @@ class MyRequestDetailScreen:
                     color=ft.Colors.ON_SURFACE_VARIANT,
                 )
             )
+        next_key = detail_next_step_key(status=detail.status, cta_kind=cta_kind)
+        lines.append(
+            ft.Container(
+                padding=ft.padding.only(top=10),
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            shell(lg, "my_requests_detail_next_heading"),
+                            weight=ft.FontWeight.W_600,
+                            size=13,
+                        ),
+                        ft.Text(shell(lg, next_key), size=13, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ],
+                    spacing=4,
+                ),
+            )
+        )
         self.body_column.controls = lines
 
     def _sync_primary_cta_button(self) -> None:
@@ -3163,18 +3222,25 @@ class MyRequestDetailScreen:
         kind = self._cta_kind
         if kind == DetailPrimaryCtaKind.NONE:
             self._primary_cta_button.visible = False
+            self._cta_caption.visible = False
+            self._cta_block.visible = False
             return
+        self._cta_block.visible = True
         self._primary_cta_button.visible = True
+        self._cta_caption.visible = True
         if kind == DetailPrimaryCtaKind.CONTINUE_TO_PAYMENT:
             self._primary_cta_button.text = shell(lg, "my_requests_cta_continue_payment")
+            self._cta_caption.value = shell(lg, "my_requests_cta_caption_payment")
         elif kind == DetailPrimaryCtaKind.CONTINUE_BOOKING:
             self._primary_cta_button.text = shell(lg, "my_requests_cta_continue_booking")
+            self._cta_caption.value = shell(lg, "my_requests_cta_caption_booking")
         else:
             self._primary_cta_button.text = shell(lg, "my_requests_cta_open_booking")
+            self._cta_caption.value = shell(lg, "my_requests_cta_caption_open_booking")
 
 
 class CustomRequestScreen:
-    """Track 4: structured RFQ from Mini App (no order created)."""
+    """Track 4 / U1: structured custom request from Mini App (no order created)."""
 
     def __init__(
         self,
@@ -3185,17 +3251,33 @@ class CustomRequestScreen:
         on_close: Callable[[], None],
         language_code: str,
         on_continue_rfq_booking: Callable[[int], None] | None = None,
+        on_open_my_requests: Callable[[], None] | None = None,
     ) -> None:
         self.page = page
         self.api_client = api_client
         self._dev_telegram_user_id = dev_telegram_user_id
         self.on_close = on_close
         self.on_continue_rfq_booking = on_continue_rfq_booking
+        self.on_open_my_requests = on_open_my_requests
         self.language_code = language_code
+        self._last_prefill: CustomRequestPrefill | None = None
         lg = language_code
         self.nav_back = ft.TextButton(shell(lg, "back"), icon=ft.Icons.ARROW_BACK, on_click=lambda _: self.on_close())
         self.title = ft.Text(shell(lg, "custom_request_title"), size=26, weight=ft.FontWeight.BOLD)
         self.intro = ft.Text(shell(lg, "custom_request_intro"), size=13, color=ft.Colors.ON_SURFACE_VARIANT)
+        self.fields_legend = ft.Text(
+            shell(lg, "custom_request_fields_legend"),
+            size=12,
+            color=ft.Colors.ON_SURFACE_VARIANT,
+        )
+        self.prefill_banner_label = ft.Text("", size=13)
+        self.prefill_banner = ft.Container(
+            visible=False,
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGH,
+            border_radius=12,
+            padding=12,
+            content=self.prefill_banner_label,
+        )
         self.request_type = ft.Dropdown(
             label=shell(lg, "custom_request_field_type"),
             width=400,
@@ -3210,6 +3292,7 @@ class CustomRequestScreen:
         self.end_date = ft.TextField(label=shell(lg, "custom_request_field_end"), width=400)
         self.route_notes = ft.TextField(
             label=shell(lg, "custom_request_field_route"),
+            hint_text=shell(lg, "custom_request_field_route_hint"),
             width=400,
             multiline=True,
             min_lines=2,
@@ -3228,11 +3311,46 @@ class CustomRequestScreen:
             on_click=lambda _: self.page.run_task(self._submit_async),
         )
 
+    def apply_prefill(self, prefill: CustomRequestPrefill | None) -> None:
+        """U1: optional hints from a catalog tour the user was viewing (separate Mode 3 request)."""
+        lg = self.language_code
+        if prefill is None:
+            self._reset_form_to_defaults()
+            return
+        self._last_prefill = prefill
+        self.request_type.value = "custom_route"
+        self.start_date.value = prefill.departure_date_iso
+        self.end_date.value = prefill.return_date_iso or ""
+        self.route_notes.value = shell(
+            lg,
+            "custom_request_prefill_route_template",
+            code=prefill.tour_code,
+            title=prefill.tour_title,
+        )
+        self.group_size.value = ""
+        self.special.value = ""
+        self.prefill_banner_label.value = shell(lg, "custom_request_prefill_banner", code=prefill.tour_code)
+        self.prefill_banner.visible = True
+
+    def _reset_form_to_defaults(self) -> None:
+        lg = self.language_code
+        self._last_prefill = None
+        self.request_type.value = "group_trip"
+        self.start_date.value = ""
+        self.end_date.value = ""
+        self.route_notes.value = ""
+        self.group_size.value = ""
+        self.special.value = ""
+        self.prefill_banner.visible = False
+        self.prefill_banner_label.value = ""
+        self.route_notes.hint_text = shell(lg, "custom_request_field_route_hint")
+
     def sync_shell_labels(self) -> None:
         lg = self.language_code
         self.nav_back.text = shell(lg, "back")
         self.title.value = shell(lg, "custom_request_title")
         self.intro.value = shell(lg, "custom_request_intro")
+        self.fields_legend.value = shell(lg, "custom_request_fields_legend")
         self.request_type.label = shell(lg, "custom_request_field_type")
         keys = ("custom_request_opt_group_trip", "custom_request_opt_custom_route", "custom_request_opt_other")
         vals = ("group_trip", "custom_route", "other")
@@ -3240,15 +3358,24 @@ class CustomRequestScreen:
         self.start_date.label = shell(lg, "custom_request_field_start")
         self.end_date.label = shell(lg, "custom_request_field_end")
         self.route_notes.label = shell(lg, "custom_request_field_route")
+        self.route_notes.hint_text = shell(lg, "custom_request_field_route_hint")
         self.group_size.label = shell(lg, "custom_request_field_group")
         self.special.label = shell(lg, "custom_request_field_special")
         self.submit_btn.text = shell(lg, "custom_request_submit")
+        if self._last_prefill is not None:
+            self.prefill_banner_label.value = shell(
+                lg,
+                "custom_request_prefill_banner",
+                code=self._last_prefill.tour_code,
+            )
 
     def build(self) -> ft.Control:
         return scrollable_page(
             ft.Row([self.nav_back], alignment=ft.MainAxisAlignment.START),
             self.title,
             self.intro,
+            self.fields_legend,
+            self.prefill_banner,
             self.request_type,
             self.start_date,
             self.end_date,
@@ -3258,13 +3385,26 @@ class CustomRequestScreen:
             ft.Row([self.submit_btn], alignment=ft.MainAxisAlignment.START),
         )
 
+    def _request_type_label(self) -> str:
+        lg = self.language_code
+        rt = self.request_type.value or "group_trip"
+        key = {
+            "group_trip": "custom_request_opt_group_trip",
+            "custom_route": "custom_request_opt_custom_route",
+            "other": "custom_request_opt_other",
+        }.get(rt, "custom_request_opt_group_trip")
+        return shell(lg, key)
+
     async def _submit_async(self) -> None:
         lg = self.language_code
         self.submit_btn.disabled = True
         self.page.update()
+        type_label = self._request_type_label()
+        route_snapshot = (self.route_notes.value or "").strip()
+        excerpt = route_snapshot[:280] + ("…" if len(route_snapshot) > 280 else "")
         try:
             end_raw = (self.end_date.value or "").strip()
-            route = (self.route_notes.value or "").strip()
+            route = route_snapshot
             if len(route) < 3:
                 raise ValueError("route")
             start_raw = (self.start_date.value or "").strip()
@@ -3294,7 +3434,7 @@ class CustomRequestScreen:
             )
             self.page.snack_bar.open = True
         else:
-            self._show_success_dialog(r.id)
+            self._show_success_dialog(r.id, request_type_label=type_label, route_excerpt=excerpt or "—")
         finally:
             self.submit_btn.disabled = False
             self.page.update()
@@ -3303,11 +3443,17 @@ class CustomRequestScreen:
         self.page.dialog = None
         self.page.update()
 
-    def _show_success_dialog(self, request_id: int) -> None:
+    def _show_success_dialog(self, request_id: int, *, request_type_label: str, route_excerpt: str) -> None:
         lg = self.language_code
-        actions: list[ft.Control] = [
-            ft.TextButton(shell(lg, "btn_done"), on_click=self._on_success_done),
-        ]
+        actions: list[ft.Control] = []
+        if self.on_open_my_requests is not None:
+            actions.append(
+                ft.OutlinedButton(
+                    shell(lg, "btn_my_requests"),
+                    on_click=self._on_success_my_requests,
+                )
+            )
+        actions.append(ft.TextButton(shell(lg, "btn_done"), on_click=self._on_success_done))
         if self.on_continue_rfq_booking is not None:
             actions.append(
                 ft.FilledButton(
@@ -3315,10 +3461,28 @@ class CustomRequestScreen:
                     on_click=lambda e: self._on_success_continue_bridge(request_id, e),
                 )
             )
+        content = ft.Column(
+            [
+                ft.Text(shell(lg, "custom_request_success_lead")),
+                ft.Text(
+                    shell(lg, "custom_request_success_reference", id=str(request_id)),
+                    weight=ft.FontWeight.W_600,
+                ),
+                ft.Text(shell(lg, "custom_request_success_summary_type", label=request_type_label), size=13),
+                ft.Text(
+                    shell(lg, "custom_request_success_summary_route", text=route_excerpt),
+                    size=13,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                ),
+                ft.Text(shell(lg, "custom_request_success_next"), size=13, color=ft.Colors.ON_SURFACE_VARIANT),
+            ],
+            tight=True,
+            spacing=8,
+        )
         dlg = ft.AlertDialog(
             modal=True,
             title=ft.Text(shell(lg, "custom_request_success_title")),
-            content=ft.Text(shell(lg, "custom_request_success", id=str(request_id))),
+            content=content,
             actions=actions,
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -3329,6 +3493,11 @@ class CustomRequestScreen:
     def _on_success_done(self, _: ft.ControlEvent) -> None:
         self._dismiss_dialog()
         self.on_close()
+
+    def _on_success_my_requests(self, _: ft.ControlEvent) -> None:
+        self._dismiss_dialog()
+        if self.on_open_my_requests is not None:
+            self.on_open_my_requests()
 
     def _on_success_continue_bridge(self, request_id: int, _: ft.ControlEvent) -> None:
         self._dismiss_dialog()
@@ -3669,6 +3838,7 @@ class MiniAppShell:
             on_open_custom_request=self.open_custom_request_from_current_route,
         )
         self._custom_request_return_route: str = "/"
+        self._pending_custom_request_prefill: CustomRequestPrefill | None = None
         self.help_screen = HelpScreen(
             page,
             api_client=self.api_client,
@@ -3694,6 +3864,7 @@ class MiniAppShell:
             on_close=self.close_custom_request,
             language_code=settings.mini_app_default_language,
             on_continue_rfq_booking=self.open_rfq_bridge_booking,
+            on_open_my_requests=self.open_my_requests,
         )
         self.settings_screen = SettingsScreen(
             page,
@@ -3752,6 +3923,7 @@ class MiniAppShell:
         self.page.go("/settings")
 
     def open_custom_request_from_help(self) -> None:
+        self._pending_custom_request_prefill = None
         self._custom_request_return_route = self.page.route or "/help"
         self.page.go("/custom-request")
 
@@ -3760,11 +3932,52 @@ class MiniAppShell:
         self._custom_request_return_route = (
             f"{self.TOUR_ROUTE_PREFIX}{code}" if code else "/"
         )
+        self._pending_custom_request_prefill = self._build_prefill_for_tour_detail_entry()
         self.page.go("/custom-request")
 
     def open_custom_request_from_current_route(self) -> None:
         self._custom_request_return_route = (self.page.route or "/").strip() or "/"
+        self._pending_custom_request_prefill = self._build_prefill_for_current_route()
         self.page.go("/custom-request")
+
+    def _build_prefill_for_tour_detail_entry(self) -> CustomRequestPrefill | None:
+        code = self.tour_detail_screen.current_tour_code
+        detail = self.tour_detail_screen._last_detail
+        if not code or detail is None or detail.tour.code != code:
+            return None
+        return prefill_from_tour_detail(detail)
+
+    def _tour_code_from_customer_route(self, route: str) -> str | None:
+        r = (route or "").strip()
+        if not r.startswith(self.TOUR_ROUTE_PREFIX):
+            return None
+        tail = r.removeprefix(self.TOUR_ROUTE_PREFIX).strip("/")
+        if not tail:
+            return None
+        if tail.endswith(self.TOUR_PREPARATION_ROUTE_SUFFIX):
+            tail = tail[: -len(self.TOUR_PREPARATION_ROUTE_SUFFIX)].strip("/")
+        return tail or None
+
+    def _build_prefill_for_current_route(self) -> CustomRequestPrefill | None:
+        route = (self.page.route or "").strip() or "/"
+        code = self._tour_code_from_customer_route(route)
+        if code is None:
+            return None
+        on_prepare = route.rstrip("/").endswith(self.TOUR_PREPARATION_ROUTE_SUFFIX)
+        if on_prepare:
+            prep = self.reservation_preparation_screen._last_preparation
+            if prep is not None and prep.tour.code == code:
+                return prefill_from_reservation_preparation(prep)
+            return None
+        detail = self.tour_detail_screen._last_detail
+        if detail is not None and detail.tour.code == code:
+            return prefill_from_tour_detail(detail)
+        return None
+
+    def _take_custom_request_prefill(self) -> CustomRequestPrefill | None:
+        p = self._pending_custom_request_prefill
+        self._pending_custom_request_prefill = None
+        return p
 
     def close_custom_request(self) -> None:
         self.page.go(self._custom_request_return_route or "/")
@@ -3795,6 +4008,8 @@ class MiniAppShell:
         if self._is_custom_request_route(self.page.route):
             if not self._custom_request_return_route:
                 self._custom_request_return_route = "/"
+            prefill = self._take_custom_request_prefill()
+            self.custom_request_screen.apply_prefill(prefill)
             self.page.views.append(
                 ft.View(
                     route="/custom-request",
