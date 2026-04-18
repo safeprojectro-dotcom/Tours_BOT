@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -78,8 +79,19 @@ class BotCustomRequestCreate(BaseModel):
         return self
 
 
+class OperationalActionFocusRead(StrEnum):
+    """V2: coarse ops bucket — derived from existing request + bridge rows only."""
+
+    TERMINAL = "terminal"
+    AWAITING_SUPPLIER_PROPOSALS = "awaiting_supplier_proposals"
+    INTERNAL_REVIEW_OR_RESOLUTION = "internal_review_or_resolution"
+    BRIDGE_SETUP_OR_VALIDATION = "bridge_setup_or_validation"
+    MONITOR_CUSTOMER_CONTINUATION = "monitor_customer_continuation"
+    RECONCILE_CLOSED_BRIDGE = "reconcile_closed_bridge"
+
+
 class CustomMarketplaceRequestOperationalListHintsRead(BaseModel):
-    """V1: admin/ops scan line + handling hints — English, read-only; not shown to customers."""
+    """V1/V2: admin/ops scan line + handling + action clarity — English, read-only; not for customers."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -89,16 +101,20 @@ class CustomMarketplaceRequestOperationalListHintsRead(BaseModel):
     proposed_supplier_response_count: int
     has_selected_supplier_response: bool
     handling_hint: str
+    action_focus: OperationalActionFocusRead
+    needs_internal_ops_attention: bool
+    primary_action_hint: str
 
 
 class CustomMarketplaceRequestOperationalDetailHintsRead(CustomMarketplaceRequestOperationalListHintsRead):
-    """V1: extends list hints with booking-bridge context for admin detail only."""
+    """V1/V2: extends list hints with booking-bridge context for admin detail only."""
 
     model_config = ConfigDict(extra="forbid")
 
     booking_bridge_present: bool
     booking_bridge_operational_label: str | None = None
     continuation_summary: str
+    bridge_continuation_interpretation: str = ""
 
 
 class CustomMarketplaceRequestRead(BaseModel):

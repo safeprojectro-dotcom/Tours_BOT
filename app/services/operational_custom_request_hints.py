@@ -1,4 +1,7 @@
-"""V1: read-side operational hints for admin custom-request views (no new lifecycle semantics)."""
+"""V1/V2: read-side operational hints for admin custom-request views (no new lifecycle semantics).
+
+V2 adds action_focus, needs_internal_ops_attention, primary_action_hint, and (detail) bridge_continuation_interpretation.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +16,7 @@ from app.schemas.custom_marketplace import (
     CustomMarketplaceRequestOperationalDetailHintsRead,
     CustomMarketplaceRequestOperationalListHintsRead,
     CustomRequestBookingBridgeRead,
+    OperationalActionFocusRead,
 )
 
 
@@ -79,6 +83,168 @@ def operational_scan_summary_line(
         parts.append(f"group {group_size}")
     parts.append(_route_preview(route_notes))
     return " · ".join(parts)
+
+
+def _list_action_triple(
+    *,
+    status: CustomMarketplaceRequestStatus,
+    proposed_count: int,
+    has_selected_supplier_response: bool,
+) -> tuple[OperationalActionFocusRead, bool, str]:
+    """V2: list has no bridge — supplier_selected defaults to bridge/setup bucket."""
+    if operational_is_terminal_status(status):
+        return (
+            OperationalActionFocusRead.TERMINAL,
+            False,
+            "No routine operational action — case is closed in this system.",
+        )
+    if status == CustomMarketplaceRequestStatus.OPEN:
+        if proposed_count == 0:
+            return (
+                OperationalActionFocusRead.AWAITING_SUPPLIER_PROPOSALS,
+                True,
+                "Triage intake and obtain proposed supplier offer(s) before a commercial decision.",
+            )
+        return (
+            OperationalActionFocusRead.INTERNAL_REVIEW_OR_RESOLUTION,
+            True,
+            "Review supplier responses and apply commercial resolution when ready.",
+        )
+    if status == CustomMarketplaceRequestStatus.UNDER_REVIEW:
+        if proposed_count == 0:
+            return (
+                OperationalActionFocusRead.INTERNAL_REVIEW_OR_RESOLUTION,
+                True,
+                "Under review but no proposed offers on file — align with suppliers or adjust status.",
+            )
+        return (
+            OperationalActionFocusRead.INTERNAL_REVIEW_OR_RESOLUTION,
+            True,
+            "Decide commercial direction using the proposed offer(s) and resolution endpoints.",
+        )
+    if status == CustomMarketplaceRequestStatus.SUPPLIER_SELECTED:
+        if not has_selected_supplier_response:
+            return (
+                OperationalActionFocusRead.INTERNAL_REVIEW_OR_RESOLUTION,
+                True,
+                "Verify selected supplier response id matches records, then manage bridge on the detail view.",
+            )
+        return (
+            OperationalActionFocusRead.BRIDGE_SETUP_OR_VALIDATION,
+            True,
+            "Commercial selection recorded — open detail to create or inspect the booking bridge.",
+        )
+    return (
+        OperationalActionFocusRead.INTERNAL_REVIEW_OR_RESOLUTION,
+        True,
+        "Review request fields and supplier responses for the next operational step.",
+    )
+
+
+def _detail_action_triple(
+    *,
+    status: CustomMarketplaceRequestStatus,
+    proposed_count: int,
+    has_selected_supplier_response: bool,
+    bridge: CustomRequestBookingBridgeRead | None,
+) -> tuple[OperationalActionFocusRead, bool, str]:
+    """V2: refine list bucket when bridge row is known (detail only)."""
+    if operational_is_terminal_status(status):
+        return (
+            OperationalActionFocusRead.TERMINAL,
+            False,
+            "No routine operational action — case is closed in this system.",
+        )
+    if status != CustomMarketplaceRequestStatus.SUPPLIER_SELECTED:
+        return _list_action_triple(
+            status=status,
+            proposed_count=proposed_count,
+            has_selected_supplier_response=has_selected_supplier_response,
+        )
+    if not has_selected_supplier_response:
+        return (
+            OperationalActionFocusRead.INTERNAL_REVIEW_OR_RESOLUTION,
+            True,
+            "Verify selected supplier response id matches records, then manage bridge on this view.",
+        )
+    if bridge is None:
+        return (
+            OperationalActionFocusRead.BRIDGE_SETUP_OR_VALIDATION,
+            True,
+            "Create a booking bridge when in-app customer execution should be linked to this selection.",
+        )
+    bst = bridge.bridge_status
+    if bst in (
+        CustomRequestBookingBridgeStatus.SUPERSEDED,
+        CustomRequestBookingBridgeStatus.CANCELLED,
+    ):
+        return (
+            OperationalActionFocusRead.RECONCILE_CLOSED_BRIDGE,
+            True,
+            "This bridge row is inactive — decide a replacement bridge or confirm off-platform handling.",
+        )
+    if bst == CustomRequestBookingBridgeStatus.PENDING_VALIDATION:
+        return (
+            OperationalActionFocusRead.BRIDGE_SETUP_OR_VALIDATION,
+            True,
+            "Finish bridge validation / tour linkage before expecting customer execution in the app.",
+        )
+    if bst in (
+        CustomRequestBookingBridgeStatus.READY,
+        CustomRequestBookingBridgeStatus.LINKED_TOUR,
+        CustomRequestBookingBridgeStatus.CUSTOMER_NOTIFIED,
+    ):
+        return (
+            OperationalActionFocusRead.MONITOR_CUSTOMER_CONTINUATION,
+            False,
+            "Customer-side steps (when eligible) use existing Mini App / Layer A flows — monitor bookings; "
+            "this summary does not confirm payment or hold state.",
+        )
+    return (
+        OperationalActionFocusRead.BRIDGE_SETUP_OR_VALIDATION,
+        True,
+        "Inspect booking bridge status and admin notes for the next setup step.",
+    )
+
+
+def _bridge_continuation_interpretation(
+    *,
+    status: CustomMarketplaceRequestStatus,
+    bridge: CustomRequestBookingBridgeRead | None,
+) -> str:
+    """V2: one line interpreting bridge vs customer path — no payment or eligibility claims."""
+    if operational_is_terminal_status(status):
+        return "Request is terminal — any bridge below may be historical; do not infer current customer progress from it alone."
+    if status != CustomMarketplaceRequestStatus.SUPPLIER_SELECTED:
+        return ""
+    if bridge is None:
+        return (
+            "No booking bridge row — customer in-app execution is not linked until an admin creates the bridge."
+        )
+    bst = bridge.bridge_status
+    if bst == CustomRequestBookingBridgeStatus.PENDING_VALIDATION:
+        return (
+            "Bridge exists but is still pending validation — customer-facing execution is not implied until this clears."
+        )
+    if bst == CustomRequestBookingBridgeStatus.READY:
+        return (
+            "Bridge is ready — whether the customer can proceed still depends only on existing prep/payment APIs, "
+            "not on this text."
+        )
+    if bst == CustomRequestBookingBridgeStatus.LINKED_TOUR:
+        return (
+            "Tour is linked on the bridge — track holds and payment only via Layer A / bookings tools, not here."
+        )
+    if bst == CustomRequestBookingBridgeStatus.CUSTOMER_NOTIFIED:
+        return (
+            "Customer-notified milestone is recorded — check whether they continued in-app or outside; not proof of payment."
+        )
+    if bst in (
+        CustomRequestBookingBridgeStatus.SUPERSEDED,
+        CustomRequestBookingBridgeStatus.CANCELLED,
+    ):
+        return "This bridge record is ended — reconcile whether a new bridge or external path applies."
+    return "Review bridge status and linked tour id against your operational checklist."
 
 
 def bridge_status_operational_label(status: CustomRequestBookingBridgeStatus) -> str:
@@ -190,6 +356,11 @@ def build_operational_list_hints(
     selected_supplier_response_id: int | None,
 ) -> CustomMarketplaceRequestOperationalListHintsRead:
     has_sel = selected_supplier_response_id is not None
+    focus, need_ops, primary = _list_action_triple(
+        status=status,
+        proposed_count=proposed_supplier_response_count,
+        has_selected_supplier_response=has_sel,
+    )
     return CustomMarketplaceRequestOperationalListHintsRead(
         lifecycle_stage_label=operational_lifecycle_stage_label(status),
         is_terminal=operational_is_terminal_status(status),
@@ -203,6 +374,9 @@ def build_operational_list_hints(
         proposed_supplier_response_count=proposed_supplier_response_count,
         has_selected_supplier_response=has_sel,
         handling_hint=_list_handling_hint(status=status, proposed_count=proposed_supplier_response_count),
+        action_focus=focus,
+        needs_internal_ops_attention=need_ops,
+        primary_action_hint=primary,
     )
 
 
@@ -231,7 +405,17 @@ def build_operational_detail_hints(
     bridge_label = (
         bridge_status_operational_label(booking_bridge.bridge_status) if booking_bridge is not None else None
     )
-    base = list_part.model_dump(exclude={"handling_hint"})
+    has_sel = selected_supplier_response_id is not None
+    dfocus, dneed, dprimary = _detail_action_triple(
+        status=status,
+        proposed_count=proposed_supplier_response_count,
+        has_selected_supplier_response=has_sel,
+        bridge=booking_bridge,
+    )
+    bridge_narrative = _bridge_continuation_interpretation(status=status, bridge=booking_bridge)
+    base = list_part.model_dump(
+        exclude={"handling_hint", "action_focus", "needs_internal_ops_attention", "primary_action_hint"},
+    )
     return CustomMarketplaceRequestOperationalDetailHintsRead(
         **base,
         handling_hint=_detail_handling_hint(
@@ -239,12 +423,16 @@ def build_operational_detail_hints(
             proposed_count=proposed_supplier_response_count,
             bridge=booking_bridge,
         ),
+        action_focus=dfocus,
+        needs_internal_ops_attention=dneed,
+        primary_action_hint=dprimary,
         booking_bridge_present=booking_bridge is not None,
         booking_bridge_operational_label=bridge_label,
         continuation_summary=_continuation_summary(
             status=status,
             proposed_count=proposed_supplier_response_count,
             bridge=booking_bridge,
-            has_selected_supplier_response=selected_supplier_response_id is not None,
+            has_selected_supplier_response=has_sel,
         ),
+        bridge_continuation_interpretation=bridge_narrative,
     )
