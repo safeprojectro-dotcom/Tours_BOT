@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from app.models.enums import TourStatus
 from app.schemas.prepared import CatalogTourCardRead, LocalizedTourContentRead, OrderSummaryRead, ReservationPreparationTourRead
 from app.schemas.tour import BoardingPointRead, TourRead
+from app.schemas.effective_commercial_execution_policy import EffectiveCommercialExecutionPolicyRead
 from app.schemas.tour_sales_mode_policy import TourSalesModePolicyRead
 
 
@@ -88,6 +89,17 @@ class MiniAppBridgeExecutionPreparationResponse(BaseModel):
     preparation: MiniAppReservationPreparationRead | None = None
     tour_code: str
     sales_mode_policy: TourSalesModePolicyRead
+    effective_execution_policy: EffectiveCommercialExecutionPolicyRead
+
+
+class MiniAppBridgePaymentEligibilityRead(BaseModel):
+    """Track 5b.3b: bridge-scoped payment eligibility — read only; use existing POST .../orders/{id}/payment-entry to pay."""
+
+    payment_entry_allowed: bool
+    order_id: int | None = None
+    effective_execution_policy: EffectiveCommercialExecutionPolicyRead
+    blocked_code: str | None = None
+    blocked_reason: str | None = None
 
 
 class MiniAppCreateReservationRequest(BaseModel):
