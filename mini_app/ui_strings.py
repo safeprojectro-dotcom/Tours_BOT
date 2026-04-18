@@ -18,6 +18,7 @@ _STR: dict[str, dict[str, str]] = {
         "btn_my_bookings": "My bookings",
         "btn_language_settings": "Language & settings",
         "btn_help": "Help",
+        "nav_custom_trip": "Custom or group trip",
         "filters_heading": "Filters",
         "label_destination": "Destination",
         "hint_destination": "Belgrade",
@@ -43,6 +44,8 @@ _STR: dict[str, dict[str, str]] = {
         "detail_assisted_booking_body": "Full-bus self-service is not offered in the app for this departure. Use the button below or Help — we will assist you with this same catalog listing. "
         "This is catalog booking assistance, not a separate custom-trip or quote workflow.",
         "btn_request_full_bus_assistance": "Contact us about this catalog trip",
+        "mode2_custom_trip_hint": "Need a different route, date, or group arrangement than this ready-made charter? Start a custom trip request — it is separate from this catalog departure and does not reserve this tour automatically.",
+        "btn_mode2_request_custom_trip": "Request a custom trip",
         "preparation_assisted_title": "Full-bus self-booking is not available for this catalog departure",
         "preparation_assisted_body": "You cannot place or pay for a whole-bus hold yourself in the app for this catalog departure. Use Help to reach the team and continue booking with manual assistance.",
         "waitlist_intro_sold_out": "This tour is sold out. You can join the waitlist to record interest — "
@@ -247,6 +250,7 @@ _STR: dict[str, dict[str, str]] = {
         "btn_my_bookings": "Rezervarile mele",
         "btn_language_settings": "Limba si setari",
         "btn_help": "Ajutor",
+        "nav_custom_trip": "Tur personalizat sau grup",
         "filters_heading": "Filtre",
         "label_destination": "Destinatie",
         "label_departure_from": "Plecare de la",
@@ -269,6 +273,8 @@ _STR: dict[str, dict[str, str]] = {
         "detail_assisted_booking_body": "Nu poți finaliza singur în aplicație un hold pentru autocarul complet la această plecare. Folosește butonul de mai jos sau Ajutor — te ajutăm cu aceeași ofertă din catalog. "
         "Este asistență pentru rezervare din catalog, nu un flux separat de cerere personalizată sau oferte.",
         "btn_request_full_bus_assistance": "Contactează-ne despre acest tur din catalog",
+        "mode2_custom_trip_hint": "Ai nevoie de alt traseu, altă dată sau altă configurație decât acest charter din catalog? Începe o cerere de tur personalizat — separată de această plecare; nu rezervă automat acest tur.",
+        "btn_mode2_request_custom_trip": "Cerere tur personalizat",
         "preparation_assisted_title": "Charter din catalog — rezervarea autocarului complet nu este în self-service aici",
         "preparation_assisted_body": "Nu poți plăti sau plasa singur un hold pentru autocarul complet în aplicație la această plecare din catalog. Folosește Ajutor pentru a contacta echipa și continuă rezervarea cu asistență manuală.",
         "waitlist_intro_sold_out": "Acest tur este epuizat. Poti intra pe lista de asteptare pentru a inregistra interesul — "

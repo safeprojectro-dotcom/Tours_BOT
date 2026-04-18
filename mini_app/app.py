@@ -8,7 +8,13 @@ from decimal import Decimal, InvalidOperation
 import flet as ft
 import httpx
 
-from app.models.enums import CustomRequestBookingBridgeStatus, PaymentStatus, TourStatus
+from app.models.enums import (
+    CustomRequestBookingBridgeStatus,
+    CustomerCommercialMode,
+    PaymentStatus,
+    TourSalesMode,
+    TourStatus,
+)
 from app.schemas.custom_marketplace import (
     MiniAppCustomRequestCustomerDetailRead,
     MiniAppCustomRequestCustomerListRead,
@@ -95,6 +101,7 @@ class CatalogScreen:
         on_my_requests: Callable[[], None],
         on_open_settings: Callable[[], None],
         on_help: Callable[[], None],
+        on_open_custom_request: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
@@ -104,6 +111,7 @@ class CatalogScreen:
         self.on_my_requests = on_my_requests
         self.on_open_settings = on_open_settings
         self.on_help = on_help
+        self.on_open_custom_request = on_open_custom_request
 
         lg = default_language_code
         self.destination_field = ft.TextField(
@@ -169,6 +177,7 @@ class CatalogScreen:
                     ft.OutlinedButton(shell(lg, "btn_my_requests"), on_click=lambda _: self.on_my_requests()),
                     ft.OutlinedButton(shell(lg, "btn_language_settings"), on_click=lambda _: self.on_open_settings()),
                     ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help()),
+                    ft.TextButton(shell(lg, "nav_custom_trip"), on_click=lambda _: self.on_open_custom_request()),
                 ],
                 alignment=ft.MainAxisAlignment.START,
                 wrap=True,
@@ -409,6 +418,7 @@ class TourDetailScreen:
         on_prepare: Callable[[str], None],
         on_help: Callable[[], None],
         on_open_settings: Callable[[], None],
+        on_open_custom_request: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
@@ -418,6 +428,7 @@ class TourDetailScreen:
         self.on_prepare = on_prepare
         self.on_help = on_help
         self.on_open_settings = on_open_settings
+        self.on_open_custom_request = on_open_custom_request
         self.current_tour_code: str | None = None
 
         lg = default_language_code
@@ -427,6 +438,10 @@ class TourDetailScreen:
             on_click=lambda _: self.on_back(),
         )
         self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_custom_trip = ft.TextButton(
+            shell(lg, "nav_custom_trip"),
+            on_click=lambda _: self.on_open_custom_request(),
+        )
         self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
         self.loading_row = ft.Row(
             [
@@ -446,6 +461,7 @@ class TourDetailScreen:
         lg = self.language_code
         self.nav_back.text = shell(lg, "back_to_catalog")
         self.nav_help.text = shell(lg, "btn_help")
+        self.nav_custom_trip.text = shell(lg, "nav_custom_trip")
         self.nav_settings.text = shell(lg, "settings")
         if self.loading_row.controls:
             self.loading_row.controls[1].value = shell(lg, "loading_tour_details")
@@ -453,7 +469,7 @@ class TourDetailScreen:
     def build(self) -> ft.Control:
         return scrollable_page(
             ft.Row(
-                [self.nav_back, self.nav_help, self.nav_settings],
+                [self.nav_back, self.nav_help, self.nav_custom_trip, self.nav_settings],
                 alignment=ft.MainAxisAlignment.START,
                 wrap=True,
             ),
@@ -621,6 +637,20 @@ class TourDetailScreen:
                 ft.Text(shell(self.language_code, "boarding_no_details"))
             )
 
+    def _mode2_custom_trip_block(self, detail: MiniAppTourDetailRead) -> list[ft.Control]:
+        """Track 5g.5: UX bridge to existing custom-request flow (Mode 3), catalog full-bus only."""
+        if detail.commercial_mode != CustomerCommercialMode.SUPPLIER_ROUTE_FULL_BUS:
+            return []
+        lg = self.language_code
+        return [
+            ft.Divider(height=12),
+            ft.Text(shell(lg, "mode2_custom_trip_hint"), size=13, color=ft.Colors.ON_SURFACE_VARIANT),
+            ft.OutlinedButton(
+                shell(lg, "btn_mode2_request_custom_trip"),
+                on_click=lambda _: self.on_open_custom_request(),
+            ),
+        ]
+
     def _build_booking_or_waitlist_actions(
         self,
         detail: MiniAppTourDetailRead,
@@ -648,6 +678,7 @@ class TourDetailScreen:
                             shell(lg, "btn_request_full_bus_assistance"),
                             on_click=lambda _: self.page.run_task(self._request_full_bus_assistance_from_detail),
                         ),
+                        *self._mode2_custom_trip_block(detail),
                     ],
                     spacing=6,
                 ),
@@ -682,6 +713,7 @@ class TourDetailScreen:
                         [
                             ft.Text(shell(lg, "waitlist_active_title"), weight=ft.FontWeight.W_600),
                             ft.Text(shell(lg, "waitlist_active_body"), color=ft.Colors.ON_SURFACE_VARIANT),
+                            *self._mode2_custom_trip_block(detail),
                         ],
                         spacing=4,
                     ),
@@ -693,15 +725,22 @@ class TourDetailScreen:
                         [
                             ft.Text(shell(lg, "waitlist_in_review_title"), weight=ft.FontWeight.W_600),
                             ft.Text(shell(lg, "waitlist_in_review_body"), color=ft.Colors.ON_SURFACE_VARIANT),
+                            *self._mode2_custom_trip_block(detail),
                         ],
                         spacing=4,
                     ),
                 )
             return ft.Container(
                 padding=ft.padding.only(top=4),
-                content=ft.Text(
-                    shell(lg, "waitlist_status_on"),
-                    color=ft.Colors.ON_SURFACE_VARIANT,
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            shell(lg, "waitlist_status_on"),
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        *self._mode2_custom_trip_block(detail),
+                    ],
+                    spacing=4,
                 ),
             )
         if st == "closed":
@@ -717,6 +756,7 @@ class TourDetailScreen:
                         ],
                         alignment=ft.MainAxisAlignment.START,
                     ),
+                    *self._mode2_custom_trip_block(detail),
                 ],
                 spacing=8,
             )
@@ -735,6 +775,7 @@ class TourDetailScreen:
                     ],
                     alignment=ft.MainAxisAlignment.START,
                 ),
+                *self._mode2_custom_trip_block(detail),
             ],
             spacing=8,
         )
@@ -825,6 +866,7 @@ class ReservationPreparationScreen:
         on_reserved: Callable[[str, int], None],
         on_help: Callable[[], None],
         on_open_settings: Callable[[], None],
+        on_open_custom_request: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
@@ -834,6 +876,7 @@ class ReservationPreparationScreen:
         self.on_reserved = on_reserved
         self.on_help = on_help
         self.on_open_settings = on_open_settings
+        self.on_open_custom_request = on_open_custom_request
         self.current_tour_code: str | None = None
 
         lg = default_language_code
@@ -866,6 +909,10 @@ class ReservationPreparationScreen:
             on_click=lambda _: self.on_back(self.current_tour_code or ""),
         )
         self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_custom_trip = ft.TextButton(
+            shell(lg, "nav_custom_trip"),
+            on_click=lambda _: self.on_open_custom_request(),
+        )
         self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
 
     def set_tour_code(self, tour_code: str) -> None:
@@ -875,6 +922,7 @@ class ReservationPreparationScreen:
         lg = self.language_code
         self.nav_back.text = shell(lg, "back_to_tour_details")
         self.nav_help.text = shell(lg, "btn_help")
+        self.nav_custom_trip.text = shell(lg, "nav_custom_trip")
         self.nav_settings.text = shell(lg, "settings")
         self.seats_dropdown.label = shell(lg, "label_seats")
         self.boarding_dropdown.label = shell(lg, "label_boarding")
@@ -887,7 +935,7 @@ class ReservationPreparationScreen:
     def build(self) -> ft.Control:
         return scrollable_page(
             ft.Row(
-                [self.nav_back, self.nav_help, self.nav_settings],
+                [self.nav_back, self.nav_help, self.nav_custom_trip, self.nav_settings],
                 alignment=ft.MainAxisAlignment.START,
                 wrap=True,
             ),
@@ -989,16 +1037,28 @@ class ReservationPreparationScreen:
 
         if not preparation.sales_mode_policy.mini_app_catalog_reservation_allowed:
             self.preparation_note.visible = False
+            prep_assisted_children: list[ft.Control] = [
+                ft.Text(shell(lg, "preparation_assisted_title"), weight=ft.FontWeight.W_600),
+                ft.Text(shell(lg, "preparation_assisted_body"), color=ft.Colors.ON_SURFACE_VARIANT),
+            ]
+            if preparation.sales_mode_policy.effective_sales_mode == TourSalesMode.FULL_BUS:
+                prep_assisted_children.extend(
+                    [
+                        ft.Divider(height=12),
+                        ft.Text(shell(lg, "mode2_custom_trip_hint"), size=13, color=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.OutlinedButton(
+                            shell(lg, "btn_mode2_request_custom_trip"),
+                            on_click=lambda _: self.on_open_custom_request(),
+                        ),
+                    ]
+                )
             self.selection_container.controls.extend(
                 header_rows
                 + [
                     ft.Container(
                         padding=ft.padding.only(top=8),
                         content=ft.Column(
-                            [
-                                ft.Text(shell(lg, "preparation_assisted_title"), weight=ft.FontWeight.W_600),
-                                ft.Text(shell(lg, "preparation_assisted_body"), color=ft.Colors.ON_SURFACE_VARIANT),
-                            ],
+                            prep_assisted_children,
                             spacing=6,
                         ),
                     ),
@@ -1147,6 +1207,7 @@ class ReservationSuccessScreen:
         on_continue_to_payment: Callable[[str, int], None],
         on_help: Callable[[], None],
         on_open_settings: Callable[[], None],
+        on_open_custom_request: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
@@ -1156,6 +1217,7 @@ class ReservationSuccessScreen:
         self.on_continue_to_payment = on_continue_to_payment
         self.on_help = on_help
         self.on_open_settings = on_open_settings
+        self.on_open_custom_request = on_open_custom_request
         self.tour_code: str | None = None
         self.order_id: int | None = None
 
@@ -1166,6 +1228,10 @@ class ReservationSuccessScreen:
             on_click=lambda _: self.on_back(self.tour_code or ""),
         )
         self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_custom_trip = ft.TextButton(
+            shell(lg, "nav_custom_trip"),
+            on_click=lambda _: self.on_open_custom_request(),
+        )
         self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
         self._heading = ft.Text(shell(lg, "reservation_confirmed_title"), size=26, weight=ft.FontWeight.BOLD)
         self._intro = ft.Text(shell(lg, "reservation_hold_intro"), color=ft.Colors.ON_SURFACE_VARIANT)
@@ -1193,6 +1259,7 @@ class ReservationSuccessScreen:
         lg = self.language_code
         self.nav_back.text = shell(lg, "back_to_preparation")
         self.nav_help.text = shell(lg, "btn_help")
+        self.nav_custom_trip.text = shell(lg, "nav_custom_trip")
         self.nav_settings.text = shell(lg, "settings")
         self._heading.value = shell(lg, "reservation_confirmed_title")
         self._intro.value = shell(lg, "reservation_hold_intro")
@@ -1203,7 +1270,7 @@ class ReservationSuccessScreen:
     def build(self) -> ft.Control:
         return scrollable_page(
             ft.Row(
-                [self.nav_back, self.nav_help, self.nav_settings],
+                [self.nav_back, self.nav_help, self.nav_custom_trip, self.nav_settings],
                 alignment=ft.MainAxisAlignment.START,
                 wrap=True,
             ),
@@ -1315,6 +1382,7 @@ class RfqBridgeExecutionScreen:
         on_continue_to_payment: Callable[[str, int], None],
         on_help: Callable[[], None],
         on_open_settings: Callable[[], None],
+        on_open_custom_request: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
@@ -1324,6 +1392,7 @@ class RfqBridgeExecutionScreen:
         self.on_continue_to_payment = on_continue_to_payment
         self.on_help = on_help
         self.on_open_settings = on_open_settings
+        self.on_open_custom_request = on_open_custom_request
         self.request_id: int | None = None
         self._bridge_prep: MiniAppBridgeExecutionPreparationResponse | None = None
         self._tour_code: str | None = None
@@ -1337,6 +1406,10 @@ class RfqBridgeExecutionScreen:
             on_click=lambda _: self.on_back(),
         )
         self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_custom_trip = ft.TextButton(
+            shell(lg, "nav_custom_trip"),
+            on_click=lambda _: self.on_open_custom_request(),
+        )
         self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
         self._title = ft.Text(shell(lg, "rfq_bridge_screen_title"), size=24, weight=ft.FontWeight.BOLD)
         self._intro = ft.Text(shell(lg, "rfq_bridge_intro"), size=13, color=ft.Colors.ON_SURFACE_VARIANT)
@@ -1374,6 +1447,7 @@ class RfqBridgeExecutionScreen:
         lg = self.language_code
         self.nav_back.text = shell(lg, "back")
         self.nav_help.text = shell(lg, "btn_help")
+        self.nav_custom_trip.text = shell(lg, "nav_custom_trip")
         self.nav_settings.text = shell(lg, "settings")
         self._title.value = shell(lg, "rfq_bridge_screen_title")
         self._intro.value = shell(lg, "rfq_bridge_intro")
@@ -1390,7 +1464,7 @@ class RfqBridgeExecutionScreen:
     def build(self) -> ft.Control:
         return scrollable_page(
             ft.Row(
-                [self.nav_back, self.nav_help, self.nav_settings],
+                [self.nav_back, self.nav_help, self.nav_custom_trip, self.nav_settings],
                 alignment=ft.MainAxisAlignment.START,
                 wrap=True,
             ),
@@ -1839,6 +1913,7 @@ class PaymentEntryScreen:
         on_help: Callable[[], None],
         on_open_settings: Callable[[], None],
         on_open_bookings: Callable[[], None],
+        on_open_custom_request: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
@@ -1848,6 +1923,7 @@ class PaymentEntryScreen:
         self.on_help = on_help
         self.on_open_settings = on_open_settings
         self.on_open_bookings = on_open_bookings
+        self.on_open_custom_request = on_open_custom_request
         self.tour_code: str | None = None
         self.order_id: int | None = None
         self._last_entry: PaymentEntryRead | None = None
@@ -1859,6 +1935,10 @@ class PaymentEntryScreen:
             on_click=lambda _: self.on_back(self.tour_code or ""),
         )
         self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_custom_trip = ft.TextButton(
+            shell(lg, "nav_custom_trip"),
+            on_click=lambda _: self.on_open_custom_request(),
+        )
         self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
         self._heading = ft.Text(shell(lg, "payment_title"), size=26, weight=ft.FontWeight.BOLD)
         self._intro = ft.Text(shell(lg, "payment_intro"), color=ft.Colors.ON_SURFACE_VARIANT)
@@ -1898,6 +1978,7 @@ class PaymentEntryScreen:
         lg = self.language_code
         self.nav_back.text = shell(lg, "back_to_preparation")
         self.nav_help.text = shell(lg, "btn_help")
+        self.nav_custom_trip.text = shell(lg, "nav_custom_trip")
         self.nav_settings.text = shell(lg, "settings")
         self._heading.value = shell(lg, "payment_title")
         self._intro.value = shell(lg, "payment_intro")
@@ -1911,7 +1992,7 @@ class PaymentEntryScreen:
     def build(self) -> ft.Control:
         return scrollable_page(
             ft.Row(
-                [self.nav_back, self.nav_help, self.nav_settings],
+                [self.nav_back, self.nav_help, self.nav_custom_trip, self.nav_settings],
                 alignment=ft.MainAxisAlignment.START,
                 wrap=True,
             ),
@@ -2143,6 +2224,7 @@ class MyBookingsScreen:
         on_open_booking: Callable[[int], None],
         on_help: Callable[[], None],
         on_open_settings: Callable[[], None],
+        on_open_custom_request: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
@@ -2152,10 +2234,15 @@ class MyBookingsScreen:
         self.on_open_booking = on_open_booking
         self.on_help = on_help
         self.on_open_settings = on_open_settings
+        self.on_open_custom_request = on_open_custom_request
 
         lg = language_code
         self.nav_back = ft.TextButton(shell(lg, "back_to_catalog"), on_click=lambda _: self.on_back_catalog())
         self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_custom_trip = ft.TextButton(
+            shell(lg, "nav_custom_trip"),
+            on_click=lambda _: self.on_open_custom_request(),
+        )
         self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
         self.page_title = ft.Text(shell(lg, "my_bookings_title"), size=26, weight=ft.FontWeight.BOLD)
         self.page_subtitle = ft.Text(
@@ -2191,6 +2278,7 @@ class MyBookingsScreen:
         lg = self.language_code
         self.nav_back.text = shell(lg, "back_to_catalog")
         self.nav_help.text = shell(lg, "btn_help")
+        self.nav_custom_trip.text = shell(lg, "nav_custom_trip")
         self.nav_settings.text = shell(lg, "settings")
         self.page_title.value = shell(lg, "my_bookings_title")
         self.page_subtitle.value = shell(lg, "my_bookings_subtitle")
@@ -2203,7 +2291,7 @@ class MyBookingsScreen:
     def build(self) -> ft.Control:
         return scrollable_page(
             ft.Row(
-                [self.nav_back, self.nav_help, self.nav_settings],
+                [self.nav_back, self.nav_help, self.nav_custom_trip, self.nav_settings],
                 alignment=ft.MainAxisAlignment.START,
                 wrap=True,
             ),
@@ -2371,6 +2459,7 @@ class BookingDetailScreen:
         on_pay_now: Callable[[str, int], None],
         on_help: Callable[[], None],
         on_open_settings: Callable[[], None],
+        on_open_custom_request: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
@@ -2381,6 +2470,7 @@ class BookingDetailScreen:
         self.on_pay_now = on_pay_now
         self.on_help = on_help
         self.on_open_settings = on_open_settings
+        self.on_open_custom_request = on_open_custom_request
         self.order_id: int | None = None
         self._last_detail: MiniAppBookingDetailRead | None = None
 
@@ -2390,6 +2480,10 @@ class BookingDetailScreen:
             on_click=lambda _: self.on_back_to_bookings(),
         )
         self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_custom_trip = ft.TextButton(
+            shell(lg, "nav_custom_trip"),
+            on_click=lambda _: self.on_open_custom_request(),
+        )
         self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
         self.page_title = ft.Text(shell(lg, "booking_details_title"), size=22, weight=ft.FontWeight.BOLD)
         self.loading_row = ft.Row(
@@ -2421,6 +2515,7 @@ class BookingDetailScreen:
         lg = self.language_code
         self.nav_back_bookings.text = shell(lg, "cta_back_to_bookings")
         self.nav_help.text = shell(lg, "btn_help")
+        self.nav_custom_trip.text = shell(lg, "nav_custom_trip")
         self.nav_settings.text = shell(lg, "settings")
         self.page_title.value = shell(lg, "booking_details_title")
         if self.loading_row.controls:
@@ -2431,7 +2526,7 @@ class BookingDetailScreen:
     def build(self) -> ft.Control:
         return scrollable_page(
             ft.Row(
-                [self.nav_back_bookings, self.nav_help, self.nav_settings],
+                [self.nav_back_bookings, self.nav_help, self.nav_custom_trip, self.nav_settings],
                 alignment=ft.MainAxisAlignment.START,
                 wrap=True,
             ),
@@ -2613,6 +2708,7 @@ class MyRequestsListScreen:
         on_open_detail: Callable[[int], None],
         on_help: Callable[[], None],
         on_open_settings: Callable[[], None],
+        on_open_custom_request: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
@@ -2622,6 +2718,7 @@ class MyRequestsListScreen:
         self.on_open_detail = on_open_detail
         self.on_help = on_help
         self.on_open_settings = on_open_settings
+        self.on_open_custom_request = on_open_custom_request
         lg = language_code
         self.nav_back = ft.TextButton(
             shell(lg, "back_to_catalog"),
@@ -2629,6 +2726,10 @@ class MyRequestsListScreen:
             on_click=lambda _: self.on_back_catalog(),
         )
         self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_custom_trip = ft.TextButton(
+            shell(lg, "nav_custom_trip"),
+            on_click=lambda _: self.on_open_custom_request(),
+        )
         self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
         self._title = ft.Text(shell(lg, "my_requests_title"), size=24, weight=ft.FontWeight.BOLD)
         self._subtitle = ft.Text(shell(lg, "my_requests_subtitle"), size=13, color=ft.Colors.ON_SURFACE_VARIANT)
@@ -2647,6 +2748,7 @@ class MyRequestsListScreen:
         lg = self.language_code
         self.nav_back.text = shell(lg, "back_to_catalog")
         self.nav_help.text = shell(lg, "btn_help")
+        self.nav_custom_trip.text = shell(lg, "nav_custom_trip")
         self.nav_settings.text = shell(lg, "settings")
         self._title.value = shell(lg, "my_requests_title")
         self._subtitle.value = shell(lg, "my_requests_subtitle")
@@ -2656,7 +2758,7 @@ class MyRequestsListScreen:
     def build(self) -> ft.Control:
         return scrollable_page(
             ft.Row(
-                [self.nav_back, self.nav_help, self.nav_settings],
+                [self.nav_back, self.nav_help, self.nav_custom_trip, self.nav_settings],
                 alignment=ft.MainAxisAlignment.START,
                 wrap=True,
             ),
@@ -2749,6 +2851,7 @@ class MyRequestDetailScreen:
         on_open_booking: Callable[[int], None],
         on_help: Callable[[], None],
         on_open_settings: Callable[[], None],
+        on_open_custom_request: Callable[[], None],
     ) -> None:
         self.page = page
         self.api_client = api_client
@@ -2760,6 +2863,7 @@ class MyRequestDetailScreen:
         self.on_open_booking = on_open_booking
         self.on_help = on_help
         self.on_open_settings = on_open_settings
+        self.on_open_custom_request = on_open_custom_request
         self.request_id: int | None = None
         self._payment_tour_code: str | None = None
         self._cta_kind: DetailPrimaryCtaKind = DetailPrimaryCtaKind.NONE
@@ -2772,6 +2876,10 @@ class MyRequestDetailScreen:
             on_click=lambda _: self.on_back_list(),
         )
         self.nav_help = ft.TextButton(shell(lg, "btn_help"), on_click=lambda _: self.on_help())
+        self.nav_custom_trip = ft.TextButton(
+            shell(lg, "nav_custom_trip"),
+            on_click=lambda _: self.on_open_custom_request(),
+        )
         self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
         self.loading_row = ft.Row(
             [
@@ -2792,6 +2900,7 @@ class MyRequestDetailScreen:
         lg = self.language_code
         self.nav_back.text = shell(lg, "my_requests_detail_back")
         self.nav_help.text = shell(lg, "btn_help")
+        self.nav_custom_trip.text = shell(lg, "nav_custom_trip")
         self.nav_settings.text = shell(lg, "settings")
         if self.loading_row.controls:
             self.loading_row.controls[1].value = shell(lg, "my_requests_loading")
@@ -2799,7 +2908,7 @@ class MyRequestDetailScreen:
     def build(self) -> ft.Control:
         return scrollable_page(
             ft.Row(
-                [self.nav_back, self.nav_help, self.nav_settings],
+                [self.nav_back, self.nav_help, self.nav_custom_trip, self.nav_settings],
                 alignment=ft.MainAxisAlignment.START,
                 wrap=True,
             ),
@@ -3245,6 +3354,12 @@ class HelpScreen:
         self.body_column = ft.Column(spacing=12)
         lg = language_code
         self.nav_back = ft.TextButton(shell(lg, "back"), icon=ft.Icons.ARROW_BACK, on_click=lambda _: self.on_close())
+        self.nav_custom_trip: ft.TextButton | None = None
+        if on_open_custom_request is not None:
+            self.nav_custom_trip = ft.TextButton(
+                shell(lg, "nav_custom_trip"),
+                on_click=lambda _: on_open_custom_request(),
+            )
         self.page_title = ft.Text(shell(lg, "help_title"), size=26, weight=ft.FontWeight.BOLD)
         self.intro_text = ft.Text(
             shell(lg, "help_return_note"),
@@ -3255,12 +3370,17 @@ class HelpScreen:
     def sync_shell_labels(self) -> None:
         lg = self.language_code
         self.nav_back.text = shell(lg, "back")
+        if self.nav_custom_trip is not None:
+            self.nav_custom_trip.text = shell(lg, "nav_custom_trip")
         self.page_title.value = shell(lg, "help_title")
         self.intro_text.value = shell(lg, "help_return_note")
 
     def build(self) -> ft.Control:
+        nav_row: list[ft.Control] = [self.nav_back]
+        if self.nav_custom_trip is not None:
+            nav_row.append(self.nav_custom_trip)
         return scrollable_page(
-            ft.Row([self.nav_back], alignment=ft.MainAxisAlignment.START),
+            ft.Row(nav_row, alignment=ft.MainAxisAlignment.START, wrap=True),
             self.page_title,
             self.intro_text,
             self.body_column,
@@ -3334,6 +3454,7 @@ class SettingsScreen:
         on_language_applied: Callable[[str], None],
         on_close: Callable[[], None],
         language_code: str,
+        on_open_custom_request: Callable[[], None] | None = None,
     ) -> None:
         self.page = page
         self.api_client = api_client
@@ -3343,6 +3464,12 @@ class SettingsScreen:
         self.language_code = language_code
         lg = language_code
         self.nav_back = ft.TextButton(shell(lg, "back"), icon=ft.Icons.ARROW_BACK, on_click=lambda _: self.on_close())
+        self.nav_custom_trip: ft.TextButton | None = None
+        if on_open_custom_request is not None:
+            self.nav_custom_trip = ft.TextButton(
+                shell(lg, "nav_custom_trip"),
+                on_click=lambda _: on_open_custom_request(),
+            )
         self.page_title = ft.Text(shell(lg, "settings_title"), size=26, weight=ft.FontWeight.BOLD)
         self.intro_text = ft.Text(shell(lg, "settings_intro"), color=ft.Colors.ON_SURFACE_VARIANT)
         self.language_dropdown = ft.Dropdown(
@@ -3355,8 +3482,11 @@ class SettingsScreen:
         )
 
     def build(self) -> ft.Control:
+        nav_row: list[ft.Control] = [self.nav_back]
+        if self.nav_custom_trip is not None:
+            nav_row.append(self.nav_custom_trip)
         return scrollable_page(
-            ft.Row([self.nav_back], alignment=ft.MainAxisAlignment.START),
+            ft.Row(nav_row, alignment=ft.MainAxisAlignment.START, wrap=True),
             self.page_title,
             self.intro_text,
             self.language_dropdown,
@@ -3368,6 +3498,8 @@ class SettingsScreen:
     def sync_shell_labels(self) -> None:
         lg = self.language_code
         self.nav_back.text = shell(lg, "back")
+        if self.nav_custom_trip is not None:
+            self.nav_custom_trip.text = shell(lg, "nav_custom_trip")
         self.page_title.value = shell(lg, "settings_title")
         self.intro_text.value = shell(lg, "settings_intro")
         self.language_dropdown.label = shell(lg, "label_display_language")
@@ -3443,6 +3575,7 @@ class MiniAppShell:
             on_my_requests=self.open_my_requests,
             on_open_settings=self.open_settings,
             on_help=self.open_help,
+            on_open_custom_request=self.open_custom_request_from_current_route,
         )
         self.my_bookings_screen = MyBookingsScreen(
             page,
@@ -3453,6 +3586,7 @@ class MiniAppShell:
             on_open_booking=self.open_booking_detail,
             on_help=self.open_help,
             on_open_settings=self.open_settings,
+            on_open_custom_request=self.open_custom_request_from_current_route,
         )
         self.my_requests_list_screen = MyRequestsListScreen(
             page,
@@ -3463,6 +3597,7 @@ class MiniAppShell:
             on_open_detail=self.open_my_request_detail,
             on_help=self.open_help,
             on_open_settings=self.open_settings,
+            on_open_custom_request=self.open_custom_request_from_current_route,
         )
         self.my_request_detail_screen = MyRequestDetailScreen(
             page,
@@ -3475,6 +3610,7 @@ class MiniAppShell:
             on_open_booking=self.open_booking_detail,
             on_help=self.open_help,
             on_open_settings=self.open_settings,
+            on_open_custom_request=self.open_custom_request_from_current_route,
         )
         self.booking_detail_screen = BookingDetailScreen(
             page,
@@ -3486,6 +3622,7 @@ class MiniAppShell:
             on_pay_now=self.open_payment_entry,
             on_help=self.open_help,
             on_open_settings=self.open_settings,
+            on_open_custom_request=self.open_custom_request_from_current_route,
         )
         self.tour_detail_screen = TourDetailScreen(
             page,
@@ -3496,6 +3633,7 @@ class MiniAppShell:
             on_prepare=self.open_tour_preparation,
             on_help=self.open_help,
             on_open_settings=self.open_settings,
+            on_open_custom_request=self.open_custom_request_from_tour_detail,
         )
         self.reservation_preparation_screen = ReservationPreparationScreen(
             page,
@@ -3506,6 +3644,7 @@ class MiniAppShell:
             on_reserved=self.open_reservation_success,
             on_help=self.open_help,
             on_open_settings=self.open_settings,
+            on_open_custom_request=self.open_custom_request_from_current_route,
         )
         self.reservation_success_screen = ReservationSuccessScreen(
             page,
@@ -3516,6 +3655,7 @@ class MiniAppShell:
             on_continue_to_payment=self.open_payment_entry,
             on_help=self.open_help,
             on_open_settings=self.open_settings,
+            on_open_custom_request=self.open_custom_request_from_current_route,
         )
         self.payment_entry_screen = PaymentEntryScreen(
             page,
@@ -3526,6 +3666,7 @@ class MiniAppShell:
             on_help=self.open_help,
             on_open_settings=self.open_settings,
             on_open_bookings=self.open_bookings,
+            on_open_custom_request=self.open_custom_request_from_current_route,
         )
         self._custom_request_return_route: str = "/"
         self.help_screen = HelpScreen(
@@ -3544,6 +3685,7 @@ class MiniAppShell:
             on_continue_to_payment=self.open_payment_entry,
             on_help=self.open_help,
             on_open_settings=self.open_settings,
+            on_open_custom_request=self.open_custom_request_from_current_route,
         )
         self.custom_request_screen = CustomRequestScreen(
             page,
@@ -3560,6 +3702,7 @@ class MiniAppShell:
             on_language_applied=self.apply_language,
             on_close=self.close_modal,
             language_code=settings.mini_app_default_language,
+            on_open_custom_request=self.open_custom_request_from_current_route,
         )
 
     def apply_language(self, code: str) -> None:
@@ -3610,6 +3753,17 @@ class MiniAppShell:
 
     def open_custom_request_from_help(self) -> None:
         self._custom_request_return_route = self.page.route or "/help"
+        self.page.go("/custom-request")
+
+    def open_custom_request_from_tour_detail(self) -> None:
+        code = self.tour_detail_screen.current_tour_code
+        self._custom_request_return_route = (
+            f"{self.TOUR_ROUTE_PREFIX}{code}" if code else "/"
+        )
+        self.page.go("/custom-request")
+
+    def open_custom_request_from_current_route(self) -> None:
+        self._custom_request_return_route = (self.page.route or "/").strip() or "/"
         self.page.go("/custom-request")
 
     def close_custom_request(self) -> None:
