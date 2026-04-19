@@ -49,6 +49,10 @@ from mini_app.custom_request_context import (
     prefill_from_reservation_preparation,
     prefill_from_tour_detail,
 )
+from mini_app.custom_request_validation import (
+    message_for_custom_request_422,
+    validate_custom_request_form_local,
+)
 from mini_app.presentation_notes import booking_detail_context_note
 from mini_app.rfq_bridge_logic import rfq_bridge_continue_to_payment_allowed
 from mini_app.rfq_hub_cta import (
@@ -3550,21 +3554,31 @@ class CustomRequestScreen:
     async def _submit_async(self) -> None:
         if self._submit_in_progress:
             return
-        self._submit_in_progress = True
         lg = self.language_code
+        route_snapshot = (self.route_notes.value or "").strip()
+        excerpt = route_snapshot[:280] + ("…" if len(route_snapshot) > 280 else "")
+        end_raw = (self.end_date.value or "").strip()
+        start_raw = (self.start_date.value or "").strip()
+        gs_raw = (self.group_size.value or "").strip()
+        local_key = validate_custom_request_form_local(
+            travel_date_start=start_raw,
+            travel_date_end=end_raw,
+            route_notes=self.route_notes.value or "",
+            group_size_raw=self.group_size.value or "",
+        )
+        if local_key is not None:
+            self.page.snack_bar = ft.SnackBar(content=ft.Text(shell(lg, local_key)), action="OK")
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
+        self._submit_in_progress = True
         self.submit_btn.disabled = True
         self.submit_btn.text = shell(lg, "custom_request_submit_sending")
         self.page.update()
         type_label = self._request_type_label()
-        route_snapshot = (self.route_notes.value or "").strip()
-        excerpt = route_snapshot[:280] + ("…" if len(route_snapshot) > 280 else "")
         submitted_ok = False
         try:
-            end_raw = (self.end_date.value or "").strip()
             route = route_snapshot
-            if len(route) < 3:
-                raise ValueError("route")
-            start_raw = (self.start_date.value or "").strip()
             body: dict[str, object] = {
                 "telegram_user_id": self._dev_telegram_user_id,
                 "request_type": self.request_type.value or "group_trip",
@@ -3573,15 +3587,17 @@ class CustomRequestScreen:
             }
             if end_raw:
                 body["travel_date_end"] = end_raw
-            gs = (self.group_size.value or "").strip()
-            if gs:
-                body["group_size"] = int(gs)
+            if gs_raw:
+                body["group_size"] = int(gs_raw)
             sp = (self.special.value or "").strip()
             if sp:
                 body["special_conditions"] = sp
             r = await self.api_client.post_custom_request(body=body)
         except httpx.HTTPStatusError as exc:
-            msg = CatalogScreen._http_error_message(exc, default=shell(lg, "custom_request_error"))
+            if exc.response is not None and exc.response.status_code == 422:
+                msg = message_for_custom_request_422(exc, lg)
+            else:
+                msg = CatalogScreen._http_error_message(exc, default=shell(lg, "custom_request_error"))
             self.page.snack_bar = ft.SnackBar(content=ft.Text(msg), action="OK")
             self.page.snack_bar.open = True
         except Exception:
