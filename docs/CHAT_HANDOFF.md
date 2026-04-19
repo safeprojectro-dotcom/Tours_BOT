@@ -21,6 +21,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Mode 3 supplier side:** **X1**, **X2** completed.
 - **Admin UI operational surfaces:** **A1** completed (read-only internal surface improvements over existing admin custom-request APIs).
 - **Hotfixes / production fixes:** supplier-offer `/start` payload/title hotfix; request-detail empty-control crash hotfix; production schema drift fix for `custom_request_booking_bridges`; custom request submit success-state hotfix; custom request **422** validation visibility hotfix.
+- **Y2 design gate:** supplier Telegram operating model documented in **`docs/SUPPLIER_TELEGRAM_OPERATING_MODEL_Y2.md`** (design-only; no semantic/runtime changes).
 
 ### Live-verified and compatibility baseline
 - **Layer A remains source of truth** for booking/payment.
