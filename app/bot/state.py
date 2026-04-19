@@ -17,3 +17,13 @@ class CustomRequestState(StatesGroup):
     route_notes = State()
     group_size = State()
     special_conditions = State()
+
+
+class SupplierOnboardingState(StatesGroup):
+    """Y2.1: supplier Telegram onboarding (narrow v1 identity/access gate)."""
+
+    entering_display_name = State()
+    entering_contact_info = State()
+    entering_region = State()
+    choosing_service_composition = State()
+    entering_fleet_summary = State()

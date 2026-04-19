@@ -30,6 +30,7 @@ from app.schemas.admin import (
     AdminSupplierCreate,
     AdminSupplierCreatedRead,
     AdminSupplierListRead,
+    AdminSupplierOnboardingReject,
     AdminSupplierRead,
     AdminTourTranslationUpsert,
 )
@@ -98,6 +99,7 @@ from app.schemas.supplier_admin import (
 )
 from app.repositories.supplier import SupplierOfferRepository
 from app.services.admin_supplier_write import AdminSupplierDuplicateCodeError, AdminSupplierWriteService
+from app.services.supplier_onboarding_service import SupplierOnboardingNotFoundError, SupplierOnboardingService
 from app.services.admin_tour_write import (
     AdminBoardingPointInUseError,
     AdminBoardingPointNotFoundError,
@@ -858,6 +860,33 @@ def get_admin_suppliers(
         items=[AdminSupplierRead.model_validate(r) for r in rows],
         total_returned=len(rows),
     )
+
+
+@router.post("/suppliers/{supplier_id}/onboarding/approve", response_model=AdminSupplierRead)
+def post_admin_supplier_onboarding_approve(
+    supplier_id: int,
+    db: Session = Depends(get_db),
+) -> AdminSupplierRead:
+    try:
+        row = SupplierOnboardingService().admin_approve(db, supplier_id=supplier_id)
+    except SupplierOnboardingNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found.") from None
+    db.commit()
+    return AdminSupplierRead.model_validate(row)
+
+
+@router.post("/suppliers/{supplier_id}/onboarding/reject", response_model=AdminSupplierRead)
+def post_admin_supplier_onboarding_reject(
+    supplier_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminSupplierOnboardingReject = Body(...),
+) -> AdminSupplierRead:
+    try:
+        row = SupplierOnboardingService().admin_reject(db, supplier_id=supplier_id, reason=payload.reason)
+    except SupplierOnboardingNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found.") from None
+    db.commit()
+    return AdminSupplierRead.model_validate(row)
 
 
 @router.get("/suppliers/{supplier_id}", response_model=AdminSupplierRead)

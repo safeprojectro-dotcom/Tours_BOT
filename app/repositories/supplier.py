@@ -16,6 +16,10 @@ class SupplierRepository(SQLAlchemyRepository[Supplier]):
         stmt = select(Supplier).where(Supplier.code == code).limit(1)
         return session.scalars(stmt).first()
 
+    def find_by_primary_telegram_user_id(self, session: Session, *, telegram_user_id: int) -> Supplier | None:
+        stmt = select(Supplier).where(Supplier.primary_telegram_user_id == telegram_user_id).limit(1)
+        return session.scalars(stmt).first()
+
 
 class SupplierApiCredentialRepository:
     def find_active_by_token_hash(

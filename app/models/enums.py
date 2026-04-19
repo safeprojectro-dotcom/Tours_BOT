@@ -84,6 +84,14 @@ class SupplierOfferLifecycle(StrEnum):
     PUBLISHED = "published"
 
 
+class SupplierOnboardingStatus(StrEnum):
+    """Y2.1 supplier Telegram onboarding review state (identity/access gate)."""
+
+    PENDING_REVIEW = "pending_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
 class CustomMarketplaceRequestType(StrEnum):
     """Layer C: structured custom trip / group RFQ categories (Track 4)."""
 

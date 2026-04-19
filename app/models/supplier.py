@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.models.enums import (
+    SupplierOnboardingStatus,
     SupplierOfferLifecycle,
     SupplierOfferPaymentMode,
     SupplierServiceComposition,
@@ -26,6 +27,22 @@ class Supplier(TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    primary_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, nullable=True, index=True)
+    onboarding_status: Mapped[SupplierOnboardingStatus] = mapped_column(
+        sqlalchemy_enum(SupplierOnboardingStatus, name="supplier_onboarding_status"),
+        nullable=False,
+        default=SupplierOnboardingStatus.APPROVED,
+    )
+    onboarding_contact_info: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    onboarding_region: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    onboarding_service_composition: Mapped[SupplierServiceComposition | None] = mapped_column(
+        sqlalchemy_enum(SupplierServiceComposition, name="supplier_service_composition"),
+        nullable=True,
+    )
+    onboarding_fleet_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    onboarding_rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    onboarding_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    onboarding_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     api_credentials: Mapped[list["SupplierApiCredential"]] = relationship(
         back_populates="supplier",

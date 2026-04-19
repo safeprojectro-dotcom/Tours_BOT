@@ -9,7 +9,15 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourSalesMode, TourStatus
+from app.models.enums import (
+    BookingStatus,
+    CancellationStatus,
+    PaymentStatus,
+    SupplierOnboardingStatus,
+    SupplierServiceComposition,
+    TourSalesMode,
+    TourStatus,
+)
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
 
 
@@ -614,6 +622,15 @@ class AdminSupplierRead(BaseModel):
     code: str
     display_name: str
     is_active: bool
+    primary_telegram_user_id: int | None = None
+    onboarding_status: SupplierOnboardingStatus
+    onboarding_contact_info: str | None = None
+    onboarding_region: str | None = None
+    onboarding_service_composition: SupplierServiceComposition | None = None
+    onboarding_fleet_summary: str | None = None
+    onboarding_rejection_reason: str | None = None
+    onboarding_submitted_at: datetime | None = None
+    onboarding_reviewed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -644,3 +661,17 @@ class AdminSupplierCreatedRead(BaseModel):
 class AdminSupplierListRead(BaseModel):
     items: list[AdminSupplierRead]
     total_returned: int
+
+
+class AdminSupplierOnboardingReject(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("reason")
+    @classmethod
+    def strip_reason(cls, v: str) -> str:
+        s = v.strip()
+        if not s:
+            raise ValueError("must not be empty or whitespace-only")
+        return s
