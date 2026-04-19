@@ -48,3 +48,8 @@ SUPPLIER_ONBOARDING_CAPABILITY_TRANSPORT_ONLY = "supplier:onboarding:cap:transpo
 SUPPLIER_ONBOARDING_CAPABILITY_TRANSPORT_GUIDE = "supplier:onboarding:cap:transport_guide"
 SUPPLIER_ONBOARDING_CAPABILITY_TRANSPORT_WATER = "supplier:onboarding:cap:transport_water"
 SUPPLIER_ONBOARDING_CAPABILITY_TRANSPORT_GUIDE_WATER = "supplier:onboarding:cap:transport_guide_water"
+
+SUPPLIER_OFFER_SALES_MODE_CALLBACK_PREFIX = "supplier:offer:sales_mode:"
+SUPPLIER_OFFER_PAYMENT_MODE_CALLBACK_PREFIX = "supplier:offer:payment_mode:"
+SUPPLIER_OFFER_SUBMIT_CALLBACK_PREFIX = "supplier:offer:submit:"
+SUPPLIER_OFFER_RESTART_CALLBACK = "supplier:offer:restart"

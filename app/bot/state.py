@@ -27,3 +27,20 @@ class SupplierOnboardingState(StatesGroup):
     entering_region = State()
     choosing_service_composition = State()
     entering_fleet_summary = State()
+
+
+class SupplierOfferIntakeState(StatesGroup):
+    """Y2.2: supplier Telegram offer intake (draft + explicit moderation submit)."""
+
+    entering_title = State()
+    entering_description = State()
+    entering_departure_datetime = State()
+    entering_return_datetime = State()
+    entering_seats_total = State()
+    entering_base_price = State()
+    entering_currency = State()
+    choosing_sales_mode = State()
+    choosing_payment_mode = State()
+    entering_program_text = State()
+    entering_vehicle_or_notes = State()
+    awaiting_submit_action = State()
