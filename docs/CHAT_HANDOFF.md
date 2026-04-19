@@ -3,6 +3,40 @@
 ## Project
 Tours_BOT
 
+## Continuity Sync — UVXWA1 Checkpoint (2026-04-19)
+
+This section is the current continuity anchor for the post-UVXWA1 state. It is documentation synchronization only and does not change code semantics.
+
+### Historical prompt baseline
+- Prompt files from **Track 0** through **Track 5g.5b** are preserved as historical implementation/design trail.
+- These prompt files are **not** a flat active todo list.
+- Do **not** mass-refresh historical prompt files one by one unless there is a narrow, explicit reason.
+- Active continuity should be taken from: **this handoff**, **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`**, and the current active prompt.
+
+### Recently completed checkpoints (accepted truth)
+- **Mode 2 / catalog whole-bus line:** Tracks **5g.4a–5g.4e**, **5g.5**, **5g.5b** completed; Layer A booking/payment paths preserved.
+- **Mode 3 customer:** **U1**, **U2**, **U3** completed.
+- **Mode 3 ops/admin read-side:** **V1**, **V2**, **V3**, **V4** completed.
+- **Mode 3 messaging:** **W1**, **W2**, **W3** completed.
+- **Mode 3 supplier side:** **X1**, **X2** completed.
+- **Admin UI operational surfaces:** **A1** completed (read-only internal surface improvements over existing admin custom-request APIs).
+- **Hotfixes / production fixes:** supplier-offer `/start` payload/title hotfix; request-detail empty-control crash hotfix; production schema drift fix for `custom_request_booking_bridges`; custom request submit success-state hotfix; custom request **422** validation visibility hotfix.
+
+### Live-verified and compatibility baseline
+- **Layer A remains source of truth** for booking/payment.
+- **`TemporaryReservationService`** remains the single hold path.
+- **`PaymentEntryService`** remains the single payment-start path.
+- **Service layer** owns policy/business rules; UI surfaces consume read-side truth and must not duplicate backend rule logic.
+- **Mode 2 != Mode 3** remains explicit and preserved.
+
+### Next safe step (after this sync)
+- **A2 candidate (safe and additive):** admin custom-request operational console usability pass focused on read-side quality only (sorting/filter presets, compact scan cues, manual operator guidance text), with no lifecycle/payment/bridge semantic changes.
+
+### Do-not-reopen items
+- Do not reopen closed tracks for redesign by default (including completed 5g/U/V/W/X/A1 blocks).
+- Do not mix Mode 2 and Mode 3 semantics.
+- Do not alter RFQ/bridge execution semantics or payment-entry/reconciliation semantics without an explicit scoped track.
+
 **Continuity anchor (read this first):** The **live** approved checkpoint is **Phase 7 closed** (**review / closure accepted**; **`docs/PHASE_7_REVIEW.md`**) — **implementation** through **final consolidation** (Steps **1–17** + polish) is **shipped**; **below** expands **Phase 7** surface to date (Steps **1–17** + **final polish**): **group trigger** + **handoff trigger** helpers (Step **2**); **minimal group runtime gating** (Step **3**); **category-aware** short escalation wording (Step **4**); **private CTA** deep-link foundation (Step **5**); **narrow private `/start`** for **`grp_private`** / **`grp_followup`** (Step **6**); **narrow runtime handoff persistence** for **`/start grp_followup`** (Step **7**); **focused runtime/bot-flow tests** for that chain (Step **8**); **narrow admin read-side visibility** for **`group_followup_start`** (Step **9** — **`is_group_followup`**, **`source_label`**); **narrow admin assignment** for **`group_followup_start`** only (Step **10** — **`POST /admin/handoffs/{handoff_id}/assign-operator`**; same narrow rules as Step **21** **`assign`**; general **`POST .../assign`** **unchanged**); **read-side work-state visibility** for **assigned** **`group_followup_start`** (Step **11** — **`is_assigned_group_followup`**, **`group_followup_work_label`**; **read-only**); **narrow take-in-work** for **assigned** **`group_followup_start`** (Step **12** — **`POST /admin/handoffs/{handoff_id}/mark-in-work`**; **`open` → `in_review`**; **`in_review`** idempotent; **`closed`** rejected; **no** new DB column); **narrow resolve/close** for **`group_followup_start`** (Steps **13–14** — **`POST /admin/handoffs/{handoff_id}/resolve-group-followup`**; **`in_review` → `closed`**; **`closed`** idempotent; **`open`** rejected; **no** replacement for general Step **20** **`close`**); **tiny resolved-state read refinement** (Steps **13–14** — derived **`group_followup_resolution_label`** on admin handoff **list** / **detail** / order-detail **`handoffs`** for **closed** **`group_followup_start`** only); **post-resolution queue visibility** (Step **15** — derived **`group_followup_queue_state`** — **`awaiting_assignment`**, **`assigned_open`**, **`in_work`**, **`resolved`**, or **`null`** for non-**`group_followup_start`**; optional narrow **`GET /admin/handoffs?group_followup_queue=`** filter — **read-side only**); **narrow private resolved-followup confirmation** (Step **16** — **`HandoffRepository.find_latest_by_user_reason`**, **`HandoffEntryService.should_show_group_followup_resolved_confirmation`**, **`start_grp_followup_resolved_intro`** when **`/start grp_followup`** and latest **`group_followup_start`** is **`closed`** with **no** **open** row; **no** operator chat, **no** notification delivery; **`_persist_group_followup_handoff`** unchanged); **narrow private followup history/readiness signal** (Step **17** — **`HandoffEntryService.group_followup_private_intro_key`** maps **open** / **assigned-open** / **`in_review`** / **resolved** / **none** to short message keys **`start_grp_followup_readiness_*`**, **`start_grp_followup_resolved_intro`**, or **`start_grp_followup_intro`**; **read-only**; **`grp_private`** unchanged; **no** write semantics change); **final followup/operator consolidation** — unified short private **`grp_followup`** wording + **`/contact`** / **`/human`** CTAs; admin **`group_followup_work_label`**, **`group_followup_resolution_label`** aligned to the same **queued / assigned / in progress / closed** mental model as **`group_followup_queue_state`** (**read-side string changes only**); tests **`test_group_followup_phase7_consolidation`**, chain tests updated; **no** new workflow mutations, **no** API shape changes, **no** public/Mini App churn. **No** automatic operator assignment **from the Telegram `grp_*` bot paths**, **no** booking/payment initiation from Phase **7** **`grp_*`** paths. **Phase 7.1 — tour sales mode** (**separate** from closed Phase **7** **`grp_followup_*`**): **Steps 1–5** + **Tracks 5g.4a–5g.4d** (**catalog Mode 2** virgin self-serve on **Layer A**) are **completed** — **`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**; **narrow** operator-assisted **full-bus** handoff (**Step 5**) remains where catalog self-serve is **not** allowed; **Railway production** was **stabilized** after **`tours.sales_mode`** DDL was applied — see **Production stabilization after Phase 7.1 deploy** below (**feature work** vs **schema-drift incident** are distinct). **Next:** **Step 6+** (product/design **beyond** closed **5g.4**) — **Next Safe Step**. **Do not** reopen **Phase 7** **`grp_followup_*`** micro-slices by default. **Deploy-critical:** **Phase 7.1** app code **must not** be deployed to a target environment unless the **`tours.sales_mode`** migration (**Alembic `20260416_06`**) is applied there as well — run **`python -m alembic upgrade head`** (or equivalent) **before** or **with** deploy; details **`COMMIT_PUSH_DEPLOY.md`**. Design reference: **`docs/TOUR_SALES_MODE_DESIGN.md`**. **Phase 6** / **`docs/PHASE_6_REVIEW.md`** — historical admin closure. **Not** **Phase 6 / Step 31**, **not** **admin payment** mutation. **Phase 5** — do **not** resume old **Step 4–5** narratives. Use **`Next Safe Step`** + **Current Status** + **`docs/PHASE_7_REVIEW.md`**.
 
 ## Current Status
@@ -1142,7 +1176,8 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 ## Next Safe Step
 
 ### Next safe step
-**Phase 7.1 / Sales Mode / Step 6+** — **product/design for scope beyond** the **closed** **Tracks 5g.4a–5g.4d** catalog Mode 2 path (**`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**). **Do not** reopen **5g.4** unless fixing a **regression**.
+**UVXWA1 post-sync default:** **A2 — admin custom-request operational usability pass (read-side/UI only)** using existing V1–V4/W3 fields.  
+**Secondary product track (separate):** **Phase 7.1 / Sales Mode / Step 6+** for scope beyond closed **5g.4**. **Do not** reopen **5g.4** unless fixing a regression.
 
 **Goal:**
 - Prioritize **charter pricing**, **supplier-defined** catalog policy, **private-bot** charter UX, **localization**, or **E2E** tests **only** with explicit scope — **after** accepting that **virgin catalog whole-bus** self-serve + **Layer A** payment-entry + **My bookings** visibility are **already shipped** for Mode 2.
@@ -1173,7 +1208,8 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 **Plan:** `docs/IMPLEMENTATION_PLAN.md` — Phase 7 **closed**; **active sub-track:** **Phase 7.1 — tour sales mode** (**Steps 1–5** + **5g.4a–5g.4d** done; **Step 6+** forward). **V2 supplier marketplace:** `docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md` — **Track 0** through **Track 5e** complete for scoped slices (request marketplace + RFQ bridge execution + supersede/cancel lifecycle); **next V2 marketplace slices** (product-prioritized): customer **multi-quote** UX, notifications, bot deep links — see that plan’s status table.
 
 ## Recommended Next Prompt
-Continue **Phase 7.1 / Sales Mode / Step 6+** (see **Next Safe Step**): scoped **product/design** **beyond** **`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`** — **no** reopening **5g.4** / **Layer A** payment semantics **without** a regression. **Phase 7** remains **closed** — **`docs/PHASE_7_REVIEW.md`**; **do not** reopen **Phase 7** **`grp_followup_*`** by default. Sources: **`docs/TOUR_SALES_MODE_DESIGN.md`**, **`docs/CHAT_HANDOFF.md`**, **`docs/TECH_SPEC_TOURS_BOT.md`**, **`docs/IMPLEMENTATION_PLAN.md`**, **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`**, **`docs/TESTING_STRATEGY.md`**, **`docs/PHASE_6_REVIEW.md`**, **`docs/PHASE_7_REVIEW.md`**.
+Default continuation prompt: **A2 — admin custom-request operational usability pass (read-side/UI only)**, preserving all booking/payment/RFQ semantics.  
+Separate optional product thread: **Phase 7.1 / Sales Mode / Step 6+** beyond **`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**. **No** reopening **5g.4** / Layer A payment semantics without a regression ticket. **Phase 7** remains closed — **`docs/PHASE_7_REVIEW.md`**; do not reopen **`grp_followup_*`** by default. Sources: **`docs/CHAT_HANDOFF.md`**, **`docs/CHECKPOINT_UVXWA1_SUMMARY.md`**, **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`**, **`docs/TECH_SPEC_TOURS_BOT.md`**.
 
 ---
 

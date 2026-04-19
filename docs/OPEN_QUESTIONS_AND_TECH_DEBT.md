@@ -7,6 +7,33 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ---
 
+## Checkpoint Sync — UVXWA1 (2026-04-19)
+
+Documentation synchronization checkpoint after completion of Tracks **5g.4a–5g.4e**, **5g.5**, **5g.5b**, **U1/U2/U3**, **V1–V4**, **W1–W3**, **X1/X2**, **A1**, plus key hotfixes and production fixes.
+
+### Resolved and accepted (not open questions)
+- **Mode 2 catalog whole-bus line** (5g.4a–5g.4e, 5g.5, 5g.5b) is implemented and accepted for current scope.
+- **Mode 3 customer, ops/admin read-side, messaging, supplier clarity** blocks (U/V/W/X) are implemented and accepted.
+- **A1 admin operational UI surface** is implemented as additive read-only internal UX over existing admin custom-request APIs.
+- **Hotfixes accepted:** supplier-offer `/start` payload/title; request-detail empty-control crash; production schema drift fix for `custom_request_booking_bridges`; custom request submit success-state; custom request **422** validation visibility.
+
+### Compatibility baseline (must remain true)
+- **Layer A** remains booking/payment source of truth.
+- **`TemporaryReservationService`** remains the single hold path.
+- **`PaymentEntryService`** remains the single payment-start path.
+- **UI layers** consume read-side truth and must not duplicate backend business rules.
+- **Mode 2** and **Mode 3** remain separate semantics.
+
+### Still genuinely open / postponed
+- Existing debt items in this file remain open unless explicitly marked closed in their own sections (payment-provider integration, admin payment mutation design gate, FSM storage hardening, notification expansion, etc.).
+- Broader lifecycle/payment/bridge redesign is **postponed** and out of scope for UVXWA1 checkpoint sync.
+- Historical prompt files are retained as implementation trail; they are **not** a mass-update active checklist.
+
+### Next safe step pointer
+- Continue with a narrow **A2** admin operational usability pass (read-side/UI only), without changing RFQ/bridge/payment/booking semantics.
+
+---
+
 ## 1. Reservation expiry status semantics
 
 ### Current decision
