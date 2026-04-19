@@ -3454,6 +3454,7 @@ class CustomRequestScreen:
             shell(lg, "custom_request_submit"),
             on_click=lambda _: self.page.run_task(self._submit_async),
         )
+        self._submit_in_progress = False
 
     def apply_prefill(self, prefill: CustomRequestPrefill | None) -> None:
         """U1: optional hints from a catalog tour the user was viewing (separate Mode 3 request)."""
@@ -3505,7 +3506,8 @@ class CustomRequestScreen:
         self.route_notes.hint_text = shell(lg, "custom_request_field_route_hint")
         self.group_size.label = shell(lg, "custom_request_field_group")
         self.special.label = shell(lg, "custom_request_field_special")
-        self.submit_btn.text = shell(lg, "custom_request_submit")
+        if not self._submit_in_progress:
+            self.submit_btn.text = shell(lg, "custom_request_submit")
         if self._last_prefill is not None:
             self.prefill_banner_label.value = shell(
                 lg,
@@ -3539,13 +3541,24 @@ class CustomRequestScreen:
         }.get(rt, "custom_request_opt_group_trip")
         return shell(lg, key)
 
+    def _release_submit_button(self) -> None:
+        lg = self.language_code
+        self._submit_in_progress = False
+        self.submit_btn.disabled = False
+        self.submit_btn.text = shell(lg, "custom_request_submit")
+
     async def _submit_async(self) -> None:
+        if self._submit_in_progress:
+            return
+        self._submit_in_progress = True
         lg = self.language_code
         self.submit_btn.disabled = True
+        self.submit_btn.text = shell(lg, "custom_request_submit_sending")
         self.page.update()
         type_label = self._request_type_label()
         route_snapshot = (self.route_notes.value or "").strip()
         excerpt = route_snapshot[:280] + ("…" if len(route_snapshot) > 280 else "")
+        submitted_ok = False
         try:
             end_raw = (self.end_date.value or "").strip()
             route = route_snapshot
@@ -3578,13 +3591,17 @@ class CustomRequestScreen:
             )
             self.page.snack_bar.open = True
         else:
+            submitted_ok = True
+            self._reset_form_to_defaults()
             self._show_success_dialog(r.id, request_type_label=type_label, route_excerpt=excerpt or "—")
         finally:
-            self.submit_btn.disabled = False
+            if not submitted_ok:
+                self._release_submit_button()
             self.page.update()
 
     def _dismiss_dialog(self) -> None:
         self.page.dialog = None
+        self._release_submit_button()
         self.page.update()
 
     def _show_success_dialog(self, request_id: int, *, request_type_label: str, route_excerpt: str) -> None:
@@ -3592,15 +3609,26 @@ class CustomRequestScreen:
         actions: list[ft.Control] = []
         if self.on_open_my_requests is not None:
             actions.append(
-                ft.OutlinedButton(
-                    shell(lg, "btn_my_requests"),
+                ft.FilledButton(
+                    shell(lg, "custom_request_success_cta_my_requests"),
                     on_click=self._on_success_my_requests,
                 )
             )
-        actions.append(ft.TextButton(shell(lg, "btn_done"), on_click=self._on_success_done))
+        actions.append(
+            ft.OutlinedButton(
+                shell(lg, "custom_request_success_back_catalog"),
+                on_click=self._on_success_back_catalog,
+            )
+        )
+        actions.append(
+            ft.TextButton(
+                shell(lg, "custom_request_success_new_request"),
+                on_click=self._on_success_new_request,
+            )
+        )
         if self.on_continue_rfq_booking is not None:
             actions.append(
-                ft.FilledButton(
+                ft.OutlinedButton(
                     shell(lg, "rfq_bridge_cta_from_success"),
                     on_click=lambda e: self._on_success_continue_bridge(request_id, e),
                 )
@@ -3634,9 +3662,12 @@ class CustomRequestScreen:
         dlg.open = True
         self.page.update()
 
-    def _on_success_done(self, _: ft.ControlEvent) -> None:
+    def _on_success_back_catalog(self, _: ft.ControlEvent) -> None:
         self._dismiss_dialog()
         self.on_close()
+
+    def _on_success_new_request(self, _: ft.ControlEvent) -> None:
+        self._dismiss_dialog()
 
     def _on_success_my_requests(self, _: ft.ControlEvent) -> None:
         self._dismiss_dialog()
