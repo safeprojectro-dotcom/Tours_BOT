@@ -88,14 +88,35 @@ def customer_visible_summary(row: CustomMarketplaceRequest) -> str:
 
 
 _CUSTOMER_OFFER_MESSAGE_EXCERPT_MAX = 200
+_CUSTOMER_ROUTE_NOTES_PREVIEW_MAX = 96
+
+
+def _single_line_text(value: str | None) -> str:
+    text = (value or "").strip()
+    if not text:
+        return ""
+    return " ".join(text.split())
+
+
+def _customer_route_notes_preview(row: CustomMarketplaceRequest) -> str | None:
+    compact = _single_line_text(row.route_notes)
+    if not compact:
+        return None
+    if len(compact) <= _CUSTOMER_ROUTE_NOTES_PREVIEW_MAX:
+        return compact
+    return f"{compact[:_CUSTOMER_ROUTE_NOTES_PREVIEW_MAX - 1].rstrip()}…"
 
 
 def _customer_offers_received_hint(
     *,
     status: CustomMarketplaceRequestStatus,
     proposed_count: int,
+    language_code: str | None = None,
 ) -> str:
-    """Track 5f v1: neutral English copy for Mini App (matches customer_visible_summary MVP style)."""
+    """Track 5f v1: neutral copy for Mini App; U3 adds Romanian when preferred language is ro."""
+    code = (language_code or "en").lower().split("-")[0]
+    if code == "ro":
+        return _customer_offers_received_hint_ro(status=status, proposed_count=proposed_count)
     if status in (
         CustomMarketplaceRequestStatus.OPEN,
         CustomMarketplaceRequestStatus.UNDER_REVIEW,
@@ -119,6 +140,38 @@ def _customer_offers_received_hint(
         return "This request was handled with team assistance."
     if status == CustomMarketplaceRequestStatus.CLOSED_EXTERNAL:
         return "This request was closed outside the in-app checkout flow."
+    if status == CustomMarketplaceRequestStatus.CANCELLED:
+        return ""
+    return ""
+
+
+def _customer_offers_received_hint_ro(
+    *,
+    status: CustomMarketplaceRequestStatus,
+    proposed_count: int,
+) -> str:
+    """Romanian mirror of _customer_offers_received_hint (presentation only)."""
+    if status in (
+        CustomMarketplaceRequestStatus.OPEN,
+        CustomMarketplaceRequestStatus.UNDER_REVIEW,
+    ):
+        if proposed_count == 0:
+            return "Încă nu există oferte de la furnizori înregistrate pentru această cerere."
+        if proposed_count == 1:
+            return "A fost primită o ofertă de la un furnizor și poate fi în analiză."
+        return f"Au fost primite {proposed_count} oferte de la furnizori și pot fi în analiză."
+    if status == CustomMarketplaceRequestStatus.SUPPLIER_SELECTED:
+        return (
+            "Echipa a selectat o ofertă de la furnizor. Pașii următori depind de cazul tău și "
+            "de legătura de rezervare de la echipă."
+        )
+    if status in (
+        CustomMarketplaceRequestStatus.CLOSED_ASSISTED,
+        CustomMarketplaceRequestStatus.FULFILLED,
+    ):
+        return "Această cerere a fost gestionată cu asistență din partea echipei."
+    if status == CustomMarketplaceRequestStatus.CLOSED_EXTERNAL:
+        return "Această cerere a fost închisă în afara fluxului de checkout din aplicație."
     if status == CustomMarketplaceRequestStatus.CANCELLED:
         return ""
     return ""
@@ -545,6 +598,12 @@ class CustomMarketplaceRequestService:
             MiniAppCustomRequestCustomerSummaryRead(
                 id=r.id,
                 status=r.status,
+                request_type=r.request_type,
+                travel_date_start=r.travel_date_start,
+                travel_date_end=r.travel_date_end,
+                created_at=r.created_at,
+                group_size=r.group_size,
+                route_notes_preview=_customer_route_notes_preview(r),
                 customer_visible_summary=customer_visible_summary(r),
                 activity_preview_title=preview.list_activity_title(
                     session,
@@ -582,7 +641,11 @@ class CustomMarketplaceRequestService:
                 if tour is not None:
                     bridge_tour_code = tour.code
         proposed_count = self._responses.count_proposed_for_request(session, request_id=row.id)
-        offers_hint = _customer_offers_received_hint(status=row.status, proposed_count=proposed_count)
+        offers_hint = _customer_offers_received_hint(
+            status=row.status,
+            proposed_count=proposed_count,
+            language_code=user.preferred_language,
+        )
         selected_snippet = _customer_selected_offer_summary(session, row=row)
         activity = CustomRequestLifecyclePreviewService().detail_activity_preview(
             session,
@@ -593,11 +656,15 @@ class CustomMarketplaceRequestService:
         return MiniAppCustomRequestCustomerDetailRead(
             id=row.id,
             status=row.status,
+            created_at=row.created_at,
+            route_notes=row.route_notes,
             customer_visible_summary=customer_visible_summary(row),
             commercial_mode=CustomerCommercialMode.CUSTOM_BUS_RENTAL_REQUEST,
             request_type=row.request_type,
             travel_date_start=row.travel_date_start,
             travel_date_end=row.travel_date_end,
+            group_size=row.group_size,
+            route_notes_preview=_customer_route_notes_preview(row),
             latest_booking_bridge_status=bridge_status,
             latest_booking_bridge_tour_code=bridge_tour_code,
             proposed_response_count=proposed_count,

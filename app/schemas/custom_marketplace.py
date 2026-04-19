@@ -455,6 +455,12 @@ class AdminCustomRequestResolutionApply(BaseModel):
 class MiniAppCustomRequestCustomerSummaryRead(BaseModel):
     id: int
     status: CustomMarketplaceRequestStatus
+    request_type: CustomMarketplaceRequestType
+    travel_date_start: date
+    travel_date_end: date | None = None
+    created_at: datetime
+    group_size: int | None = None
+    route_notes_preview: str | None = None
     customer_visible_summary: str
     activity_preview_title: str | None = None
 
@@ -477,6 +483,11 @@ class MiniAppSelectedOfferSummaryRead(BaseModel):
 class MiniAppCustomRequestCustomerDetailRead(BaseModel):
     id: int
     status: CustomMarketplaceRequestStatus
+    created_at: datetime
+    route_notes: str = Field(
+        default="",
+        description="U3: full route/notes text the customer submitted (same source as intake; for IA section).",
+    )
     customer_visible_summary: str
     commercial_mode: CustomerCommercialMode = Field(
         default=CustomerCommercialMode.CUSTOM_BUS_RENTAL_REQUEST,
@@ -485,6 +496,8 @@ class MiniAppCustomRequestCustomerDetailRead(BaseModel):
     request_type: CustomMarketplaceRequestType
     travel_date_start: date
     travel_date_end: date | None
+    group_size: int | None = None
+    route_notes_preview: str | None = None
     latest_booking_bridge_status: CustomRequestBookingBridgeStatus | None = None
     latest_booking_bridge_tour_code: str | None = None
     proposed_response_count: int = 0

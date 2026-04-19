@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 
 import flet as ft
@@ -57,7 +57,6 @@ from mini_app.rfq_hub_cta import (
     detail_next_step_key,
     is_request_status_terminal,
     my_requests_list_summary_key,
-    my_requests_row_hint_key,
     pick_booking_for_bridge_tour,
     request_status_user_label,
     request_type_user_label,
@@ -95,6 +94,39 @@ def _payment_status_user_label(status: PaymentStatus, lang: str | None) -> str:
 
 def _hold_timer_hint(expires_at: datetime | None, lang: str | None) -> str:
     return _hold_timer_hint_i18n(expires_at, lang, format_dt=CatalogScreen._format_datetime)
+
+
+def _format_request_datetime(value: datetime) -> str:
+    return CatalogScreen._format_datetime(value)
+
+
+def _format_request_date(value: date | None) -> str:
+    if value is None:
+        return ""
+    return value.isoformat()
+
+
+def _request_subject_line(
+    *,
+    lg: str | None,
+    request_type_label: str,
+    travel_start: date,
+    travel_end: date | None,
+    group_size: int | None,
+    route_notes_preview: str | None,
+) -> str:
+    lead = (route_notes_preview or "").strip() or request_type_label
+    parts: list[str] = [lead]
+    if group_size is not None and group_size > 0:
+        parts.append(shell(lg, "my_requests_subject_group", size=str(group_size)))
+    start = _format_request_date(travel_start)
+    end = _format_request_date(travel_end)
+    if end and end != start:
+        date_part = shell(lg, "my_requests_subject_dates_range", start=start, end=end)
+    else:
+        date_part = shell(lg, "my_requests_subject_date_single", date=start)
+    parts.append(date_part)
+    return " · ".join(parts)
 
 
 class CatalogScreen:
@@ -2792,11 +2824,14 @@ class MyRequestsListScreen:
                 telegram_user_id=self.dev_telegram_user_id,
             )
         except httpx.HTTPStatusError as exc:
-            self.error_text.value = CatalogScreen._http_error_message(exc, default="Unable to load requests.")
+            self.error_text.value = CatalogScreen._http_error_message(
+                exc,
+                default=shell(self.language_code, "my_requests_error_load_list"),
+            )
             self.error_text.visible = True
             self._render(None)
         except Exception:
-            self.error_text.value = "Unable to load requests."
+            self.error_text.value = shell(self.language_code, "my_requests_error_load_list")
             self.error_text.visible = True
             self._render(None)
         else:
@@ -2836,8 +2871,24 @@ class MyRequestsListScreen:
     def _request_card(self, item: MiniAppCustomRequestCustomerSummaryRead) -> ft.Control:
         lg = self.language_code
         st_label = request_status_user_label(lg, item.status)
-        hint = shell(lg, my_requests_row_hint_key(item.status))
-        preview_line: list[ft.Control] = []
+        type_label = request_type_user_label(lg, item.request_type)
+        created_label = _format_request_datetime(item.created_at)
+        subject = _request_subject_line(
+            lg=lg,
+            request_type_label=type_label,
+            travel_start=item.travel_date_start,
+            travel_end=item.travel_date_end,
+            group_size=item.group_size,
+            route_notes_preview=item.route_notes_preview,
+        )
+        preview_line: list[ft.Control] = [
+            ft.Text(
+                shell(lg, "my_requests_row_meta", type=type_label, created=created_label),
+                size=12,
+                color=ft.Colors.ON_SURFACE_VARIANT,
+            ),
+            ft.Text(subject, size=13, color=ft.Colors.ON_SURFACE_VARIANT),
+        ]
         if (item.activity_preview_title or "").strip():
             preview_line.append(
                 ft.Text(
@@ -2852,10 +2903,22 @@ class MyRequestsListScreen:
             padding=16,
             content=ft.Column(
                 [
-                    ft.Text(st_label, weight=ft.FontWeight.W_600),
-                    ft.Text(item.customer_visible_summary, size=14, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Row(
+                        [
+                            ft.Text(
+                                shell(lg, "my_requests_row_reference", id=str(item.id)),
+                                weight=ft.FontWeight.W_700,
+                            ),
+                            ft.Container(
+                                padding=ft.padding.symmetric(horizontal=10, vertical=4),
+                                border_radius=999,
+                                bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
+                                content=ft.Text(st_label, size=11, weight=ft.FontWeight.W_600),
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
                     *preview_line,
-                    ft.Text(hint, size=12, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Row(
                         [
                             ft.FilledButton(
@@ -3003,10 +3066,13 @@ class MyRequestDetailScreen:
                 telegram_user_id=self.dev_telegram_user_id,
             )
         except httpx.HTTPStatusError as exc:
-            self.error_text.value = CatalogScreen._http_error_message(exc, default="Unable to load this request.")
+            self.error_text.value = CatalogScreen._http_error_message(
+                exc,
+                default=shell(self.language_code, "my_requests_error_load_detail"),
+            )
             self.error_text.visible = True
         except Exception:
-            self.error_text.value = "Unable to load this request."
+            self.error_text.value = shell(self.language_code, "my_requests_error_load_detail")
             self.error_text.visible = True
         try:
             bookings = await self.api_client.list_my_bookings(
@@ -3094,17 +3160,26 @@ class MyRequestDetailScreen:
         cta_kind: DetailPrimaryCtaKind,
     ) -> None:
         lg = self.language_code
-        st = request_status_user_label(lg, detail.status)
-        type_l = request_type_user_label(lg, detail.request_type)
+        status_label = request_status_user_label(lg, detail.status)
+        type_label = request_type_user_label(lg, detail.request_type)
         end_part = (
             shell(lg, "my_requests_detail_date_end", end=str(detail.travel_date_end))
             if detail.travel_date_end
             else ""
         )
+        created_when = _format_request_datetime(detail.created_at)
         lines: list[ft.Control] = [
-            ft.Text(shell(lg, "my_requests_detail_title"), size=22, weight=ft.FontWeight.BOLD),
-            ft.Text(shell(lg, "my_requests_detail_status", label=st)),
-            ft.Text(shell(lg, "my_requests_detail_type", label=type_l)),
+            ft.Text(
+                shell(lg, "my_requests_detail_header_ref", id=str(detail.id)),
+                size=22,
+                weight=ft.FontWeight.BOLD,
+            ),
+            ft.Text(
+                shell(lg, "my_requests_detail_created_line", when=created_when),
+                size=13,
+                color=ft.Colors.ON_SURFACE_VARIANT,
+            ),
+            ft.Text(shell(lg, "my_requests_detail_type", label=type_label)),
             ft.Text(
                 shell(
                     lg,
@@ -3113,33 +3188,60 @@ class MyRequestDetailScreen:
                     end=end_part,
                 )
             ),
-            ft.Text(shell(lg, "my_requests_detail_summary"), weight=ft.FontWeight.W_600),
-            ft.Text(detail.customer_visible_summary, color=ft.Colors.ON_SURFACE_VARIANT),
         ]
-        if (detail.offers_received_hint or "").strip():
+        if detail.group_size is not None and detail.group_size > 0:
             lines.append(
-                ft.Container(
-                    padding=ft.padding.only(top=6),
-                    content=ft.Text(
-                        detail.offers_received_hint.strip(),
-                        size=13,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                    ),
+                ft.Text(
+                    shell(lg, "my_requests_detail_group_size", n=str(detail.group_size)),
+                    size=13,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
                 )
             )
+        lines.append(
+            ft.Container(
+                padding=ft.padding.only(top=8),
+                content=ft.Text(
+                    shell(lg, "my_requests_section_what_you_asked"),
+                    weight=ft.FontWeight.W_600,
+                    size=14,
+                ),
+            )
+        )
+        lines.append(
+            ft.Text(
+                (detail.route_notes_preview or "").strip() or shell(lg, "my_requests_route_notes_empty"),
+                size=14,
+                color=ft.Colors.ON_SURFACE,
+            )
+        )
+        lines.append(
+            ft.Container(
+                padding=ft.padding.only(top=10),
+                content=ft.Text(
+                    shell(lg, "my_requests_section_current_status"),
+                    weight=ft.FontWeight.W_600,
+                    size=14,
+                ),
+            )
+        )
+        lines.append(ft.Text(status_label, size=14, color=ft.Colors.ON_SURFACE_VARIANT))
+        lines.append(
+            ft.Container(
+                padding=ft.padding.only(top=10),
+                content=ft.Text(
+                    shell(lg, "my_requests_section_current_update"),
+                    weight=ft.FontWeight.W_600,
+                    size=14,
+                ),
+            )
+        )
         if detail.activity_preview is not None:
             ap = detail.activity_preview
             title_s = (ap.title or "").strip()
             message_s = (ap.message or "").strip()
             disc_s = (ap.preview_disclaimer or "").strip()
             if title_s or message_s or disc_s:
-                ap_children: list[ft.Control] = [
-                    ft.Text(
-                        shell(lg, "my_requests_activity_heading"),
-                        weight=ft.FontWeight.W_600,
-                        size=13,
-                    ),
-                ]
+                ap_children: list[ft.Control] = []
                 if title_s:
                     ap_children.append(ft.Text(title_s, size=14, weight=ft.FontWeight.W_500))
                 if message_s:
