@@ -21,6 +21,11 @@ class TestAdminCustomRequestsOpsUiA1:
         assert "prepared" in body and "not proof" in body
         assert "v1" in body and "v4" in body
         assert "/admin/custom-requests" in r.text
+        assert "needs attention only" in body
+        assert "hide terminal" in body
+        assert "internal triage" in body
+        assert "customer continuation signals" in body
+        assert "commercial and supplier progression context" in body
 
     def test_ops_html_file_matches_router_path(self) -> None:
         repo_root = Path(__file__).resolve().parents[2]
@@ -30,3 +35,7 @@ class TestAdminCustomRequestsOpsUiA1:
         assert "Prepared only" in raw or "prepared only" in raw.lower()
         assert "not_sent_to_customer_channels" in raw
         assert "operational scan" in raw.lower()
+        assert "no payment readiness implied" in raw.lower()
+        assert "listSearch" in raw
+        assert "filterAttention" in raw
+        assert "hideTerminal" in raw

@@ -51,6 +51,30 @@
       padding: 0.75rem 1rem; min-height: 200px;
     }
     .panel h2 { font-size: 0.95rem; margin: 0 0 0.75rem; color: var(--muted); font-weight: 600; }
+    .list-tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+      align-items: center;
+    }
+    .list-tools input[type="text"] {
+      flex: 1;
+      min-width: 12rem;
+      padding: 0.35rem 0.45rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+    }
+    .list-tools label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 12px;
+      color: var(--muted);
+      user-select: none;
+    }
     .card {
       border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.75rem; margin-bottom: 0.5rem;
       cursor: pointer; transition: border-color 0.12s;
@@ -79,6 +103,10 @@
       border-left: 3px solid var(--warn); padding: 0.5rem 0.75rem; margin-top: 0.35rem;
       background: rgba(201, 162, 39, 0.08); font-size: 12px; color: #d4c9a8;
     }
+    .summary-line { margin-top: 6px; font-size: 13px; }
+    .kv { margin-top: 0.35rem; }
+    .kv div { margin-bottom: 0.2rem; }
+    .k { color: var(--muted); margin-right: 0.25rem; }
     .empty { color: var(--muted); font-style: italic; }
   </style>
 </head>
@@ -101,7 +129,12 @@
 
   <div class="layout">
     <div class="panel">
-      <h2>List</h2>
+      <h2>List <span class="mono" id="listMeta"></span></h2>
+      <div class="list-tools">
+        <input type="text" id="listSearch" placeholder="Filter by ID, status, stage, action focus, summary"/>
+        <label><input type="checkbox" id="filterAttention"/> Needs attention only</label>
+        <label><input type="checkbox" id="hideTerminal"/> Hide terminal</label>
+      </div>
       <div id="list"></div>
     </div>
     <div class="panel" id="detailPanel">
@@ -118,6 +151,10 @@
   const saveBtn = document.getElementById("saveToken");
   const loadBtn = document.getElementById("loadList");
   const listEl = document.getElementById("list");
+  const listMeta = document.getElementById("listMeta");
+  const listSearch = document.getElementById("listSearch");
+  const filterAttention = document.getElementById("filterAttention");
+  const hideTerminal = document.getElementById("hideTerminal");
   const loadErr = document.getElementById("loadErr");
   const statusLine = document.getElementById("statusLine");
   const detailEl = document.getElementById("detail");
@@ -153,13 +190,39 @@
   let selectedId = null;
   let lastItems = [];
 
+  function listNeedle(row) {
+    const op = row.operational_hints || {};
+    return [
+      row.id,
+      row.status,
+      op.lifecycle_stage_label,
+      op.action_focus,
+      op.scan_summary_line,
+      op.primary_action_hint,
+      op.follow_through_one_liner
+    ].map(function (v) { return String(v || "").toLowerCase(); }).join(" ");
+  }
+
+  function applyListFilters(items) {
+    const q = String(listSearch.value || "").trim().toLowerCase();
+    return items.filter(function (row) {
+      const op = row.operational_hints || {};
+      if (filterAttention.checked && !op.needs_internal_ops_attention) return false;
+      if (hideTerminal.checked && op.is_terminal) return false;
+      if (q && listNeedle(row).indexOf(q) === -1) return false;
+      return true;
+    });
+  }
+
   function renderList(items) {
+    const filtered = applyListFilters(items);
+    listMeta.textContent = "(" + filtered.length + "/" + items.length + ")";
     listEl.innerHTML = "";
-    if (!items.length) {
+    if (!filtered.length) {
       listEl.innerHTML = '<p class="empty">No items.</p>';
       return;
     }
-    items.forEach(function (row) {
+    filtered.forEach(function (row) {
       const op = row.operational_hints || {};
       const id = row.id;
       const div = document.createElement("div");
@@ -167,10 +230,13 @@
       const attn = op.needs_internal_ops_attention ? chip("Needs internal attention", "attn") : "";
       const term = op.is_terminal ? chip("Terminal", "term") : "";
       const focus = op.action_focus ? chip(op.action_focus, "okfocus") : "";
+      const routeExcerpt = row.route_notes ? String(row.route_notes).substring(0, 92) + (String(row.route_notes).length > 92 ? "…" : "") : "";
       div.innerHTML =
         '<div class="id">#' + esc(id) + ' · ' + esc(row.status) + '</div>' +
         '<div class="mono" style="margin-top:4px;">' + esc(op.lifecycle_stage_label || "") + '</div>' +
-        '<div style="margin-top:6px;font-size:13px;">' + esc(op.scan_summary_line || "") + '</div>' +
+        '<div class="summary-line">' + esc(op.scan_summary_line || "") + '</div>' +
+        '<div class="mono" style="margin-top:4px;">' + esc(op.primary_action_hint || "") + '</div>' +
+        (routeExcerpt ? '<div class="mono" style="margin-top:4px;">Route: ' + esc(routeExcerpt) + '</div>' : '') +
         '<div class="chips">' + attn + term + focus +
         (op.follow_through_one_liner ? chip(op.follow_through_one_liner.substring(0, 42) + (op.follow_through_one_liner.length > 42 ? "…" : "")) : "") +
         '</div>';
@@ -197,6 +263,16 @@
     const bridge = data.booking_bridge || null;
 
     let html = "";
+    html += block("Internal triage",
+      '<div class="kv">' +
+      '<div><span class="k">Needs attention now:</span>' + esc(op.needs_internal_ops_attention ? "yes" : "no") + '</div>' +
+      '<div><span class="k">Terminal state:</span>' + esc(op.is_terminal ? "yes" : "no") + '</div>' +
+      '<div><span class="k">Lifecycle stage:</span>' + esc(op.lifecycle_stage_label || "") + '</div>' +
+      '<div><span class="k">Action focus:</span>' + esc(op.action_focus || "") + '</div>' +
+      '</div>' +
+      (op.primary_action_hint ? "\n\n" + esc(op.primary_action_hint) : "")
+    );
+
     html += block("Request essentials",
       "ID " + esc(req.id) + " · status " + esc(req.status) + " · type " + esc(req.request_type) + "\\n" +
       "Travel: " + esc(req.travel_date_start) + (req.travel_date_end ? " → " + esc(req.travel_date_end) : "") + "\\n" +
@@ -213,27 +289,34 @@
       esc(op.primary_action_hint || "")
     );
 
-    html += block("Transition (V3)",
+    html += block("Transition visibility (V3)",
       esc(op.transition_stage_one_liner || "") + "\\n\\n" +
       esc(op.transition_chain_summary || "") + "\\n" +
       "Selection link: " + esc(op.selection_link_state || "") + "\\n" +
       "Customer path (ops view): " + esc(op.customer_path_visibility || "")
     );
 
-    html += block("Follow-through (V4)",
+    html += block("Customer continuation signals (V4, read-side evidence)",
       esc(op.follow_through_one_liner || "") + "\\n\\n" +
       esc(op.follow_through_summary || "") + "\\n" +
       "Posture: " + esc(op.follow_through_posture || "") + "\\n" +
       "Progression evidence (this API): " + esc(op.customer_progression_evidence || "")
     );
 
-    html += block("Bridge & continuation",
+    html += block("Bridge execution context (record, no payment readiness implied)",
       (bridge
         ? esc(JSON.stringify(bridge, null, 2))
         : "(no booking bridge row)") +
       "\\n\\n" + esc(op.continuation_summary || "") +
       (op.bridge_continuation_interpretation ? "\\n\\n" + esc(op.bridge_continuation_interpretation) : "") +
       (op.booking_bridge_operational_label ? "\\nLabel: " + esc(op.booking_bridge_operational_label) : "")
+    );
+
+    const responses = data.responses || [];
+    html += block("Commercial and supplier progression context (internal)",
+      "Proposed responses: " + esc(op.proposed_supplier_response_count) + "\\n" +
+      "Selected response recorded: " + esc(op.has_selected_supplier_response ? "yes" : "no") + "\\n" +
+      "Supplier responses in detail payload: " + esc(responses.length)
     );
 
     if (pcm) {
@@ -251,7 +334,6 @@
       html += block("Prepared customer message (W3)", "(none — API returned null)");
     }
 
-    const responses = data.responses || [];
     html += block("Supplier responses (system record)",
       responses.length ? esc(JSON.stringify(responses, null, 2)) : "(no responses in payload)"
     );
@@ -292,6 +374,9 @@
     }
   }
 
+  listSearch.addEventListener("input", function () { renderList(lastItems); });
+  filterAttention.addEventListener("change", function () { renderList(lastItems); });
+  hideTerminal.addEventListener("change", function () { renderList(lastItems); });
   loadBtn.addEventListener("click", loadList);
 })();
   </script>
