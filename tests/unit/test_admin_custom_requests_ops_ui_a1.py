@@ -23,9 +23,14 @@ class TestAdminCustomRequestsOpsUiA1:
         assert "/admin/custom-requests" in r.text
         assert "needs attention only" in body
         assert "hide terminal" in body
-        assert "internal triage" in body
         assert "customer continuation signals" in body
         assert "commercial and supplier progression context" in body
+        assert "current operational decision" in body
+        assert "blockers / waiting state" in body
+        assert "not delivery evidence" in body
+        assert "live workspace detail" in body
+        assert "prev request" in body
+        assert "next request" in body
 
     def test_ops_html_file_matches_router_path(self) -> None:
         repo_root = Path(__file__).resolve().parents[2]
@@ -39,3 +44,9 @@ class TestAdminCustomRequestsOpsUiA1:
         assert "listSearch" in raw
         assert "filterAttention" in raw
         assert "hideTerminal" in raw
+        assert "operationalDecisionLabel" in raw
+        assert "blockerSignals" in raw
+        assert "derived from existing operational hints" in raw.lower()
+        assert "updateWorkspaceSelectionMeta" in raw
+        assert "navigateRelative" in raw
+        assert "Current request #" in raw

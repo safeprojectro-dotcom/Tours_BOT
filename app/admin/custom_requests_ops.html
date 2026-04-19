@@ -44,13 +44,59 @@
     button:hover { background: rgba(91, 159, 212, 0.28); }
     button.secondary { border-color: var(--border); background: transparent; }
     .err { color: var(--danger); font-size: 13px; margin-top: 0.5rem; }
-    .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 1rem; }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.35fr);
+      gap: 1rem;
+      align-items: start;
+      min-height: calc(100vh - 180px);
+    }
     @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
     .panel {
       background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
       padding: 0.75rem 1rem; min-height: 200px;
     }
     .panel h2 { font-size: 0.95rem; margin: 0 0 0.75rem; color: var(--muted); font-weight: 600; }
+    .list-panel {
+      position: sticky;
+      top: 0.6rem;
+      max-height: calc(100vh - 2.2rem);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .list-scroll {
+      overflow: auto;
+      padding-right: 0.15rem;
+    }
+    .detail-panel {
+      max-height: calc(100vh - 2.2rem);
+      overflow: auto;
+    }
+    .detail-sticky {
+      position: sticky;
+      top: -0.1rem;
+      z-index: 4;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.55rem;
+      margin-bottom: 0.6rem;
+    }
+    .workspace-actions {
+      display: flex;
+      gap: 0.45rem;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 0.35rem;
+    }
+    .workspace-actions button {
+      padding: 0.28rem 0.6rem;
+      font-size: 12px;
+    }
+    .workspace-status {
+      font-size: 12px;
+      color: var(--muted);
+    }
     .list-tools {
       display: flex;
       flex-wrap: wrap;
@@ -80,7 +126,11 @@
       cursor: pointer; transition: border-color 0.12s;
     }
     .card:hover { border-color: var(--accent); }
-    .card.active { border-color: var(--accent); background: rgba(91, 159, 212, 0.08); }
+    .card.active {
+      border-color: var(--accent);
+      background: rgba(91, 159, 212, 0.08);
+      box-shadow: inset 3px 0 0 rgba(91, 159, 212, 0.95);
+    }
     .card .id { font-weight: 600; }
     .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.35rem; }
     .chip {
@@ -107,6 +157,14 @@
     .kv { margin-top: 0.35rem; }
     .kv div { margin-bottom: 0.2rem; }
     .k { color: var(--muted); margin-right: 0.25rem; }
+    .signal {
+      border: 1px solid var(--border);
+      background: rgba(91, 159, 212, 0.1);
+      border-radius: 6px;
+      padding: 0.35rem 0.5rem;
+      margin-bottom: 0.45rem;
+    }
+    .signal strong { color: #cfe3f5; }
     .empty { color: var(--muted); font-style: italic; }
   </style>
 </head>
@@ -128,17 +186,24 @@
   <div id="loadErr" class="err"></div>
 
   <div class="layout">
-    <div class="panel">
+    <div class="panel list-panel">
       <h2>List <span class="mono" id="listMeta"></span></h2>
       <div class="list-tools">
         <input type="text" id="listSearch" placeholder="Filter by ID, status, stage, action focus, summary"/>
         <label><input type="checkbox" id="filterAttention"/> Needs attention only</label>
         <label><input type="checkbox" id="hideTerminal"/> Hide terminal</label>
       </div>
-      <div id="list"></div>
+      <div class="list-scroll" id="list"></div>
     </div>
-    <div class="panel" id="detailPanel">
-      <h2>Detail</h2>
+    <div class="panel detail-panel" id="detailPanel">
+      <div class="detail-sticky">
+        <h2>Live workspace detail</h2>
+        <div class="workspace-actions">
+          <button type="button" class="secondary" id="prevReq">Prev request</button>
+          <button type="button" class="secondary" id="nextReq">Next request</button>
+          <span class="workspace-status" id="activeReqMeta">No request selected.</span>
+        </div>
+      </div>
       <p class="empty" id="detailPlaceholder">Select a request to load detail.</p>
       <div id="detail" style="display:none;"></div>
     </div>
@@ -159,6 +224,9 @@
   const statusLine = document.getElementById("statusLine");
   const detailEl = document.getElementById("detail");
   const detailPh = document.getElementById("detailPlaceholder");
+  const prevReq = document.getElementById("prevReq");
+  const nextReq = document.getElementById("nextReq");
+  const activeReqMeta = document.getElementById("activeReqMeta");
 
   function getToken() {
     return (sessionStorage.getItem(TOKEN_KEY) || "").trim();
@@ -189,6 +257,7 @@
 
   let selectedId = null;
   let lastItems = [];
+  let lastFilteredItems = [];
 
   function listNeedle(row) {
     const op = row.operational_hints || {};
@@ -215,12 +284,18 @@
   }
 
   function renderList(items) {
+    const beforeSelected = selectedId;
     const filtered = applyListFilters(items);
+    lastFilteredItems = filtered.slice();
     listMeta.textContent = "(" + filtered.length + "/" + items.length + ")";
     listEl.innerHTML = "";
     if (!filtered.length) {
       listEl.innerHTML = '<p class="empty">No items.</p>';
+      activeReqMeta.textContent = "No request selected.";
       return;
+    }
+    if (!filtered.some(function (r) { return r.id === selectedId; })) {
+      selectedId = filtered[0].id;
     }
     filtered.forEach(function (row) {
       const op = row.operational_hints || {};
@@ -240,18 +315,45 @@
         '<div class="chips">' + attn + term + focus +
         (op.follow_through_one_liner ? chip(op.follow_through_one_liner.substring(0, 42) + (op.follow_through_one_liner.length > 42 ? "…" : "")) : "") +
         '</div>';
-      div.addEventListener("click", function () {
-        selectedId = id;
-        renderList(lastItems);
-        loadDetail(id);
-      });
+      div.addEventListener("click", function () { selectRequestById(id); });
       listEl.appendChild(div);
     });
+    updateWorkspaceSelectionMeta();
+    if (selectedId && selectedId !== beforeSelected) {
+      loadDetail(selectedId);
+    }
   }
 
   function block(title, body) {
     if (!body) return "";
     return '<section class="block"><h3>' + esc(title) + '</h3><div class="block-body">' + body + '</div></section>';
+  }
+
+  function operationalDecisionLabel(op) {
+    if (op.is_terminal) return "Closed / terminal follow-through";
+    const focus = String(op.action_focus || "");
+    if (focus === "awaiting_supplier_proposals") return "Waiting on supplier proposals";
+    if (focus === "internal_review_or_resolution") return "Waiting on internal review / resolution";
+    if (focus === "bridge_setup_or_validation") return "Bridge-related internal validation";
+    if (focus === "monitor_customer_continuation") return "Customer continuation should be monitored";
+    if (focus === "reconcile_closed_bridge") return "Closed bridge reconciliation follow-through";
+    return "Operational review in progress";
+  }
+
+  function blockerSignals(op) {
+    const lines = [];
+    const focus = String(op.action_focus || "");
+    if (focus === "awaiting_supplier_proposals") lines.push("Primary bottleneck: supplier proposals are still pending.");
+    if (focus === "internal_review_or_resolution") lines.push("Primary bottleneck: internal commercial review/resolution is pending.");
+    if (focus === "bridge_setup_or_validation") lines.push("Primary bottleneck: bridge setup/validation needs internal completion.");
+    if (focus === "monitor_customer_continuation") lines.push("Primary bottleneck: customer-side continuation evidence is not complete here.");
+    if (focus === "reconcile_closed_bridge") lines.push("Primary bottleneck: post-bridge reconciliation/closure checks remain.");
+    if (op.is_terminal) lines.push("State is terminal/closed in this view.");
+    if (op.selection_link_state) lines.push("Selection link state: " + op.selection_link_state + ".");
+    if (op.customer_path_visibility) lines.push("Customer path visibility: " + op.customer_path_visibility + ".");
+    if (op.customer_progression_evidence) lines.push("Customer progression evidence in this API: " + op.customer_progression_evidence + ".");
+    if (!lines.length && op.transition_stage_one_liner) lines.push(op.transition_stage_one_liner);
+    return lines;
   }
 
   function renderDetail(data) {
@@ -261,16 +363,26 @@
     const op = data.operational_hints || {};
     const pcm = data.prepared_customer_lifecycle_message || null;
     const bridge = data.booking_bridge || null;
+    const decisionLabel = operationalDecisionLabel(op);
+    const blockers = blockerSignals(op);
 
     let html = "";
-    html += block("Internal triage",
+    html += block("Current operational decision (A2)",
+      '<div class="signal"><strong>Decision frame:</strong> ' + esc(decisionLabel) + '</div>' +
       '<div class="kv">' +
-      '<div><span class="k">Needs attention now:</span>' + esc(op.needs_internal_ops_attention ? "yes" : "no") + '</div>' +
+      '<div><span class="k">Action focus:</span>' + esc(op.action_focus || "") + '</div>' +
+      '<div><span class="k">Needs internal ops attention:</span>' + esc(op.needs_internal_ops_attention ? "yes" : "no") + '</div>' +
       '<div><span class="k">Terminal state:</span>' + esc(op.is_terminal ? "yes" : "no") + '</div>' +
       '<div><span class="k">Lifecycle stage:</span>' + esc(op.lifecycle_stage_label || "") + '</div>' +
-      '<div><span class="k">Action focus:</span>' + esc(op.action_focus || "") + '</div>' +
       '</div>' +
-      (op.primary_action_hint ? "\n\n" + esc(op.primary_action_hint) : "")
+      (op.primary_action_hint ? "\n\nNext action hint: " + esc(op.primary_action_hint) : "")
+    );
+
+    html += block("Blockers / waiting state (derived from existing operational hints)",
+      '<div class="kv">' +
+      blockers.map(function (b) { return "<div>• " + esc(b) + "</div>"; }).join("") +
+      '</div>' +
+      (op.handling_hint ? "\n\nHandling hint: " + esc(op.handling_hint) : "")
     );
 
     html += block("Request essentials",
@@ -288,6 +400,21 @@
       "Action focus: " + esc(op.action_focus) + "\\n" +
       esc(op.primary_action_hint || "")
     );
+
+    if (pcm) {
+      html += block("Prepared customer message (W3 — internal reference only, not delivery evidence)",
+        "Title: " + esc(pcm.title) + "\\n\\n" + esc(pcm.message) +
+        '\\n\\n<span class="mono">Event: ' + esc(pcm.notification_event) + " · lang " + esc(pcm.language_code) + "</span>"
+      );
+      html += '<div class="disclaimer">' +
+        "<strong>Prepared only — not delivery.</strong> " +
+        esc(pcm.internal_disclaimer || "") + "\\n" +
+        "Flags: not_sent_to_customer_channels=" + esc(pcm.not_sent_to_customer_channels) +
+        ", not_enqueued_to_order_notification_outbox=" + esc(pcm.not_enqueued_to_order_notification_outbox) + "." +
+        "</div>";
+    } else {
+      html += block("Prepared customer message (W3)", "(none — API returned null)");
+    }
 
     html += block("Transition visibility (V3)",
       esc(op.transition_stage_one_liner || "") + "\\n\\n" +
@@ -319,26 +446,46 @@
       "Supplier responses in detail payload: " + esc(responses.length)
     );
 
-    if (pcm) {
-      html += block("Prepared customer message (W3 — internal reference only)",
-        "Title: " + esc(pcm.title) + "\\n\\n" + esc(pcm.message) +
-        '\\n\\n<span class="mono">Event: ' + esc(pcm.notification_event) + " · lang " + esc(pcm.language_code) + "</span>"
-      );
-      html += '<div class="disclaimer">' +
-        "<strong>Prepared only — not delivery.</strong> " +
-        esc(pcm.internal_disclaimer || "") + "\\n" +
-        "Flags: not_sent_to_customer_channels=" + esc(pcm.not_sent_to_customer_channels) +
-        ", not_enqueued_to_order_notification_outbox=" + esc(pcm.not_enqueued_to_order_notification_outbox) + "." +
-        "</div>";
-    } else {
-      html += block("Prepared customer message (W3)", "(none — API returned null)");
-    }
-
     html += block("Supplier responses (system record)",
       responses.length ? esc(JSON.stringify(responses, null, 2)) : "(no responses in payload)"
     );
 
     detailEl.innerHTML = html;
+    updateWorkspaceSelectionMeta();
+  }
+
+  function updateWorkspaceSelectionMeta() {
+    if (!selectedId) {
+      activeReqMeta.textContent = "No request selected.";
+      return;
+    }
+    const idx = lastFilteredItems.findIndex(function (r) { return r.id === selectedId; });
+    if (idx < 0) {
+      activeReqMeta.textContent = "Selected request is outside current filter.";
+      return;
+    }
+    const row = lastFilteredItems[idx];
+    const op = row.operational_hints || {};
+    activeReqMeta.textContent =
+      "Current request #" + selectedId +
+      " (" + (idx + 1) + "/" + lastFilteredItems.length + ")" +
+      " · " + (op.lifecycle_stage_label || row.status || "state");
+  }
+
+  function selectRequestById(id) {
+    if (!id) return;
+    selectedId = id;
+    renderList(lastItems);
+    loadDetail(id);
+  }
+
+  function navigateRelative(step) {
+    if (!lastFilteredItems.length) return;
+    let idx = lastFilteredItems.findIndex(function (r) { return r.id === selectedId; });
+    if (idx < 0) idx = 0;
+    const nextIdx = idx + step;
+    if (nextIdx < 0 || nextIdx >= lastFilteredItems.length) return;
+    selectRequestById(lastFilteredItems[nextIdx].id);
   }
 
   async function loadDetail(id) {
@@ -368,6 +515,7 @@
       lastItems = items;
       statusLine.textContent = items.length + " requests";
       renderList(items);
+      if (selectedId) loadDetail(selectedId);
     } catch (e) {
       listEl.innerHTML = "";
       loadErr.textContent = String(e.message || e);
@@ -377,6 +525,8 @@
   listSearch.addEventListener("input", function () { renderList(lastItems); });
   filterAttention.addEventListener("change", function () { renderList(lastItems); });
   hideTerminal.addEventListener("change", function () { renderList(lastItems); });
+  prevReq.addEventListener("click", function () { navigateRelative(-1); });
+  nextReq.addEventListener("click", function () { navigateRelative(1); });
   loadBtn.addEventListener("click", loadList);
 })();
   </script>
