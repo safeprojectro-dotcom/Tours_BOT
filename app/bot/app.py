@@ -6,6 +6,7 @@ from app.bot.handlers.group_gating import router as group_gating_router
 from app.bot.handlers.private_entry import router as private_entry_router
 from app.bot.handlers.supplier_onboarding import router as supplier_onboarding_router
 from app.bot.handlers.supplier_offer_intake import router as supplier_offer_intake_router
+from app.bot.handlers.supplier_offer_workspace import router as supplier_offer_workspace_router
 
 
 def create_dispatcher() -> Dispatcher:
@@ -15,4 +16,5 @@ def create_dispatcher() -> Dispatcher:
     dispatcher.include_router(private_entry_router)
     dispatcher.include_router(supplier_onboarding_router)
     dispatcher.include_router(supplier_offer_intake_router)
+    dispatcher.include_router(supplier_offer_workspace_router)
     return dispatcher

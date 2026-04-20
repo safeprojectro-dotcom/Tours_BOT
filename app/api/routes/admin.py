@@ -67,6 +67,7 @@ from app.services.supplier_offer_moderation_service import (
     SupplierOfferModerationStateError,
     SupplierOfferPublicationConfigError,
 )
+from app.services.supplier_offer_supplier_notification_service import SupplierOfferSupplierNotificationService
 from app.services.supplier_offer_service import SupplierOfferService
 from app.services.custom_marketplace_request_service import (
     CustomMarketplaceRequestNotFoundError,
@@ -99,7 +100,11 @@ from app.schemas.supplier_admin import (
 )
 from app.repositories.supplier import SupplierOfferRepository
 from app.services.admin_supplier_write import AdminSupplierDuplicateCodeError, AdminSupplierWriteService
-from app.services.supplier_onboarding_service import SupplierOnboardingNotFoundError, SupplierOnboardingService
+from app.services.supplier_onboarding_service import (
+    SupplierOnboardingApprovalValidationError,
+    SupplierOnboardingNotFoundError,
+    SupplierOnboardingService,
+)
 from app.services.admin_tour_write import (
     AdminBoardingPointInUseError,
     AdminBoardingPointNotFoundError,
@@ -871,6 +876,8 @@ def post_admin_supplier_onboarding_approve(
         row = SupplierOnboardingService().admin_approve(db, supplier_id=supplier_id)
     except SupplierOnboardingNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found.") from None
+    except SupplierOnboardingApprovalValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     db.commit()
     return AdminSupplierRead.model_validate(row)
 
@@ -944,6 +951,10 @@ def post_admin_supplier_offer_approve(offer_id: int, db: Session = Depends(get_d
     except SupplierOfferModerationStateError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     db.commit()
+    try:
+        SupplierOfferSupplierNotificationService().notify_approved(db, offer_id=offer_id)
+    except Exception:
+        pass
     return row
 
 
@@ -960,6 +971,14 @@ def post_admin_supplier_offer_reject(
     except SupplierOfferModerationStateError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     db.commit()
+    try:
+        SupplierOfferSupplierNotificationService().notify_rejected(
+            db,
+            offer_id=offer_id,
+            reason=payload.reason,
+        )
+    except Exception:
+        pass
     return row
 
 
@@ -974,7 +993,27 @@ def post_admin_supplier_offer_publish(offer_id: int, db: Session = Depends(get_d
     except SupplierOfferModerationStateError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     db.commit()
+    try:
+        SupplierOfferSupplierNotificationService().notify_published(db, offer_id=offer_id)
+    except Exception:
+        pass
     return AdminSupplierOfferPublishResult(offer=offer_read, telegram_message_id=message_id)
+
+
+@router.post("/supplier-offers/{offer_id}/retract", response_model=SupplierOfferRead)
+def post_admin_supplier_offer_retract(offer_id: int, db: Session = Depends(get_db)) -> SupplierOfferRead:
+    try:
+        row = SupplierOfferModerationService().retract_published(db, offer_id=offer_id)
+    except SupplierOfferModerationNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    except SupplierOfferModerationStateError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    try:
+        SupplierOfferSupplierNotificationService().notify_retracted(db, offer_id=offer_id)
+    except Exception:
+        pass
+    return row
 
 
 @router.get("/custom-requests", response_model=CustomMarketplaceRequestListRead)

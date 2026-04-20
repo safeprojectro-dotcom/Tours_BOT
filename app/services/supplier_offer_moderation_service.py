@@ -12,7 +12,7 @@ from app.models.supplier import SupplierOffer
 from app.repositories.supplier import SupplierOfferRepository
 from app.schemas.supplier_admin import SupplierOfferRead
 from app.services.supplier_offer_showcase_message import build_showcase_publication
-from app.services.telegram_showcase_client import TelegramShowcaseSendError, send_showcase_publication
+from app.services.telegram_showcase_client import TelegramShowcaseSendError, delete_channel_message, send_showcase_publication
 
 
 class SupplierOfferModerationNotFoundError(Exception):
@@ -110,6 +110,38 @@ class SupplierOfferModerationService:
         session.flush()
         session.refresh(row)
         return self._to_read(row), message_id
+
+    def retract_published(
+        self,
+        session: Session,
+        *,
+        offer_id: int,
+        settings: Settings | None = None,
+    ) -> SupplierOfferRead:
+        cfg = settings or get_settings()
+        row = self._row(session, offer_id)
+        if row.lifecycle_status != SupplierOfferLifecycle.PUBLISHED:
+            raise SupplierOfferModerationStateError(
+                "Only published offers can be retracted.",
+            )
+        token = (cfg.telegram_bot_token or "").strip()
+        chat_id = (row.showcase_chat_id or "").strip()
+        message_id = row.showcase_message_id
+        # Best-effort channel cleanup: retract must still work if Telegram deletion fails.
+        if token and chat_id and message_id is not None:
+            try:
+                delete_channel_message(
+                    bot_token=token,
+                    chat_id=chat_id,
+                    message_id=message_id,
+                )
+            except TelegramShowcaseSendError:
+                pass
+        row.lifecycle_status = SupplierOfferLifecycle.APPROVED
+        session.add(row)
+        session.flush()
+        session.refresh(row)
+        return self._to_read(row)
 
     def list_offers(
         self,

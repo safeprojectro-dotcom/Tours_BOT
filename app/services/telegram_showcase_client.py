@@ -60,6 +60,54 @@ def send_channel_html_message(*, bot_token: str, chat_id: str, text: str, timeou
     )
 
 
+def send_private_text_message(*, bot_token: str, telegram_user_id: int, text: str, timeout_s: float = 30.0) -> int:
+    """POST sendMessage to private user chat; return message_id."""
+    return _post_telegram_api(
+        bot_token=bot_token,
+        method="sendMessage",
+        payload={
+            "chat_id": str(telegram_user_id),
+            "text": text,
+        },
+        timeout_s=timeout_s,
+    )
+
+
+def delete_channel_message(
+    *,
+    bot_token: str,
+    chat_id: str,
+    message_id: int,
+    timeout_s: float = 30.0,
+) -> bool:
+    """Best-effort deleteMessage for a channel post; return Telegram result bool."""
+    url = f"https://api.telegram.org/bot{bot_token}/deleteMessage"
+    try:
+        with httpx.Client(timeout=timeout_s) as client:
+            response = client.post(
+                url,
+                json={
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                },
+            )
+    except httpx.HTTPError as exc:
+        raise TelegramShowcaseSendError(f"telegram_http_error: {exc}") from exc
+
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise TelegramShowcaseSendError(f"telegram_invalid_json: {response.text[:200]}") from exc
+
+    if response.status_code != 200 or not data.get("ok"):
+        desc = data.get("description") if isinstance(data, dict) else None
+        raise TelegramShowcaseSendError(
+            f"telegram_delete_failed: {desc or response.text[:200]}",
+            telegram_description=str(desc) if desc else None,
+        )
+    return bool(data.get("result"))
+
+
 def send_channel_photo(
     *,
     bot_token: str,

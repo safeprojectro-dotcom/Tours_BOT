@@ -13,6 +13,7 @@ from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
 from app.models.enums import SupplierOfferLifecycle, TourSalesMode
+from app.models.supplier import Supplier
 from app.services.supplier_offer_deep_link import (
     parse_supplier_offer_start_arg,
     private_bot_deeplink,
@@ -123,6 +124,71 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
 
         dup = self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
         self.assertEqual(dup.status_code, 400)
+
+    def test_approve_is_not_auto_publish_and_retract_is_separate_action(self) -> None:
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        headers = {"Authorization": "Bearer test-admin-secret"}
+
+        a = self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
+        self.assertEqual(a.status_code, 200, a.text)
+        self.assertEqual(a.json()["lifecycle_status"], "approved")
+        self.assertIsNone(a.json()["published_at"])
+
+        bad_retract = self.client.post(f"/admin/supplier-offers/{oid}/retract", headers=headers)
+        self.assertEqual(bad_retract.status_code, 400)
+
+        mock_cfg = SimpleNamespace(
+            telegram_bot_token="dummy-token",
+            telegram_offer_showcase_channel_id="-10012345",
+            telegram_bot_username="testbot",
+            telegram_mini_app_url="https://example.com/mini",
+        )
+        with (
+            patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
+            patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=77),
+            patch("app.services.supplier_offer_moderation_service.delete_channel_message", return_value=True),
+        ):
+            p = self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
+            self.assertEqual(p.status_code, 200, p.text)
+            self.assertEqual(p.json()["offer"]["lifecycle_status"], "published")
+            r = self.client.post(f"/admin/supplier-offers/{oid}/retract", headers=headers)
+            self.assertEqual(r.status_code, 200, r.text)
+            self.assertEqual(r.json()["lifecycle_status"], "approved")
+
+    def test_supplier_notifications_sent_for_moderation_and_publication_events(self) -> None:
+        supplier_id, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        # Bind supplier to Telegram user for notifications.
+        sup_row = self.session.get(Supplier, supplier_id)
+        self.assertIsNotNone(sup_row)
+        assert sup_row is not None
+        sup_row.primary_telegram_user_id = 991001
+        self.create_user(
+            telegram_user_id=991001,
+            username="notif_supplier",
+            preferred_language="ro",
+        )
+        self.session.commit()
+
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        mock_cfg = SimpleNamespace(
+            telegram_bot_token="dummy-token",
+            telegram_offer_showcase_channel_id="-10012345",
+            telegram_bot_username="testbot",
+            telegram_mini_app_url="https://example.com/mini",
+        )
+        with (
+            patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
+            patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=90),
+            patch("app.services.supplier_offer_moderation_service.delete_channel_message", return_value=True),
+            patch("app.services.supplier_offer_supplier_notification_service.send_private_text_message", return_value=123) as notify_send,
+        ):
+            self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
+            self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
+            self.client.post(f"/admin/supplier-offers/{oid}/retract", headers=headers)
+
+        self.assertGreaterEqual(notify_send.call_count, 3)
 
     def test_reject_sets_reason(self) -> None:
         _, token = self._bootstrap_supplier_token()
