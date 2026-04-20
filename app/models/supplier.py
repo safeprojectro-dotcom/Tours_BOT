@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.models.enums import (
+    SupplierLegalEntityType,
     SupplierOnboardingStatus,
     SupplierOfferLifecycle,
     SupplierOfferPaymentMode,
@@ -35,6 +36,14 @@ class Supplier(TimestampMixin, Base):
     )
     onboarding_contact_info: Mapped[str | None] = mapped_column(String(255), nullable=True)
     onboarding_region: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    legal_entity_type: Mapped[SupplierLegalEntityType | None] = mapped_column(
+        sqlalchemy_enum(SupplierLegalEntityType, name="supplier_legal_entity_type"),
+        nullable=True,
+    )
+    legal_registered_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    legal_registration_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    permit_license_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    permit_license_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
     onboarding_service_composition: Mapped[SupplierServiceComposition | None] = mapped_column(
         sqlalchemy_enum(SupplierServiceComposition, name="supplier_service_composition"),
         nullable=True,

@@ -25,6 +25,11 @@ class SupplierOnboardingState(StatesGroup):
     entering_display_name = State()
     entering_contact_info = State()
     entering_region = State()
+    choosing_legal_entity_type = State()
+    entering_legal_registered_name = State()
+    entering_legal_registration_code = State()
+    entering_permit_license_type = State()
+    entering_permit_license_number = State()
     choosing_service_composition = State()
     entering_fleet_summary = State()
 

@@ -48,6 +48,10 @@ SUPPLIER_ONBOARDING_CAPABILITY_TRANSPORT_ONLY = "supplier:onboarding:cap:transpo
 SUPPLIER_ONBOARDING_CAPABILITY_TRANSPORT_GUIDE = "supplier:onboarding:cap:transport_guide"
 SUPPLIER_ONBOARDING_CAPABILITY_TRANSPORT_WATER = "supplier:onboarding:cap:transport_water"
 SUPPLIER_ONBOARDING_CAPABILITY_TRANSPORT_GUIDE_WATER = "supplier:onboarding:cap:transport_guide_water"
+SUPPLIER_ONBOARDING_LEGAL_ENTITY_CALLBACK_PREFIX = "supplier:onboarding:legal_entity:"
+SUPPLIER_ONBOARDING_LEGAL_ENTITY_COMPANY = "supplier:onboarding:legal_entity:company"
+SUPPLIER_ONBOARDING_LEGAL_ENTITY_INDIVIDUAL_ENTREPRENEUR = "supplier:onboarding:legal_entity:individual_entrepreneur"
+SUPPLIER_ONBOARDING_LEGAL_ENTITY_AUTHORIZED_CARRIER = "supplier:onboarding:legal_entity:authorized_carrier"
 
 SUPPLIER_OFFER_SALES_MODE_CALLBACK_PREFIX = "supplier:offer:sales_mode:"
 SUPPLIER_OFFER_PAYMENT_MODE_CALLBACK_PREFIX = "supplier:offer:payment_mode:"

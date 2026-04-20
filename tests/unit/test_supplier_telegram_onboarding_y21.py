@@ -14,8 +14,11 @@ from app.bot.state import SupplierOnboardingState
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
-from app.models.enums import SupplierOnboardingStatus, SupplierServiceComposition
-from app.services.supplier_onboarding_service import SupplierOnboardingService
+from app.models.enums import SupplierLegalEntityType, SupplierOnboardingStatus, SupplierServiceComposition
+from app.services.supplier_onboarding_service import (
+    SupplierOnboardingApprovalValidationError,
+    SupplierOnboardingService,
+)
 from tests.unit.base import FoundationDBTestCase
 
 
@@ -91,6 +94,22 @@ class SupplierTelegramOnboardingY21Tests(FoundationDBTestCase):
 
         self._run(body())
 
+    def test_onboarding_region_moves_to_required_legal_entity_step(self) -> None:
+        async def body() -> None:
+            message = _private_message(telegram_user_id=811_007)
+            message.text = "RO Center"
+            state = MagicMock()
+            state.update_data = AsyncMock()
+            state.set_state = AsyncMock()
+            binder = _SessionLocalBinder(self.session)
+            with patch.object(supplier_onboarding, "SessionLocal", binder):
+                await supplier_onboarding.onboarding_region(message, state)
+            state.set_state.assert_awaited_with(SupplierOnboardingState.choosing_legal_entity_type)
+            text = message.answer.call_args[0][0].lower()
+            self.assertIn("legal entity", text)
+
+        self._run(body())
+
     def test_supplier_command_pending_user_gets_status_message(self) -> None:
         SupplierOnboardingService().submit_from_telegram(
             self.session,
@@ -98,6 +117,11 @@ class SupplierTelegramOnboardingY21Tests(FoundationDBTestCase):
             display_name="Pending Bot Co",
             contact_info="+4010",
             region="RO",
+            legal_entity_type=SupplierLegalEntityType.COMPANY,
+            legal_registered_name="Pending Bot Co SRL",
+            legal_registration_code="RO123456",
+            permit_license_type="Transport license",
+            permit_license_number="TL-100",
             service_composition=SupplierServiceComposition.TRANSPORT_ONLY,
             fleet_summary=None,
         )
@@ -126,6 +150,11 @@ class SupplierTelegramOnboardingY21Tests(FoundationDBTestCase):
             display_name="RoadJet",
             contact_info="+40111222333 @roadjet",
             region="RO West",
+            legal_entity_type=SupplierLegalEntityType.COMPANY,
+            legal_registered_name="RoadJet SRL",
+            legal_registration_code="RO555001",
+            permit_license_type="Road carrier license",
+            permit_license_number="RC-2026-01",
             service_composition=SupplierServiceComposition.TRANSPORT_GUIDE,
             fleet_summary="2 buses",
         )
@@ -134,6 +163,8 @@ class SupplierTelegramOnboardingY21Tests(FoundationDBTestCase):
         self.assertEqual(supplier.primary_telegram_user_id, 811_002)
         self.assertEqual(supplier.onboarding_status, SupplierOnboardingStatus.PENDING_REVIEW)
         self.assertEqual(supplier.onboarding_service_composition, SupplierServiceComposition.TRANSPORT_GUIDE)
+        self.assertEqual(supplier.legal_entity_type, SupplierLegalEntityType.COMPANY)
+        self.assertEqual(supplier.legal_registration_code, "RO555001")
         self.assertFalse(supplier.is_active)
 
     def test_pending_supplier_is_not_approved(self) -> None:
@@ -144,6 +175,11 @@ class SupplierTelegramOnboardingY21Tests(FoundationDBTestCase):
             display_name="Pending Co",
             contact_info="+4000000",
             region="RO",
+            legal_entity_type=SupplierLegalEntityType.INDIVIDUAL_ENTREPRENEUR,
+            legal_registered_name="Pending Co PFA",
+            legal_registration_code="ROPFA777",
+            permit_license_type="Local permit",
+            permit_license_number="LP-777",
             service_composition=SupplierServiceComposition.TRANSPORT_ONLY,
             fleet_summary=None,
         )
@@ -159,6 +195,11 @@ class SupplierTelegramOnboardingY21Tests(FoundationDBTestCase):
             display_name="Gate Co",
             contact_info="+40444",
             region="RO South",
+            legal_entity_type=SupplierLegalEntityType.AUTHORIZED_CARRIER,
+            legal_registered_name="Gate Carrier SA",
+            legal_registration_code="ROGATE444",
+            permit_license_type="Carrier authorization",
+            permit_license_number="CA-444",
             service_composition=SupplierServiceComposition.TRANSPORT_WATER,
             fleet_summary=None,
         )
@@ -180,7 +221,35 @@ class SupplierTelegramOnboardingY21Tests(FoundationDBTestCase):
         )
         self.assertEqual(approve.status_code, 200, approve.text)
         self.assertEqual(approve.json()["onboarding_status"], "approved")
+        self.assertEqual(approve.json()["legal_registration_code"], "ROGATE444")
         self.assertTrue(approve.json()["is_active"])
+
+    def test_admin_supplier_read_includes_legal_identity_fields(self) -> None:
+        svc = SupplierOnboardingService()
+        supplier, _ = svc.submit_from_telegram(
+            self.session,
+            telegram_user_id=811_006,
+            display_name="Legal View Co",
+            contact_info="+40666",
+            region="RO North",
+            legal_entity_type=SupplierLegalEntityType.COMPANY,
+            legal_registered_name="Legal View SRL",
+            legal_registration_code="ROVIEW666",
+            permit_license_type="Tour transport permit",
+            permit_license_number="TTP-666",
+            service_composition=SupplierServiceComposition.TRANSPORT_ONLY,
+            fleet_summary=None,
+        )
+        self.session.commit()
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        resp = self.client.get(f"/admin/suppliers/{supplier.id}", headers=headers)
+        self.assertEqual(resp.status_code, 200, resp.text)
+        body = resp.json()
+        self.assertEqual(body["legal_entity_type"], "company")
+        self.assertEqual(body["legal_registered_name"], "Legal View SRL")
+        self.assertEqual(body["legal_registration_code"], "ROVIEW666")
+        self.assertEqual(body["permit_license_type"], "Tour transport permit")
+        self.assertEqual(body["permit_license_number"], "TTP-666")
 
     def test_rejected_supplier_resubmission_returns_pending(self) -> None:
         svc = SupplierOnboardingService()
@@ -190,6 +259,11 @@ class SupplierTelegramOnboardingY21Tests(FoundationDBTestCase):
             display_name="Retry Co",
             contact_info="+40555",
             region="RO East",
+            legal_entity_type=SupplierLegalEntityType.COMPANY,
+            legal_registered_name="Retry Co SRL",
+            legal_registration_code="RORETRY1",
+            permit_license_type="Transport license",
+            permit_license_number="TRL-1",
             service_composition=SupplierServiceComposition.TRANSPORT_ONLY,
             fleet_summary=None,
         )
@@ -200,6 +274,11 @@ class SupplierTelegramOnboardingY21Tests(FoundationDBTestCase):
             display_name="Retry Co Updated",
             contact_info="+40555 @retry",
             region="RO East Updated",
+            legal_entity_type=SupplierLegalEntityType.AUTHORIZED_CARRIER,
+            legal_registered_name="Retry Co Updated SA",
+            legal_registration_code="RORETRY2",
+            permit_license_type="Carrier permit",
+            permit_license_number="CP-2",
             service_composition=SupplierServiceComposition.TRANSPORT_GUIDE_WATER,
             fleet_summary="4 vehicles",
         )
@@ -207,7 +286,20 @@ class SupplierTelegramOnboardingY21Tests(FoundationDBTestCase):
         self.assertEqual(result, "resubmitted")
         self.assertEqual(again.onboarding_status, SupplierOnboardingStatus.PENDING_REVIEW)
         self.assertEqual(again.display_name, "Retry Co Updated")
+        self.assertEqual(again.legal_registration_code, "RORETRY2")
         self.assertEqual(again.onboarding_service_composition, SupplierServiceComposition.TRANSPORT_GUIDE_WATER)
+
+    def test_admin_approve_requires_legal_identity_for_pending_supplier(self) -> None:
+        supplier = self.create_supplier(
+            code="Y21A-MISS",
+            display_name="Missing Legal",
+            is_active=False,
+            onboarding_status=SupplierOnboardingStatus.PENDING_REVIEW,
+            primary_telegram_user_id=811_099,
+        )
+        self.session.commit()
+        with self.assertRaises(SupplierOnboardingApprovalValidationError):
+            SupplierOnboardingService().admin_approve(self.session, supplier_id=supplier.id)
 
 
 if __name__ == "__main__":

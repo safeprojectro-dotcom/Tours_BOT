@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.models.enums import (
     BookingStatus,
     CancellationStatus,
+    SupplierLegalEntityType,
     PaymentStatus,
     SupplierOnboardingStatus,
     SupplierServiceComposition,
@@ -626,6 +627,11 @@ class AdminSupplierRead(BaseModel):
     onboarding_status: SupplierOnboardingStatus
     onboarding_contact_info: str | None = None
     onboarding_region: str | None = None
+    legal_entity_type: SupplierLegalEntityType | None = None
+    legal_registered_name: str | None = None
+    legal_registration_code: str | None = None
+    permit_license_type: str | None = None
+    permit_license_number: str | None = None
     onboarding_service_composition: SupplierServiceComposition | None = None
     onboarding_fleet_summary: str | None = None
     onboarding_rejection_reason: str | None = None

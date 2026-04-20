@@ -84,6 +84,14 @@ class SupplierOfferLifecycle(StrEnum):
     PUBLISHED = "published"
 
 
+class SupplierLegalEntityType(StrEnum):
+    """Y2.1a: minimal legal identity categories for supplier onboarding approval."""
+
+    COMPANY = "company"
+    INDIVIDUAL_ENTREPRENEUR = "individual_entrepreneur"
+    AUTHORIZED_CARRIER = "authorized_carrier"
+
+
 class SupplierOnboardingStatus(StrEnum):
     """Y2.1 supplier Telegram onboarding review state (identity/access gate)."""
 
