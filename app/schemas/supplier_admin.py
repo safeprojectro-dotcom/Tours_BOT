@@ -69,6 +69,49 @@ class AdminSupplierOfferPublishResult(BaseModel):
     telegram_message_id: int | None = None
 
 
+class SupplierOfferExecutionLinkRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    supplier_offer_id: int
+    tour_id: int
+    link_status: str
+    close_reason: str | None = None
+    link_note: str | None = None
+    closed_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AdminSupplierOfferExecutionLinkBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tour_id: int = Field(gt=0)
+    link_note: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("link_note")
+    @classmethod
+    def strip_note(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s or None
+
+
+class AdminSupplierOfferExecutionLinkCloseBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(default="unlinked", max_length=32)
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, v: str) -> str:
+        s = v.strip().lower()
+        if s not in {"unlinked", "retracted", "invalidated"}:
+            raise ValueError("reason must be one of: unlinked, retracted, invalidated")
+        return s
+
+
 class SupplierOfferCreate(BaseModel):
     supplier_reference: str | None = Field(default=None, max_length=64)
     title: str = Field(min_length=1, max_length=255)

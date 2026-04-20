@@ -11,7 +11,7 @@ from app.models.order import Order
 from app.models.payment import Payment
 from app.models.tour import BoardingPoint, BoardingPointTranslation, Tour, TourTranslation
 from app.models.user import User
-from app.models.supplier import Supplier, SupplierApiCredential, SupplierOffer
+from app.models.supplier import Supplier, SupplierApiCredential, SupplierOffer, SupplierOfferExecutionLink
 from app.models.waitlist import WaitlistEntry
 
 __all__ = [
@@ -30,6 +30,7 @@ __all__ = [
     "SupplierApiCredential",
     "SupplierCustomRequestResponse",
     "SupplierOffer",
+    "SupplierOfferExecutionLink",
     "Tour",
     "TourTranslation",
     "User",

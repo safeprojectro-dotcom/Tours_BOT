@@ -68,6 +68,11 @@ from app.services.supplier_offer_moderation_service import (
     SupplierOfferPublicationConfigError,
 )
 from app.services.supplier_offer_supplier_notification_service import SupplierOfferSupplierNotificationService
+from app.services.supplier_offer_execution_link_service import (
+    SupplierOfferExecutionLinkNotFoundError,
+    SupplierOfferExecutionLinkService,
+    SupplierOfferExecutionLinkValidationError,
+)
 from app.services.supplier_offer_service import SupplierOfferService
 from app.services.custom_marketplace_request_service import (
     CustomMarketplaceRequestNotFoundError,
@@ -93,8 +98,11 @@ from app.schemas.custom_marketplace import (
     CustomRequestBookingBridgeRead,
 )
 from app.schemas.supplier_admin import (
+    AdminSupplierOfferExecutionLinkBody,
+    AdminSupplierOfferExecutionLinkCloseBody,
     AdminSupplierOfferPublishResult,
     AdminSupplierOfferRejectBody,
+    SupplierOfferExecutionLinkRead,
     SupplierOfferListRead,
     SupplierOfferRead,
 )
@@ -1000,6 +1008,49 @@ def post_admin_supplier_offer_publish(offer_id: int, db: Session = Depends(get_d
     return AdminSupplierOfferPublishResult(offer=offer_read, telegram_message_id=message_id)
 
 
+@router.post("/supplier-offers/{offer_id}/execution-link", response_model=SupplierOfferExecutionLinkRead)
+def post_admin_supplier_offer_execution_link(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminSupplierOfferExecutionLinkBody = Body(...),
+) -> SupplierOfferExecutionLinkRead:
+    try:
+        row = SupplierOfferExecutionLinkService().link_offer_to_tour(
+            db,
+            offer_id=offer_id,
+            tour_id=payload.tour_id,
+            link_note=payload.link_note,
+        )
+    except SupplierOfferExecutionLinkNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    except SupplierOfferExecutionLinkValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return row
+
+
+@router.post("/supplier-offers/{offer_id}/execution-link/close", response_model=SupplierOfferExecutionLinkRead)
+def post_admin_supplier_offer_execution_link_close(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminSupplierOfferExecutionLinkCloseBody | None = Body(default=None),
+) -> SupplierOfferExecutionLinkRead:
+    body = payload or AdminSupplierOfferExecutionLinkCloseBody()
+    try:
+        row = SupplierOfferExecutionLinkService().close_active_link(
+            db,
+            offer_id=offer_id,
+            reason=body.reason,
+        )
+    except SupplierOfferExecutionLinkNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Active execution link not found.") from None
+    except SupplierOfferExecutionLinkValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    assert row is not None
+    return row
+
+
 @router.post("/supplier-offers/{offer_id}/retract", response_model=SupplierOfferRead)
 def post_admin_supplier_offer_retract(offer_id: int, db: Session = Depends(get_db)) -> SupplierOfferRead:
     try:
@@ -1008,6 +1059,13 @@ def post_admin_supplier_offer_retract(offer_id: int, db: Session = Depends(get_d
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
     except SupplierOfferModerationStateError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    # Keep execution-link history consistent with publication lifecycle.
+    SupplierOfferExecutionLinkService().close_active_link(
+        db,
+        offer_id=offer_id,
+        reason="retracted",
+        allow_missing=True,
+    )
     db.commit()
     try:
         SupplierOfferSupplierNotificationService().notify_retracted(db, offer_id=offer_id)

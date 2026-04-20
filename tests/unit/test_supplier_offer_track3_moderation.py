@@ -13,6 +13,7 @@ from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
 from app.models.enums import SupplierOfferLifecycle, TourSalesMode
+from app.models.supplier import SupplierOfferExecutionLink
 from app.models.supplier import Supplier
 from app.services.supplier_offer_deep_link import (
     parse_supplier_offer_start_arg,
@@ -238,6 +239,118 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertEqual(lst.status_code, 200)
         ids = {x["id"] for x in lst.json()["items"]}
         self.assertIn(oid, ids)
+
+    def test_admin_can_link_published_offer_to_tour_and_replace_active(self) -> None:
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        mock_cfg = SimpleNamespace(
+            telegram_bot_token="dummy-token",
+            telegram_offer_showcase_channel_id="-10012345",
+            telegram_bot_username="testbot",
+            telegram_mini_app_url="https://example.com/mini",
+        )
+        tour_a = self.create_tour(code="LNK-A", sales_mode=TourSalesMode.PER_SEAT)
+        tour_b = self.create_tour(code="LNK-B", sales_mode=TourSalesMode.PER_SEAT)
+        self.session.commit()
+        with (
+            patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
+            patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=120),
+        ):
+            self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
+            self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
+
+        r1 = self.client.post(
+            f"/admin/supplier-offers/{oid}/execution-link",
+            headers=headers,
+            json={"tour_id": tour_a.id},
+        )
+        self.assertEqual(r1.status_code, 200, r1.text)
+        self.assertEqual(r1.json()["link_status"], "active")
+        self.assertEqual(r1.json()["tour_id"], tour_a.id)
+
+        # Re-linking same tour is idempotent and keeps one active link.
+        r_same = self.client.post(
+            f"/admin/supplier-offers/{oid}/execution-link",
+            headers=headers,
+            json={"tour_id": tour_a.id},
+        )
+        self.assertEqual(r_same.status_code, 200, r_same.text)
+        self.assertEqual(r_same.json()["tour_id"], tour_a.id)
+
+        r2 = self.client.post(
+            f"/admin/supplier-offers/{oid}/execution-link",
+            headers=headers,
+            json={"tour_id": tour_b.id},
+        )
+        self.assertEqual(r2.status_code, 200, r2.text)
+        self.assertEqual(r2.json()["tour_id"], tour_b.id)
+        self.assertEqual(r2.json()["link_status"], "active")
+
+        links = (
+            self.session.query(SupplierOfferExecutionLink)
+            .filter(SupplierOfferExecutionLink.supplier_offer_id == oid)
+            .order_by(SupplierOfferExecutionLink.id.asc())
+            .all()
+        )
+        self.assertGreaterEqual(len(links), 2)
+        active = [x for x in links if x.link_status == "active"]
+        self.assertEqual(len(active), 1)
+        self.assertEqual(active[0].tour_id, tour_b.id)
+        replaced = [x for x in links if x.link_status == "closed" and x.close_reason == "replaced"]
+        self.assertGreaterEqual(len(replaced), 1)
+
+    def test_admin_can_close_active_execution_link_and_preserve_history(self) -> None:
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        mock_cfg = SimpleNamespace(
+            telegram_bot_token="dummy-token",
+            telegram_offer_showcase_channel_id="-10012345",
+            telegram_bot_username="testbot",
+            telegram_mini_app_url="https://example.com/mini",
+        )
+        tour = self.create_tour(code="LNK-CLOSE", sales_mode=TourSalesMode.PER_SEAT)
+        self.session.commit()
+        with (
+            patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
+            patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=121),
+        ):
+            self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
+            self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
+        self.client.post(
+            f"/admin/supplier-offers/{oid}/execution-link",
+            headers=headers,
+            json={"tour_id": tour.id},
+        )
+
+        close = self.client.post(
+            f"/admin/supplier-offers/{oid}/execution-link/close",
+            headers=headers,
+            json={"reason": "unlinked"},
+        )
+        self.assertEqual(close.status_code, 200, close.text)
+        self.assertEqual(close.json()["link_status"], "closed")
+        self.assertEqual(close.json()["close_reason"], "unlinked")
+
+        links = self.session.query(SupplierOfferExecutionLink).filter_by(supplier_offer_id=oid).all()
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links[0].link_status, "closed")
+        self.assertEqual(links[0].close_reason, "unlinked")
+
+    def test_execution_link_requires_published_offer(self) -> None:
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour = self.create_tour(code="LNK-REQ", sales_mode=TourSalesMode.PER_SEAT)
+        self.session.commit()
+        r = self.client.post(
+            f"/admin/supplier-offers/{oid}/execution-link",
+            headers=headers,
+            json={"tour_id": tour.id},
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("Only published offers", r.text)
 
     def test_showcase_html_contains_cta_links(self) -> None:
         supplier = self.create_supplier(code="HTML-S")

@@ -13,6 +13,8 @@ from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.models.enums import SupplierOfferLifecycle, SupplierOnboardingStatus
 from app.models.supplier import Supplier
+from app.services.supplier_offer_operational_alerts import SupplierOfferOperationalAlertService
+from app.services.supplier_offer_execution_link_service import SupplierOfferExecutionLinkService
 from app.services.supplier_offer_service import SupplierOfferService
 from app.services.supplier_onboarding_service import SupplierOnboardingService
 
@@ -47,7 +49,7 @@ def _status_key(status: SupplierOfferLifecycle) -> str:
     return f"supplier_offers_status_{status.value}"
 
 
-def _offer_operational_lines(language_code: str | None, *, offer) -> list[str]:
+def _offer_operational_lines(language_code: str | None, *, offer, execution_metrics=None) -> list[str]:
     """
     Return narrow, supplier-safe operational signals.
 
@@ -55,13 +57,8 @@ def _offer_operational_lines(language_code: str | None, *, offer) -> list[str]:
     data model has no authoritative offer->Layer A execution linkage. Showing synthetic
     booking math in bot layer would be misleading.
     """
-    lines = [
-        translate(
-            language_code,
-            "supplier_offers_operational_declared_capacity",
-            seats_total=str(offer.seats_total),
-        )
-    ]
+    declared_capacity = offer.seats_total if execution_metrics is None else execution_metrics.declared_capacity
+    lines = [translate(language_code, "supplier_offers_operational_declared_capacity", seats_total=str(declared_capacity))]
     is_published = offer.lifecycle_status == SupplierOfferLifecycle.PUBLISHED
     lines.append(
         translate(
@@ -79,7 +76,64 @@ def _offer_operational_lines(language_code: str | None, *, offer) -> list[str]:
             ),
         )
     )
-    lines.append(translate(language_code, "supplier_offers_operational_live_stats_not_available"))
+    if execution_metrics is None:
+        lines.append(translate(language_code, "supplier_offers_operational_live_stats_not_available"))
+        return lines
+
+    lines.append(
+        translate(
+            language_code,
+            "supplier_offers_operational_occupied_capacity",
+            seats=str(execution_metrics.occupied_capacity),
+        )
+    )
+    lines.append(
+        translate(
+            language_code,
+            "supplier_offers_operational_remaining_capacity",
+            seats=str(execution_metrics.remaining_capacity),
+        )
+    )
+    lines.append(
+        translate(
+            language_code,
+            "supplier_offers_operational_active_reserved_hold_seats",
+            seats=str(execution_metrics.active_reserved_hold_seats),
+        )
+    )
+    lines.append(
+        translate(
+            language_code,
+            "supplier_offers_operational_confirmed_paid_seats",
+            seats=str(execution_metrics.confirmed_paid_seats),
+        )
+    )
+    lines.append(
+        translate(
+            language_code,
+            "supplier_offers_operational_sold_out",
+            value=translate(
+                language_code,
+                "supplier_offers_operational_yes" if execution_metrics.sold_out else "supplier_offers_operational_no",
+            ),
+        )
+    )
+    return lines
+
+
+def _offer_alert_lines(language_code: str | None, *, offer) -> list[str]:
+    alerts = SupplierOfferOperationalAlertService().alerts_for_offer(offer=offer)
+    if not alerts:
+        return []
+    lines: list[str] = []
+    for alert in alerts:
+        lines.append(
+            translate(
+                language_code,
+                "supplier_offers_alert_line",
+                alert=translate(language_code, f"supplier_offers_alert_{alert.code}"),
+            )
+        )
     return lines
 
 
@@ -105,30 +159,38 @@ async def cmd_supplier_offers(message: Message, state: FSMContext) -> None:
             await message.answer(translate(lg, _gate_message_key(status_code)))
             return
         offers = SupplierOfferService().list_offers(session, supplier_id=supplier.id, limit=20, offset=0)
+        metrics_service = SupplierOfferExecutionLinkService()
+        rendered_items: list[list[str]] = []
+        for offer in offers:
+            execution_metrics = None
+            if offer.lifecycle_status == SupplierOfferLifecycle.PUBLISHED:
+                execution_metrics = metrics_service.active_metrics_for_offer(session, offer_id=offer.id)
+            one = [
+                translate(
+                    lg,
+                    "supplier_offers_workspace_line",
+                    offer_id=str(offer.id),
+                    status=translate(lg, _status_key(offer.lifecycle_status)),
+                    title=offer.title,
+                    updated_at=offer.updated_at.isoformat(timespec="minutes").replace("T", " "),
+                )
+            ]
+            one.extend(_offer_operational_lines(lg, offer=offer, execution_metrics=execution_metrics))
+            one.extend(_offer_alert_lines(lg, offer=offer))
+            if offer.lifecycle_status == SupplierOfferLifecycle.REJECTED and offer.moderation_rejection_reason:
+                one.append(
+                    translate(
+                        lg,
+                        "supplier_offers_workspace_reject_reason",
+                        reason=offer.moderation_rejection_reason,
+                    )
+                )
+            rendered_items.append(one)
     await state.clear()
     if not offers:
         await message.answer(translate(lg, "supplier_offers_workspace_empty"))
         return
     lines = [translate(lg, "supplier_offers_workspace_title")]
-    for offer in offers:
-        status_label = translate(lg, _status_key(offer.lifecycle_status))
-        lines.append(
-            translate(
-                lg,
-                "supplier_offers_workspace_line",
-                offer_id=str(offer.id),
-                status=status_label,
-                title=offer.title,
-                updated_at=offer.updated_at.isoformat(timespec="minutes").replace("T", " "),
-            )
-        )
-        lines.extend(_offer_operational_lines(lg, offer=offer))
-        if offer.lifecycle_status == SupplierOfferLifecycle.REJECTED and offer.moderation_rejection_reason:
-            lines.append(
-                translate(
-                    lg,
-                    "supplier_offers_workspace_reject_reason",
-                    reason=offer.moderation_rejection_reason,
-                )
-            )
+    for block in rendered_items:
+        lines.extend(block)
     await message.answer("\n\n".join(lines))

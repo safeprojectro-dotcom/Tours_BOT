@@ -140,3 +140,46 @@ class SupplierOffer(TimestampMixin, Base):
     showcase_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
     supplier: Mapped["Supplier"] = relationship(back_populates="offers")
+    execution_links: Mapped[list["SupplierOfferExecutionLink"]] = relationship(
+        back_populates="supplier_offer",
+        cascade="all, delete-orphan",
+    )
+
+
+class SupplierOfferExecutionLink(TimestampMixin, Base):
+    """Explicit supplier_offer -> Layer A tour execution linkage (Y27.1)."""
+
+    __tablename__ = "supplier_offer_execution_links"
+    __table_args__ = (
+        CheckConstraint("link_status IN ('active', 'closed')", name="ck_supplier_offer_exec_links_status"),
+        CheckConstraint(
+            "close_reason IS NULL OR close_reason IN ('replaced', 'unlinked', 'retracted', 'invalidated')",
+            name="ck_supplier_offer_exec_links_close_reason",
+        ),
+        CheckConstraint(
+            "("
+            "(link_status = 'active' AND closed_at IS NULL AND close_reason IS NULL)"
+            " OR "
+            "(link_status = 'closed' AND closed_at IS NOT NULL)"
+            ")",
+            name="ck_supplier_offer_exec_links_active_closed_consistency",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    supplier_offer_id: Mapped[int] = mapped_column(
+        ForeignKey("supplier_offers.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    tour_id: Mapped[int] = mapped_column(
+        ForeignKey("tours.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    link_status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    close_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    link_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    supplier_offer: Mapped["SupplierOffer"] = relationship(back_populates="execution_links")
