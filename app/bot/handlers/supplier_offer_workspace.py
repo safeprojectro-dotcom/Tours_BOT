@@ -47,6 +47,42 @@ def _status_key(status: SupplierOfferLifecycle) -> str:
     return f"supplier_offers_status_{status.value}"
 
 
+def _offer_operational_lines(language_code: str | None, *, offer) -> list[str]:
+    """
+    Return narrow, supplier-safe operational signals.
+
+    We intentionally do not compute sold/hold/payment aggregates here because the current
+    data model has no authoritative offer->Layer A execution linkage. Showing synthetic
+    booking math in bot layer would be misleading.
+    """
+    lines = [
+        translate(
+            language_code,
+            "supplier_offers_operational_declared_capacity",
+            seats_total=str(offer.seats_total),
+        )
+    ]
+    is_published = offer.lifecycle_status == SupplierOfferLifecycle.PUBLISHED
+    lines.append(
+        translate(
+            language_code,
+            "supplier_offers_operational_publication_active" if is_published else "supplier_offers_operational_publication_inactive",
+        )
+    )
+    lines.append(
+        translate(
+            language_code,
+            "supplier_offers_operational_progress_hint",
+            hint=translate(
+                language_code,
+                "supplier_offers_operational_progress_published" if is_published else "supplier_offers_operational_progress_unpublished",
+            ),
+        )
+    )
+    lines.append(translate(language_code, "supplier_offers_operational_live_stats_not_available"))
+    return lines
+
+
 @router.message(Command("supplier_offers"))
 async def cmd_supplier_offers(message: Message, state: FSMContext) -> None:
     if message.from_user is None:
@@ -86,6 +122,7 @@ async def cmd_supplier_offers(message: Message, state: FSMContext) -> None:
                 updated_at=offer.updated_at.isoformat(timespec="minutes").replace("T", " "),
             )
         )
+        lines.extend(_offer_operational_lines(lg, offer=offer))
         if offer.lifecycle_status == SupplierOfferLifecycle.REJECTED and offer.moderation_rejection_reason:
             lines.append(
                 translate(
