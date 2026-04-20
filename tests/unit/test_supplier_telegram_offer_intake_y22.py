@@ -1,4 +1,4 @@
-"""Y2.2: supplier Telegram offer intake (approved gate, draft persistence, moderation submit)."""
+"""Y2.2a: supplier Telegram offer intake polish (navigation, validation, submit boundary)."""
 
 from __future__ import annotations
 
@@ -7,9 +7,16 @@ import unittest
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.bot.constants import SUPPLIER_OFFER_SUBMIT_CALLBACK_PREFIX
+from app.bot.constants import SUPPLIER_OFFER_PAYMENT_MODE_CALLBACK_PREFIX, SUPPLIER_OFFER_SUBMIT_CALLBACK_PREFIX
 from app.bot.handlers import supplier_offer_intake
-from app.models.enums import SupplierOfferLifecycle, SupplierOnboardingStatus, SupplierServiceComposition
+from app.bot.state import SupplierOfferIntakeState
+from app.models.enums import (
+    SupplierOfferLifecycle,
+    SupplierOfferPaymentMode,
+    SupplierOnboardingStatus,
+    SupplierServiceComposition,
+    TourSalesMode,
+)
 from app.services.supplier_offer_service import SupplierOfferService
 from tests.unit.base import FoundationDBTestCase
 
@@ -43,6 +50,9 @@ class _DictFSMState:
 
     async def set_state(self, value) -> None:
         self.last_state = value
+
+    async def get_state(self):
+        return self.last_state
 
 
 def _private_message(*, telegram_user_id: int) -> MagicMock:
@@ -94,8 +104,8 @@ class SupplierTelegramOfferIntakeY22Tests(FoundationDBTestCase):
             message = _private_message(telegram_user_id=912_001)
             with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
                 await supplier_offer_intake.cmd_supplier_offer(message, state)
-            text = message.answer.call_args[0][0].lower()
-            self.assertIn("supplier offer intake", text)
+            all_texts = [c.args[0].lower() for c in message.answer.call_args_list]
+            self.assertTrue(any("supplier offer intake" in t for t in all_texts))
             self.assertIsNotNone(state.last_state)
 
         self._run(body())
@@ -140,6 +150,80 @@ class SupplierTelegramOfferIntakeY22Tests(FoundationDBTestCase):
         text = asyncio.run(body())
         self.assertIn("onboarding", text)
 
+    def test_back_navigation_works_safely(self) -> None:
+        async def body() -> None:
+            state = _DictFSMState()
+            await state.set_state(SupplierOfferIntakeState.entering_description)
+            message = _private_message(telegram_user_id=912_010)
+            message.text = "inapoi"
+            with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
+                await supplier_offer_intake.intake_description(message, state)
+            self.assertEqual(state.last_state, SupplierOfferIntakeState.entering_title)
+
+        self._run(body())
+
+    def test_home_navigation_resets_flow_safely(self) -> None:
+        async def body() -> None:
+            state = _DictFSMState()
+            await state.set_state(SupplierOfferIntakeState.entering_departure_point)
+            await state.update_data(title="Draft title")
+            message = _private_message(telegram_user_id=912_011)
+            message.text = "Acasă"
+            with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
+                await supplier_offer_intake.intake_departure_point(message, state)
+            self.assertIsNone(state.last_state)
+            self.assertEqual(state.data, {})
+
+        self._run(body())
+
+    def test_invalid_datetime_is_rejected_clearly(self) -> None:
+        async def body() -> None:
+            state = _DictFSMState()
+            await state.set_state(SupplierOfferIntakeState.entering_departure_datetime)
+            message = _private_message(telegram_user_id=912_012)
+            message.text = "2026-12-01"
+            with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
+                await supplier_offer_intake.intake_departure(message, state)
+            text = message.answer.call_args[0][0].lower()
+            self.assertIn("date/time", text)
+            self.assertEqual(state.last_state, SupplierOfferIntakeState.entering_departure_datetime)
+
+        self._run(body())
+
+    def test_invalid_currency_is_rejected_clearly(self) -> None:
+        async def body() -> None:
+            state = _DictFSMState()
+            await state.set_state(SupplierOfferIntakeState.entering_currency)
+            message = _private_message(telegram_user_id=912_013)
+            message.text = "EURO"
+            with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
+                await supplier_offer_intake.intake_currency(message, state)
+            text = message.answer.call_args[0][0].lower()
+            self.assertIn("3-letter", text)
+            self.assertEqual(state.last_state, SupplierOfferIntakeState.entering_currency)
+
+        self._run(body())
+
+    def test_price_prompt_changes_based_on_sales_mode(self) -> None:
+        async def body(sales_mode: TourSalesMode) -> str:
+            state = _DictFSMState()
+            await state.set_state(SupplierOfferIntakeState.choosing_payment_mode)
+            await state.update_data(sales_mode=sales_mode.value)
+            message = _private_message(telegram_user_id=912_014)
+            cb = _callback(
+                telegram_user_id=912_014,
+                data=f"{SUPPLIER_OFFER_PAYMENT_MODE_CALLBACK_PREFIX}{SupplierOfferPaymentMode.PLATFORM_CHECKOUT.value}",
+                message=message,
+            )
+            with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
+                await supplier_offer_intake.intake_payment_mode(cb, state)
+            return message.answer.call_args[0][0].lower()
+
+        per_seat = asyncio.run(body(TourSalesMode.PER_SEAT))
+        full_bus = asyncio.run(body(TourSalesMode.FULL_BUS))
+        self.assertIn("per seat", per_seat)
+        self.assertIn("full-bus", full_bus)
+
     def test_draft_persists_and_submit_moves_to_moderation_ready(self) -> None:
         supplier = self.create_supplier(
             code="Y22-SUB",
@@ -159,13 +243,14 @@ class SupplierTelegramOfferIntakeY22Tests(FoundationDBTestCase):
             await state.update_data(
                 title="Telegram Offer",
                 description="Short route description",
+                departure_point="Chisinau",
                 departure_datetime="2026-10-01T08:00:00+00:00",
                 return_datetime="2026-10-02T18:00:00+00:00",
                 seats_total=40,
-                base_price="120.00",
-                currency="EUR",
                 sales_mode="per_seat",
                 payment_mode="platform_checkout",
+                base_price="120.00",
+                currency="EUR",
                 program_text="Program details",
             )
             message = _private_message(telegram_user_id=912_004)
@@ -207,13 +292,14 @@ class SupplierTelegramOfferIntakeY22Tests(FoundationDBTestCase):
             await state.update_data(
                 title=title,
                 description="Desc",
+                departure_point="Iasi",
                 departure_datetime="2026-11-01T09:00:00+00:00",
                 return_datetime="2026-11-02T20:00:00+00:00",
                 seats_total=30,
-                base_price="99.00",
-                currency="EUR",
                 sales_mode="per_seat",
                 payment_mode="platform_checkout",
+                base_price="99.00",
+                currency="EUR",
                 program_text="Program",
             )
             message = _private_message(telegram_user_id=912_005)
