@@ -64,6 +64,32 @@ Documentation synchronization checkpoint after completion of Tracks **5g.4a–5g
 
 ---
 
+## Checkpoint Sync — Y24 + Y25 (2026-04-20)
+
+### Resolved and accepted (not open questions)
+- Supplier read-side now includes narrow operational visibility in **`/supplier_offers`** for supplier-owned offers only.
+- Supplier read-side now includes narrow operational alerts in **`/supplier_offers`** with deterministic non-PII signals:
+  - `publication_retracted`
+  - `offer_departing_soon`
+  - `offer_departed`
+- Y24/Y25 remained strictly read-side only and did not add booking/payment mutation controls.
+
+### Current read-side boundaries (must remain true)
+- Supplier sees own offers only.
+- Supplier sees lifecycle status, reject-reason visibility, and publication/retraction visibility.
+- Supplier does **not** get customer PII, customer list views, payment rows/provider details, or booking/payment control surfaces.
+- Supplier analytics/finance dashboard scope remains postponed.
+
+### Still open / postponed
+- Booking-derived aggregate alerting remains postponed until authoritative offer→execution linkage is explicitly designed and accepted.
+- Examples intentionally postponed for now: first confirmed booking, low remaining capacity, sold out/full alerts.
+- No ad hoc booking-derived math should be added in bot handlers without that linkage.
+
+### Next safe step pointer
+- Narrow design gate for authoritative supplier offer→execution linkage (read-only design first), then additive supplier read-side extension if accepted.
+
+---
+
 ## 1. Reservation expiry status semantics
 
 ### Current decision
