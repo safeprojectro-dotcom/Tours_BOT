@@ -34,6 +34,36 @@ Documentation synchronization checkpoint after completion of Tracks **5g.4a–5g
 
 ---
 
+## Checkpoint Sync — Y2.3 + Y2.1a (2026-04-20)
+
+### Resolved and accepted (not open questions)
+- Supplier v1 operational loop is now implemented in narrow scope: onboarding gate, supplier offer intake, moderation/publication actions, retract path, supplier read-side list, and supplier Telegram lifecycle notifications.
+- Approve and publish are explicitly separate semantics (`approve != publish`); reject reason is supplier-visible.
+- Supplier onboarding legal/compliance minimum identity fields are required on the pending-approval path: `legal_entity_type`, `legal_registered_name`, `legal_registration_code`, `permit_license_type`, `permit_license_number`.
+
+### Compatibility baseline (must remain true)
+- No Layer A booking/payment semantics change.
+- No RFQ/bridge execution semantics change.
+- No payment-entry/reconciliation semantics change.
+- No Mode 2/Mode 3 merge.
+
+### Explicitly accepted compatibility nuance
+- Legacy already-approved suppliers remain operationally compatible.
+- Existing approved supplier rows may still have NULL in new legal fields by design.
+- Legal completeness guard applies to approving pending suppliers, not retroactive forced migration of all approved suppliers.
+
+### Still open / postponed
+- Clean-room live verification for a brand-new supplier completing the full legal-hardened onboarding path in production is still pending.
+- Legal document upload/KYC file workflow remains postponed.
+- Full compliance audit subsystem remains postponed.
+- Supplier analytics/dashboard portal rewrite remains postponed.
+- Full supplier org/RBAC redesign remains postponed.
+
+### Next safe step pointer
+- Narrow supplier operational visibility / basic stats (read-side only, no PII, no booking/payment controls).
+
+---
+
 ## 1. Reservation expiry status semantics
 
 ### Current decision

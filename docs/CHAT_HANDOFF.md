@@ -23,18 +23,43 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Hotfixes / production fixes:** supplier-offer `/start` payload/title hotfix; request-detail empty-control crash hotfix; production schema drift fix for `custom_request_booking_bridges`; custom request submit success-state hotfix; custom request **422** validation visibility hotfix.
 - **Y2 design gate:** supplier Telegram operating model documented in **`docs/SUPPLIER_TELEGRAM_OPERATING_MODEL_Y2.md`** (design-only; no semantic/runtime changes).
 - **Y2.1 implementation:** supplier Telegram identity binding + onboarding FSM + admin approve/reject gate completed and verified.
+- **Y2.2 implementation:** approved supplier Telegram offer intake (**`/supplier_offer`**) with draft persistence and explicit submit to **`ready_for_moderation`**.
+- **Y2.2a implementation:** supplier offer intake polish (navigation, validation hardening, field order/readability, review summary) completed as a narrow additive pass.
+- **Y2.3 implementation:** supplier/admin moderation-publication workspace completed (**`/supplier_offers`** read-side, approve/reject/publish/retract ops path, supplier Telegram status notifications).
+- **Y2.1a implementation:** supplier onboarding legal/compliance hardening completed (mandatory legal identity fields for pending-approval onboarding path).
 
-### Supplier continuity truth (Y2/Y2.1 accepted)
+### Supplier continuity truth (Y2/Y2.3/Y2.1a accepted)
 - Supplier v1 model is **supplier entity + one primary Telegram-bound operator**.
 - Telegram user binding is the practical supplier operating access anchor.
 - Supplier onboarding runs through Telegram FSM and persists onboarding profile fields.
 - Supplier operational access requires explicit admin approval (pending/rejected are not operational).
-- Supplier offer intake must not bypass moderation/publication.
+- Supplier offer loop now exists end-to-end in narrow scope:
+  - **`/supplier`** onboarding (`pending_review` / `approved` / `rejected`) + admin approve/reject gate.
+  - **`/supplier_offer`** draft intake + explicit submit to **`ready_for_moderation`**.
+  - Admin moderation/publication actions: approve, reject(with reason), publish, retract.
+  - **`/supplier_offers`** supplier read-side status visibility.
+  - Supplier Telegram notifications: approved, rejected(with reason), published, retracted.
+- Approve/publish remain separate by design:
+  - **approve does not auto-publish**;
+  - **publish** is an explicit admin action;
+  - **reject** carries supplier-visible reason;
+  - **retract** moves published offer back to **approved**.
 - Supplier onboarding / bot entry must not directly create live Layer A tours.
 - Multi-operator organization / RBAC is explicitly postponed beyond Y2.1.
+- Supplier legal/compliance identity is now required for pending onboarding approvals:
+  - **`legal_entity_type`**
+  - **`legal_registered_name`**
+  - **`legal_registration_code`**
+  - **`permit_license_type`**
+  - **`permit_license_number`**
+- Backward compatibility is intentionally narrow and explicit:
+  - legacy already-approved suppliers remain operationally compatible;
+  - legacy approved rows may still contain **NULL** in new legal fields;
+  - legal completeness guard applies to approving **pending** suppliers (not retroactive forced migration of all already-approved rows).
 
-### Live verification facts (Y2.1)
+### Live verification facts (Y2.1 / Y2.3 / Y2.1a)
 - Railway migration applied successfully: **`20260425_14_supplier_telegram_onboarding_gate`**.
+- Railway migration applied successfully: **`20260426_15_supplier_legal_compliance_fields`**.
 - **`/health`** returns ok.
 - **`/healthz`** returns ready.
 - Supplier onboarding pending path verified in Telegram.
@@ -42,6 +67,11 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - Admin onboarding approve endpoint verified live.
 - Repeated **`/supplier`** correctly shows approved state.
 - Reject live verification is not claimed here beyond tested local route behavior.
+- Y2.3 moderation/publication workspace is implemented in code and test-covered.
+- Supplier offer flow remains live-working for existing approved suppliers.
+- Legacy approved supplier compatibility behavior is confirmed.
+- Full clean-room live verification for a brand-new supplier through the new legal onboarding path is still pending (not overclaimed).
+- Retract channel deletion uses best-effort Telegram **`deleteMessage`** behavior and does not block retract state transition when deletion fails.
 
 ### Live-verified and compatibility baseline
 - **Layer A remains source of truth** for booking/payment.
@@ -51,7 +81,12 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Mode 2 != Mode 3** remains explicit and preserved.
 
 ### Next safe step (after this sync)
-- **Y2.2 — Supplier Telegram offer intake (safe and additive):** approved supplier can create/edit **draft** offers via Telegram and explicitly submit to moderation (**`ready_for_moderation`**) with no direct publish, no moderation bypass, and no direct Layer A live-tour creation.
+- **Next supplier-safe step:** narrow supplier operational visibility / basic stats (read-side only):
+  - basic published-offer operational visibility;
+  - load/seat-progress style metrics only when safe;
+  - no customer PII;
+  - no finance dashboard;
+  - no booking/payment control redesign.
 
 ### Do-not-reopen items
 - Do not reopen closed tracks for redesign by default (including completed 5g/U/V/W/X/A1 blocks).
@@ -1200,11 +1235,15 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 ## Next Safe Step
 
 ### Next safe step
-**Y2.1 post-sync default:** **Y2.2 — Supplier Telegram offer intake** for **approved** suppliers only (create/edit **draft** + explicit submit to moderation).  
+**Y2.3 + Y2.1a post-sync default:** **narrow supplier operational visibility / basic stats** (read-side only, safe additive scope).  
 **Secondary product track (separate):** **Phase 7.1 / Sales Mode / Step 6+** for scope beyond closed **5g.4**. **Do not** reopen **5g.4** unless fixing a regression.
 
 **Goal:**
-- Prioritize **charter pricing**, **supplier-defined** catalog policy, **private-bot** charter UX, **localization**, or **E2E** tests **only** with explicit scope — **after** accepting that **virgin catalog whole-bus** self-serve + **Layer A** payment-entry + **My bookings** visibility are **already shipped** for Mode 2.
+- Prioritize supplier read-side operational visibility in narrow scope:
+  - offer-level status/operational progress signals;
+  - basic load/seat-progress style metrics when safely derivable;
+  - no customer identity exposure;
+  - no booking/payment control mutation surface.
 
 **Must not expand into (unless explicitly approved):**
 - **Payment reconciliation** or **payment-entry** semantic changes
@@ -1232,7 +1271,7 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 **Plan:** `docs/IMPLEMENTATION_PLAN.md` — Phase 7 **closed**; **active sub-track:** **Phase 7.1 — tour sales mode** (**Steps 1–5** + **5g.4a–5g.4d** done; **Step 6+** forward). **V2 supplier marketplace:** `docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md` — **Track 0** through **Track 5e** complete for scoped slices (request marketplace + RFQ bridge execution + supersede/cancel lifecycle); **next V2 marketplace slices** (product-prioritized): customer **multi-quote** UX, notifications, bot deep links — see that plan’s status table.
 
 ## Recommended Next Prompt
-Default continuation prompt: **Y2.2 — Supplier Telegram offer intake** (approved supplier only; draft/edit + submit for moderation), preserving all booking/payment/RFQ semantics and moderation boundaries.  
+Default continuation prompt: **Supplier operational visibility / basic stats (narrow read-side)** — additive supplier-facing visibility on own published-offer operational progress only, preserving booking/payment/RFQ semantics and privacy boundaries.  
 Separate optional product thread: **Phase 7.1 / Sales Mode / Step 6+** beyond **`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**. **No** reopening **5g.4** / Layer A payment semantics without a regression ticket. **Phase 7** remains closed — **`docs/PHASE_7_REVIEW.md`**; do not reopen **`grp_followup_*`** by default. Sources: **`docs/CHAT_HANDOFF.md`**, **`docs/CHECKPOINT_UVXWA1_SUMMARY.md`**, **`docs/SUPPLIER_TELEGRAM_OPERATING_MODEL_Y2.md`**, **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`**, **`docs/TECH_SPEC_TOURS_BOT.md`**.
 
 ---
