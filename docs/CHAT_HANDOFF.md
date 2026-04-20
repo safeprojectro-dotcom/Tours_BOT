@@ -29,8 +29,9 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Y2.1a implementation:** supplier onboarding legal/compliance hardening completed (mandatory legal identity fields for pending-approval onboarding path).
 - **Y24 implementation:** narrow supplier operational visibility added in **`/supplier_offers`** (read-side only, safe aggregate signals, no PII).
 - **Y25 implementation:** narrow supplier operational alerts added in **`/supplier_offers`** (publication retracted, departing soon, departed; deterministic read-side derivation only).
+- **Y27 design gate:** authoritative supplier offer→execution linkage design accepted in **`docs/SUPPLIER_OFFER_EXECUTION_LINKAGE_DESIGN.md`** (design-only, no runtime changes in this gate).
 
-### Supplier continuity truth (Y2/Y2.3/Y2.1a/Y24/Y25 accepted)
+### Supplier continuity truth (Y2/Y2.3/Y2.1a/Y24/Y25/Y27 accepted)
 - Supplier v1 model is **supplier entity + one primary Telegram-bound operator**.
 - Telegram user binding is the practical supplier operating access anchor.
 - Supplier onboarding runs through Telegram FSM and persists onboarding profile fields.
@@ -72,6 +73,12 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - Booking-derived aggregate alerting remains postponed until explicit authoritative linkage exists:
   - examples intentionally postponed: first confirmed booking, low remaining capacity, sold out/full.
   - do not invent booking-derived supplier alerts without safe, deterministic **offer → execution** linkage.
+- Y27 design truth (accepted, pre-implementation):
+  - authoritative execution truth for supplier booking-derived read-side metrics is Layer A **`Tour + Order`**;
+  - safe booking-derived supplier stats require explicit additive persisted linkage;
+  - recommended linkage path is additive table **`supplier_offer_execution_links`** with one-active-link invariant;
+  - legacy supplier offers may remain unlinked (fallback remains lifecycle-only/no execution stats);
+  - richer booking-derived alerts remain postponed until linkage persistence is implemented.
 
 ### Live verification facts (Y2.1 / Y2.3 / Y2.1a)
 - Railway migration applied successfully: **`20260425_14_supplier_telegram_onboarding_gate`**.
@@ -97,11 +104,11 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Mode 2 != Mode 3** remains explicit and preserved.
 
 ### Next safe step (after this sync)
-- **Next supplier-safe step:** narrow design gate for authoritative **offer → execution linkage** (read-only design first):
-  - define safe and deterministic linkage for supplier-owned published offers to Layer A execution truth;
-  - specify which additional read-only operational metrics/alerts become valid only after that linkage;
-  - keep supplier visibility non-PII and non-financial at this stage;
-  - no booking/payment control redesign.
+- **Next supplier-safe step:** **Y27.1 — supplier offer execution linkage persistence + admin link/unlink**:
+  - additive linkage persistence for supplier offer → Layer A `Tour`;
+  - one-active-link invariant per supplier offer;
+  - admin-controlled link/replace/unlink semantics for published/retracted flow;
+  - keep supplier read-side non-PII and control-free (no booking/payment mutation surfaces).
 
 ### Do-not-reopen items
 - Do not reopen closed tracks for redesign by default (including completed 5g/U/V/W/X/A1 blocks).
@@ -1250,13 +1257,13 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 ## Next Safe Step
 
 ### Next safe step
-**Y24 + Y25 post-sync default:** **narrow design gate for authoritative supplier offer→execution linkage** (read-only design scope first).  
+**Y27 post-sync default:** **Y27.1 — supplier offer execution linkage persistence + admin link/unlink** (narrow additive implementation scope).  
 **Secondary product track (separate):** **Phase 7.1 / Sales Mode / Step 6+** for scope beyond closed **5g.4**. **Do not** reopen **5g.4** unless fixing a regression.
 
 **Goal:**
-- Prioritize a narrow supplier linkage design gate:
-  - define authoritative and safe **offer → execution** mapping boundaries;
-  - document which booking-derived aggregate signals can be exposed only after linkage is explicit;
+- Prioritize narrow linkage persistence implementation:
+  - persist authoritative supplier offer → Layer A execution linkage;
+  - enable safe additive booking-derived aggregate supplier read-side metrics only where linkage exists;
   - preserve current non-PII, read-only supplier surfaces;
   - no booking/payment control mutation surface.
 
@@ -1286,7 +1293,7 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 **Plan:** `docs/IMPLEMENTATION_PLAN.md` — Phase 7 **closed**; **active sub-track:** **Phase 7.1 — tour sales mode** (**Steps 1–5** + **5g.4a–5g.4d** done; **Step 6+** forward). **V2 supplier marketplace:** `docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md` — **Track 0** through **Track 5e** complete for scoped slices (request marketplace + RFQ bridge execution + supersede/cancel lifecycle); **next V2 marketplace slices** (product-prioritized): customer **multi-quote** UX, notifications, bot deep links — see that plan’s status table.
 
 ## Recommended Next Prompt
-Default continuation prompt: **Supplier-side authoritative offer→execution linkage design gate (narrow, read-only)** — define safe mapping and eligibility for future booking-derived aggregate visibility/alerts, preserving booking/payment/RFQ semantics and privacy boundaries.  
+Default continuation prompt: **Y27.1 — supplier offer execution linkage persistence + admin link/unlink (narrow additive implementation)** — add authoritative linkage storage and admin controls, then expose safe booking-derived aggregate supplier read-side only when linked, preserving booking/payment/RFQ semantics and privacy boundaries.  
 Separate optional product thread: **Phase 7.1 / Sales Mode / Step 6+** beyond **`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**. **No** reopening **5g.4** / Layer A payment semantics without a regression ticket. **Phase 7** remains closed — **`docs/PHASE_7_REVIEW.md`**; do not reopen **`grp_followup_*`** by default. Sources: **`docs/CHAT_HANDOFF.md`**, **`docs/CHECKPOINT_UVXWA1_SUMMARY.md`**, **`docs/SUPPLIER_TELEGRAM_OPERATING_MODEL_Y2.md`**, **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`**, **`docs/TECH_SPEC_TOURS_BOT.md`**.
 
 ---

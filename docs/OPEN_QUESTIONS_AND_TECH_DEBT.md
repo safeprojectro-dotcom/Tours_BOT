@@ -90,6 +90,35 @@ Documentation synchronization checkpoint after completion of Tracks **5g.4a–5g
 
 ---
 
+## Checkpoint Sync — Y27 (design accepted, pre-Y27.1 implementation) (2026-04-20)
+
+### Resolved and accepted (not open questions)
+- Supplier v1 scope remains intact in narrow operational form: onboarding + legal/compliance pending-approval hardening, supplier offer intake, moderation/publication/retract, supplier workspace, narrow operational visibility, and narrow alerts.
+- Y27 design gate is accepted: authoritative supplier booking-derived execution truth is Layer A `Tour + Order`.
+- Y27 design recommends explicit additive linkage persistence (`supplier_offer_execution_links`) with one-active-link invariant.
+
+### Current read-side boundaries (must remain true)
+- Supplier sees own offers only.
+- Supplier sees lifecycle status, reject-reason visibility, publication/retraction visibility, narrow operational visibility, and narrow alerts (`publication_retracted`, `offer_departing_soon`, `offer_departed`).
+- Supplier does **not** see customer PII, customer lists, payment rows/provider details, booking/payment controls, or finance dashboards.
+
+### Still open / postponed
+- Booking-derived aggregate supplier metrics and richer booking-derived alerts remain postponed until Y27.1 linkage persistence is implemented.
+- Legacy offers may remain unlinked; unlinked offers continue lifecycle-only fallback.
+- No ad hoc booking-derived math in bot/read handlers before explicit linkage persistence.
+
+### Compatibility baseline (must remain true)
+- No Layer A booking/payment redesign.
+- No RFQ/bridge redesign.
+- No payment-entry/reconciliation redesign.
+- No customer PII exposure.
+- No broad supplier portal or RBAC redesign.
+
+### Next safe step pointer
+- **Y27.1 — supplier offer execution linkage persistence + admin link/unlink** (narrow additive implementation).
+
+---
+
 ## 1. Reservation expiry status semantics
 
 ### Current decision
