@@ -50,3 +50,10 @@ class SupplierOfferIntakeState(StatesGroup):
     entering_program_text = State()
     entering_vehicle_or_notes = State()
     awaiting_submit_action = State()
+
+
+class AdminModerationState(StatesGroup):
+    """Y28.1: Telegram admin moderation workspace state."""
+
+    browsing_offer_queue = State()
+    awaiting_reject_reason = State()

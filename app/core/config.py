@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     telegram_mini_app_url: str | None = Field(default=None, alias="TELEGRAM_MINI_APP_URL")
     #: Channel ID (e.g. -1001234567890) for moderated supplier-offer showcase posts (Track 3). Optional until publishing.
     telegram_offer_showcase_channel_id: str | None = Field(default=None, alias="TELEGRAM_OFFER_SHOWCASE_CHANNEL_ID")
+    #: Comma-separated Telegram user IDs allowed to access admin bot workspace (Y28.1, fail-closed).
+    telegram_admin_allowlist_user_ids: str = Field(default="", alias="TELEGRAM_ADMIN_ALLOWLIST_USER_IDS")
     telegram_default_language: str = Field(default="en", alias="TELEGRAM_DEFAULT_LANGUAGE")
     telegram_supported_languages: str = Field(
         default="en,ro,ru,sr,hu,it,de",
@@ -61,6 +63,19 @@ class Settings(BaseSettings):
     def telegram_supported_language_codes(self) -> tuple[str, ...]:
         codes = [code.strip().lower() for code in self.telegram_supported_languages.split(",")]
         return tuple(code for code in codes if code)
+
+    @property
+    def telegram_admin_allowlist_ids(self) -> tuple[int, ...]:
+        out: list[int] = []
+        for raw in self.telegram_admin_allowlist_user_ids.split(","):
+            txt = raw.strip()
+            if not txt:
+                continue
+            try:
+                out.append(int(txt))
+            except ValueError:
+                continue
+        return tuple(out)
 
 
 @lru_cache
