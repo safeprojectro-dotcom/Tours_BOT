@@ -280,7 +280,7 @@ async def admin_queue_navigation(query: CallbackQuery, state: FSMContext) -> Non
 
 def _parse_action(data: str) -> tuple[str, int] | None:
     raw = data.removeprefix(ADMIN_OFFERS_ACTION_CALLBACK_PREFIX)
-    parts = raw.split(":", 1)
+    parts = raw.rsplit(":", 1)
     if len(parts) != 2:
         return None
     action_name, offer_id_raw = parts
@@ -316,19 +316,26 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
         return
     parsed = _parse_action(query.data)
     if parsed is None:
+        await query.message.answer(
+            translate(
+                lg,
+                "admin_offer_action_unavailable",
+                detail=f"Unknown action payload: {query.data}",
+            )
+        )
         await query.answer()
         return
     action_name, offer_id = parsed
     moderation = SupplierOfferModerationService()
     try:
         with SessionLocal() as session:
-            if action_name == "reject":
+            if action_name == ADMIN_OFFERS_ACTION_REJECT:
                 await state.set_state(AdminModerationState.awaiting_reject_reason)
                 await state.update_data(current_offer_id=offer_id, reject_offer_id=offer_id)
                 await query.message.answer(translate(lg, "admin_offer_reject_prompt", offer_id=str(offer_id)))
                 await query.answer()
                 return
-            if action_name == "approve":
+            if action_name == ADMIN_OFFERS_ACTION_APPROVE:
                 moderation.approve(session, offer_id=offer_id)
                 session.commit()
                 try:
@@ -336,7 +343,7 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                 except Exception:
                     pass
                 done_key = "admin_offer_action_done_approve"
-            elif action_name == "publish":
+            elif action_name == ADMIN_OFFERS_ACTION_PUBLISH:
                 moderation.publish(session, offer_id=offer_id)
                 session.commit()
                 try:
@@ -344,7 +351,7 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                 except Exception:
                     pass
                 done_key = "admin_offer_action_done_publish"
-            elif action_name == "retract":
+            elif action_name == ADMIN_OFFERS_ACTION_RETRACT:
                 moderation.retract_published(session, offer_id=offer_id)
                 SupplierOfferExecutionLinkService().close_active_link(
                     session,
@@ -359,6 +366,13 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                     pass
                 done_key = "admin_offer_action_done_retract"
             else:
+                await query.message.answer(
+                    translate(
+                        lg,
+                        "admin_offer_action_unavailable",
+                        detail=f"Unknown action: {action_name}",
+                    )
+                )
                 await query.answer()
                 return
             queue_ids, idx, current_offer_id = _refresh_queue(offer_id, session=session)

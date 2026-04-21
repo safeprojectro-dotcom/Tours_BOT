@@ -8,7 +8,13 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.bot.constants import ADMIN_OFFERS_ACTION_CALLBACK_PREFIX
+from app.bot.constants import (
+    ADMIN_OFFERS_ACTION_APPROVE,
+    ADMIN_OFFERS_ACTION_CALLBACK_PREFIX,
+    ADMIN_OFFERS_ACTION_PUBLISH,
+    ADMIN_OFFERS_ACTION_REJECT,
+    ADMIN_OFFERS_ACTION_RETRACT,
+)
 from app.bot.handlers import admin_moderation
 from app.core.config import get_settings
 from app.models.enums import SupplierOfferLifecycle, SupplierOfferPaymentMode, TourSalesMode
@@ -145,7 +151,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             message = _private_message(telegram_user_id=990001)
             cb = _callback(
                 telegram_user_id=990001,
-                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}approve:{offer_id}",
+                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_APPROVE}:{offer_id}",
                 message=message,
             )
             with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
@@ -167,7 +173,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             message = _private_message(telegram_user_id=990001)
             cb = _callback(
                 telegram_user_id=990001,
-                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}reject:{offer_id}",
+                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_REJECT}:{offer_id}",
                 message=message,
             )
             with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
@@ -201,7 +207,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             message = _private_message(telegram_user_id=990001)
             cb = _callback(
                 telegram_user_id=990001,
-                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}publish:{offer_id}",
+                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_PUBLISH}:{offer_id}",
                 message=message,
             )
             with (
@@ -240,7 +246,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             message = _private_message(telegram_user_id=990001)
             cb = _callback(
                 telegram_user_id=990001,
-                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}retract:{offer_id}",
+                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_RETRACT}:{offer_id}",
                 message=message,
             )
             with (
@@ -272,7 +278,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             message = _private_message(telegram_user_id=990001)
             approve_cb = _callback(
                 telegram_user_id=990001,
-                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}approve:{offer_id}",
+                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_APPROVE}:{offer_id}",
                 message=message,
             )
             with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
@@ -295,6 +301,25 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         self.assertIn(f"admin:offers:action:approve:{offer_id}", actions)
         self.assertIn(f"admin:offers:action:reject:{offer_id}", actions)
         self.assertNotIn(f"admin:offers:action:edit:{offer_id}", actions)
+
+    def test_unknown_action_gives_explicit_feedback(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.READY_FOR_MODERATION)
+
+        async def body() -> str:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            cb = _callback(
+                telegram_user_id=990001,
+                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}unknown:{offer_id}",
+                message=message,
+            )
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(cb, state)
+            return "\n".join(c.args[0].lower() for c in message.answer.call_args_list if c.args)
+
+        text = asyncio.run(body())
+        self.assertIn("action is unavailable", text)
+        self.assertIn("unknown action", text)
 
 
 if __name__ == "__main__":
