@@ -30,8 +30,9 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Y24 implementation:** narrow supplier operational visibility added in **`/supplier_offers`** (read-side only, safe aggregate signals, no PII).
 - **Y25 implementation:** narrow supplier operational alerts added in **`/supplier_offers`** (publication retracted, departing soon, departed; deterministic read-side derivation only).
 - **Y27 design gate:** authoritative supplier offer→execution linkage design accepted in **`docs/SUPPLIER_OFFER_EXECUTION_LINKAGE_DESIGN.md`** (design-only, no runtime changes in this gate).
+- **Y28 design block:** Telegram admin moderation/publication workspace design accepted in **`docs/TELEGRAM_ADMIN_MODERATION_WORKSPACE_DESIGN.md`** (design-only; operational client layer over existing backend truth).
 
-### Supplier continuity truth (Y2/Y2.3/Y2.1a/Y24/Y25/Y27 accepted)
+### Supplier continuity truth (Y2/Y2.3/Y2.1a/Y24/Y25/Y27/Y28 accepted)
 - Supplier v1 model is **supplier entity + one primary Telegram-bound operator**.
 - Telegram user binding is the practical supplier operating access anchor.
 - Supplier onboarding runs through Telegram FSM and persists onboarding profile fields.
@@ -79,6 +80,20 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
   - recommended linkage path is additive table **`supplier_offer_execution_links`** with one-active-link invariant;
   - legacy supplier offers may remain unlinked (fallback remains lifecycle-only/no execution stats);
   - richer booking-derived alerts remain postponed until linkage persistence is implemented.
+- Y27.1 implementation truth (accepted):
+  - additive linkage persistence is implemented (`supplier_offer_execution_links`);
+  - one-active-link invariant per supplier offer is enforced;
+  - admin can explicitly link/unlink supplier offer execution tour;
+  - supplier booking-derived aggregate metrics are shown only when active authoritative link exists.
+- Y28 Telegram admin design truth (accepted, pre-implementation):
+  - Telegram admin workspace is moderator/publisher client only; supplier remains content author;
+  - admin **must not** edit supplier-authored content;
+  - fail-closed allowlisted Telegram admin IDs for v1 access;
+  - narrow command model: `/admin_ops`, `/admin_offers` (optional trivial alias `/admin_queue`);
+  - workspace flow: queue → detail → actions with `prev/next/back/home`;
+  - actions: approve, reject(with reason), publish, retract;
+  - `approve != publish` remains strict; supplier rework loop reuses `rejected + reason` in v1;
+  - no lifecycle redesign in this block.
 
 ### Live verification facts (Y2.1 / Y2.3 / Y2.1a)
 - Railway migration applied successfully: **`20260425_14_supplier_telegram_onboarding_gate`**.
@@ -104,11 +119,13 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Mode 2 != Mode 3** remains explicit and preserved.
 
 ### Next safe step (after this sync)
-- **Next supplier-safe step:** **Y27.1 — supplier offer execution linkage persistence + admin link/unlink**:
-  - additive linkage persistence for supplier offer → Layer A `Tour`;
-  - one-active-link invariant per supplier offer;
-  - admin-controlled link/replace/unlink semantics for published/retracted flow;
-  - keep supplier read-side non-PII and control-free (no booking/payment mutation surfaces).
+- **Next supplier-safe step:** **Y28.1 — Telegram admin moderation workspace implementation**:
+  - fail-closed Telegram admin allowlist gate;
+  - `/admin_ops` and `/admin_offers` entry commands;
+  - queue read-side + offer detail card;
+  - approve / reject(with reason) / publish / retract actions;
+  - `prev/next/back/home` navigation and clear action feedback;
+  - no admin editing path.
 
 ### Do-not-reopen items
 - Do not reopen closed tracks for redesign by default (including completed 5g/U/V/W/X/A1 blocks).
@@ -1257,15 +1274,15 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 ## Next Safe Step
 
 ### Next safe step
-**Y27 post-sync default:** **Y27.1 — supplier offer execution linkage persistence + admin link/unlink** (narrow additive implementation scope).  
+**Y28 post-sync default:** **Y28.1 — Telegram admin moderation workspace implementation** (narrow operational client scope over existing admin/service truth).  
 **Secondary product track (separate):** **Phase 7.1 / Sales Mode / Step 6+** for scope beyond closed **5g.4**. **Do not** reopen **5g.4** unless fixing a regression.
 
 **Goal:**
-- Prioritize narrow linkage persistence implementation:
-  - persist authoritative supplier offer → Layer A execution linkage;
-  - enable safe additive booking-derived aggregate supplier read-side metrics only where linkage exists;
-  - preserve current non-PII, read-only supplier surfaces;
-  - no booking/payment control mutation surface.
+- Prioritize narrow Telegram admin moderation workspace v1:
+  - reuse existing moderation/publication/linkage truth from backend;
+  - provide queue→detail→actions workflow in Telegram for mobile-first ops;
+  - preserve no-edit boundary (admin moderates/publishes, supplier authors content);
+  - no booking/payment/RFQ semantic changes.
 
 **Must not expand into (unless explicitly approved):**
 - **Payment reconciliation** or **payment-entry** semantic changes
@@ -1293,7 +1310,7 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 **Plan:** `docs/IMPLEMENTATION_PLAN.md` — Phase 7 **closed**; **active sub-track:** **Phase 7.1 — tour sales mode** (**Steps 1–5** + **5g.4a–5g.4d** done; **Step 6+** forward). **V2 supplier marketplace:** `docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md` — **Track 0** through **Track 5e** complete for scoped slices (request marketplace + RFQ bridge execution + supersede/cancel lifecycle); **next V2 marketplace slices** (product-prioritized): customer **multi-quote** UX, notifications, bot deep links — see that plan’s status table.
 
 ## Recommended Next Prompt
-Default continuation prompt: **Y27.1 — supplier offer execution linkage persistence + admin link/unlink (narrow additive implementation)** — add authoritative linkage storage and admin controls, then expose safe booking-derived aggregate supplier read-side only when linked, preserving booking/payment/RFQ semantics and privacy boundaries.  
+Default continuation prompt: **Y28.1 — Telegram admin moderation workspace implementation (narrow operational client layer)** — fail-closed admin allowlist + `/admin_ops`/`/admin_offers` + queue/detail/actions (approve/reject with reason/publish/retract), preserving no-edit boundary and existing backend moderation truth.  
 Separate optional product thread: **Phase 7.1 / Sales Mode / Step 6+** beyond **`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**. **No** reopening **5g.4** / Layer A payment semantics without a regression ticket. **Phase 7** remains closed — **`docs/PHASE_7_REVIEW.md`**; do not reopen **`grp_followup_*`** by default. Sources: **`docs/CHAT_HANDOFF.md`**, **`docs/CHECKPOINT_UVXWA1_SUMMARY.md`**, **`docs/SUPPLIER_TELEGRAM_OPERATING_MODEL_Y2.md`**, **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`**, **`docs/TECH_SPEC_TOURS_BOT.md`**.
 
 ---

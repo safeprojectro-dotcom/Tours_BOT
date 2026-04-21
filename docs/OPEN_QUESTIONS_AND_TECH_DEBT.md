@@ -119,6 +119,34 @@ Documentation synchronization checkpoint after completion of Tracks **5g.4a–5g
 
 ---
 
+## Checkpoint Sync — Y28 (design accepted, pre-Y28.1 implementation) (2026-04-20)
+
+### Resolved and accepted (not open questions)
+- Telegram admin moderation/publication workspace design is accepted (`docs/TELEGRAM_ADMIN_MODERATION_WORKSPACE_DESIGN.md`).
+- Admin role in Telegram workspace v1 remains moderator/publisher only; supplier remains content author.
+- Accepted v1 Telegram admin scope: fail-closed allowlisted Telegram admin IDs, narrow commands (`/admin_ops`, `/admin_offers`, optional trivial `/admin_queue`), queue→detail→actions flow, navigation (`prev/next/back/home`), and actions (`approve`, `reject` with reason, `publish`, `retract`).
+- `approve != publish` remains strict; supplier rework loop reuses current `rejected + reason` model in v1.
+
+### Current boundaries (must remain true)
+- Telegram admin workspace is an operational client layer over existing backend/service truth.
+- No admin editing of supplier-authored content.
+- No admin editing of supplier legal/commercial truth in Telegram workspace v1.
+- No Layer A booking/payment redesign, no RFQ/bridge redesign, no payment-entry/reconciliation redesign.
+
+### Still open / postponed
+- Scheduled publish.
+- Admin content editing.
+- Mass moderation actions.
+- RFQ Telegram admin workspace.
+- Order/payment admin controls in Telegram.
+- Analytics/finance dashboard expansion.
+- Broad portal replacement / RBAC redesign.
+
+### Next safe step pointer
+- **Y28.1 — Telegram admin moderation workspace implementation** (narrow operational client scope).
+
+---
+
 ## 1. Reservation expiry status semantics
 
 ### Current decision
