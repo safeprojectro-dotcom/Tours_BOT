@@ -33,6 +33,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Y28 design block:** Telegram admin moderation/publication workspace design accepted in **`docs/TELEGRAM_ADMIN_MODERATION_WORKSPACE_DESIGN.md`** (design-only; operational client layer over existing backend truth).
 - **Y29.1 implementation:** supplier onboarding navigation polish completed for **`/supplier`** (`Inapoi` back-step navigation with in-memory draft preservation + `Acasa` full FSM cancel/reset).
 - **Y28.2 implementation:** Telegram admin offer visibility expansion completed (`/admin_queue` for `ready_for_moderation`, `/admin_approved` for approved/unpublished, `/admin_published` for published).
+- **Y29.2 implementation:** additive supplier profile status governance completed (profile lifecycle supports `pending_review` / `approved` / `rejected` / `suspended` / `revoked`; admin governance actions now include approve/reject/suspend/reactivate/revoke at service/API truth level).
 
 ### Supplier continuity truth (Y2/Y2.3/Y2.1a/Y24/Y25/Y27/Y28 accepted)
 - Supplier v1 model is **supplier entity + one primary Telegram-bound operator**.
@@ -62,6 +63,13 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
   - supplier profile lifecycle model,
   - supplier offer lifecycle or publication flow,
   - Layer A / RFQ / payment semantics.
+- Y29.2 supplier profile governance truth (accepted):
+  - supplier profile lifecycle now supports `pending_review`, `approved`, `rejected`, `suspended`, `revoked`;
+  - `reactivate` is explicit admin action returning profile from `suspended` to `approved`;
+  - admin/service/API governance surface now supports: `approve`, `reject`, `suspend`, `reactivate`, `revoke`;
+  - existing onboarding `approve/reject` path remains preserved for `pending_review`;
+  - legacy already-approved suppliers remain compatible;
+  - supplier profile lifecycle remains separate from supplier offer moderation/publication lifecycle (`approve != publish` on offers remains unchanged).
 - Multi-operator organization / RBAC is explicitly postponed beyond Y2.1.
 - Supplier legal/compliance identity is now required for pending onboarding approvals:
   - **`legal_entity_type`**
@@ -119,6 +127,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 ### Live verification facts (Y2.1 / Y2.3 / Y2.1a)
 - Railway migration applied successfully: **`20260425_14_supplier_telegram_onboarding_gate`**.
 - Railway migration applied successfully: **`20260426_15_supplier_legal_compliance_fields`**.
+- Railway migration applied successfully: **`20260428_17_supplier_profile_status_governance`**.
 - **`/health`** returns ok.
 - **`/healthz`** returns ready.
 - Supplier onboarding pending path verified in Telegram.
@@ -140,7 +149,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Mode 2 != Mode 3** remains explicit and preserved.
 
 ### Next safe step (after this sync)
-- **Next supplier-safe step:** **Y29.2 — additive supplier profile status model**.
+- **Next supplier-safe step:** **Y29.3 — Telegram admin supplier moderation workspace**.
 
 ### Do-not-reopen items
 - Do not reopen closed tracks for redesign by default (including completed 5g/U/V/W/X/A1 blocks).
@@ -149,6 +158,12 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - Do not redesign Layer A booking/payment core.
 - Do not broaden supplier auth into full org/RBAC in this step range.
 - Do not default into a full supplier portal rewrite.
+- Y29.2 scope boundaries were preserved and must remain true:
+  - Telegram admin supplier workspace was **not** implemented in Y29.2;
+  - supplier-status gating integration across bot surfaces was **not** implemented in Y29.2;
+  - supplier offer auto retract/blocking cascade was **not** implemented in Y29.2;
+  - onboarding UX navigation polish was **not** part of Y29.2;
+  - Layer A / RFQ / payment semantics were **not** redesigned in Y29.2.
 
 **Continuity anchor (read this first):** The **live** approved checkpoint is **Phase 7 closed** (**review / closure accepted**; **`docs/PHASE_7_REVIEW.md`**) — **implementation** through **final consolidation** (Steps **1–17** + polish) is **shipped**; **below** expands **Phase 7** surface to date (Steps **1–17** + **final polish**): **group trigger** + **handoff trigger** helpers (Step **2**); **minimal group runtime gating** (Step **3**); **category-aware** short escalation wording (Step **4**); **private CTA** deep-link foundation (Step **5**); **narrow private `/start`** for **`grp_private`** / **`grp_followup`** (Step **6**); **narrow runtime handoff persistence** for **`/start grp_followup`** (Step **7**); **focused runtime/bot-flow tests** for that chain (Step **8**); **narrow admin read-side visibility** for **`group_followup_start`** (Step **9** — **`is_group_followup`**, **`source_label`**); **narrow admin assignment** for **`group_followup_start`** only (Step **10** — **`POST /admin/handoffs/{handoff_id}/assign-operator`**; same narrow rules as Step **21** **`assign`**; general **`POST .../assign`** **unchanged**); **read-side work-state visibility** for **assigned** **`group_followup_start`** (Step **11** — **`is_assigned_group_followup`**, **`group_followup_work_label`**; **read-only**); **narrow take-in-work** for **assigned** **`group_followup_start`** (Step **12** — **`POST /admin/handoffs/{handoff_id}/mark-in-work`**; **`open` → `in_review`**; **`in_review`** idempotent; **`closed`** rejected; **no** new DB column); **narrow resolve/close** for **`group_followup_start`** (Steps **13–14** — **`POST /admin/handoffs/{handoff_id}/resolve-group-followup`**; **`in_review` → `closed`**; **`closed`** idempotent; **`open`** rejected; **no** replacement for general Step **20** **`close`**); **tiny resolved-state read refinement** (Steps **13–14** — derived **`group_followup_resolution_label`** on admin handoff **list** / **detail** / order-detail **`handoffs`** for **closed** **`group_followup_start`** only); **post-resolution queue visibility** (Step **15** — derived **`group_followup_queue_state`** — **`awaiting_assignment`**, **`assigned_open`**, **`in_work`**, **`resolved`**, or **`null`** for non-**`group_followup_start`**; optional narrow **`GET /admin/handoffs?group_followup_queue=`** filter — **read-side only**); **narrow private resolved-followup confirmation** (Step **16** — **`HandoffRepository.find_latest_by_user_reason`**, **`HandoffEntryService.should_show_group_followup_resolved_confirmation`**, **`start_grp_followup_resolved_intro`** when **`/start grp_followup`** and latest **`group_followup_start`** is **`closed`** with **no** **open** row; **no** operator chat, **no** notification delivery; **`_persist_group_followup_handoff`** unchanged); **narrow private followup history/readiness signal** (Step **17** — **`HandoffEntryService.group_followup_private_intro_key`** maps **open** / **assigned-open** / **`in_review`** / **resolved** / **none** to short message keys **`start_grp_followup_readiness_*`**, **`start_grp_followup_resolved_intro`**, or **`start_grp_followup_intro`**; **read-only**; **`grp_private`** unchanged; **no** write semantics change); **final followup/operator consolidation** — unified short private **`grp_followup`** wording + **`/contact`** / **`/human`** CTAs; admin **`group_followup_work_label`**, **`group_followup_resolution_label`** aligned to the same **queued / assigned / in progress / closed** mental model as **`group_followup_queue_state`** (**read-side string changes only**); tests **`test_group_followup_phase7_consolidation`**, chain tests updated; **no** new workflow mutations, **no** API shape changes, **no** public/Mini App churn. **No** automatic operator assignment **from the Telegram `grp_*` bot paths**, **no** booking/payment initiation from Phase **7** **`grp_*`** paths. **Phase 7.1 — tour sales mode** (**separate** from closed Phase **7** **`grp_followup_*`**): **Steps 1–5** + **Tracks 5g.4a–5g.4d** (**catalog Mode 2** virgin self-serve on **Layer A**) are **completed** — **`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**; **narrow** operator-assisted **full-bus** handoff (**Step 5**) remains where catalog self-serve is **not** allowed; **Railway production** was **stabilized** after **`tours.sales_mode`** DDL was applied — see **Production stabilization after Phase 7.1 deploy** below (**feature work** vs **schema-drift incident** are distinct). **Next:** **Step 6+** (product/design **beyond** closed **5g.4**) — **Next Safe Step**. **Do not** reopen **Phase 7** **`grp_followup_*`** micro-slices by default. **Deploy-critical:** **Phase 7.1** app code **must not** be deployed to a target environment unless the **`tours.sales_mode`** migration (**Alembic `20260416_06`**) is applied there as well — run **`python -m alembic upgrade head`** (or equivalent) **before** or **with** deploy; details **`COMMIT_PUSH_DEPLOY.md`**. Design reference: **`docs/TOUR_SALES_MODE_DESIGN.md`**. **Phase 6** / **`docs/PHASE_6_REVIEW.md`** — historical admin closure. **Not** **Phase 6 / Step 31**, **not** **admin payment** mutation. **Phase 5** — do **not** resume old **Step 4–5** narratives. Use **`Next Safe Step`** + **Current Status** + **`docs/PHASE_7_REVIEW.md`**.
 
@@ -1284,25 +1299,28 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 - **Still valid:** staging smoke on **`/admin/*`** through Phase 6 Step 30 when convenient; **`docs/PHASE_6_REVIEW.md`** remains the Phase 6 closure reference; **`docs/PHASE_7_REVIEW.md`** is the Phase **7** closure reference.
 - **Optional later (product-prioritized only):** narrow **persisted move placement audit** on successful **`POST /move`**, **or** another **low-risk** admin read refinement — **never** default to **admin payment** mutation; requires **explicit** design checkpoint (**`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** **§1f**).
 - **Still postponed:** admin **refund / capture / cancel-payment**, **broad** order status editor, **merge** tooling, **payment reconciliation** rewrite, **persisted** move timeline without an explicit slice, handoff **unassign**, broader **reassignment** policy, full **operator queue/workflow engine**, **notifications** from admin actions, **full** admin SPA, **publication**, **bulk** ops — per plan / product.
+- **Supplier governance postponed set (post-Y29.2):** Telegram admin supplier moderation workspace, supplier-status gating integration across bot surfaces, exclusion visibility policy / supplier offer auto retract-block cascade, broad supplier RBAC/org redesign, governance analytics/dashboard.
 - **Longer-term:** optional group assistant at scale, content assistant, handoff notifications, analytics — **explicit** product scope per `docs/IMPLEMENTATION_PLAN.md`.
 
 ## Next Safe Step
 
 ### Next safe step
-**Y28 post-sync default:** **Y28.1 — Telegram admin moderation workspace implementation** (narrow operational client scope over existing admin/service truth).  
+**Y29.2 post-sync default:** **Y29.3 — Telegram admin supplier moderation workspace** (narrow operational client scope over existing supplier profile governance truth).  
 **Secondary product track (separate):** **Phase 7.1 / Sales Mode / Step 6+** for scope beyond closed **5g.4**. **Do not** reopen **5g.4** unless fixing a regression.
 
 **Goal:**
-- Prioritize narrow Telegram admin moderation workspace v1:
-  - reuse existing moderation/publication/linkage truth from backend;
-  - provide queue→detail→actions workflow in Telegram for mobile-first ops;
-  - preserve no-edit boundary (admin moderates/publishes, supplier authors content);
+- Prioritize narrow Telegram admin **supplier profile** moderation workspace v1:
+  - reuse existing supplier profile governance truth from backend;
+  - provide admin operational surface for supplier profile actions (`approve`, `reject`, `suspend`, `reactivate`, `revoke`);
+  - preserve strict separation between supplier profile lifecycle and supplier offer lifecycle;
   - no booking/payment/RFQ semantic changes.
 
 **Must not expand into (unless explicitly approved):**
 - **Payment reconciliation** or **payment-entry** semantic changes
 - **RFQ/bridge** execution changes
 - **Reopening** **5g.4** as a **new design track** without a bug/regression ticket
+- Supplier offer auto retract/blocking cascade from profile status changes
+- Broad supplier org/RBAC redesign or governance analytics/dashboard buildout
 
 **Baseline (shipped):** **Phase 7.1 / Steps 1–5** + **Tracks 5g.4a–5g.4d** — **`tour.sales_mode`**, **`TourSalesModePolicyService`**, Mini App catalog **full_bus** virgin self-serve (**`TemporaryReservationService`** + **`PaymentEntryService`**), assisted path (**Step 5**), human-readable booking **facade**; **`COMMIT_PUSH_DEPLOY.md`** migration gate for **`20260416_06`**; acceptance **`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**.
 
@@ -1325,7 +1343,7 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 **Plan:** `docs/IMPLEMENTATION_PLAN.md` — Phase 7 **closed**; **active sub-track:** **Phase 7.1 — tour sales mode** (**Steps 1–5** + **5g.4a–5g.4d** done; **Step 6+** forward). **V2 supplier marketplace:** `docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md` — **Track 0** through **Track 5e** complete for scoped slices (request marketplace + RFQ bridge execution + supersede/cancel lifecycle); **next V2 marketplace slices** (product-prioritized): customer **multi-quote** UX, notifications, bot deep links — see that plan’s status table.
 
 ## Recommended Next Prompt
-Default continuation prompt: **Y28.1 — Telegram admin moderation workspace implementation (narrow operational client layer)** — fail-closed admin allowlist + `/admin_ops`/`/admin_offers` + queue/detail/actions (approve/reject with reason/publish/retract), preserving no-edit boundary and existing backend moderation truth.  
+Default continuation prompt: **Y29.3 — Telegram admin supplier moderation workspace (narrow operational client layer)** — fail-closed admin allowlist + supplier-profile queue/detail/actions (`approve`, `reject`, `suspend`, `reactivate`, `revoke`), preserving strict profile-vs-offer lifecycle separation and existing backend governance truth.  
 Separate optional product thread: **Phase 7.1 / Sales Mode / Step 6+** beyond **`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**. **No** reopening **5g.4** / Layer A payment semantics without a regression ticket. **Phase 7** remains closed — **`docs/PHASE_7_REVIEW.md`**; do not reopen **`grp_followup_*`** by default. Sources: **`docs/CHAT_HANDOFF.md`**, **`docs/CHECKPOINT_UVXWA1_SUMMARY.md`**, **`docs/SUPPLIER_TELEGRAM_OPERATING_MODEL_Y2.md`**, **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`**, **`docs/TECH_SPEC_TOURS_BOT.md`**.
 
 ---
