@@ -96,8 +96,9 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         super().tearDown()
 
     def _create_offer(self, *, lifecycle: SupplierOfferLifecycle) -> int:
+        idx = self._next()
         supplier = self.create_supplier(
-            code=f"Y281-{lifecycle.value}",
+            code=f"Y281-{lifecycle.value}-{idx}",
             display_name="Moderation Supplier",
             is_active=True,
         )
@@ -113,6 +114,25 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         )
         self.session.commit()
         return offer.id
+
+    @staticmethod
+    def _all_answer_texts(message: MagicMock) -> str:
+        return "\n".join(c.args[0].lower() for c in message.answer.call_args_list if c.args)
+
+    @staticmethod
+    def _inline_button_texts(message: MagicMock) -> list[str]:
+        texts: list[str] = []
+        for call in message.answer.call_args_list:
+            markup = call.kwargs.get("reply_markup")
+            if markup is None:
+                continue
+            inline_rows = getattr(markup, "inline_keyboard", None) or []
+            for row in inline_rows:
+                for btn in row:
+                    txt = getattr(btn, "text", None)
+                    if isinstance(txt, str):
+                        texts.append(txt.lower())
+        return texts
 
     def test_non_allowlisted_telegram_user_is_denied(self) -> None:
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.READY_FOR_MODERATION)
@@ -142,6 +162,86 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         text = asyncio.run(body())
         self.assertIn("admin moderation queue", text)
         self.assertIn("offer #", text)
+
+    def test_admin_queue_shows_ready_for_moderation_only(self) -> None:
+        ready_id = self._create_offer(lifecycle=SupplierOfferLifecycle.READY_FOR_MODERATION)
+        approved_id = self._create_offer(lifecycle=SupplierOfferLifecycle.APPROVED)
+        published_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+
+        async def body() -> str:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.cmd_admin_offers(message, state)
+            return self._all_answer_texts(message)
+
+        text = asyncio.run(body())
+        self.assertIn(f"#{ready_id}", text)
+        self.assertNotIn(f"#{approved_id}", text)
+        self.assertNotIn(f"#{published_id}", text)
+
+    def test_admin_approved_shows_approved_unpublished_offers(self) -> None:
+        ready_id = self._create_offer(lifecycle=SupplierOfferLifecycle.READY_FOR_MODERATION)
+        approved_id = self._create_offer(lifecycle=SupplierOfferLifecycle.APPROVED)
+        published_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+
+        async def body() -> str:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.cmd_admin_approved(message, state)
+            return self._all_answer_texts(message)
+
+        text = asyncio.run(body())
+        self.assertIn("approved / unpublished queue", text)
+        self.assertIn(f"#{approved_id}", text)
+        self.assertNotIn(f"#{ready_id}", text)
+        self.assertNotIn(f"#{published_id}", text)
+
+    def test_admin_published_shows_published_offers(self) -> None:
+        ready_id = self._create_offer(lifecycle=SupplierOfferLifecycle.READY_FOR_MODERATION)
+        approved_id = self._create_offer(lifecycle=SupplierOfferLifecycle.APPROVED)
+        published_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+
+        async def body() -> str:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.cmd_admin_published(message, state)
+            return self._all_answer_texts(message)
+
+        text = asyncio.run(body())
+        self.assertIn("published queue", text)
+        self.assertIn(f"#{published_id}", text)
+        self.assertNotIn(f"#{ready_id}", text)
+        self.assertNotIn(f"#{approved_id}", text)
+
+    def test_publish_action_available_only_in_approved_unpublished_view(self) -> None:
+        approved_id = self._create_offer(lifecycle=SupplierOfferLifecycle.APPROVED)
+        published_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+
+        async def body_approved() -> list[str]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.cmd_admin_approved(message, state)
+            return self._inline_button_texts(message)
+
+        async def body_published() -> list[str]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.cmd_admin_published(message, state)
+            return self._inline_button_texts(message)
+
+        approved_buttons = asyncio.run(body_approved())
+        published_buttons = asyncio.run(body_published())
+        self.assertGreater(approved_id, 0)
+        self.assertGreater(published_id, 0)
+        self.assertIn("publish", approved_buttons)
+        self.assertNotIn("retract", approved_buttons)
+        self.assertIn("retract", published_buttons)
+        self.assertNotIn("publish", published_buttons)
 
     def test_admin_can_approve_from_allowed_state(self) -> None:
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.READY_FOR_MODERATION)
@@ -269,6 +369,42 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         self.assertEqual(valid_row.lifecycle_status, SupplierOfferLifecycle.APPROVED)
         self.assertIn("unavailable", invalid_text)
         self.assertIn("retracted", valid_text)
+
+    def test_moderation_queue_approve_reject_remain_unchanged(self) -> None:
+        offer_approve_id = self._create_offer(lifecycle=SupplierOfferLifecycle.READY_FOR_MODERATION)
+        offer_reject_id = self._create_offer(lifecycle=SupplierOfferLifecycle.READY_FOR_MODERATION)
+
+        async def body() -> None:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            approve_cb = _callback(
+                telegram_user_id=990001,
+                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_APPROVE}:{offer_approve_id}",
+                message=message,
+            )
+            reject_cb = _callback(
+                telegram_user_id=990001,
+                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_REJECT}:{offer_reject_id}",
+                message=message,
+            )
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(approve_cb, state)
+                await admin_moderation.admin_offer_action(reject_cb, state)
+            reason_message = _private_message(telegram_user_id=990001)
+            reason_message.text = "Needs clearer route"
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_reject_reason(reason_message, state)
+
+        self._run(body())
+        row_approve = admin_moderation.SupplierOfferModerationService()._offers.get_any(self.session, offer_id=offer_approve_id)
+        row_reject = admin_moderation.SupplierOfferModerationService()._offers.get_any(self.session, offer_id=offer_reject_id)
+        self.assertIsNotNone(row_approve)
+        self.assertIsNotNone(row_reject)
+        assert row_approve is not None
+        assert row_reject is not None
+        self.assertEqual(row_approve.lifecycle_status, SupplierOfferLifecycle.APPROVED)
+        self.assertEqual(row_reject.lifecycle_status, SupplierOfferLifecycle.REJECTED)
+        self.assertEqual(row_reject.moderation_rejection_reason, "Needs clearer route")
 
     def test_approve_publish_remain_separate(self) -> None:
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.READY_FOR_MODERATION)

@@ -41,6 +41,9 @@ router.message.filter(F.chat.type == "private")
 router.callback_query.filter(F.message.chat.type == "private")
 
 _QUEUE_LIMIT = 20
+_QUEUE_MODE_MODERATION = "moderation"
+_QUEUE_MODE_APPROVED = "approved"
+_QUEUE_MODE_PUBLISHED = "published"
 
 
 def _user_service() -> TelegramUserContextService:
@@ -83,18 +86,42 @@ def _detail_keyboard(language_code: str | None, offer: SupplierOfferRead) -> Inl
     return kb
 
 
-def _load_queue_ids(session) -> list[int]:
+def _queue_lifecycle(mode: str) -> SupplierOfferLifecycle:
+    if mode == _QUEUE_MODE_APPROVED:
+        return SupplierOfferLifecycle.APPROVED
+    if mode == _QUEUE_MODE_PUBLISHED:
+        return SupplierOfferLifecycle.PUBLISHED
+    return SupplierOfferLifecycle.READY_FOR_MODERATION
+
+
+def _queue_title_key(mode: str) -> str:
+    if mode == _QUEUE_MODE_APPROVED:
+        return "admin_offer_workspace_title_approved"
+    if mode == _QUEUE_MODE_PUBLISHED:
+        return "admin_offer_workspace_title_published"
+    return "admin_offer_workspace_title"
+
+
+def _queue_empty_key(mode: str) -> str:
+    if mode == _QUEUE_MODE_APPROVED:
+        return "admin_offer_workspace_empty_approved"
+    if mode == _QUEUE_MODE_PUBLISHED:
+        return "admin_offer_workspace_empty_published"
+    return "admin_offer_workspace_empty"
+
+
+def _load_queue_ids(session, *, mode: str) -> list[int]:
     items = SupplierOfferModerationService().list_offers(
         session,
-        lifecycle_status=SupplierOfferLifecycle.READY_FOR_MODERATION,
+        lifecycle_status=_queue_lifecycle(mode),
         limit=_QUEUE_LIMIT,
         offset=0,
     )
     return [offer.id for offer in items]
 
 
-def _queue_text(language_code: str | None, *, offers: list[SupplierOfferRead]) -> str:
-    lines = [translate(language_code, "admin_offer_workspace_title", count=str(len(offers)))]
+def _queue_text(language_code: str | None, *, offers: list[SupplierOfferRead], mode: str) -> str:
+    lines = [translate(language_code, _queue_title_key(mode), count=str(len(offers)))]
     for offer in offers:
         lines.append(f"#{offer.id} · {translate(language_code, _status_key(offer.lifecycle_status))} · {offer.title}")
     return "\n".join(lines)
@@ -153,12 +180,20 @@ async def _deny_if_not_allowed(message: Message | CallbackQuery, *, language_cod
     return True
 
 
-async def _store_queue_state(state: FSMContext, *, queue_ids: list[int], queue_index: int, current_offer_id: int | None) -> None:
+async def _store_queue_state(
+    state: FSMContext,
+    *,
+    queue_ids: list[int],
+    queue_index: int,
+    current_offer_id: int | None,
+    queue_mode: str,
+) -> None:
     await state.set_state(AdminModerationState.browsing_offer_queue)
     await state.update_data(
         queue_offer_ids=queue_ids,
         queue_index=queue_index,
         current_offer_id=current_offer_id,
+        queue_mode=queue_mode,
     )
 
 
@@ -178,8 +213,7 @@ async def _show_current_offer(message: Message, state: FSMContext, *, language_c
         await message.answer(detail_text, reply_markup=_detail_keyboard(language_code, offer).as_markup())
 
 
-@router.message(Command("admin_ops", "admin_offers", "admin_queue"))
-async def cmd_admin_offers(message: Message, state: FSMContext) -> None:
+async def _open_queue(message: Message, state: FSMContext, *, queue_mode: str) -> None:
     if message.from_user is None:
         return
     with SessionLocal() as session:
@@ -197,23 +231,44 @@ async def cmd_admin_offers(message: Message, state: FSMContext) -> None:
         await state.clear()
         return
     with SessionLocal() as session:
-        queue_ids = _load_queue_ids(session)
+        queue_ids = _load_queue_ids(session, mode=queue_mode)
         if not queue_ids:
             await state.clear()
-            await message.answer(translate(lg, "admin_offer_workspace_empty"))
+            await message.answer(translate(lg, _queue_empty_key(queue_mode)))
             return
         offers = [
             SupplierOfferModerationService()._to_read(row)
             for row in [SupplierOfferModerationService()._offers.get_any(session, offer_id=oid) for oid in queue_ids]
             if row is not None
         ]
-        await _store_queue_state(state, queue_ids=queue_ids, queue_index=0, current_offer_id=queue_ids[0])
-        await message.answer(_queue_text(lg, offers=offers))
+        await _store_queue_state(
+            state,
+            queue_ids=queue_ids,
+            queue_index=0,
+            current_offer_id=queue_ids[0],
+            queue_mode=queue_mode,
+        )
+        await message.answer(_queue_text(lg, offers=offers, mode=queue_mode))
         current = offers[0]
         await message.answer(
             _offer_detail_text(session, lg, offer=current),
             reply_markup=_detail_keyboard(lg, current).as_markup(),
         )
+
+
+@router.message(Command("admin_ops", "admin_offers", "admin_queue"))
+async def cmd_admin_offers(message: Message, state: FSMContext) -> None:
+    await _open_queue(message, state, queue_mode=_QUEUE_MODE_MODERATION)
+
+
+@router.message(Command("admin_approved"))
+async def cmd_admin_approved(message: Message, state: FSMContext) -> None:
+    await _open_queue(message, state, queue_mode=_QUEUE_MODE_APPROVED)
+
+
+@router.message(Command("admin_published"))
+async def cmd_admin_published(message: Message, state: FSMContext) -> None:
+    await _open_queue(message, state, queue_mode=_QUEUE_MODE_PUBLISHED)
 
 
 @router.callback_query(F.data.in_({ADMIN_OFFERS_NAV_HOME, ADMIN_OFFERS_NAV_BACK, ADMIN_OFFERS_NAV_NEXT, ADMIN_OFFERS_NAV_PREV}))
@@ -237,6 +292,7 @@ async def admin_queue_navigation(query: CallbackQuery, state: FSMContext) -> Non
     if query.data == ADMIN_OFFERS_NAV_BACK:
         data = await state.get_data()
         queue_ids = [x for x in data.get("queue_offer_ids", []) if isinstance(x, int)]
+        queue_mode = str(data.get("queue_mode") or _QUEUE_MODE_MODERATION)
         with SessionLocal() as session:
             offers = [
                 SupplierOfferModerationService()._to_read(row)
@@ -244,14 +300,15 @@ async def admin_queue_navigation(query: CallbackQuery, state: FSMContext) -> Non
                 if row is not None
             ]
         if offers:
-            await query.message.answer(_queue_text(lg, offers=offers))
+            await query.message.answer(_queue_text(lg, offers=offers, mode=queue_mode))
         else:
-            await query.message.answer(translate(lg, "admin_offer_workspace_empty"))
+            await query.message.answer(translate(lg, _queue_empty_key(queue_mode)))
         await query.answer()
         return
 
     data = await state.get_data()
     queue_ids = [x for x in data.get("queue_offer_ids", []) if isinstance(x, int)]
+    queue_mode = str(data.get("queue_mode") or _QUEUE_MODE_MODERATION)
     if not queue_ids:
         await query.message.answer(translate(lg, "admin_offer_no_current"))
         await query.answer()
@@ -263,7 +320,13 @@ async def admin_queue_navigation(query: CallbackQuery, state: FSMContext) -> Non
     else:
         idx = (idx - 1) % len(queue_ids)
     current_offer_id = queue_ids[idx]
-    await _store_queue_state(state, queue_ids=queue_ids, queue_index=idx, current_offer_id=current_offer_id)
+    await _store_queue_state(
+        state,
+        queue_ids=queue_ids,
+        queue_index=idx,
+        current_offer_id=current_offer_id,
+        queue_mode=queue_mode,
+    )
     with SessionLocal() as session:
         row = SupplierOfferModerationService()._offers.get_any(session, offer_id=current_offer_id)
         if row is None:
@@ -290,8 +353,8 @@ def _parse_action(data: str) -> tuple[str, int] | None:
         return None
 
 
-def _refresh_queue(current_offer_id: int, *, session) -> tuple[list[int], int, int]:
-    queue_ids = _load_queue_ids(session)
+def _refresh_queue(current_offer_id: int, *, session, mode: str) -> tuple[list[int], int, int]:
+    queue_ids = _load_queue_ids(session, mode=mode)
     if queue_ids:
         if current_offer_id in queue_ids:
             idx = queue_ids.index(current_offer_id)
@@ -329,6 +392,8 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
     moderation = SupplierOfferModerationService()
     try:
         with SessionLocal() as session:
+            data = await state.get_data()
+            queue_mode = str(data.get("queue_mode") or _QUEUE_MODE_MODERATION)
             if action_name == ADMIN_OFFERS_ACTION_REJECT:
                 await state.set_state(AdminModerationState.awaiting_reject_reason)
                 await state.update_data(current_offer_id=offer_id, reject_offer_id=offer_id)
@@ -375,8 +440,14 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                 )
                 await query.answer()
                 return
-            queue_ids, idx, current_offer_id = _refresh_queue(offer_id, session=session)
-            await _store_queue_state(state, queue_ids=queue_ids, queue_index=idx, current_offer_id=current_offer_id)
+            queue_ids, idx, current_offer_id = _refresh_queue(offer_id, session=session, mode=queue_mode)
+            await _store_queue_state(
+                state,
+                queue_ids=queue_ids,
+                queue_index=idx,
+                current_offer_id=current_offer_id,
+                queue_mode=queue_mode,
+            )
             await query.message.answer(translate(lg, done_key, offer_id=str(offer_id)))
             row = moderation._offers.get_any(session, offer_id=current_offer_id)
             if row is not None:
@@ -387,7 +458,7 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                 )
             elif not queue_ids:
                 await state.clear()
-                await query.message.answer(translate(lg, "admin_offer_workspace_empty"))
+                await query.message.answer(translate(lg, _queue_empty_key(queue_mode)))
     except (SupplierOfferModerationNotFoundError, SupplierOfferModerationStateError, SupplierOfferPublicationConfigError) as exc:
         detail = getattr(exc, "message", str(exc))
         await query.message.answer(translate(lg, "admin_offer_action_unavailable", detail=detail))
@@ -428,6 +499,7 @@ async def admin_offer_reject_reason(message: Message, state: FSMContext) -> None
     moderation = SupplierOfferModerationService()
     try:
         with SessionLocal() as session:
+            queue_mode = str(data.get("queue_mode") or _QUEUE_MODE_MODERATION)
             moderation.reject(session, offer_id=reject_offer_id, reason=text)
             session.commit()
             try:
@@ -438,8 +510,14 @@ async def admin_offer_reject_reason(message: Message, state: FSMContext) -> None
                 )
             except Exception:
                 pass
-            queue_ids, idx, current_offer_id = _refresh_queue(reject_offer_id, session=session)
-            await _store_queue_state(state, queue_ids=queue_ids, queue_index=idx, current_offer_id=current_offer_id)
+            queue_ids, idx, current_offer_id = _refresh_queue(reject_offer_id, session=session, mode=queue_mode)
+            await _store_queue_state(
+                state,
+                queue_ids=queue_ids,
+                queue_index=idx,
+                current_offer_id=current_offer_id,
+                queue_mode=queue_mode,
+            )
             await state.update_data(reject_offer_id=None)
             await message.answer(translate(lg, "admin_offer_action_done_reject", offer_id=str(reject_offer_id)))
             row = moderation._offers.get_any(session, offer_id=current_offer_id)
@@ -451,7 +529,7 @@ async def admin_offer_reject_reason(message: Message, state: FSMContext) -> None
                 )
             elif not queue_ids:
                 await state.clear()
-                await message.answer(translate(lg, "admin_offer_workspace_empty"))
+                await message.answer(translate(lg, _queue_empty_key(queue_mode)))
     except (SupplierOfferModerationNotFoundError, SupplierOfferModerationStateError) as exc:
         detail = getattr(exc, "message", str(exc))
         await message.answer(translate(lg, "admin_offer_action_unavailable", detail=detail))
