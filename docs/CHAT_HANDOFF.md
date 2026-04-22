@@ -32,6 +32,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Y27 design gate:** authoritative supplier offer→execution linkage design accepted in **`docs/SUPPLIER_OFFER_EXECUTION_LINKAGE_DESIGN.md`** (design-only, no runtime changes in this gate).
 - **Y28 design block:** Telegram admin moderation/publication workspace design accepted in **`docs/TELEGRAM_ADMIN_MODERATION_WORKSPACE_DESIGN.md`** (design-only; operational client layer over existing backend truth).
 - **Y29.1 implementation:** supplier onboarding navigation polish completed for **`/supplier`** (`Inapoi` back-step navigation with in-memory draft preservation + `Acasa` full FSM cancel/reset).
+- **Y28.2 implementation:** Telegram admin offer visibility expansion completed (`/admin_queue` for `ready_for_moderation`, `/admin_approved` for approved/unpublished, `/admin_published` for published).
 
 ### Supplier continuity truth (Y2/Y2.3/Y2.1a/Y24/Y25/Y27/Y28 accepted)
 - Supplier v1 model is **supplier entity + one primary Telegram-bound operator**.
@@ -104,6 +105,16 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
   - actions: approve, reject(with reason), publish, retract;
   - `approve != publish` remains strict; supplier rework loop reuses `rejected + reason` in v1;
   - no lifecycle redesign in this block.
+- Y28.2 Telegram admin visibility truth (accepted):
+  - admin Telegram offer surfaces now include:
+    - **`/admin_queue`** => `ready_for_moderation`,
+    - **`/admin_approved`** => approved/unpublished,
+    - **`/admin_published`** => published;
+  - state-driven action separation remains strict:
+    - `ready_for_moderation` => approve/reject,
+    - approved/unpublished => publish,
+    - published => retract;
+  - boundaries preserved: `approve != publish`, no admin content editing, no lifecycle redesign, no scheduling, no broad portal replacement.
 
 ### Live verification facts (Y2.1 / Y2.3 / Y2.1a)
 - Railway migration applied successfully: **`20260425_14_supplier_telegram_onboarding_gate`**.
@@ -129,7 +140,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Mode 2 != Mode 3** remains explicit and preserved.
 
 ### Next safe step (after this sync)
-- **Next supplier-safe step:** **Y28.2 — Telegram admin approved/published visibility expansion** (narrow read-side expansion only).
+- **Next supplier-safe step:** **Y29.2 — additive supplier profile status model**.
 
 ### Do-not-reopen items
 - Do not reopen closed tracks for redesign by default (including completed 5g/U/V/W/X/A1 blocks).

@@ -175,6 +175,40 @@ Documentation synchronization checkpoint after completion of Tracks **5g.4a–5g
 
 ---
 
+## Checkpoint Sync — Y28.2 (Telegram admin approved/published visibility expansion) (2026-04-22)
+
+### Resolved and accepted (not open questions)
+- Telegram admin offer surfaces now include:
+  - `/admin_queue` => `ready_for_moderation`,
+  - `/admin_approved` => approved/unpublished,
+  - `/admin_published` => published.
+- State-driven action separation is preserved:
+  - `ready_for_moderation` => approve/reject,
+  - approved/unpublished => publish,
+  - published => retract.
+- Existing moderation lifecycle semantics remain unchanged (`approve != publish` preserved).
+
+### Boundaries preserved (must remain true)
+- No admin content editing introduced.
+- No lifecycle redesign introduced.
+- No scheduling/mass moderation introduced.
+- No Layer A booking/payment redesign.
+- No RFQ/bridge redesign.
+- No payment-entry/reconciliation redesign.
+
+### Still open / postponed
+- Supplier profile moderation Telegram workspace.
+- Supplier suspend/revoke implementation.
+- Supplier status gating integration.
+- Exclusion visibility policy implementation.
+- Scheduled publish.
+- Mass moderation.
+
+### Next safe step pointer
+- **Y29.2 — additive supplier profile status model**.
+
+---
+
 ## 1. Reservation expiry status semantics
 
 ### Current decision
