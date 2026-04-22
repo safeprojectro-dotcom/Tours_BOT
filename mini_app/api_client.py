@@ -18,6 +18,7 @@ from app.schemas.mini_app import (
     MiniAppHelpRead,
     MiniAppLanguagePreferenceResponse,
     MiniAppReservationPreparationRead,
+    MiniAppSupplierOfferLandingRead,
     MiniAppSettingsRead,
     MiniAppSupportRequestResponse,
     MiniAppTourDetailRead,
@@ -165,6 +166,12 @@ class MiniAppApiClient:
             response = await client.get("/mini-app/settings", params=params or None)
             response.raise_for_status()
             return MiniAppSettingsRead.model_validate(response.json())
+
+    async def get_supplier_offer_landing(self, *, supplier_offer_id: int) -> MiniAppSupplierOfferLandingRead:
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=10.0) as client:
+            response = await client.get(f"/mini-app/supplier-offers/{supplier_offer_id}")
+            response.raise_for_status()
+            return MiniAppSupplierOfferLandingRead.model_validate(response.json())
 
     async def post_language_preference(self, *, telegram_user_id: int, language_code: str) -> str:
         body = {"telegram_user_id": telegram_user_id, "language_code": language_code}

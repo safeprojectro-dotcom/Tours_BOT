@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from app.core.config import Settings
 from app.models.enums import SupplierServiceComposition, TourSalesMode
 from app.models.supplier import SupplierOffer
-from app.services.supplier_offer_deep_link import private_bot_deeplink
+from app.services.supplier_offer_deep_link import mini_app_supplier_offer_url, private_bot_deeplink
 
 _BUCHAREST = ZoneInfo("Europe/Bucharest")
 
@@ -148,7 +148,8 @@ def build_showcase_publication(offer: SupplierOffer, settings: Settings) -> Show
         det_url = html.escape(private_bot_deeplink(bot_username=uname, offer_id=offer.id))
         cta_parts.append(f'<a href="{det_url}">Detalii</a>')
     if mini:
-        cta_parts.append(f'<a href="{html.escape(mini)}">Rezervă</a>')
+        reserve_url = html.escape(mini_app_supplier_offer_url(mini_app_url=mini, offer_id=offer.id))
+        cta_parts.append(f'<a href="{reserve_url}">Rezervă</a>')
     if cta_parts:
         body_lines.append("<b>" + " | ".join(cta_parts) + "</b>")
 

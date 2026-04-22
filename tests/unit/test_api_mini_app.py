@@ -9,7 +9,7 @@ from sqlalchemy import event
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
-from app.models.enums import TourSalesMode, TourStatus
+from app.models.enums import SupplierOfferLifecycle, TourSalesMode, TourStatus
 from app.models.handoff import Handoff
 from app.models.waitlist import WaitlistEntry
 from app.services.handoff_entry import HandoffEntryService
@@ -196,6 +196,47 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(unknown_response.json()["detail"], "tour not found")
         self.assertEqual(collecting_group_response.status_code, 404)
         self.assertEqual(collecting_group_response.json()["detail"], "tour not found")
+
+    def test_supplier_offer_landing_returns_published_offer_context(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(
+            supplier,
+            lifecycle_status=SupplierOfferLifecycle.PUBLISHED,
+            title="Published Offer Landing",
+            description="Read-only published supplier offer context.",
+            seats_total=44,
+            base_price="145.00",
+            currency="EUR",
+            showcase_chat_id="-100123456",
+            showcase_message_id=9988,
+        )
+        self.session.commit()
+
+        response = self.client.get(f"/mini-app/supplier-offers/{offer.id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["supplier_offer_id"], offer.id)
+        self.assertEqual(body["title"], "Published Offer Landing")
+        self.assertEqual(body["description"], "Read-only published supplier offer context.")
+        self.assertEqual(body["base_price"], "145.00")
+        self.assertEqual(body["currency"], "EUR")
+        self.assertEqual(body["publication"]["lifecycle_status"], "published")
+        self.assertEqual(body["publication"]["showcase_chat_id"], "-100123456")
+        self.assertEqual(body["publication"]["showcase_message_id"], 9988)
+        self.assertEqual(body["catalog_fallback_route"], "/")
+
+    def test_supplier_offer_landing_rejects_unpublished_offer(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(
+            supplier,
+            lifecycle_status=SupplierOfferLifecycle.READY_FOR_MODERATION,
+            title="Hidden Draft",
+        )
+        self.session.commit()
+
+        response = self.client.get(f"/mini-app/supplier-offers/{offer.id}")
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "supplier offer not found")
 
     def test_preparation_route_returns_preparation_options_for_open_tour(self) -> None:
         tour = self.create_tour(

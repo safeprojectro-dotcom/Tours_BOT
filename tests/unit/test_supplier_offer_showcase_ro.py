@@ -77,6 +77,7 @@ class SupplierOfferShowcaseRoTests(unittest.TestCase):
         self.assertIn("11 mai 2026, 21:00", cap)
         self.assertIn("Detalii", cap)
         self.assertIn("Rezervă", cap)
+        self.assertIn("/supplier-offers/7", cap)
         self.assertIn("Abonează-te la canal", cap)
         self.assertNotIn("full_bus", cap.lower())
         self.assertNotIn("per_seat", cap.lower())

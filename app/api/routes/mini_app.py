@@ -28,6 +28,7 @@ from app.schemas.mini_app import (
     MiniAppPaymentEntryRequest,
     MiniAppReservationPreparationRead,
     MiniAppSettingsRead,
+    MiniAppSupplierOfferLandingRead,
     MiniAppSupportRequest,
     MiniAppSupportRequestResponse,
     MiniAppTourDetailRead,
@@ -50,6 +51,7 @@ from app.services.handoff_entry import HandoffEntryService
 from app.services.mini_app_help_settings import MiniAppHelpSettingsService
 from app.services.mini_app_reservation_preparation import MiniAppReservationPreparationService
 from app.services.mini_app_mock_payment import MiniAppMockPaymentCompletionService
+from app.services.mini_app_supplier_offer_landing import MiniAppSupplierOfferLandingService
 from app.services.mini_app_tour_detail import MiniAppTourDetailService
 from app.services.mini_app_waitlist import MiniAppWaitlistService
 from app.services.tour_sales_mode_policy import TourSalesModePolicyService
@@ -321,6 +323,20 @@ def get_mini_app_ui_settings(
 ) -> MiniAppSettingsRead:
     tid = telegram_user_id if telegram_user_id is not None and telegram_user_id > 0 else None
     return MiniAppHelpSettingsService().get_settings_read(session, telegram_user_id=tid)
+
+
+@router.get("/supplier-offers/{supplier_offer_id}", response_model=MiniAppSupplierOfferLandingRead)
+def get_supplier_offer_landing(
+    supplier_offer_id: int,
+    session: Session = Depends(get_db),
+) -> MiniAppSupplierOfferLandingRead:
+    detail = MiniAppSupplierOfferLandingService().get_published_offer_landing(
+        session,
+        supplier_offer_id=supplier_offer_id,
+    )
+    if detail is None:
+        raise HTTPException(status_code=404, detail="supplier offer not found")
+    return detail
 
 
 @router.post("/language-preference", response_model=MiniAppLanguagePreferenceResponse)

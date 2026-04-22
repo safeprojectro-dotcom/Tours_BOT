@@ -28,3 +28,10 @@ def private_bot_deeplink(*, bot_username: str, offer_id: int) -> str:
         raise ValueError("bot_username is required")
     payload = supplier_offer_start_payload(offer_id)
     return f"https://t.me/{uname}?start={payload}"
+
+
+def mini_app_supplier_offer_url(*, mini_app_url: str, offer_id: int) -> str:
+    base = mini_app_url.strip().rstrip("/")
+    if not base:
+        raise ValueError("mini_app_url is required")
+    return f"{base}/supplier-offers/{int(offer_id)}"

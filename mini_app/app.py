@@ -30,6 +30,7 @@ from app.schemas.mini_app import (
     MiniAppBridgePaymentEligibilityRead,
     MiniAppCatalogRead,
     MiniAppReservationPreparationRead,
+    MiniAppSupplierOfferLandingRead,
     MiniAppTourDetailRead,
     MiniAppWaitlistStatusRead,
 )
@@ -3696,6 +3697,161 @@ class CustomRequestScreen:
             self.on_continue_rfq_booking(request_id)
 
 
+class SupplierOfferLandingScreen:
+    def __init__(
+        self,
+        page: ft.Page,
+        *,
+        api_client: MiniAppApiClient,
+        language_code: str,
+        on_back_catalog: Callable[[], None],
+        on_open_settings: Callable[[], None],
+        on_open_custom_request: Callable[[], None] | None = None,
+    ) -> None:
+        self.page = page
+        self.api_client = api_client
+        self.language_code = language_code
+        self.on_back_catalog = on_back_catalog
+        self.on_open_settings = on_open_settings
+        self.on_open_custom_request = on_open_custom_request
+        self.current_offer_id: int | None = None
+        self._last_detail: MiniAppSupplierOfferLandingRead | None = None
+        lg = language_code
+        self.nav_back = ft.TextButton(
+            shell(lg, "back_to_catalog"),
+            icon=ft.Icons.ARROW_BACK,
+            on_click=lambda _: self.on_back_catalog(),
+        )
+        self.nav_settings = ft.TextButton(shell(lg, "settings"), on_click=lambda _: self.on_open_settings())
+        self.nav_custom_trip: ft.TextButton | None = None
+        if on_open_custom_request is not None:
+            self.nav_custom_trip = ft.TextButton(shell(lg, "nav_custom_trip"), on_click=lambda _: on_open_custom_request())
+        self.page_title = ft.Text(shell(lg, "supplier_offer_landing_title"), size=26, weight=ft.FontWeight.BOLD)
+        self.subtitle = ft.Text("", size=13, color=ft.Colors.ON_SURFACE_VARIANT)
+        self.body_column = ft.Column(spacing=10)
+        self.catalog_cta = ft.FilledButton(
+            shell(lg, "supplier_offer_btn_browse_catalog"),
+            on_click=lambda _: self.on_back_catalog(),
+        )
+        self.fallback_hint = ft.Text(
+            shell(lg, "supplier_offer_fallback_hint"),
+            size=12,
+            color=ft.Colors.ON_SURFACE_VARIANT,
+        )
+
+    def set_offer_id(self, supplier_offer_id: int) -> None:
+        self.current_offer_id = supplier_offer_id
+
+    def sync_shell_labels(self) -> None:
+        lg = self.language_code
+        self.nav_back.text = shell(lg, "back_to_catalog")
+        self.nav_settings.text = shell(lg, "settings")
+        if self.nav_custom_trip is not None:
+            self.nav_custom_trip.text = shell(lg, "nav_custom_trip")
+        self.page_title.value = shell(lg, "supplier_offer_landing_title")
+        self.catalog_cta.text = shell(lg, "supplier_offer_btn_browse_catalog")
+        self.fallback_hint.value = shell(lg, "supplier_offer_fallback_hint")
+        detail = self._last_detail
+        if detail is not None:
+            self.subtitle.value = shell(lg, "supplier_offer_opened_ref", id=str(detail.supplier_offer_id))
+
+    def build(self) -> ft.Control:
+        nav_row: list[ft.Control] = [self.nav_back, self.nav_settings]
+        if self.nav_custom_trip is not None:
+            nav_row.append(self.nav_custom_trip)
+        return scrollable_page(
+            ft.Row(nav_row, alignment=ft.MainAxisAlignment.START, wrap=True),
+            self.page_title,
+            self.subtitle,
+            self.body_column,
+            ft.Container(height=8),
+            self.catalog_cta,
+            self.fallback_hint,
+        )
+
+    async def load_offer(self) -> None:
+        self.sync_shell_labels()
+        lg = self.language_code
+        offer_id = self.current_offer_id
+        if offer_id is None:
+            self.body_column.controls = [ft.Text("Offer id is missing.", color=ft.Colors.ERROR)]
+            self.page.update()
+            return
+        self.body_column.controls = [
+            ft.Row(
+                [ft.ProgressRing(width=20, height=20, stroke_width=2), ft.Text(shell(lg, "supplier_offer_landing_loading"))],
+                spacing=10,
+            )
+        ]
+        self.page.update()
+        try:
+            detail = await self.api_client.get_supplier_offer_landing(supplier_offer_id=offer_id)
+        except httpx.HTTPStatusError as exc:
+            self._last_detail = None
+            self.subtitle.value = shell(lg, "supplier_offer_opened_ref", id=str(offer_id))
+            self.body_column.controls = [
+                ft.Text(
+                    CatalogScreen._http_error_message(exc, default="Could not load this supplier offer."),
+                    color=ft.Colors.ERROR,
+                )
+            ]
+            self.page.update()
+            return
+        except Exception:
+            self._last_detail = None
+            self.subtitle.value = shell(lg, "supplier_offer_opened_ref", id=str(offer_id))
+            self.body_column.controls = [ft.Text("Could not load this supplier offer.", color=ft.Colors.ERROR)]
+            self.page.update()
+            return
+
+        self._last_detail = detail
+        self.subtitle.value = shell(lg, "supplier_offer_opened_ref", id=str(detail.supplier_offer_id))
+        status = getattr(detail.publication.lifecycle_status, "value", detail.publication.lifecycle_status)
+        schedule_line = (
+            f"{CatalogScreen._format_datetime(detail.departure_datetime)} → "
+            f"{CatalogScreen._format_datetime(detail.return_datetime)}"
+        )
+        if detail.base_price is not None and (detail.currency or "").strip():
+            price_line = f"{detail.base_price} {detail.currency}"
+        else:
+            price_line = shell(lg, "supplier_offer_price_missing")
+        blocks: list[ft.Control] = [
+            ft.Text(detail.title, size=22, weight=ft.FontWeight.BOLD),
+            ft.Text(shell(lg, "supplier_offer_publication_line", status=str(status)), size=12),
+            ft.Container(height=6),
+            ft.Text(shell(lg, "supplier_offer_schedule_title"), size=16, weight=ft.FontWeight.W_600),
+            ft.Text(schedule_line),
+            ft.Container(height=4),
+            ft.Text(shell(lg, "supplier_offer_price_title"), size=16, weight=ft.FontWeight.W_600),
+            ft.Text(price_line),
+            ft.Container(height=4),
+            ft.Text(shell(lg, "supplier_offer_section_capacity"), size=16, weight=ft.FontWeight.W_600),
+            ft.Text(str(detail.seats_total)),
+            ft.Container(height=4),
+            ft.Text(shell(lg, "supplier_offer_section_description"), size=16, weight=ft.FontWeight.W_600),
+            ft.Text(detail.description),
+        ]
+        if (detail.boarding_places_text or "").strip():
+            blocks.extend(
+                [
+                    ft.Container(height=4),
+                    ft.Text(shell(lg, "supplier_offer_section_boarding"), size=16, weight=ft.FontWeight.W_600),
+                    ft.Text(detail.boarding_places_text),
+                ]
+            )
+        transport = (detail.vehicle_label or "").strip() or (detail.transport_notes or "").strip()
+        if transport:
+            blocks.extend(
+                [
+                    ft.Container(height=4),
+                    ft.Text(shell(lg, "supplier_offer_section_transport"), size=16, weight=ft.FontWeight.W_600),
+                    ft.Text(transport),
+                ]
+            )
+        self.body_column.controls = blocks
+        self.page.update()
+
+
 class HelpScreen:
     def __init__(
         self,
@@ -3919,6 +4075,7 @@ class SettingsScreen:
 class MiniAppShell:
     TOUR_ROUTE_PREFIX = "/tours/"
     TOUR_PREPARATION_ROUTE_SUFFIX = "/prepare"
+    SUPPLIER_OFFER_ROUTE_PREFIX = "/supplier-offers/"
 
     def __init__(self, page: ft.Page) -> None:
         settings = get_mini_app_settings()
@@ -4037,6 +4194,14 @@ class MiniAppShell:
             on_open_custom_request=self.open_custom_request_from_help,
             language_code=settings.mini_app_default_language,
         )
+        self.supplier_offer_landing_screen = SupplierOfferLandingScreen(
+            page,
+            api_client=self.api_client,
+            language_code=settings.mini_app_default_language,
+            on_back_catalog=self.open_catalog,
+            on_open_settings=self.open_settings,
+            on_open_custom_request=self.open_custom_request_from_current_route,
+        )
         self.rfq_bridge_execution_screen = RfqBridgeExecutionScreen(
             page,
             api_client=self.api_client,
@@ -4081,6 +4246,7 @@ class MiniAppShell:
         self.custom_request_screen.language_code = code
         self.rfq_bridge_execution_screen.language_code = code
         self.settings_screen.language_code = code
+        self.supplier_offer_landing_screen.language_code = code
         self.catalog_screen.sync_shell_labels()
         self.settings_screen.sync_shell_labels()
         self.tour_detail_screen.sync_shell_labels()
@@ -4094,6 +4260,7 @@ class MiniAppShell:
         self.help_screen.sync_shell_labels()
         self.custom_request_screen.sync_shell_labels()
         self.rfq_bridge_execution_screen.sync_shell_labels()
+        self.supplier_offer_landing_screen.sync_shell_labels()
 
     async def hydrate_language_from_server(self) -> None:
         try:
@@ -4276,6 +4443,21 @@ class MiniAppShell:
             self.page.run_task(self.settings_screen.load_options)
             return
 
+        supplier_offer_id = self._extract_supplier_offer_id(self.page.route)
+        if supplier_offer_id is not None:
+            self.supplier_offer_landing_screen.set_offer_id(supplier_offer_id)
+            self.page.views.append(
+                ft.View(
+                    route=self.page.route or "/",
+                    controls=[self.supplier_offer_landing_screen.build()],
+                    padding=0,
+                    spacing=0,
+                )
+            )
+            self.page.update()
+            self.page.run_task(self.supplier_offer_landing_screen.load_offer)
+            return
+
         payment_ctx = self._extract_payment_route(self.page.route)
         if payment_ctx is not None:
             tour_code, order_id = payment_ctx
@@ -4448,6 +4630,9 @@ class MiniAppShell:
     def open_tour_preparation(self, tour_code: str) -> None:
         self.page.go(f"{self.TOUR_ROUTE_PREFIX}{tour_code}{self.TOUR_PREPARATION_ROUTE_SUFFIX}")
 
+    def open_supplier_offer(self, supplier_offer_id: int) -> None:
+        self.page.go(f"{self.SUPPLIER_OFFER_ROUTE_PREFIX}{supplier_offer_id}")
+
     def open_reservation_success(self, tour_code: str, order_id: int) -> None:
         self.page.go(f"{self.TOUR_ROUTE_PREFIX}{tour_code}/prepare/reserved/{order_id}")
 
@@ -4562,6 +4747,15 @@ class MiniAppShell:
         code = route.removeprefix(self.TOUR_ROUTE_PREFIX)
         code = code.removesuffix(self.TOUR_PREPARATION_ROUTE_SUFFIX).strip("/")
         return code or None
+
+    @staticmethod
+    def _extract_supplier_offer_id(route: str | None) -> int | None:
+        if not route:
+            return None
+        m = re.match(r"^/supplier-offers/(\d+)/?$", route.strip())
+        if not m:
+            return None
+        return int(m.group(1))
 
 
 def main(page: ft.Page) -> None:

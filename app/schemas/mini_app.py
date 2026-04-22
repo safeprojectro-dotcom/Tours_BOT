@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import CustomerCommercialMode, TourStatus
+from app.models.enums import CustomerCommercialMode, SupplierOfferLifecycle, TourStatus
 from app.schemas.prepared import CatalogTourCardRead, LocalizedTourContentRead, OrderSummaryRead, ReservationPreparationTourRead
 from app.schemas.tour import BoardingPointRead, TourRead
 from app.schemas.effective_commercial_execution_policy import EffectiveCommercialExecutionPolicyRead
@@ -204,3 +204,29 @@ class MiniAppWaitlistStatusRead(BaseModel):
         description="active | in_review | closed for the user's current row, if any.",
     )
     waitlist_entry_id: int | None = Field(default=None, description="Primary key of the surfaced waitlist row.")
+
+
+class MiniAppSupplierOfferPublicationContextRead(BaseModel):
+    lifecycle_status: SupplierOfferLifecycle
+    published_at: datetime | None = None
+    showcase_chat_id: str | None = None
+    showcase_message_id: int | None = None
+
+
+class MiniAppSupplierOfferLandingRead(BaseModel):
+    supplier_offer_id: int
+    title: str
+    description: str
+    departure_datetime: datetime
+    return_datetime: datetime
+    boarding_places_text: str | None = None
+    transport_notes: str | None = None
+    vehicle_label: str | None = None
+    seats_total: int
+    base_price: Decimal | None = None
+    currency: str | None = None
+    publication: MiniAppSupplierOfferPublicationContextRead
+    catalog_fallback_route: str = Field(
+        default="/",
+        description="Safe fallback route for catalog browsing from supplier-offer landing.",
+    )
