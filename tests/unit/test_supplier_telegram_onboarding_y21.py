@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 from sqlalchemy import event
 
+from app.bot.constants import SUPPLIER_ONBOARDING_NAV_BACK_CALLBACK, SUPPLIER_ONBOARDING_NAV_HOME_CALLBACK
 from app.bot.handlers import supplier_onboarding
 from app.bot.state import SupplierOnboardingState
 from app.core.config import get_settings
@@ -43,6 +44,43 @@ def _private_message(*, telegram_user_id: int) -> MagicMock:
     message.chat.id = 777_001
     message.answer = AsyncMock(return_value=MagicMock(message_id=1))
     return message
+
+
+def _callback(*, telegram_user_id: int, data: str, message: MagicMock) -> MagicMock:
+    cb = MagicMock()
+    cb.from_user = message.from_user
+    cb.from_user.id = telegram_user_id
+    cb.from_user.language_code = "en"
+    cb.data = data
+    cb.message = message
+    cb.answer = AsyncMock()
+    return cb
+
+
+class _DictFSMState:
+    def __init__(self) -> None:
+        self.data: dict = {}
+        self.last_state = None
+
+    async def update_data(self, data: dict | None = None, **kwargs: object) -> dict:
+        if data:
+            self.data.update(dict(data))
+        if kwargs:
+            self.data.update(kwargs)
+        return dict(self.data)
+
+    async def get_data(self) -> dict:
+        return dict(self.data)
+
+    async def clear(self) -> None:
+        self.data.clear()
+        self.last_state = None
+
+    async def set_state(self, value) -> None:
+        self.last_state = value
+
+    async def get_state(self):
+        return self.last_state
 
 
 class SupplierTelegramOnboardingY21Tests(FoundationDBTestCase):
@@ -107,6 +145,118 @@ class SupplierTelegramOnboardingY21Tests(FoundationDBTestCase):
             state.set_state.assert_awaited_with(SupplierOnboardingState.choosing_legal_entity_type)
             text = message.answer.call_args[0][0].lower()
             self.assertIn("legal entity", text)
+
+        self._run(body())
+
+    def test_onboarding_back_moves_to_previous_step(self) -> None:
+        async def body() -> None:
+            message = _private_message(telegram_user_id=811_050)
+            message.text = "Inapoi"
+            state = _DictFSMState()
+            await state.set_state(SupplierOnboardingState.entering_contact_info)
+            await state.update_data(display_name="RoadJet")
+            binder = _SessionLocalBinder(self.session)
+            with patch.object(supplier_onboarding, "SessionLocal", binder):
+                await supplier_onboarding.onboarding_contact_info(message, state)
+            self.assertEqual(state.last_state, SupplierOnboardingState.entering_display_name)
+            self.assertEqual(state.data.get("display_name"), "RoadJet")
+
+        self._run(body())
+
+    def test_onboarding_back_preserves_draft_data(self) -> None:
+        async def body() -> None:
+            message = _private_message(telegram_user_id=811_051)
+            message.text = "Inapoi"
+            state = _DictFSMState()
+            await state.set_state(SupplierOnboardingState.entering_legal_registration_code)
+            await state.update_data(
+                display_name="RoadJet",
+                contact_info="+401",
+                region="RO",
+                legal_entity_type="company",
+                legal_registered_name="RoadJet SRL",
+            )
+            binder = _SessionLocalBinder(self.session)
+            with patch.object(supplier_onboarding, "SessionLocal", binder):
+                await supplier_onboarding.onboarding_legal_registration_code(message, state)
+            self.assertEqual(state.last_state, SupplierOnboardingState.entering_legal_registered_name)
+            self.assertEqual(state.data.get("legal_registered_name"), "RoadJet SRL")
+            self.assertEqual(state.data.get("display_name"), "RoadJet")
+
+        self._run(body())
+
+    def test_onboarding_home_clears_state_and_returns_feedback(self) -> None:
+        async def body() -> None:
+            message = _private_message(telegram_user_id=811_052)
+            message.text = "Acasă"
+            state = _DictFSMState()
+            await state.set_state(SupplierOnboardingState.entering_permit_license_type)
+            await state.update_data(display_name="RoadJet", contact_info="+401")
+            binder = _SessionLocalBinder(self.session)
+            with patch.object(supplier_onboarding, "SessionLocal", binder):
+                await supplier_onboarding.onboarding_permit_license_type(message, state)
+            self.assertIsNone(state.last_state)
+            self.assertEqual(state.data, {})
+            all_text = "\n".join(c.args[0].lower() for c in message.answer.call_args_list if c.args)
+            self.assertIn("cancelled", all_text)
+
+        self._run(body())
+
+    def test_onboarding_choice_step_supports_nav_callbacks(self) -> None:
+        async def body() -> None:
+            state = _DictFSMState()
+            await state.set_state(SupplierOnboardingState.choosing_legal_entity_type)
+            await state.update_data(display_name="RoadJet", contact_info="+401", region="RO")
+            message = _private_message(telegram_user_id=811_053)
+            cb_back = _callback(
+                telegram_user_id=811_053,
+                data=SUPPLIER_ONBOARDING_NAV_BACK_CALLBACK,
+                message=message,
+            )
+            binder = _SessionLocalBinder(self.session)
+            with patch.object(supplier_onboarding, "SessionLocal", binder):
+                await supplier_onboarding.onboarding_nav_callback(cb_back, state)
+            self.assertEqual(state.last_state, SupplierOnboardingState.entering_region)
+            self.assertEqual(state.data.get("display_name"), "RoadJet")
+            cb_home = _callback(
+                telegram_user_id=811_053,
+                data=SUPPLIER_ONBOARDING_NAV_HOME_CALLBACK,
+                message=message,
+            )
+            with patch.object(supplier_onboarding, "SessionLocal", binder):
+                await supplier_onboarding.onboarding_nav_callback(cb_home, state)
+            self.assertIsNone(state.last_state)
+            self.assertEqual(state.data, {})
+
+        self._run(body())
+
+    def test_onboarding_finish_submit_path_still_works(self) -> None:
+        async def body() -> None:
+            state = _DictFSMState()
+            await state.set_state(SupplierOnboardingState.entering_fleet_summary)
+            await state.update_data(
+                display_name="Finish Co",
+                contact_info="+40777 @finish",
+                region="RO West",
+                legal_entity_type="company",
+                legal_registered_name="Finish Co SRL",
+                legal_registration_code="ROFIN777",
+                permit_license_type="Road transport permit",
+                permit_license_number="RTP-777",
+                service_composition="transport_only",
+            )
+            message = _private_message(telegram_user_id=811_054)
+            message.text = "2 buses"
+            binder = _SessionLocalBinder(self.session)
+            with patch.object(supplier_onboarding, "SessionLocal", binder):
+                await supplier_onboarding.onboarding_finish(message, state)
+            supplier = SupplierOnboardingService().get_by_telegram_user_id(self.session, telegram_user_id=811_054)
+            self.assertIsNotNone(supplier)
+            assert supplier is not None
+            self.assertEqual(supplier.onboarding_status, SupplierOnboardingStatus.PENDING_REVIEW)
+            self.assertEqual(supplier.legal_registration_code, "ROFIN777")
+            self.assertIsNone(state.last_state)
+            self.assertEqual(state.data, {})
 
         self._run(body())
 

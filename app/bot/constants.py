@@ -52,6 +52,9 @@ SUPPLIER_ONBOARDING_LEGAL_ENTITY_CALLBACK_PREFIX = "supplier:onboarding:legal_en
 SUPPLIER_ONBOARDING_LEGAL_ENTITY_COMPANY = "supplier:onboarding:legal_entity:company"
 SUPPLIER_ONBOARDING_LEGAL_ENTITY_INDIVIDUAL_ENTREPRENEUR = "supplier:onboarding:legal_entity:individual_entrepreneur"
 SUPPLIER_ONBOARDING_LEGAL_ENTITY_AUTHORIZED_CARRIER = "supplier:onboarding:legal_entity:authorized_carrier"
+SUPPLIER_ONBOARDING_NAV_CALLBACK_PREFIX = "supplier:onboarding:nav:"
+SUPPLIER_ONBOARDING_NAV_BACK_CALLBACK = "supplier:onboarding:nav:back"
+SUPPLIER_ONBOARDING_NAV_HOME_CALLBACK = "supplier:onboarding:nav:home"
 
 SUPPLIER_OFFER_SALES_MODE_CALLBACK_PREFIX = "supplier:offer:sales_mode:"
 SUPPLIER_OFFER_PAYMENT_MODE_CALLBACK_PREFIX = "supplier:offer:payment_mode:"
