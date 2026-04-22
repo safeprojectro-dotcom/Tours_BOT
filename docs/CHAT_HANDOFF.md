@@ -35,6 +35,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Y28.2 implementation:** Telegram admin offer visibility expansion completed (`/admin_queue` for `ready_for_moderation`, `/admin_approved` for approved/unpublished, `/admin_published` for published).
 - **Y29.2 implementation:** additive supplier profile status governance completed (profile lifecycle supports `pending_review` / `approved` / `rejected` / `suspended` / `revoked`; admin governance actions now include approve/reject/suspend/reactivate/revoke at service/API truth level).
 - **Y29.3 implementation:** Telegram admin supplier moderation workspace completed as narrow operational client for supplier profiles (`/admin_supplier_queue`, `/admin_suppliers`) with profile actions: approve, reject(with reason), suspend(with reason), reactivate, revoke(with reason).
+- **Y30 design gate accepted:** Supplier Offer -> Mini App Conversion Bridge design captured in **`docs/SUPPLIER_OFFER_MINI_APP_CONVERSION_BRIDGE_DESIGN.md`** (design-only; no runtime/migration/test changes in this gate).
 
 ### Supplier continuity truth (Y2/Y2.3/Y2.1a/Y24/Y25/Y27/Y28 accepted)
 - Supplier v1 model is **supplier entity + one primary Telegram-bound operator**.
@@ -77,6 +78,15 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
   - supplier profile moderation remains separate from supplier offer moderation (no publish/retract vocabulary in supplier profile workspace);
   - no supplier-offer auto retract/blocking cascade was introduced;
   - no supplier-status gating integration across supplier/offer bot surfaces was introduced.
+- Y30 conversion-bridge design truth (accepted):
+  - published supplier offers remain visible in Telegram channel as showcase/advertising content;
+  - channel visibility is explicitly separate from current customer bookability (`visibility != bookability`);
+  - Mini App holds current executable/actionability truth for customer actions;
+  - channel CTA contract is stable: both `Detalii` and `Rezervare` resolve to the same stable Mini App supplier-offer landing (optional intent hint allowed), not directly to fragile execution endpoints;
+  - `supplier_offer` remains commercial/showcase/publication object while `tour` remains Layer A execution/catalog object; no forced 1:1 merge;
+  - conversion bridge states may include: published-only, published+landing, published+linked executable, sold-out, assisted-only, view-only/not currently executable;
+  - per-seat/full-bus actionability is determined dynamically on Mini App landing by current policy/inventory truth; channel post may remain visible even when self-service booking is unavailable;
+  - future offer-specific coupon/promo logic belongs to conversion/commercial layer, not raw channel/publication text.
 - Multi-operator organization / RBAC is explicitly postponed beyond Y2.1.
 - Supplier legal/compliance identity is now required for pending onboarding approvals:
   - **`legal_entity_type`**
@@ -156,7 +166,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Mode 2 != Mode 3** remains explicit and preserved.
 
 ### Next safe step (after this sync)
-- **Next supplier-safe step:** **Y29.4 — supplier status gating integration**.
+- **Next supplier-safe step:** **Y30.1 — stable Mini App supplier-offer landing (read-only first)**.
 
 ### Do-not-reopen items
 - Do not reopen closed tracks for redesign by default (including completed 5g/U/V/W/X/A1 blocks).
@@ -1312,27 +1322,28 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 - **Still valid:** staging smoke on **`/admin/*`** through Phase 6 Step 30 when convenient; **`docs/PHASE_6_REVIEW.md`** remains the Phase 6 closure reference; **`docs/PHASE_7_REVIEW.md`** is the Phase **7** closure reference.
 - **Optional later (product-prioritized only):** narrow **persisted move placement audit** on successful **`POST /move`**, **or** another **low-risk** admin read refinement — **never** default to **admin payment** mutation; requires **explicit** design checkpoint (**`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** **§1f**).
 - **Still postponed:** admin **refund / capture / cancel-payment**, **broad** order status editor, **merge** tooling, **payment reconciliation** rewrite, **persisted** move timeline without an explicit slice, handoff **unassign**, broader **reassignment** policy, full **operator queue/workflow engine**, **notifications** from admin actions, **full** admin SPA, **publication**, **bulk** ops — per plan / product.
-- **Supplier governance postponed set (post-Y29.3):** supplier-status gating integration across supplier/offer surfaces, exclusion visibility policy / supplier offer auto retract-block cascade, broad supplier RBAC/org redesign, governance analytics/dashboard, supplier-offer conversion bridge design/implementation.
+- **Supplier governance postponed set (post-Y30 design acceptance):** full conversion bridge implementation, actionability resolver implementation, supplier-status gating integration across supplier/offer surfaces, exclusion visibility policy / supplier offer auto retract-block cascade, broad supplier RBAC/org redesign, governance analytics/dashboard, coupons implementation.
 - **Longer-term:** optional group assistant at scale, content assistant, handoff notifications, analytics — **explicit** product scope per `docs/IMPLEMENTATION_PLAN.md`.
 
 ## Next Safe Step
 
 ### Next safe step
-**Y29.3 post-sync default:** **Y29.4 — supplier status gating integration** (narrow follow-up over existing supplier profile governance truth and Telegram supplier admin workspace).  
+**Y30 post-sync default:** **Y30.1 — stable Mini App supplier-offer landing (read-only first)** (narrow first implementation slice over accepted conversion-bridge design truth).  
 **Secondary product track (separate):** **Phase 7.1 / Sales Mode / Step 6+** for scope beyond closed **5g.4**. **Do not** reopen **5g.4** unless fixing a regression.
 
 **Goal:**
-- Prioritize narrow supplier status gating integration:
-  - reuse existing supplier profile governance truth (`pending_review` / `approved` / `rejected` / `suspended` / `revoked`);
-  - integrate deterministic gating across supplier/offer bot surfaces without changing offer lifecycle semantics;
-  - preserve strict separation between supplier profile lifecycle and supplier offer lifecycle;
+- Prioritize stable supplier-offer Mini App landing (read-only first):
+  - reuse accepted channel discovery contract while keeping Layer A/Mini App execution truth authoritative;
+  - ensure both `Detalii` and `Rezervare` resolve to one stable supplier-offer landing entry;
+  - expose deterministic customer actionability state (bookable/sold-out/assisted/view-only) without mutation side effects in this first slice;
   - no booking/payment/RFQ semantic changes.
 
 **Must not expand into (unless explicitly approved):**
 - **Payment reconciliation** or **payment-entry** semantic changes
 - **RFQ/bridge** execution changes
 - **Reopening** **5g.4** as a **new design track** without a bug/regression ticket
-- Supplier offer auto retract/blocking cascade from profile status changes
+- Supplier offer auto retract/blocking cascade
+- Supplier status gating integration in the same slice (separate follow-up after landing baseline)
 - Broad supplier org/RBAC redesign or governance analytics/dashboard buildout
 
 **Baseline (shipped):** **Phase 7.1 / Steps 1–5** + **Tracks 5g.4a–5g.4d** — **`tour.sales_mode`**, **`TourSalesModePolicyService`**, Mini App catalog **full_bus** virgin self-serve (**`TemporaryReservationService`** + **`PaymentEntryService`**), assisted path (**Step 5**), human-readable booking **facade**; **`COMMIT_PUSH_DEPLOY.md`** migration gate for **`20260416_06`**; acceptance **`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**.
@@ -1356,7 +1367,7 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 **Plan:** `docs/IMPLEMENTATION_PLAN.md` — Phase 7 **closed**; **active sub-track:** **Phase 7.1 — tour sales mode** (**Steps 1–5** + **5g.4a–5g.4d** done; **Step 6+** forward). **V2 supplier marketplace:** `docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md` — **Track 0** through **Track 5e** complete for scoped slices (request marketplace + RFQ bridge execution + supersede/cancel lifecycle); **next V2 marketplace slices** (product-prioritized): customer **multi-quote** UX, notifications, bot deep links — see that plan’s status table.
 
 ## Recommended Next Prompt
-Default continuation prompt: **Y29.4 — supplier status gating integration (narrow policy integration layer)** — wire supplier profile status gates across supplier/offer bot surfaces while preserving strict profile-vs-offer lifecycle separation and without implementing supplier-offer auto retract/block cascade.  
+Default continuation prompt: **Y30.1 — stable Mini App supplier-offer landing (read-only first)** — implement a stable supplier-offer landing target for channel CTA (`Detalii`/`Rezervare`) with dynamic actionability read-state and no execution-semantic redesign.  
 Separate optional product thread: **Phase 7.1 / Sales Mode / Step 6+** beyond **`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**. **No** reopening **5g.4** / Layer A payment semantics without a regression ticket. **Phase 7** remains closed — **`docs/PHASE_7_REVIEW.md`**; do not reopen **`grp_followup_*`** by default. Sources: **`docs/CHAT_HANDOFF.md`**, **`docs/CHECKPOINT_UVXWA1_SUMMARY.md`**, **`docs/SUPPLIER_TELEGRAM_OPERATING_MODEL_Y2.md`**, **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`**, **`docs/TECH_SPEC_TOURS_BOT.md`**.
 
 ---
