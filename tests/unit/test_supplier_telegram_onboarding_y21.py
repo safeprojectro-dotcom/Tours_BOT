@@ -18,6 +18,7 @@ from app.main import create_app
 from app.models.enums import SupplierLegalEntityType, SupplierOnboardingStatus, SupplierServiceComposition
 from app.services.supplier_onboarding_service import (
     SupplierOnboardingApprovalValidationError,
+    SupplierOnboardingStatusTransitionError,
     SupplierOnboardingService,
 )
 from tests.unit.base import FoundationDBTestCase
@@ -339,7 +340,7 @@ class SupplierTelegramOnboardingY21Tests(FoundationDBTestCase):
 
     def test_admin_approve_reject_routes(self) -> None:
         svc = SupplierOnboardingService()
-        supplier, _ = svc.submit_from_telegram(
+        supplier_reject, _ = svc.submit_from_telegram(
             self.session,
             telegram_user_id=811_004,
             display_name="Gate Co",
@@ -357,7 +358,7 @@ class SupplierTelegramOnboardingY21Tests(FoundationDBTestCase):
         headers = {"Authorization": "Bearer test-admin-secret"}
 
         reject = self.client.post(
-            f"/admin/suppliers/{supplier.id}/onboarding/reject",
+            f"/admin/suppliers/{supplier_reject.id}/onboarding/reject",
             headers=headers,
             json={"reason": "Need clearer profile"},
         )
@@ -365,14 +366,122 @@ class SupplierTelegramOnboardingY21Tests(FoundationDBTestCase):
         self.assertEqual(reject.json()["onboarding_status"], "rejected")
         self.assertFalse(reject.json()["is_active"])
 
+        supplier_approve, _ = svc.submit_from_telegram(
+            self.session,
+            telegram_user_id=811_404,
+            display_name="Gate Co Approve",
+            contact_info="+404040",
+            region="RO South",
+            legal_entity_type=SupplierLegalEntityType.AUTHORIZED_CARRIER,
+            legal_registered_name="Gate Carrier Approve SA",
+            legal_registration_code="ROGATE404",
+            permit_license_type="Carrier authorization",
+            permit_license_number="CA-404",
+            service_composition=SupplierServiceComposition.TRANSPORT_WATER,
+            fleet_summary=None,
+        )
+        self.session.commit()
         approve = self.client.post(
-            f"/admin/suppliers/{supplier.id}/onboarding/approve",
+            f"/admin/suppliers/{supplier_approve.id}/onboarding/approve",
             headers=headers,
         )
         self.assertEqual(approve.status_code, 200, approve.text)
         self.assertEqual(approve.json()["onboarding_status"], "approved")
-        self.assertEqual(approve.json()["legal_registration_code"], "ROGATE444")
+        self.assertEqual(approve.json()["legal_registration_code"], "ROGATE404")
         self.assertTrue(approve.json()["is_active"])
+
+    def test_admin_suspend_reactivate_revoke_routes(self) -> None:
+        supplier = self.create_supplier(
+            code="Y292-ROUTE",
+            display_name="Governed Co",
+            is_active=True,
+            onboarding_status=SupplierOnboardingStatus.APPROVED,
+        )
+        self.session.commit()
+        headers = {"Authorization": "Bearer test-admin-secret"}
+
+        suspend = self.client.post(
+            f"/admin/suppliers/{supplier.id}/onboarding/suspend",
+            headers=headers,
+            json={"reason": "Policy breach"},
+        )
+        self.assertEqual(suspend.status_code, 200, suspend.text)
+        self.assertEqual(suspend.json()["onboarding_status"], "suspended")
+        self.assertFalse(suspend.json()["is_active"])
+        self.assertEqual(suspend.json()["onboarding_suspension_reason"], "Policy breach")
+
+        reactivate = self.client.post(
+            f"/admin/suppliers/{supplier.id}/onboarding/reactivate",
+            headers=headers,
+        )
+        self.assertEqual(reactivate.status_code, 200, reactivate.text)
+        self.assertEqual(reactivate.json()["onboarding_status"], "approved")
+        self.assertTrue(reactivate.json()["is_active"])
+        self.assertIsNone(reactivate.json()["onboarding_suspension_reason"])
+
+        revoke = self.client.post(
+            f"/admin/suppliers/{supplier.id}/onboarding/revoke",
+            headers=headers,
+            json={"reason": "Permanent ban"},
+        )
+        self.assertEqual(revoke.status_code, 200, revoke.text)
+        self.assertEqual(revoke.json()["onboarding_status"], "revoked")
+        self.assertFalse(revoke.json()["is_active"])
+        self.assertEqual(revoke.json()["onboarding_revocation_reason"], "Permanent ban")
+
+    def test_invalid_profile_status_transitions_are_rejected(self) -> None:
+        supplier = self.create_supplier(
+            code="Y292-INVALID",
+            display_name="Invalid Transition Co",
+            is_active=False,
+            onboarding_status=SupplierOnboardingStatus.REJECTED,
+        )
+        self.session.commit()
+        headers = {"Authorization": "Bearer test-admin-secret"}
+
+        bad_suspend = self.client.post(
+            f"/admin/suppliers/{supplier.id}/onboarding/suspend",
+            headers=headers,
+            json={"reason": "Not allowed"},
+        )
+        self.assertEqual(bad_suspend.status_code, 400, bad_suspend.text)
+        self.assertIn("Only approved suppliers can be suspended", bad_suspend.text)
+
+        bad_reactivate = self.client.post(
+            f"/admin/suppliers/{supplier.id}/onboarding/reactivate",
+            headers=headers,
+        )
+        self.assertEqual(bad_reactivate.status_code, 400, bad_reactivate.text)
+        self.assertIn("Only suspended suppliers can be reactivated", bad_reactivate.text)
+
+        bad_revoke = self.client.post(
+            f"/admin/suppliers/{supplier.id}/onboarding/revoke",
+            headers=headers,
+            json={"reason": "Not allowed"},
+        )
+        self.assertEqual(bad_revoke.status_code, 400, bad_revoke.text)
+        self.assertIn("Only approved or suspended suppliers can be revoked", bad_revoke.text)
+
+    def test_legacy_approved_supplier_remains_compatible(self) -> None:
+        supplier = self.create_supplier(
+            code="Y292-LEGACY",
+            display_name="Legacy Approved Supplier",
+            is_active=True,
+            onboarding_status=SupplierOnboardingStatus.APPROVED,
+            primary_telegram_user_id=811_700,
+        )
+        self.session.commit()
+        headers = {"Authorization": "Bearer test-admin-secret"}
+
+        read = self.client.get(f"/admin/suppliers/{supplier.id}", headers=headers)
+        self.assertEqual(read.status_code, 200, read.text)
+        self.assertEqual(read.json()["onboarding_status"], "approved")
+        self.assertTrue(read.json()["is_active"])
+        self.assertIsNone(read.json().get("onboarding_suspension_reason"))
+        self.assertIsNone(read.json().get("onboarding_revocation_reason"))
+
+        with self.assertRaises(SupplierOnboardingStatusTransitionError):
+            SupplierOnboardingService().admin_approve(self.session, supplier_id=supplier.id)
 
     def test_admin_supplier_read_includes_legal_identity_fields(self) -> None:
         svc = SupplierOnboardingService()

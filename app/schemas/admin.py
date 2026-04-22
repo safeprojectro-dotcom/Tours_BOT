@@ -635,6 +635,8 @@ class AdminSupplierRead(BaseModel):
     onboarding_service_composition: SupplierServiceComposition | None = None
     onboarding_fleet_summary: str | None = None
     onboarding_rejection_reason: str | None = None
+    onboarding_suspension_reason: str | None = None
+    onboarding_revocation_reason: str | None = None
     onboarding_submitted_at: datetime | None = None
     onboarding_reviewed_at: datetime | None = None
     created_at: datetime
@@ -670,6 +672,20 @@ class AdminSupplierListRead(BaseModel):
 
 
 class AdminSupplierOnboardingReject(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("reason")
+    @classmethod
+    def strip_reason(cls, v: str) -> str:
+        s = v.strip()
+        if not s:
+            raise ValueError("must not be empty or whitespace-only")
+        return s
+
+
+class AdminSupplierStatusReason(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reason: str = Field(min_length=1, max_length=4000)

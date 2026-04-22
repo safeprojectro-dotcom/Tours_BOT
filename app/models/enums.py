@@ -98,6 +98,8 @@ class SupplierOnboardingStatus(StrEnum):
     PENDING_REVIEW = "pending_review"
     APPROVED = "approved"
     REJECTED = "rejected"
+    SUSPENDED = "suspended"
+    REVOKED = "revoked"
 
 
 class CustomMarketplaceRequestType(StrEnum):

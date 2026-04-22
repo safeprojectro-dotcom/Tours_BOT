@@ -19,6 +19,12 @@ class SupplierOnboardingApprovalValidationError(Exception):
         super().__init__(message)
 
 
+class SupplierOnboardingStatusTransitionError(Exception):
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__(message)
+
+
 class SupplierOnboardingService:
     def __init__(self, *, supplier_repo: SupplierRepository | None = None) -> None:
         self.supplier_repo = supplier_repo or SupplierRepository()
@@ -104,6 +110,10 @@ class SupplierOnboardingService:
         supplier = session.get(Supplier, supplier_id)
         if supplier is None:
             raise SupplierOnboardingNotFoundError
+        if supplier.onboarding_status != SupplierOnboardingStatus.PENDING_REVIEW:
+            raise SupplierOnboardingStatusTransitionError(
+                "Only pending_review suppliers can be approved via onboarding approve.",
+            )
         if (
             supplier.onboarding_status == SupplierOnboardingStatus.PENDING_REVIEW
             and not self._has_required_legal_identity(supplier)
@@ -114,6 +124,8 @@ class SupplierOnboardingService:
         supplier.onboarding_status = SupplierOnboardingStatus.APPROVED
         supplier.is_active = True
         supplier.onboarding_rejection_reason = None
+        supplier.onboarding_suspension_reason = None
+        supplier.onboarding_revocation_reason = None
         supplier.onboarding_reviewed_at = datetime.now(UTC)
         if supplier.onboarding_submitted_at is None:
             supplier.onboarding_submitted_at = supplier.onboarding_reviewed_at
@@ -124,9 +136,76 @@ class SupplierOnboardingService:
         supplier = session.get(Supplier, supplier_id)
         if supplier is None:
             raise SupplierOnboardingNotFoundError
+        if supplier.onboarding_status != SupplierOnboardingStatus.PENDING_REVIEW:
+            raise SupplierOnboardingStatusTransitionError(
+                "Only pending_review suppliers can be rejected via onboarding reject.",
+            )
+        clean_reason = self._normalize_reason(reason)
         supplier.onboarding_status = SupplierOnboardingStatus.REJECTED
         supplier.is_active = False
-        supplier.onboarding_rejection_reason = reason.strip()
+        supplier.onboarding_rejection_reason = clean_reason
+        supplier.onboarding_suspension_reason = None
+        supplier.onboarding_revocation_reason = None
+        supplier.onboarding_reviewed_at = datetime.now(UTC)
+        if supplier.onboarding_submitted_at is None:
+            supplier.onboarding_submitted_at = supplier.onboarding_reviewed_at
+        session.flush()
+        return supplier
+
+    def admin_suspend(self, session: Session, *, supplier_id: int, reason: str) -> Supplier:
+        supplier = session.get(Supplier, supplier_id)
+        if supplier is None:
+            raise SupplierOnboardingNotFoundError
+        if supplier.onboarding_status != SupplierOnboardingStatus.APPROVED:
+            raise SupplierOnboardingStatusTransitionError(
+                "Only approved suppliers can be suspended.",
+            )
+        clean_reason = self._normalize_reason(reason)
+        supplier.onboarding_status = SupplierOnboardingStatus.SUSPENDED
+        supplier.is_active = False
+        supplier.onboarding_suspension_reason = clean_reason
+        supplier.onboarding_rejection_reason = None
+        supplier.onboarding_revocation_reason = None
+        supplier.onboarding_reviewed_at = datetime.now(UTC)
+        if supplier.onboarding_submitted_at is None:
+            supplier.onboarding_submitted_at = supplier.onboarding_reviewed_at
+        session.flush()
+        return supplier
+
+    def admin_reactivate(self, session: Session, *, supplier_id: int) -> Supplier:
+        supplier = session.get(Supplier, supplier_id)
+        if supplier is None:
+            raise SupplierOnboardingNotFoundError
+        if supplier.onboarding_status != SupplierOnboardingStatus.SUSPENDED:
+            raise SupplierOnboardingStatusTransitionError(
+                "Only suspended suppliers can be reactivated.",
+            )
+        supplier.onboarding_status = SupplierOnboardingStatus.APPROVED
+        supplier.is_active = True
+        supplier.onboarding_suspension_reason = None
+        supplier.onboarding_reviewed_at = datetime.now(UTC)
+        if supplier.onboarding_submitted_at is None:
+            supplier.onboarding_submitted_at = supplier.onboarding_reviewed_at
+        session.flush()
+        return supplier
+
+    def admin_revoke(self, session: Session, *, supplier_id: int, reason: str) -> Supplier:
+        supplier = session.get(Supplier, supplier_id)
+        if supplier is None:
+            raise SupplierOnboardingNotFoundError
+        if supplier.onboarding_status not in (
+            SupplierOnboardingStatus.APPROVED,
+            SupplierOnboardingStatus.SUSPENDED,
+        ):
+            raise SupplierOnboardingStatusTransitionError(
+                "Only approved or suspended suppliers can be revoked.",
+            )
+        clean_reason = self._normalize_reason(reason)
+        supplier.onboarding_status = SupplierOnboardingStatus.REVOKED
+        supplier.is_active = False
+        supplier.onboarding_revocation_reason = clean_reason
+        supplier.onboarding_rejection_reason = None
+        supplier.onboarding_suspension_reason = None
         supplier.onboarding_reviewed_at = datetime.now(UTC)
         if supplier.onboarding_submitted_at is None:
             supplier.onboarding_submitted_at = supplier.onboarding_reviewed_at
@@ -152,3 +231,10 @@ class SupplierOnboardingService:
             and (supplier.permit_license_type or "").strip()
             and (supplier.permit_license_number or "").strip()
         )
+
+    @staticmethod
+    def _normalize_reason(reason: str) -> str:
+        clean = reason.strip()
+        if not clean:
+            raise SupplierOnboardingStatusTransitionError("Reason must not be empty.")
+        return clean

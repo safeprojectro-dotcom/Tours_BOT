@@ -50,6 +50,8 @@ class Supplier(TimestampMixin, Base):
     )
     onboarding_fleet_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     onboarding_rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    onboarding_suspension_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    onboarding_revocation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     onboarding_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     onboarding_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

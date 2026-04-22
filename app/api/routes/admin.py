@@ -32,6 +32,7 @@ from app.schemas.admin import (
     AdminSupplierListRead,
     AdminSupplierOnboardingReject,
     AdminSupplierRead,
+    AdminSupplierStatusReason,
     AdminTourTranslationUpsert,
 )
 from app.services.admin_handoff_write import (
@@ -111,6 +112,7 @@ from app.services.admin_supplier_write import AdminSupplierDuplicateCodeError, A
 from app.services.supplier_onboarding_service import (
     SupplierOnboardingApprovalValidationError,
     SupplierOnboardingNotFoundError,
+    SupplierOnboardingStatusTransitionError,
     SupplierOnboardingService,
 )
 from app.services.admin_tour_write import (
@@ -886,6 +888,8 @@ def post_admin_supplier_onboarding_approve(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found.") from None
     except SupplierOnboardingApprovalValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    except SupplierOnboardingStatusTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     db.commit()
     return AdminSupplierRead.model_validate(row)
 
@@ -900,6 +904,55 @@ def post_admin_supplier_onboarding_reject(
         row = SupplierOnboardingService().admin_reject(db, supplier_id=supplier_id, reason=payload.reason)
     except SupplierOnboardingNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found.") from None
+    except SupplierOnboardingStatusTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return AdminSupplierRead.model_validate(row)
+
+
+@router.post("/suppliers/{supplier_id}/onboarding/suspend", response_model=AdminSupplierRead)
+def post_admin_supplier_onboarding_suspend(
+    supplier_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminSupplierStatusReason = Body(...),
+) -> AdminSupplierRead:
+    try:
+        row = SupplierOnboardingService().admin_suspend(db, supplier_id=supplier_id, reason=payload.reason)
+    except SupplierOnboardingNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found.") from None
+    except SupplierOnboardingStatusTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return AdminSupplierRead.model_validate(row)
+
+
+@router.post("/suppliers/{supplier_id}/onboarding/reactivate", response_model=AdminSupplierRead)
+def post_admin_supplier_onboarding_reactivate(
+    supplier_id: int,
+    db: Session = Depends(get_db),
+) -> AdminSupplierRead:
+    try:
+        row = SupplierOnboardingService().admin_reactivate(db, supplier_id=supplier_id)
+    except SupplierOnboardingNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found.") from None
+    except SupplierOnboardingStatusTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return AdminSupplierRead.model_validate(row)
+
+
+@router.post("/suppliers/{supplier_id}/onboarding/revoke", response_model=AdminSupplierRead)
+def post_admin_supplier_onboarding_revoke(
+    supplier_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminSupplierStatusReason = Body(...),
+) -> AdminSupplierRead:
+    try:
+        row = SupplierOnboardingService().admin_revoke(db, supplier_id=supplier_id, reason=payload.reason)
+    except SupplierOnboardingNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found.") from None
+    except SupplierOnboardingStatusTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     db.commit()
     return AdminSupplierRead.model_validate(row)
 
