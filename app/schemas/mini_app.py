@@ -213,6 +213,13 @@ class MiniAppSupplierOfferPublicationContextRead(BaseModel):
     showcase_message_id: int | None = None
 
 
+class MiniAppSupplierOfferActionabilityState(StrEnum):
+    BOOKABLE = "bookable"
+    SOLD_OUT = "sold_out"
+    ASSISTED_ONLY = "assisted_only"
+    VIEW_ONLY = "view_only"
+
+
 class MiniAppSupplierOfferLandingRead(BaseModel):
     supplier_offer_id: int
     title: str
@@ -225,6 +232,8 @@ class MiniAppSupplierOfferLandingRead(BaseModel):
     seats_total: int
     base_price: Decimal | None = None
     currency: str | None = None
+    actionability_state: MiniAppSupplierOfferActionabilityState = MiniAppSupplierOfferActionabilityState.VIEW_ONLY
+    linked_tour_code: str | None = None
     publication: MiniAppSupplierOfferPublicationContextRead
     catalog_fallback_route: str = Field(
         default="/",

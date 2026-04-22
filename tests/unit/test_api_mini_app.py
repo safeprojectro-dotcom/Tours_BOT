@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.main import create_app
 from app.models.enums import SupplierOfferLifecycle, TourSalesMode, TourStatus
 from app.models.handoff import Handoff
+from app.models.supplier import SupplierOfferExecutionLink
 from app.models.waitlist import WaitlistEntry
 from app.services.handoff_entry import HandoffEntryService
 from app.repositories.user import UserRepository
@@ -237,6 +238,92 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         response = self.client.get(f"/mini-app/supplier-offers/{offer.id}")
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "supplier offer not found")
+
+    def test_supplier_offer_landing_actionability_bookable_per_seat(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(
+            supplier,
+            lifecycle_status=SupplierOfferLifecycle.PUBLISHED,
+            sales_mode=TourSalesMode.PER_SEAT,
+            title="Per-seat linked",
+        )
+        tour = self.create_tour(
+            code="SUP-OFFER-BOOKABLE-PS",
+            sales_mode=TourSalesMode.PER_SEAT,
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=30,
+            seats_available=9,
+        )
+        self.session.add(SupplierOfferExecutionLink(supplier_offer_id=offer.id, tour_id=tour.id, link_status="active"))
+        self.session.commit()
+
+        response = self.client.get(f"/mini-app/supplier-offers/{offer.id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["actionability_state"], "bookable")
+        self.assertEqual(body["linked_tour_code"], "SUP-OFFER-BOOKABLE-PS")
+
+    def test_supplier_offer_landing_actionability_sold_out(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(
+            supplier,
+            lifecycle_status=SupplierOfferLifecycle.PUBLISHED,
+            sales_mode=TourSalesMode.PER_SEAT,
+            title="Per-seat sold out",
+        )
+        tour = self.create_tour(
+            code="SUP-OFFER-SOLDOUT",
+            sales_mode=TourSalesMode.PER_SEAT,
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=30,
+            seats_available=0,
+        )
+        self.session.add(SupplierOfferExecutionLink(supplier_offer_id=offer.id, tour_id=tour.id, link_status="active"))
+        self.session.commit()
+
+        response = self.client.get(f"/mini-app/supplier-offers/{offer.id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["actionability_state"], "sold_out")
+
+    def test_supplier_offer_landing_actionability_full_bus_assisted_only(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(
+            supplier,
+            lifecycle_status=SupplierOfferLifecycle.PUBLISHED,
+            sales_mode=TourSalesMode.FULL_BUS,
+            title="Full-bus assisted",
+        )
+        tour = self.create_tour(
+            code="SUP-OFFER-FB-ASSIST",
+            sales_mode=TourSalesMode.FULL_BUS,
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=40,
+            seats_available=20,
+        )
+        self.session.add(SupplierOfferExecutionLink(supplier_offer_id=offer.id, tour_id=tour.id, link_status="active"))
+        self.session.commit()
+
+        response = self.client.get(f"/mini-app/supplier-offers/{offer.id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["actionability_state"], "assisted_only")
+
+    def test_supplier_offer_landing_actionability_falls_back_to_view_only_when_truth_insufficient(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(
+            supplier,
+            lifecycle_status=SupplierOfferLifecycle.PUBLISHED,
+            sales_mode=TourSalesMode.PER_SEAT,
+            title="No active link",
+        )
+        self.session.commit()
+
+        response = self.client.get(f"/mini-app/supplier-offers/{offer.id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["actionability_state"], "view_only")
+        self.assertIsNone(body["linked_tour_code"])
 
     def test_preparation_route_returns_preparation_options_for_open_tour(self) -> None:
         tour = self.create_tour(

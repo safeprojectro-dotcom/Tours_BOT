@@ -30,6 +30,7 @@ from app.schemas.mini_app import (
     MiniAppBridgePaymentEligibilityRead,
     MiniAppCatalogRead,
     MiniAppReservationPreparationRead,
+    MiniAppSupplierOfferActionabilityState,
     MiniAppSupplierOfferLandingRead,
     MiniAppTourDetailRead,
     MiniAppWaitlistStatusRead,
@@ -3729,9 +3730,21 @@ class SupplierOfferLandingScreen:
         self.page_title = ft.Text(shell(lg, "supplier_offer_landing_title"), size=26, weight=ft.FontWeight.BOLD)
         self.subtitle = ft.Text("", size=13, color=ft.Colors.ON_SURFACE_VARIANT)
         self.body_column = ft.Column(spacing=10)
+        self.actionability_badge = ft.Container(
+            visible=False,
+            padding=8,
+            border_radius=10,
+            bgcolor=ft.Colors.BLUE_50,
+            content=ft.Text("", size=13, weight=ft.FontWeight.W_600),
+        )
         self.catalog_cta = ft.FilledButton(
             shell(lg, "supplier_offer_btn_browse_catalog"),
             on_click=lambda _: self.on_back_catalog(),
+        )
+        self.bookable_placeholder_cta = ft.OutlinedButton(
+            shell(lg, "supplier_offer_actionability_cta_bookable_placeholder"),
+            on_click=lambda _: self.on_back_catalog(),
+            visible=False,
         )
         self.fallback_hint = ft.Text(
             shell(lg, "supplier_offer_fallback_hint"),
@@ -3750,6 +3763,7 @@ class SupplierOfferLandingScreen:
             self.nav_custom_trip.text = shell(lg, "nav_custom_trip")
         self.page_title.value = shell(lg, "supplier_offer_landing_title")
         self.catalog_cta.text = shell(lg, "supplier_offer_btn_browse_catalog")
+        self.bookable_placeholder_cta.text = shell(lg, "supplier_offer_actionability_cta_bookable_placeholder")
         self.fallback_hint.value = shell(lg, "supplier_offer_fallback_hint")
         detail = self._last_detail
         if detail is not None:
@@ -3765,6 +3779,8 @@ class SupplierOfferLandingScreen:
             self.subtitle,
             self.body_column,
             ft.Container(height=8),
+            self.actionability_badge,
+            self.bookable_placeholder_cta,
             self.catalog_cta,
             self.fallback_hint,
         )
@@ -3815,9 +3831,37 @@ class SupplierOfferLandingScreen:
             price_line = f"{detail.base_price} {detail.currency}"
         else:
             price_line = shell(lg, "supplier_offer_price_missing")
+        state = detail.actionability_state
+        state_value = getattr(state, "value", state)
+        if state_value == MiniAppSupplierOfferActionabilityState.BOOKABLE.value:
+            state_label = shell(lg, "supplier_offer_actionability_bookable")
+            hint_line = shell(lg, "supplier_offer_actionability_hint_bookable")
+            self.actionability_badge.bgcolor = ft.Colors.GREEN_50
+            self.bookable_placeholder_cta.visible = True
+        elif state_value == MiniAppSupplierOfferActionabilityState.SOLD_OUT.value:
+            state_label = shell(lg, "supplier_offer_actionability_sold_out")
+            hint_line = shell(lg, "supplier_offer_actionability_hint_sold_out")
+            self.actionability_badge.bgcolor = ft.Colors.RED_50
+            self.bookable_placeholder_cta.visible = False
+        elif state_value == MiniAppSupplierOfferActionabilityState.ASSISTED_ONLY.value:
+            state_label = shell(lg, "supplier_offer_actionability_assisted_only")
+            hint_line = shell(lg, "supplier_offer_actionability_hint_assisted_only")
+            self.actionability_badge.bgcolor = ft.Colors.AMBER_50
+            self.bookable_placeholder_cta.visible = False
+        else:
+            state_label = shell(lg, "supplier_offer_actionability_view_only")
+            hint_line = shell(lg, "supplier_offer_actionability_hint_view_only")
+            self.actionability_badge.bgcolor = ft.Colors.BLUE_50
+            self.bookable_placeholder_cta.visible = False
+        if isinstance(self.actionability_badge.content, ft.Text):
+            self.actionability_badge.content.value = state_label
+        self.actionability_badge.visible = True
         blocks: list[ft.Control] = [
             ft.Text(detail.title, size=22, weight=ft.FontWeight.BOLD),
             ft.Text(shell(lg, "supplier_offer_publication_line", status=str(status)), size=12),
+            ft.Container(height=4),
+            ft.Text(shell(lg, "supplier_offer_actionability_title"), size=16, weight=ft.FontWeight.W_600),
+            ft.Text(hint_line, size=13, color=ft.Colors.ON_SURFACE_VARIANT),
             ft.Container(height=6),
             ft.Text(shell(lg, "supplier_offer_schedule_title"), size=16, weight=ft.FontWeight.W_600),
             ft.Text(schedule_line),
