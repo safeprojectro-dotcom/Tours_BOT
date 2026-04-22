@@ -36,6 +36,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Y29.2 implementation:** additive supplier profile status governance completed (profile lifecycle supports `pending_review` / `approved` / `rejected` / `suspended` / `revoked`; admin governance actions now include approve/reject/suspend/reactivate/revoke at service/API truth level).
 - **Y29.3 implementation:** Telegram admin supplier moderation workspace completed as narrow operational client for supplier profiles (`/admin_supplier_queue`, `/admin_suppliers`) with profile actions: approve, reject(with reason), suspend(with reason), reactivate, revoke(with reason).
 - **Y30 design gate accepted:** Supplier Offer -> Mini App Conversion Bridge design captured in **`docs/SUPPLIER_OFFER_MINI_APP_CONVERSION_BRIDGE_DESIGN.md`** (design-only; no runtime/migration/test changes in this gate).
+- **Y30.1 implementation:** stable Mini App supplier-offer landing shipped (read-only first) for **published** supplier offers via stable route **`/mini-app/supplier-offers/{supplier_offer_id}`**; unpublished offers are fail-closed (**404**), and customer fallback to catalog is explicit (no dead-end from channel CTA).
 
 ### Supplier continuity truth (Y2/Y2.3/Y2.1a/Y24/Y25/Y27/Y28 accepted)
 - Supplier v1 model is **supplier entity + one primary Telegram-bound operator**.
@@ -87,6 +88,12 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
   - conversion bridge states may include: published-only, published+landing, published+linked executable, sold-out, assisted-only, view-only/not currently executable;
   - per-seat/full-bus actionability is determined dynamically on Mini App landing by current policy/inventory truth; channel post may remain visible even when self-service booking is unavailable;
   - future offer-specific coupon/promo logic belongs to conversion/commercial layer, not raw channel/publication text.
+- Y30.1 implementation truth (accepted):
+  - stable read-only Mini App landing for supplier offers is now live and keyed by stable **`supplier_offer_id`** identity;
+  - channel-arrival customer path is no longer a dead-end: opening a published supplier offer always lands on a readable offer context page with catalog fallback;
+  - public landing visibility remains narrow and fail-closed: only **`published`** supplier offers are returned; non-published offers return safe not-found;
+  - channel CTA behavior is now aligned with design truth: `Rezervă` targets the stable supplier-offer Mini App landing instead of a fragile execution target;
+  - this slice is additive read-side only: no direct booking/payment activation from supplier-offer landing, no full actionability resolver, no auto create/link of Layer A tours, no coupon logic, no broad publication-flow redesign.
 - Multi-operator organization / RBAC is explicitly postponed beyond Y2.1.
 - Supplier legal/compliance identity is now required for pending onboarding approvals:
   - **`legal_entity_type`**
@@ -166,7 +173,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Mode 2 != Mode 3** remains explicit and preserved.
 
 ### Next safe step (after this sync)
-- **Next supplier-safe step:** **Y30.1 — stable Mini App supplier-offer landing (read-only first)**.
+- **Next supplier-safe step:** **Y30.2 — supplier-offer actionability resolver**.
 
 ### Do-not-reopen items
 - Do not reopen closed tracks for redesign by default (including completed 5g/U/V/W/X/A1 blocks).
@@ -209,6 +216,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **V2 supplier marketplace — Track 5f v1 (Customer multi-quote summary / aggregate visibility) — completed (implementation + stabilization reviewed):** **`GET /mini-app/custom-requests/{id}`** adds **`proposed_response_count`** (**`proposed`** only), **`offers_received_hint`** (neutral English MVP copy), **`selected_offer_summary`** (allowlisted read-only snippet for **admin-selected** **`proposed`** response only — **no** supplier identity; excerpt capped). **`SupplierCustomRequestResponseRepository.count_proposed_for_request`**. **My Requests** detail renders hint + snippet — **no** new CTAs, **no** comparison UI, **no** customer choice. **No** migration; **no** new write routes; **no** bridge/payment logic change. **Stabilization:** **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** §34; **`COMMIT_PUSH_DEPLOY.md`** (Track **5f v1** note).
 - **V2 supplier marketplace — Track 5g.1 (Commercial mode classification — read-side only) — completed (implementation + stabilization reviewed):** additive **`commercial_mode`** on **`MiniAppTourDetailRead`** (**`GET /mini-app/tours/{tour_code}`**) — derived from authoritative **`Tour.sales_mode`** (**`per_seat` → `supplier_route_per_seat`**, **`full_bus` → `supplier_route_full_bus`**); additive **`commercial_mode`** on **`MiniAppCustomRequestCustomerDetailRead`** (**`GET /mini-app/custom-requests/{id}`**) — always **`custom_bus_rental_request`** (Track **5g** Mode **3** / RFQ). Enum **`CustomerCommercialMode`**; mapper **`commercial_mode_for_catalog_tour_sales_mode`** (**`app/services/customer_commercial_mode_read.py`**). **No** migration; **no** booking/payment/bridge/RFQ execution/CTA/bot-routing/admin-workflow changes; **no** change to **5f v1** field meanings. **Stabilization:** **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** §35; **`COMMIT_PUSH_DEPLOY.md`** (Track **5g.1** note). Design gate: **`docs/CURSOR_PROMPT_TRACK_5G_THREE_COMMERCIAL_MODES_DESIGN_GATE.md`**.
 - **V2 supplier marketplace — Tracks 5g.4a–5g.4e (catalog Mode 2 Mini App executable path + acceptance) — completed (documentation closure):** virgin-capacity **whole-bus** catalog self-serve (**`seats_available == seats_total`**, fixed **`seats_count`**), same **`Order`** → existing **`PaymentEntryService`** / payment-entry route, Mini App UX/copy and **My bookings** human-readable **facade** labels — all on **Layer A** only; **no** RFQ/bridge execution change, **no** reconciliation redesign. Acceptance record: **`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**; debt note: **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** §36. **Branch closed** except regressions.
+- **V2 supplier marketplace — Y30.1 (stable supplier-offer Mini App landing, read-only first) — completed:** new stable read-side public landing endpoint **`GET /mini-app/supplier-offers/{supplier_offer_id}`** (published-only visibility; safe **404** for unpublished), Mini App route/screen wiring for supplier-offer context and explicit catalog fallback, and channel showcase CTA alignment to stable landing target. **No migration**, **no test-contract broadening beyond focused landing coverage**, **no Layer A booking/payment semantic changes**, **no RFQ/bridge semantic changes**.
 - **Phase 7** (group→private→**`group_followup_start`**→admin) remains **closed enough for staging/MVP** — **`docs/PHASE_7_REVIEW.md`**; **do not** reopen old **Phase 7** followup/operator micro-slices unless product **explicitly** rescopes.
 - **Current active sub-track:** **Phase 7.1 — tour sales mode** (**separate** from the closed **Phase 7** **`group_followup_*`** track).
 - **Completed checkpoints in this sub-track:** **Steps 1–5** — **Step 1** admin/source-of-truth **`tour.sales_mode`**; **Step 2** backend **`TourSalesModePolicyService`** / **`TourSalesModePolicyRead`**; **Step 3** Mini App read-side adaptation to policy; **Step 4** private bot read-side adaptation to policy; **Step 5** operator-assisted full-bus path (**structured** handoff **`reason`**, tour + sales-mode context on **private bot** + **Mini App** assistance, **admin** read flags — **no** direct whole-bus reservation/payment). **Plus** **Tracks 5g.4a–5g.4d** — **catalog** virgin whole-bus **self-serve** hold + payment continuation + booking visibility (**Layer A**, **`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**). Summaries: **Completed Steps** → **Phase 7.1 / Sales Mode / Steps 1–4 completed** and **Phase 7.1 / Sales Mode / Step 5 completed**. Verification: **Verified** (below); production smoke: **Production stabilization after Phase 7.1 deploy** (below).
@@ -1316,27 +1324,37 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 - **`tour.sales_mode` (Phase 7.1):** tour-level **commercial source of truth**; **`TourSalesModePolicyService`** is the **single service-layer interpretation** — **Mini App** and **private bot** (Steps **3–4**) **consume** that policy on read-side/CTA paths; **do not** duplicate commercial rules in UI-only layers
 
 ### Not Implemented Yet
-- **Next (forward, active sub-track):** **Phase 7.1 / Sales Mode / Step 6+** — product/design for **scope beyond** the **closed** catalog virgin Mode 2 Mini App path (**`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**): charter **pricing**, **supplier-defined** policy, **private-bot** charter UX, **E2E** coverage, **full** i18n — **not** a default reopening of **5g.4**; **separate** from Phase **7** handoff/operator chain expansion. Optional **later** slices: group **rate limits** — product-scoped.
+- **Next (forward, active supplier-offer bridge sub-track):** **Y30.2 — supplier-offer actionability resolver** (narrow continuation after Y30.1 stable landing): classify supplier-offer landing actionability states from current truth (e.g. linked executable / sold out / assisted-only / view-only) while preserving Layer A and RFQ boundaries.
+- **Parallel separate thread (unchanged):** **Phase 7.1 / Sales Mode / Step 6+** — product/design for **scope beyond** the **closed** catalog virgin Mode 2 Mini App path (**`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**): charter **pricing**, **supplier-defined** policy, **private-bot** charter UX, **E2E** coverage, **full** i18n — **not** a default reopening of **5g.4**; **separate** from Phase **7** handoff/operator chain expansion. Optional **later** slices: group **rate limits** — product-scoped.
 - **Phase 7.1 — explicitly postponed (beyond closed 5g.4):** **`full_bus_price`**; **`bus_capacity`**; **pricing expansion**; non-catalog or **non-virgin** whole-bus **execution** rules beyond current **`TourSalesModePolicyService`**; **`TemporaryReservationService` / reservation engine refactor**; **broad operator workflow rewrite**; any **“many seats ⇒ whole bus”** heuristic; **old Phase 7** **`grp_followup_*`** chain expansion; broader **payment** / **availability** / **seat-semantics** changes driven by **`sales_mode`** without an explicit slice — **unless** product approves a scoped implementation.
 - **Group / handoff (Phase 7 — closed):** Steps **1–17** + **final consolidation** + **`docs/PHASE_7_REVIEW.md`** = **rules + helpers + group gating + escalation wording + deep links + private `/start`** + **narrow** **`handoffs`** write on **`/start grp_followup`** (**Step 7**) + **focused tests** (**Step 8**) + **admin read visibility** (**Step 9**) + **narrow `assign-operator`** (**Step 10**) + **read-side work-state labels** (**Step 11**) + **narrow `mark-in-work`** (**Step 12**) + **narrow `resolve-group-followup`** + **`group_followup_resolution_label`** (**Steps 13–14**) + **`group_followup_queue_state`** + **`group_followup_queue`** list filter (**Step 15**) + **private resolved confirmation** on **`grp_followup`** (**Step 16**) + **private readiness/history** (**Step 17**) + **aligned private/admin wording** (**consolidation**); **group** chat path (Steps **3–4**) still **no** DB handoff rows — **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** §**19**.
 - **Still valid:** staging smoke on **`/admin/*`** through Phase 6 Step 30 when convenient; **`docs/PHASE_6_REVIEW.md`** remains the Phase 6 closure reference; **`docs/PHASE_7_REVIEW.md`** is the Phase **7** closure reference.
 - **Optional later (product-prioritized only):** narrow **persisted move placement audit** on successful **`POST /move`**, **or** another **low-risk** admin read refinement — **never** default to **admin payment** mutation; requires **explicit** design checkpoint (**`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** **§1f**).
 - **Still postponed:** admin **refund / capture / cancel-payment**, **broad** order status editor, **merge** tooling, **payment reconciliation** rewrite, **persisted** move timeline without an explicit slice, handoff **unassign**, broader **reassignment** policy, full **operator queue/workflow engine**, **notifications** from admin actions, **full** admin SPA, **publication**, **bulk** ops — per plan / product.
-- **Supplier governance postponed set (post-Y30 design acceptance):** full conversion bridge implementation, actionability resolver implementation, supplier-status gating integration across supplier/offer surfaces, exclusion visibility policy / supplier offer auto retract-block cascade, broad supplier RBAC/org redesign, governance analytics/dashboard, coupons implementation.
+- **Supplier governance / conversion postponed set (post-Y30.1 sync):**
+  - full supplier-offer actionability resolver beyond current read-only landing (sold_out / assisted_only / linked executable / view-only matrix);
+  - direct booking/payment activation from supplier-offer landing;
+  - auto-create / auto-link Layer A tours from supplier offers;
+  - coupon logic;
+  - supplier-offer conversion activation workflow end-to-end;
+  - supplier-status gating integration across supplier/offer surfaces;
+  - exclusion visibility policy / supplier offer auto retract-block cascade;
+  - broad publication-flow redesign and broad supplier RBAC/org redesign;
+  - governance analytics/dashboard.
 - **Longer-term:** optional group assistant at scale, content assistant, handoff notifications, analytics — **explicit** product scope per `docs/IMPLEMENTATION_PLAN.md`.
 
 ## Next Safe Step
 
 ### Next safe step
-**Y30 post-sync default:** **Y30.1 — stable Mini App supplier-offer landing (read-only first)** (narrow first implementation slice over accepted conversion-bridge design truth).  
+**Y30 post-sync default:** **Y30.2 — supplier-offer actionability resolver** (narrow continuation after Y30.1 stable read-only landing).  
 **Secondary product track (separate):** **Phase 7.1 / Sales Mode / Step 6+** for scope beyond closed **5g.4**. **Do not** reopen **5g.4** unless fixing a regression.
 
 **Goal:**
-- Prioritize stable supplier-offer Mini App landing (read-only first):
-  - reuse accepted channel discovery contract while keeping Layer A/Mini App execution truth authoritative;
-  - ensure both `Detalii` and `Rezervare` resolve to one stable supplier-offer landing entry;
-  - expose deterministic customer actionability state (bookable/sold-out/assisted/view-only) without mutation side effects in this first slice;
-  - no booking/payment/RFQ semantic changes.
+- Prioritize Y30.2 actionability resolver over shipped Y30.1 landing baseline:
+  - keep stable supplier-offer landing contract from Y30.1 unchanged;
+  - derive deterministic customer actionability state (linked executable / sold-out / assisted-only / view-only) from current truth;
+  - keep visibility != bookability explicit on landing;
+  - no booking/payment/RFQ semantic redesign while introducing resolver read-state.
 
 **Must not expand into (unless explicitly approved):**
 - **Payment reconciliation** or **payment-entry** semantic changes
@@ -1367,7 +1385,7 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 **Plan:** `docs/IMPLEMENTATION_PLAN.md` — Phase 7 **closed**; **active sub-track:** **Phase 7.1 — tour sales mode** (**Steps 1–5** + **5g.4a–5g.4d** done; **Step 6+** forward). **V2 supplier marketplace:** `docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md` — **Track 0** through **Track 5e** complete for scoped slices (request marketplace + RFQ bridge execution + supersede/cancel lifecycle); **next V2 marketplace slices** (product-prioritized): customer **multi-quote** UX, notifications, bot deep links — see that plan’s status table.
 
 ## Recommended Next Prompt
-Default continuation prompt: **Y30.1 — stable Mini App supplier-offer landing (read-only first)** — implement a stable supplier-offer landing target for channel CTA (`Detalii`/`Rezervare`) with dynamic actionability read-state and no execution-semantic redesign.  
+Default continuation prompt: **Y30.2 — supplier-offer actionability resolver** — build resolver-driven actionability read-state on top of shipped stable supplier-offer landing (`/mini-app/supplier-offers/{supplier_offer_id}`), keeping Layer A booking/payment semantics and RFQ/bridge semantics unchanged.  
 Separate optional product thread: **Phase 7.1 / Sales Mode / Step 6+** beyond **`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**. **No** reopening **5g.4** / Layer A payment semantics without a regression ticket. **Phase 7** remains closed — **`docs/PHASE_7_REVIEW.md`**; do not reopen **`grp_followup_*`** by default. Sources: **`docs/CHAT_HANDOFF.md`**, **`docs/CHECKPOINT_UVXWA1_SUMMARY.md`**, **`docs/SUPPLIER_TELEGRAM_OPERATING_MODEL_Y2.md`**, **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`**, **`docs/TECH_SPEC_TOURS_BOT.md`**.
 
 ---
