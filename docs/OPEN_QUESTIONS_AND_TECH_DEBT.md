@@ -147,6 +147,34 @@ Documentation synchronization checkpoint after completion of Tracks **5g.4a–5g
 
 ---
 
+## Checkpoint Sync — Y29.1 (supplier onboarding navigation polish) (2026-04-21)
+
+### Resolved and accepted (not open questions)
+- `/supplier` onboarding now supports safe navigation controls:
+  - `Inapoi` => previous step with in-memory FSM draft preserved,
+  - `Acasa` => full onboarding FSM cancel/reset (state + draft cleared).
+- Navigation behavior is narrow UX-only and aligned with accepted supplier bot navigation patterns.
+
+### Boundaries preserved (must remain true)
+- No change to onboarding required fields.
+- No change to onboarding approval lifecycle (`pending_review` / `approved` / `rejected`).
+- No change to supplier profile lifecycle model.
+- No change to supplier offer lifecycle or publication flow.
+- No Layer A booking/payment redesign.
+- No RFQ/bridge redesign.
+- No payment-entry/reconciliation redesign.
+
+### Still open / postponed
+- Supplier Telegram moderation workspace (supplier profiles).
+- Supplier suspend/revoke implementation.
+- Supplier status gating integration against offer actions/visibility.
+- Exclusion visibility policy implementation for supplier-level exclusion events.
+
+### Next safe step pointer
+- **Y28.2 — Telegram admin approved/published visibility expansion** (narrow read-side scope).
+
+---
+
 ## 1. Reservation expiry status semantics
 
 ### Current decision

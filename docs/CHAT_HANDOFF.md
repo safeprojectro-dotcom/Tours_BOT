@@ -31,6 +31,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Y25 implementation:** narrow supplier operational alerts added in **`/supplier_offers`** (publication retracted, departing soon, departed; deterministic read-side derivation only).
 - **Y27 design gate:** authoritative supplier offer→execution linkage design accepted in **`docs/SUPPLIER_OFFER_EXECUTION_LINKAGE_DESIGN.md`** (design-only, no runtime changes in this gate).
 - **Y28 design block:** Telegram admin moderation/publication workspace design accepted in **`docs/TELEGRAM_ADMIN_MODERATION_WORKSPACE_DESIGN.md`** (design-only; operational client layer over existing backend truth).
+- **Y29.1 implementation:** supplier onboarding navigation polish completed for **`/supplier`** (`Inapoi` back-step navigation with in-memory draft preservation + `Acasa` full FSM cancel/reset).
 
 ### Supplier continuity truth (Y2/Y2.3/Y2.1a/Y24/Y25/Y27/Y28 accepted)
 - Supplier v1 model is **supplier entity + one primary Telegram-bound operator**.
@@ -51,6 +52,15 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
   - **reject** carries supplier-visible reason;
   - **retract** moves published offer back to **approved**.
 - Supplier onboarding / bot entry must not directly create live Layer A tours.
+- Supplier onboarding UX now supports safe navigation in **`/supplier`**:
+  - **`Inapoi`** => previous FSM step, preserving in-memory draft values;
+  - **`Acasa`** => full onboarding FSM cancel/reset (state + in-progress draft cleared).
+- Y29.1 onboarding navigation is UX-only and does **not** change:
+  - onboarding required fields,
+  - onboarding approval lifecycle (`pending_review` / `approved` / `rejected`),
+  - supplier profile lifecycle model,
+  - supplier offer lifecycle or publication flow,
+  - Layer A / RFQ / payment semantics.
 - Multi-operator organization / RBAC is explicitly postponed beyond Y2.1.
 - Supplier legal/compliance identity is now required for pending onboarding approvals:
   - **`legal_entity_type`**
@@ -119,13 +129,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Mode 2 != Mode 3** remains explicit and preserved.
 
 ### Next safe step (after this sync)
-- **Next supplier-safe step:** **Y28.1 — Telegram admin moderation workspace implementation**:
-  - fail-closed Telegram admin allowlist gate;
-  - `/admin_ops` and `/admin_offers` entry commands;
-  - queue read-side + offer detail card;
-  - approve / reject(with reason) / publish / retract actions;
-  - `prev/next/back/home` navigation and clear action feedback;
-  - no admin editing path.
+- **Next supplier-safe step:** **Y28.2 — Telegram admin approved/published visibility expansion** (narrow read-side expansion only).
 
 ### Do-not-reopen items
 - Do not reopen closed tracks for redesign by default (including completed 5g/U/V/W/X/A1 blocks).
