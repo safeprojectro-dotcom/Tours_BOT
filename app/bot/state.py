@@ -57,3 +57,10 @@ class AdminModerationState(StatesGroup):
 
     browsing_offer_queue = State()
     awaiting_reject_reason = State()
+
+
+class AdminSupplierModerationState(StatesGroup):
+    """Y29.3: Telegram admin supplier profile moderation workspace state."""
+
+    browsing_supplier_queue = State()
+    awaiting_reason = State()
