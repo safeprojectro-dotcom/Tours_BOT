@@ -113,6 +113,7 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "supplier_offer_invalid_seats_total": "Seats capacity must be a positive integer.",
         "supplier_offer_invalid_price": "Price must be a valid non-negative number.",
         "supplier_offer_invalid_currency": "Currency must be a 3-letter code, for example EUR, RON, USD.",
+        "supplier_offer_step_processing_failed": "Could not process this input. Please try again.",
         "supplier_offer_draft_saved": "Supplier offer draft saved: #{offer_id}. Review and submit when ready.",
         "supplier_offer_review_summary": "Draft review:\n"
         "• Title: {title}\n"
@@ -400,6 +401,7 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "supplier_offer_invalid_seats_total": "Capacitatea de locuri trebuie să fie un număr întreg pozitiv.",
         "supplier_offer_invalid_price": "Prețul trebuie să fie un număr valid nenegativ.",
         "supplier_offer_invalid_currency": "Valuta trebuie să fie cod din 3 litere, de exemplu EUR, RON, USD.",
+        "supplier_offer_step_processing_failed": "Nu am putut procesa acest input. Te rog încearcă din nou.",
         "supplier_offer_draft_saved": "Draft ofertă furnizor salvat: #{offer_id}. Revizuiește și trimite când ești gata.",
         "supplier_offer_review_summary": "Rezumat draft:\n"
         "• Titlu: {title}\n"
