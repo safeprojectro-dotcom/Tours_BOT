@@ -352,6 +352,71 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertEqual(r.status_code, 400)
         self.assertIn("Only published offers", r.text)
 
+    def test_execution_link_rejects_unknown_tour(self) -> None:
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        mock_cfg = SimpleNamespace(
+            telegram_bot_token="dummy-token",
+            telegram_offer_showcase_channel_id="-10012345",
+            telegram_bot_username="testbot",
+            telegram_mini_app_url="https://example.com/mini",
+        )
+        with (
+            patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
+            patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=122),
+        ):
+            self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
+            self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
+
+        r = self.client.post(
+            f"/admin/supplier-offers/{oid}/execution-link",
+            headers=headers,
+            json={"tour_id": 999999},
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("Tour not found", r.text)
+
+    def test_admin_can_list_execution_links_history(self) -> None:
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        mock_cfg = SimpleNamespace(
+            telegram_bot_token="dummy-token",
+            telegram_offer_showcase_channel_id="-10012345",
+            telegram_bot_username="testbot",
+            telegram_mini_app_url="https://example.com/mini",
+        )
+        tour_a = self.create_tour(code="LNK-HIST-A", sales_mode=TourSalesMode.PER_SEAT)
+        tour_b = self.create_tour(code="LNK-HIST-B", sales_mode=TourSalesMode.PER_SEAT)
+        self.session.commit()
+        with (
+            patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
+            patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=123),
+        ):
+            self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
+            self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
+        self.client.post(
+            f"/admin/supplier-offers/{oid}/execution-link",
+            headers=headers,
+            json={"tour_id": tour_a.id, "link_note": "initial"},
+        )
+        self.client.post(
+            f"/admin/supplier-offers/{oid}/execution-link",
+            headers=headers,
+            json={"tour_id": tour_b.id, "link_note": "replace"},
+        )
+
+        hist = self.client.get(f"/admin/supplier-offers/{oid}/execution-links", headers=headers)
+        self.assertEqual(hist.status_code, 200, hist.text)
+        body = hist.json()
+        self.assertEqual(body["total_returned"], 2)
+        self.assertEqual(body["items"][0]["tour_id"], tour_b.id)
+        self.assertEqual(body["items"][0]["link_status"], "active")
+        self.assertEqual(body["items"][1]["tour_id"], tour_a.id)
+        self.assertEqual(body["items"][1]["link_status"], "closed")
+        self.assertEqual(body["items"][1]["close_reason"], "replaced")
+
     def test_showcase_html_contains_cta_links(self) -> None:
         supplier = self.create_supplier(code="HTML-S")
         offer = self.create_supplier_offer(

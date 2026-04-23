@@ -83,6 +83,11 @@ class SupplierOfferExecutionLinkRead(BaseModel):
     updated_at: datetime
 
 
+class SupplierOfferExecutionLinkListRead(BaseModel):
+    items: list[SupplierOfferExecutionLinkRead]
+    total_returned: int
+
+
 class AdminSupplierOfferExecutionLinkBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

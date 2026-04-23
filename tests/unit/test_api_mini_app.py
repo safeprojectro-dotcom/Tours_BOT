@@ -352,6 +352,45 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertFalse(body["execution_activation_available"])
         self.assertIsNone(body["execution_target_tour_code"])
 
+    def test_supplier_offer_landing_stops_execution_activation_after_link_closed(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(
+            supplier,
+            lifecycle_status=SupplierOfferLifecycle.PUBLISHED,
+            sales_mode=TourSalesMode.PER_SEAT,
+            title="Linked then closed",
+        )
+        tour = self.create_tour(
+            code="SUP-OFFER-LINK-CLOSE",
+            sales_mode=TourSalesMode.PER_SEAT,
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=30,
+            seats_available=6,
+        )
+        link = SupplierOfferExecutionLink(supplier_offer_id=offer.id, tour_id=tour.id, link_status="active")
+        self.session.add(link)
+        self.session.commit()
+
+        active_response = self.client.get(f"/mini-app/supplier-offers/{offer.id}")
+        self.assertEqual(active_response.status_code, 200, active_response.text)
+        active_body = active_response.json()
+        self.assertEqual(active_body["actionability_state"], "bookable")
+        self.assertTrue(active_body["execution_activation_available"])
+        self.assertEqual(active_body["execution_target_tour_code"], "SUP-OFFER-LINK-CLOSE")
+
+        link.link_status = "closed"
+        link.close_reason = "unlinked"
+        link.closed_at = datetime.now(UTC)
+        self.session.add(link)
+        self.session.commit()
+
+        closed_response = self.client.get(f"/mini-app/supplier-offers/{offer.id}")
+        self.assertEqual(closed_response.status_code, 200, closed_response.text)
+        closed_body = closed_response.json()
+        self.assertEqual(closed_body["actionability_state"], "view_only")
+        self.assertFalse(closed_body["execution_activation_available"])
+        self.assertIsNone(closed_body["execution_target_tour_code"])
+
     def test_preparation_route_returns_preparation_options_for_open_tour(self) -> None:
         tour = self.create_tour(
             code="BELGRADE-PREP-API",

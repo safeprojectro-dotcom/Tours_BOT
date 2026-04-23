@@ -103,6 +103,7 @@ from app.schemas.supplier_admin import (
     AdminSupplierOfferExecutionLinkCloseBody,
     AdminSupplierOfferPublishResult,
     AdminSupplierOfferRejectBody,
+    SupplierOfferExecutionLinkListRead,
     SupplierOfferExecutionLinkRead,
     SupplierOfferListRead,
     SupplierOfferRead,
@@ -1080,6 +1081,21 @@ def post_admin_supplier_offer_execution_link(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     db.commit()
     return row
+
+
+@router.get("/supplier-offers/{offer_id}/execution-links", response_model=SupplierOfferExecutionLinkListRead)
+def list_admin_supplier_offer_execution_links(
+    offer_id: int,
+    db: Session = Depends(get_db),
+) -> SupplierOfferExecutionLinkListRead:
+    try:
+        items = SupplierOfferExecutionLinkService().list_links_for_offer(
+            db,
+            offer_id=offer_id,
+        )
+    except SupplierOfferExecutionLinkNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    return SupplierOfferExecutionLinkListRead(items=items, total_returned=len(items))
 
 
 @router.post("/supplier-offers/{offer_id}/execution-link/close", response_model=SupplierOfferExecutionLinkRead)

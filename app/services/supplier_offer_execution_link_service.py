@@ -142,3 +142,15 @@ class SupplierOfferExecutionLinkService:
             confirmed_paid_seats=max(aggr.confirmed_paid_seats, 0),
             sold_out=aggr.seats_available <= 0,
         )
+
+    def list_links_for_offer(
+        self,
+        session: Session,
+        *,
+        offer_id: int,
+    ) -> list[SupplierOfferExecutionLinkRead]:
+        offer = self._offers.get_any(session, offer_id=offer_id)
+        if offer is None:
+            raise SupplierOfferExecutionLinkNotFoundError
+        rows = self._links.list_for_offer(session, supplier_offer_id=offer_id)
+        return [self._to_read(row) for row in rows]
