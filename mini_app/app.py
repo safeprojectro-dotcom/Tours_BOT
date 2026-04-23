@@ -3707,6 +3707,7 @@ class SupplierOfferLandingScreen:
         language_code: str,
         on_back_catalog: Callable[[], None],
         on_open_settings: Callable[[], None],
+        on_open_execution_tour: Callable[[str], None],
         on_open_custom_request: Callable[[], None] | None = None,
     ) -> None:
         self.page = page
@@ -3714,6 +3715,7 @@ class SupplierOfferLandingScreen:
         self.language_code = language_code
         self.on_back_catalog = on_back_catalog
         self.on_open_settings = on_open_settings
+        self.on_open_execution_tour = on_open_execution_tour
         self.on_open_custom_request = on_open_custom_request
         self.current_offer_id: int | None = None
         self._last_detail: MiniAppSupplierOfferLandingRead | None = None
@@ -3743,7 +3745,7 @@ class SupplierOfferLandingScreen:
         )
         self.bookable_placeholder_cta = ft.OutlinedButton(
             shell(lg, "supplier_offer_actionability_cta_bookable_placeholder"),
-            on_click=lambda _: self.on_back_catalog(),
+            on_click=lambda _: self._open_execution_target(),
             visible=False,
         )
         self.fallback_hint = ft.Text(
@@ -3754,6 +3756,17 @@ class SupplierOfferLandingScreen:
 
     def set_offer_id(self, supplier_offer_id: int) -> None:
         self.current_offer_id = supplier_offer_id
+
+    def _open_execution_target(self) -> None:
+        detail = self._last_detail
+        if detail is None:
+            self.on_back_catalog()
+            return
+        target = (detail.execution_target_tour_code or "").strip()
+        if not target:
+            self.on_back_catalog()
+            return
+        self.on_open_execution_tour(target)
 
     def sync_shell_labels(self) -> None:
         lg = self.language_code
@@ -3835,9 +3848,13 @@ class SupplierOfferLandingScreen:
         state_value = getattr(state, "value", state)
         if state_value == MiniAppSupplierOfferActionabilityState.BOOKABLE.value:
             state_label = shell(lg, "supplier_offer_actionability_bookable")
-            hint_line = shell(lg, "supplier_offer_actionability_hint_bookable")
+            if detail.execution_activation_available and (detail.execution_target_tour_code or "").strip():
+                hint_line = shell(lg, "supplier_offer_actionability_hint_bookable_ready")
+                self.bookable_placeholder_cta.visible = True
+            else:
+                hint_line = shell(lg, "supplier_offer_actionability_hint_bookable")
+                self.bookable_placeholder_cta.visible = False
             self.actionability_badge.bgcolor = ft.Colors.GREEN_50
-            self.bookable_placeholder_cta.visible = True
         elif state_value == MiniAppSupplierOfferActionabilityState.SOLD_OUT.value:
             state_label = shell(lg, "supplier_offer_actionability_sold_out")
             hint_line = shell(lg, "supplier_offer_actionability_hint_sold_out")
@@ -4244,6 +4261,7 @@ class MiniAppShell:
             language_code=settings.mini_app_default_language,
             on_back_catalog=self.open_catalog,
             on_open_settings=self.open_settings,
+            on_open_execution_tour=self.open_tour_detail,
             on_open_custom_request=self.open_custom_request_from_current_route,
         )
         self.rfq_bridge_execution_screen = RfqBridgeExecutionScreen(

@@ -234,6 +234,8 @@ class MiniAppSupplierOfferLandingRead(BaseModel):
     currency: str | None = None
     actionability_state: MiniAppSupplierOfferActionabilityState = MiniAppSupplierOfferActionabilityState.VIEW_ONLY
     linked_tour_code: str | None = None
+    execution_activation_available: bool = False
+    execution_target_tour_code: str | None = None
     publication: MiniAppSupplierOfferPublicationContextRead
     catalog_fallback_route: str = Field(
         default="/",

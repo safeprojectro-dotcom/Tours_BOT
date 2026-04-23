@@ -56,6 +56,8 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
         )
         self.assertEqual(row.actionability_state, MiniAppSupplierOfferActionabilityState.VIEW_ONLY)
         self.assertEqual(row.actionability_state.value, "view_only")
+        self.assertFalse(row.execution_activation_available)
+        self.assertIsNone(row.execution_target_tour_code)
 
 
 if __name__ == "__main__":

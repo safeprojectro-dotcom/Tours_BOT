@@ -75,6 +75,17 @@ class MiniAppSupplierOfferLandingService:
         if row.lifecycle_status != SupplierOfferLifecycle.PUBLISHED:
             return None
         actionability_state, linked_tour_code = self._resolve_actionability(session, offer=row)
+        execution_available = (
+            actionability_state == MiniAppSupplierOfferActionabilityState.BOOKABLE
+            and bool((linked_tour_code or "").strip())
+        )
+        if (
+            actionability_state == MiniAppSupplierOfferActionabilityState.BOOKABLE
+            and not execution_available
+        ):
+            # Fail-safe: never claim direct execution activation without authoritative target.
+            actionability_state = MiniAppSupplierOfferActionabilityState.VIEW_ONLY
+            linked_tour_code = None
         return MiniAppSupplierOfferLandingRead(
             supplier_offer_id=row.id,
             title=row.title,
@@ -89,6 +100,8 @@ class MiniAppSupplierOfferLandingService:
             currency=row.currency,
             actionability_state=actionability_state,
             linked_tour_code=linked_tour_code,
+            execution_activation_available=execution_available,
+            execution_target_tour_code=linked_tour_code if execution_available else None,
             publication=MiniAppSupplierOfferPublicationContextRead(
                 lifecycle_status=row.lifecycle_status,
                 published_at=row.published_at,

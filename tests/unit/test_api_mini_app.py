@@ -225,6 +225,8 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(body["publication"]["showcase_chat_id"], "-100123456")
         self.assertEqual(body["publication"]["showcase_message_id"], 9988)
         self.assertEqual(body["catalog_fallback_route"], "/")
+        self.assertFalse(body["execution_activation_available"])
+        self.assertIsNone(body["execution_target_tour_code"])
 
     def test_supplier_offer_landing_rejects_unpublished_offer(self) -> None:
         supplier = self.create_supplier()
@@ -262,6 +264,8 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         body = response.json()
         self.assertEqual(body["actionability_state"], "bookable")
         self.assertEqual(body["linked_tour_code"], "SUP-OFFER-BOOKABLE-PS")
+        self.assertTrue(body["execution_activation_available"])
+        self.assertEqual(body["execution_target_tour_code"], "SUP-OFFER-BOOKABLE-PS")
 
     def test_supplier_offer_landing_actionability_sold_out(self) -> None:
         supplier = self.create_supplier()
@@ -285,6 +289,8 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual(body["actionability_state"], "sold_out")
+        self.assertFalse(body["execution_activation_available"])
+        self.assertIsNone(body["execution_target_tour_code"])
 
     def test_supplier_offer_landing_actionability_full_bus_assisted_only(self) -> None:
         supplier = self.create_supplier()
@@ -308,6 +314,8 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual(body["actionability_state"], "assisted_only")
+        self.assertFalse(body["execution_activation_available"])
+        self.assertIsNone(body["execution_target_tour_code"])
 
     def test_supplier_offer_landing_actionability_falls_back_to_view_only_when_truth_insufficient(self) -> None:
         supplier = self.create_supplier()
@@ -324,6 +332,25 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         body = response.json()
         self.assertEqual(body["actionability_state"], "view_only")
         self.assertIsNone(body["linked_tour_code"])
+        self.assertFalse(body["execution_activation_available"])
+        self.assertIsNone(body["execution_target_tour_code"])
+
+    def test_supplier_offer_landing_bookable_without_target_fails_safe(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(
+            supplier,
+            lifecycle_status=SupplierOfferLifecycle.PUBLISHED,
+            sales_mode=TourSalesMode.PER_SEAT,
+            title="Missing target",
+        )
+        self.session.commit()
+
+        response = self.client.get(f"/mini-app/supplier-offers/{offer.id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertNotEqual(body["actionability_state"], "bookable")
+        self.assertFalse(body["execution_activation_available"])
+        self.assertIsNone(body["execution_target_tour_code"])
 
     def test_preparation_route_returns_preparation_options_for_open_tour(self) -> None:
         tour = self.create_tour(
