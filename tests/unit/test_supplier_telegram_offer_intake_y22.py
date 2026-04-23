@@ -162,6 +162,50 @@ class SupplierTelegramOfferIntakeY22Tests(FoundationDBTestCase):
 
         self._run(body())
 
+    def test_title_valid_text_transitions_to_description(self) -> None:
+        async def body() -> None:
+            state = _DictFSMState()
+            await state.set_state(SupplierOfferIntakeState.entering_title)
+            message = _private_message(telegram_user_id=912_018)
+            message.text = "Valid title"
+            with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
+                await supplier_offer_intake.intake_title(message, state)
+            self.assertEqual(state.last_state, SupplierOfferIntakeState.entering_description)
+            self.assertEqual(state.data.get("title"), "Valid title")
+            self.assertTrue(message.answer.await_count >= 1)
+
+        self._run(body())
+
+    def test_title_invalid_input_shows_explicit_feedback_and_stays(self) -> None:
+        async def body() -> None:
+            state = _DictFSMState()
+            await state.set_state(SupplierOfferIntakeState.entering_title)
+            message = _private_message(telegram_user_id=912_019)
+            message.text = " "
+            with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
+                await supplier_offer_intake.intake_title(message, state)
+            self.assertEqual(state.last_state, SupplierOfferIntakeState.entering_title)
+            self.assertIn("short", message.answer.call_args[0][0].lower())
+
+        self._run(body())
+
+    def test_title_repeated_invalid_messages_never_silent(self) -> None:
+        async def body() -> None:
+            state = _DictFSMState()
+            await state.set_state(SupplierOfferIntakeState.entering_title)
+            message = _private_message(telegram_user_id=912_024)
+            with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
+                message.text = "x"
+                await supplier_offer_intake.intake_title(message, state)
+                message.text = ""
+                await supplier_offer_intake.intake_title(message, state)
+            self.assertEqual(state.last_state, SupplierOfferIntakeState.entering_title)
+            self.assertEqual(message.answer.await_count, 2)
+            texts = [c.args[0].lower() for c in message.answer.call_args_list]
+            self.assertTrue(all(("short" in t) or ("could not process" in t) for t in texts))
+
+        self._run(body())
+
     def test_description_valid_text_transitions_to_departure_point(self) -> None:
         async def body() -> None:
             state = _DictFSMState()
@@ -229,6 +273,20 @@ class SupplierTelegramOfferIntakeY22Tests(FoundationDBTestCase):
             message.text = "Acasă"
             with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
                 await supplier_offer_intake.intake_description(message, state)
+            self.assertIsNone(state.last_state)
+            self.assertEqual(state.data, {})
+
+        self._run(body())
+
+    def test_home_navigation_works_on_title_step(self) -> None:
+        async def body() -> None:
+            state = _DictFSMState()
+            await state.set_state(SupplierOfferIntakeState.entering_title)
+            await state.update_data(title="Old draft title")
+            message = _private_message(telegram_user_id=912_025)
+            message.text = "Acasă"
+            with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
+                await supplier_offer_intake.intake_title(message, state)
             self.assertIsNone(state.last_state)
             self.assertEqual(state.data, {})
 

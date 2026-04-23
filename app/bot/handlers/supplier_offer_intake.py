@@ -421,18 +421,29 @@ async def cmd_supplier_offer(message: Message, state: FSMContext) -> None:
 
 @router.message(SupplierOfferIntakeState.entering_title)
 async def intake_title(message: Message, state: FSMContext) -> None:
-    if message.from_user is None or not message.text:
+    if message.from_user is None:
         return
     lg = await _resolve_language(message.from_user.id, message.from_user.language_code)
-    if await _handle_nav_text(message, state, lg):
-        return
-    title = message.text.strip()
-    if len(title) < 2:
-        await message.answer(translate(lg, "supplier_offer_invalid_short"), reply_markup=_reply_nav_keyboard(lg))
-        return
-    await state.update_data(title=title)
-    await state.set_state(SupplierOfferIntakeState.entering_description)
-    await _prompt_for_state(message, state, language_code=lg, state_name="entering_description")
+    if lg is None:
+        lg = message.from_user.language_code or "en"
+    try:
+        if await _handle_nav_text(message, state, lg):
+            return
+        if not message.text:
+            await message.answer(translate(lg, "supplier_offer_invalid_short"), reply_markup=_reply_nav_keyboard(lg))
+            return
+        title = message.text.strip()
+        if len(title) < 2:
+            await message.answer(translate(lg, "supplier_offer_invalid_short"), reply_markup=_reply_nav_keyboard(lg))
+            return
+        await state.update_data(title=title)
+        await state.set_state(SupplierOfferIntakeState.entering_description)
+        await _prompt_for_state(message, state, language_code=lg, state_name="entering_description")
+    except Exception:
+        await message.answer(
+            translate(lg, "supplier_offer_step_processing_failed"),
+            reply_markup=_reply_nav_keyboard(lg),
+        )
 
 
 @router.message(SupplierOfferIntakeState.entering_description)
