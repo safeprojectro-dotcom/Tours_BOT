@@ -76,32 +76,14 @@
   <script>
     (function injectTelegramBridgeIdentity() {
       var resolvedUserId = null;
-      var trace = {
-        entrypointActive: true,
-        bridgeObjectExists: false,
-        initDataPresent: false,
-        initDataLength: 0,
-        initDataUnsafeUserIdPresent: false,
-        userIdFound: false,
-        injectedToHistory: false,
-        skippedAlreadyPresent: false,
-        tgBridgeUserIdInUrl: false,
-        source: "none"
-      };
       try {
         var tg = window.Telegram;
         var webApp = tg && tg.WebApp;
-        trace.bridgeObjectExists = !!webApp;
-        trace.initDataPresent = !!(webApp && typeof webApp.initData === "string" && webApp.initData);
-        trace.initDataLength = trace.initDataPresent ? webApp.initData.length : 0;
         if (webApp && webApp.initDataUnsafe && webApp.initDataUnsafe.user) {
-          trace.initDataUnsafeUserIdPresent = !!webApp.initDataUnsafe.user.id;
           var rawId = webApp.initDataUnsafe.user.id;
           var parsed = Number(rawId);
           if (Number.isInteger(parsed) && parsed > 0) {
             resolvedUserId = parsed;
-            trace.userIdFound = true;
-            trace.source = "initDataUnsafe";
           }
         }
         if (!resolvedUserId && webApp && typeof webApp.initData === "string" && webApp.initData) {
@@ -112,8 +94,6 @@
             var parsedInitId = Number(parsedUser && parsedUser.id);
             if (Number.isInteger(parsedInitId) && parsedInitId > 0) {
               resolvedUserId = parsedInitId;
-              trace.userIdFound = true;
-              trace.source = "initData";
             }
           }
         }
@@ -129,35 +109,13 @@
           params.has("user_id") ||
           params.has("tg_bridge_user_id");
         if (alreadyHasIdentity) {
-          trace.skippedAlreadyPresent = true;
-          trace.tgBridgeUserIdInUrl = true;
           return;
         }
         params.set("tg_bridge_user_id", String(resolvedUserId));
         currentUrl.search = params.toString();
         window.history.replaceState(window.history.state, "", currentUrl.toString());
-        trace.injectedToHistory = true;
-        trace.tgBridgeUserIdInUrl = true;
       } catch (_err) {
         // no-op: keep fail-closed behavior when bridge is unavailable
-      } finally {
-        window.__mini_app_bridge_trace = trace;
-        // #region agent log
-        fetch("http://127.0.0.1:7699/ingest/9f995efc-cd2b-4797-b2f3-b60008959e52", {method: "POST", headers: {"Content-Type": "application/json", "X-Debug-Session-Id": "7dffdf"}, body: JSON.stringify({sessionId: "7dffdf", runId: "baseline", hypothesisId: "H1_H2", location: "assets/index.html:injectTelegramBridgeIdentity", message: "js bridge bootstrap trace", data: {entrypointActive: trace.entrypointActive, bridgeObjectExists: trace.bridgeObjectExists, initDataPresent: trace.initDataPresent, initDataLength: trace.initDataLength, initDataUnsafeUserIdPresent: trace.initDataUnsafeUserIdPresent, userIdFound: trace.userIdFound, injectedToHistory: trace.injectedToHistory, skippedAlreadyPresent: trace.skippedAlreadyPresent, tgBridgeUserIdInUrl: trace.tgBridgeUserIdInUrl, source: trace.source}, timestamp: Date.now()})}).catch(function () {});
-        // #endregion
-        try {
-          console.info(
-            "mini_app_bridge_trace",
-            "entrypoint_active=" + String(trace.entrypointActive),
-            "bridge_object_exists=" + String(trace.bridgeObjectExists),
-            "user_id_found=" + String(trace.userIdFound),
-            "injected_to_history=" + String(trace.injectedToHistory),
-            "skipped_already_present=" + String(trace.skippedAlreadyPresent),
-            "source=" + trace.source
-          );
-        } catch (_consoleErr) {
-          // ignore console errors
-        }
       }
     })();
   </script>

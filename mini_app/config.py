@@ -16,6 +16,11 @@ class MiniAppSettings(BaseSettings):
         default=False,
         alias="MINI_APP_ALLOW_DEV_IDENTITY_FALLBACK",
     )
+    # Minimal safe identity trace logging; disabled by default.
+    mini_app_debug_trace: bool = Field(
+        default=False,
+        alias="MINI_APP_DEBUG_TRACE",
+    )
     # When enabled, logs only non-sensitive Mini App identity source presence/branch diagnostics.
     mini_app_identity_trace_enabled: bool = Field(
         default=False,

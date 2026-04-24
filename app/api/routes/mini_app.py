@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import json
-import time
 from datetime import date
 from decimal import Decimal
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -73,31 +70,6 @@ from app.services.custom_request_booking_bridge_service import (
 )
 
 router = APIRouter(prefix="/mini-app", tags=["mini-app"])
-DEBUG_LOG_PATH = Path("debug-7dffdf.log")
-
-
-def _agent_debug_log(
-    *,
-    run_id: str,
-    hypothesis_id: str,
-    location: str,
-    message: str,
-    data: dict[str, object],
-) -> None:
-    payload = {
-        "sessionId": "7dffdf",
-        "runId": run_id,
-        "hypothesisId": hypothesis_id,
-        "location": location,
-        "message": message,
-        "data": data,
-        "timestamp": int(time.time() * 1000),
-    }
-    try:
-        with DEBUG_LOG_PATH.open("a", encoding="utf-8") as fp:
-            fp.write(json.dumps(payload, ensure_ascii=True) + "\n")
-    except Exception:
-        return
 
 
 @router.get("/bookings", response_model=MiniAppBookingsListRead)
@@ -108,15 +80,6 @@ def list_my_bookings(
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_db),
 ) -> MiniAppBookingsListRead:
-    # region agent log
-    _agent_debug_log(
-        run_id="baseline",
-        hypothesis_id="H5",
-        location="app/api/routes/mini_app.py:list_my_bookings",
-        message="backend received bookings identity query",
-        data={"telegram_user_id_present": telegram_user_id > 0},
-    )
-    # endregion
     return MiniAppBookingsService().list_bookings(
         session,
         telegram_user_id=telegram_user_id,
@@ -180,15 +143,6 @@ def list_mini_app_custom_requests_for_customer(
     session: Session = Depends(get_db),
 ) -> MiniAppCustomRequestCustomerListRead:
     """Minimal RFQ status for the requester (Track 5a) — no supplier quote comparison."""
-    # region agent log
-    _agent_debug_log(
-        run_id="baseline",
-        hypothesis_id="H5",
-        location="app/api/routes/mini_app.py:list_mini_app_custom_requests_for_customer",
-        message="backend received my-requests list identity query",
-        data={"telegram_user_id_present": telegram_user_id > 0},
-    )
-    # endregion
     try:
         return CustomMarketplaceRequestService().list_for_customer_mini_app(
             session,
@@ -209,15 +163,6 @@ def get_mini_app_custom_request_for_customer(
     telegram_user_id: int = Query(gt=0),
     session: Session = Depends(get_db),
 ) -> MiniAppCustomRequestCustomerDetailRead:
-    # region agent log
-    _agent_debug_log(
-        run_id="baseline",
-        hypothesis_id="H5",
-        location="app/api/routes/mini_app.py:get_mini_app_custom_request_for_customer",
-        message="backend received my-request detail identity query",
-        data={"telegram_user_id_present": telegram_user_id > 0, "request_id": request_id},
-    )
-    # endregion
     try:
         return CustomMarketplaceRequestService().get_customer_detail_mini_app(
             session,
@@ -377,15 +322,6 @@ def get_mini_app_ui_settings(
     session: Session = Depends(get_db),
 ) -> MiniAppSettingsRead:
     tid = telegram_user_id if telegram_user_id is not None and telegram_user_id > 0 else None
-    # region agent log
-    _agent_debug_log(
-        run_id="baseline",
-        hypothesis_id="H5",
-        location="app/api/routes/mini_app.py:get_mini_app_ui_settings",
-        message="backend received settings identity query",
-        data={"telegram_user_id_present": tid is not None},
-    )
-    # endregion
     return MiniAppHelpSettingsService().get_settings_read(session, telegram_user_id=tid)
 
 
@@ -408,15 +344,6 @@ def post_mini_app_language_preference(
     payload: MiniAppLanguagePreferenceRequest,
     session: Session = Depends(get_db),
 ) -> MiniAppLanguagePreferenceResponse:
-    # region agent log
-    _agent_debug_log(
-        run_id="baseline",
-        hypothesis_id="H5",
-        location="app/api/routes/mini_app.py:post_mini_app_language_preference",
-        message="backend received settings save identity body",
-        data={"telegram_user_id_present": payload.telegram_user_id > 0},
-    )
-    # endregion
     service = MiniAppHelpSettingsService()
     applied = service.set_language_preference(
         session,
