@@ -73,8 +73,6 @@
     });
   </script>
 
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
   <script>
     (function bootstrapTelegramBridgeBeforeFlet() {
       function loadPythonBootstrapOnce() {
@@ -106,6 +104,32 @@
           return null;
         }
         return null;
+      }
+
+      function applySdkStatusToUrl(flags) {
+        var currentUrl = new URL(window.location.href);
+        var params = currentUrl.searchParams;
+        var changed = false;
+
+        function toFlag(value) {
+          return value === "1" ? "1" : "0";
+        }
+
+        function setIfDifferent(key, value) {
+          var normalized = String(value);
+          if (params.get(key) !== normalized) {
+            params.set(key, normalized);
+            changed = true;
+          }
+        }
+
+        setIfDifferent("tg_sdk_loaded", toFlag(flags.tg_sdk_loaded));
+        setIfDifferent("tg_sdk_error", toFlag(flags.tg_sdk_error));
+
+        if (changed) {
+          currentUrl.search = params.toString();
+          window.history.replaceState(window.history.state, "", currentUrl.toString());
+        }
       }
 
       function extractBridgeSnapshot() {
@@ -190,6 +214,16 @@
       var bridgeAttempts = 0;
       var maxBridgeAttempts = 30;
       var bridgeRetryDelayMs = 75;
+      var sdkStartTimeoutMs = 1800;
+      var bridgeStarted = false;
+
+      function startBridgeOnce() {
+        if (bridgeStarted) {
+          return;
+        }
+        bridgeStarted = true;
+        tryBridgeThenStartFlet();
+      }
 
       function tryBridgeThenStartFlet() {
         var snapshot = {
@@ -223,7 +257,30 @@
         window.setTimeout(tryBridgeThenStartFlet, bridgeRetryDelayMs);
       }
 
-      tryBridgeThenStartFlet();
+      applySdkStatusToUrl({ tg_sdk_loaded: "0", tg_sdk_error: "0" });
+
+      if (window.Telegram && window.Telegram.WebApp) {
+        applySdkStatusToUrl({ tg_sdk_loaded: "1", tg_sdk_error: "0" });
+        startBridgeOnce();
+        return;
+      }
+
+      var sdkScript = document.createElement("script");
+      sdkScript.src = "https://telegram.org/js/telegram-web-app.js";
+      sdkScript.async = true;
+      sdkScript.onload = function () {
+        applySdkStatusToUrl({ tg_sdk_loaded: "1", tg_sdk_error: "0" });
+        startBridgeOnce();
+      };
+      sdkScript.onerror = function () {
+        applySdkStatusToUrl({ tg_sdk_loaded: "0", tg_sdk_error: "1" });
+        startBridgeOnce();
+      };
+      document.head.appendChild(sdkScript);
+
+      window.setTimeout(function () {
+        startBridgeOnce();
+      }, sdkStartTimeoutMs);
     })();
   </script>
 
