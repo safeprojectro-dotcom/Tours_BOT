@@ -85,56 +85,112 @@
         document.head.appendChild(script);
       }
 
-      function resolveTelegramUserId() {
+      function parseUserIdFromInitData(initDataRaw) {
+        if (typeof initDataRaw !== "string" || !initDataRaw) {
+          return null;
+        }
+        try {
+          var initParams = new URLSearchParams(initDataRaw);
+          var userPayload = initParams.get("user");
+          if (!userPayload) {
+            return null;
+          }
+          var parsedUser = JSON.parse(userPayload);
+          var parsedInitId = Number(parsedUser && parsedUser.id);
+          if (Number.isInteger(parsedInitId) && parsedInitId > 0) {
+            return parsedInitId;
+          }
+        } catch (_err) {
+          return null;
+        }
+        return null;
+      }
+
+      function extractBridgeSnapshot() {
         var tg = window.Telegram;
         var webApp = tg && tg.WebApp;
+        var hasTelegram = !!tg;
+        var hasWebApp = !!webApp;
+        var hasInitData = false;
         var resolvedUserId = null;
 
+        if (webApp && typeof webApp.ready === "function") {
+          try {
+            webApp.ready();
+          } catch (_err) {
+            // no-op: keep fail-closed behavior
+          }
+        }
+
         if (webApp && webApp.initDataUnsafe && webApp.initDataUnsafe.user) {
+          hasInitData = true;
           var unsafeId = Number(webApp.initDataUnsafe.user.id);
           if (Number.isInteger(unsafeId) && unsafeId > 0) {
             resolvedUserId = unsafeId;
           }
         }
 
-        if (!resolvedUserId && webApp && typeof webApp.initData === "string" && webApp.initData) {
-          var initParams = new URLSearchParams(webApp.initData);
-          var userPayload = initParams.get("user");
-          if (userPayload) {
-            var parsedUser = JSON.parse(userPayload);
-            var parsedInitId = Number(parsedUser && parsedUser.id);
-            if (Number.isInteger(parsedInitId) && parsedInitId > 0) {
-              resolvedUserId = parsedInitId;
-            }
+        if (webApp && typeof webApp.initData === "string" && webApp.initData) {
+          hasInitData = true;
+          if (!resolvedUserId) {
+            resolvedUserId = parseUserIdFromInitData(webApp.initData);
           }
         }
-        return resolvedUserId;
+
+        return {
+          tg_bridge_seen: hasTelegram ? "1" : "0",
+          tg_bridge_webapp: hasWebApp ? "1" : "0",
+          tg_bridge_init: hasInitData ? "1" : "0",
+          tg_bridge_user: resolvedUserId ? "1" : "0",
+          tg_bridge_user_id: resolvedUserId ? String(resolvedUserId) : null
+        };
       }
 
-      function injectUserIdToUrl(userId) {
+      function applyBridgeSnapshotToUrl(snapshot) {
         var currentUrl = new URL(window.location.href);
         var params = currentUrl.searchParams;
+        var changed = false;
+
+        function setIfDifferent(key, value) {
+          if (params.get(key) !== value) {
+            params.set(key, value);
+            changed = true;
+          }
+        }
+
+        setIfDifferent("tg_bridge_seen", snapshot.tg_bridge_seen);
+        setIfDifferent("tg_bridge_webapp", snapshot.tg_bridge_webapp);
+        setIfDifferent("tg_bridge_init", snapshot.tg_bridge_init);
+        setIfDifferent("tg_bridge_user", snapshot.tg_bridge_user);
+
         var alreadyHasIdentity =
           params.has("telegram_user_id") ||
           params.has("tg_user_id") ||
           params.has("tguid") ||
           params.has("user_id") ||
           params.has("tg_bridge_user_id");
-        if (!alreadyHasIdentity) {
-          params.set("tg_bridge_user_id", String(userId));
+
+        if (!alreadyHasIdentity && snapshot.tg_bridge_user_id) {
+          setIfDifferent("tg_bridge_user_id", snapshot.tg_bridge_user_id);
+        }
+
+        if (changed) {
           currentUrl.search = params.toString();
           window.history.replaceState(window.history.state, "", currentUrl.toString());
         }
       }
 
-      var frameAttempts = 0;
-      var maxFrameAttempts = 20;
+      var bridgeAttempts = 0;
+      var maxBridgeAttempts = 30;
+      var bridgeRetryDelayMs = 75;
 
       function tryBridgeThenStartFlet() {
+        var snapshot = null;
         try {
-          var userId = resolveTelegramUserId();
-          if (userId) {
-            injectUserIdToUrl(userId);
+          snapshot = extractBridgeSnapshot();
+          applyBridgeSnapshotToUrl(snapshot);
+
+          if (snapshot.tg_bridge_user === "1") {
             loadPythonBootstrapOnce();
             return;
           }
@@ -142,12 +198,15 @@
           // no-op: keep fail-closed behavior when bridge is unavailable
         }
 
-        frameAttempts += 1;
-        if (frameAttempts >= maxFrameAttempts) {
+        bridgeAttempts += 1;
+        if (bridgeAttempts >= maxBridgeAttempts) {
+          if (snapshot) {
+            applyBridgeSnapshotToUrl(snapshot);
+          }
           loadPythonBootstrapOnce();
           return;
         }
-        window.requestAnimationFrame(tryBridgeThenStartFlet);
+        window.setTimeout(tryBridgeThenStartFlet, bridgeRetryDelayMs);
       }
 
       tryBridgeThenStartFlet();
