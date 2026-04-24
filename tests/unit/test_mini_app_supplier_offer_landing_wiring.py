@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from app.models.enums import SupplierOfferLifecycle
 from app.schemas.mini_app import (
@@ -94,6 +95,24 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
         )
         self.assertEqual(resolved, 888002)
 
+    def test_runtime_identity_resolution_reads_querystring_object_to_dict(self) -> None:
+        class _QueryStringLike:
+            @property
+            def to_dict(self) -> dict[str, str]:
+                return {
+                    "tgWebAppData": 'query_id=AAAB&user={"id":918273,"first_name":"Q"}',
+                }
+
+        resolved = MiniAppShell.resolve_runtime_telegram_user_id(
+            app_env="production",
+            route="/bookings",
+            page_url=None,
+            page_query=_QueryStringLike(),
+            dev_telegram_user_id=100001,
+            allow_dev_fallback=False,
+        )
+        self.assertEqual(resolved, 918273)
+
     def test_runtime_identity_resolution_reads_fragment_query_path(self) -> None:
         resolved = MiniAppShell.resolve_runtime_telegram_user_id(
             app_env="production",
@@ -137,6 +156,40 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
             allow_dev_fallback=False,
         )
         self.assertIsNone(resolved)
+
+    def test_apply_resolved_identity_propagates_to_user_scoped_screens(self) -> None:
+        shell = MiniAppShell.__new__(MiniAppShell)
+        shell._resolved_telegram_user_id = 556677
+        shell.my_bookings_screen = SimpleNamespace(telegram_user_id=None)
+        shell.booking_detail_screen = SimpleNamespace(telegram_user_id=None)
+        shell.my_requests_list_screen = SimpleNamespace(telegram_user_id=None)
+        shell.my_request_detail_screen = SimpleNamespace(telegram_user_id=None)
+        shell.settings_screen = SimpleNamespace(telegram_user_id=None)
+
+        MiniAppShell._apply_resolved_identity_to_user_scoped_screens(shell)
+
+        self.assertEqual(shell.my_bookings_screen.telegram_user_id, 556677)
+        self.assertEqual(shell.booking_detail_screen.telegram_user_id, 556677)
+        self.assertEqual(shell.my_requests_list_screen.telegram_user_id, 556677)
+        self.assertEqual(shell.my_request_detail_screen.telegram_user_id, 556677)
+        self.assertEqual(shell.settings_screen.telegram_user_id, 556677)
+
+    def test_apply_resolved_identity_keeps_fail_closed_when_missing(self) -> None:
+        shell = MiniAppShell.__new__(MiniAppShell)
+        shell._resolved_telegram_user_id = None
+        shell.my_bookings_screen = SimpleNamespace(telegram_user_id=100001)
+        shell.booking_detail_screen = SimpleNamespace(telegram_user_id=100001)
+        shell.my_requests_list_screen = SimpleNamespace(telegram_user_id=100001)
+        shell.my_request_detail_screen = SimpleNamespace(telegram_user_id=100001)
+        shell.settings_screen = SimpleNamespace(telegram_user_id=100001)
+
+        MiniAppShell._apply_resolved_identity_to_user_scoped_screens(shell)
+
+        self.assertIsNone(shell.my_bookings_screen.telegram_user_id)
+        self.assertIsNone(shell.booking_detail_screen.telegram_user_id)
+        self.assertIsNone(shell.my_requests_list_screen.telegram_user_id)
+        self.assertIsNone(shell.my_request_detail_screen.telegram_user_id)
+        self.assertIsNone(shell.settings_screen.telegram_user_id)
 
 
 if __name__ == "__main__":

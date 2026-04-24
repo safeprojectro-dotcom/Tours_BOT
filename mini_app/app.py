@@ -4796,6 +4796,12 @@ class MiniAppShell:
             and self._resolved_telegram_user_id is not None
             and self._resolved_telegram_user_id == self._dev_telegram_user_id
         )
+        query_keys: list[str] = []
+        try:
+            query_map = MiniAppShell._query_object_to_dict(page_query)
+            query_keys = sorted(query_map.keys())
+        except Exception:
+            query_keys = []
         logger.info(
             "mini_app_identity_probe context=%s app_env=%s resolved=%s runtime_source_resolved=%s "
             "fallback_used=%s route_has_query=%s url_has_query=%s url_has_fragment=%s page_query_keys=%s",
@@ -4807,7 +4813,7 @@ class MiniAppShell:
             bool(route and "?" in route),
             bool(page_url and urlsplit(page_url).query),
             bool(page_url and urlsplit(page_url).fragment),
-            sorted(page_query.keys()) if isinstance(page_query, Mapping) else [],
+            query_keys,
         )
 
     def _refresh_runtime_identity_from_current_context(self) -> None:
@@ -4848,6 +4854,28 @@ class MiniAppShell:
             if n > 0:
                 return n
         return None
+
+    @staticmethod
+    def _query_object_to_dict(page_query: object | None) -> dict[str, str]:
+        if page_query is None:
+            return {}
+        if isinstance(page_query, Mapping):
+            out: dict[str, str] = {}
+            for k, v in page_query.items():
+                if k is None:
+                    continue
+                out[str(k)] = "" if v is None else str(v)
+            return out
+        # Flet QueryString object exposes `to_dict` property.
+        raw = getattr(page_query, "to_dict", None)
+        if isinstance(raw, Mapping):
+            out: dict[str, str] = {}
+            for k, v in raw.items():
+                if k is None:
+                    continue
+                out[str(k)] = "" if v is None else str(v)
+            return out
+        return {}
 
     @staticmethod
     def _extract_runtime_telegram_user_id(
@@ -4925,10 +4953,11 @@ class MiniAppShell:
             candidate = _from_tg_init_data(fragment_query)
             if candidate is not None:
                 return candidate
-        if isinstance(page_query, Mapping):
+        query_map = MiniAppShell._query_object_to_dict(page_query)
+        if query_map:
             raw_init_data: str | None = None
             for key in ("telegram_user_id", "tg_user_id", "tguid", "user_id"):
-                raw = page_query.get(key)  # type: ignore[arg-type]
+                raw = query_map.get(key)
                 if raw is None:
                     continue
                 txt = str(raw).strip()
@@ -4937,7 +4966,7 @@ class MiniAppShell:
                     if n > 0:
                         return n
             for key in ("tgWebAppData", "tg_web_app_data", "init_data", "webapp_data"):
-                raw = page_query.get(key)  # type: ignore[arg-type]
+                raw = query_map.get(key)
                 if raw is None:
                     continue
                 raw_init_data = str(raw)
