@@ -256,6 +256,7 @@ _STR: dict[str, dict[str, str]] = {
         "rfq_bridge_expired_hold": "This hold is no longer active. Check the catalog for availability or contact the team about your request.",
         "rfq_bridge_eligibility_error": "Could not verify whether app checkout is allowed. You can try again or use Help.",
         "rfq_bridge_closed_booking_path": "This booking link is no longer active. Use My requests or My bookings if you still have a reservation, or contact the team.",
+        "rfq_bridge_no_step_yet": "No booking step is available yet. Your request is waiting for operator review.",
         "rfq_hub_detail_bridge_closed": "The booking link for this request was closed or replaced. If you still have a reservation, open it from My bookings or continue from your request detail.",
         "btn_my_requests": "My requests",
         "my_requests_title": "My requests",
@@ -557,6 +558,7 @@ _STR: dict[str, dict[str, str]] = {
         "rfq_bridge_expired_hold": "Acest hold nu mai este activ. Verifică catalogul sau contactează echipa pentru cererea ta.",
         "rfq_bridge_eligibility_error": "Nu am putut verifica dacă plata în aplicație este permisă. Poți reîncerca sau folosi Ajutor.",
         "rfq_bridge_closed_booking_path": "Această legătură de rezervare nu mai este activă. Folosește Cererile mele sau Rezervările mele dacă ai încă o rezervare, sau contactează echipa.",
+        "rfq_bridge_no_step_yet": "Nu există încă un pas de rezervare disponibil. Cererea ta așteaptă analiza operatorului.",
         "btn_my_requests": "Cererile mele",
         "my_requests_title": "Cererile mele",
         "my_requests_subtitle": "Doar cereri de tur personalizat — separate de checkout-ul din catalog și de lista de așteptare. "
