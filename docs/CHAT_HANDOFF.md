@@ -202,6 +202,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
   1. Supplier -> Conversion Bridge design/implementation gate.
   2. Admin operational visibility for bookings/requests.
   3. Operator workflows.
+- Implementation gate document: **`docs/SUPPLIER_CONVERSION_BRIDGE_IMPLEMENTATION_GATE.md`**.
 - Architecture continuity anchor before next tracks: **`docs/DESIGN_1_SUPPLIER_MARKETPLACE_ARCHITECTURE_CHECKPOINT.md`** (accepted intermediate checkpoint for Design 1 boundaries/order/non-goals).
 - Phase 7.1 continuation must pass design/review gate before runtime changes: **`docs/PHASE_7_1_SALES_MODE_FULL_BUS_REVIEW_GATE.md`**.
 
