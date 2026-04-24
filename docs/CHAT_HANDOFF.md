@@ -20,7 +20,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Mode 3 messaging:** **W1**, **W2**, **W3** completed.
 - **Mode 3 supplier side:** **X1**, **X2** completed.
 - **Admin UI operational surfaces:** **A1** completed (read-only internal surface improvements over existing admin custom-request APIs).
-- **Hotfixes / production fixes:** supplier-offer `/start` payload/title hotfix; request-detail empty-control crash hotfix; production schema drift fix for `custom_request_booking_bridges`; custom request submit success-state hotfix; custom request **422** validation visibility hotfix.
+- **Hotfixes / production fixes:** supplier-offer `/start` payload/title hotfix; request-detail empty-control crash hotfix; production schema drift fix for `custom_request_booking_bridges`; custom request submit success-state hotfix; custom request **422** validation visibility hotfix; Mini App high-severity user-isolation/privacy hotfix for `My bookings` / `My requests` (unsafe shared identity path removed; per-Telegram-user isolation restored in real runtime path).
 - **Y2 design gate:** supplier Telegram operating model documented in **`docs/SUPPLIER_TELEGRAM_OPERATING_MODEL_Y2.md`** (design-only; no semantic/runtime changes).
 - **Y2.1 implementation:** supplier Telegram identity binding + onboarding FSM + admin approve/reject gate completed and verified.
 - **Y2.2 implementation:** approved supplier Telegram offer intake (**`/supplier_offer`**) with draft persistence and explicit submit to **`ready_for_moderation`**.
@@ -181,6 +181,12 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **`PaymentEntryService`** remains the single payment-start path.
 - **Service layer** owns policy/business rules; UI surfaces consume read-side truth and must not duplicate backend rule logic.
 - **Mode 2 != Mode 3** remains explicit and preserved.
+- **Mini App user isolation (hotfix-closed):** `My bookings` / `My requests` are now correctly scoped per Telegram user; cross-user shared visibility path is closed in runtime behavior.
+
+### Mini App isolation hotfix continuity (narrow scope)
+- Confirmed bug (closed): a high-severity privacy/isolation issue allowed different Telegram users to see the same data in `My bookings` / `My requests`.
+- Hotfix scope is narrow and identity-only: no booking-domain redesign, no requests-domain redesign, no supplier conversion-bridge redesign, and no Layer A / RFQ / payment semantic changes.
+- Compatibility remains additive for valid user flows: normal Mini App journeys continue to work, now with strict per-user data isolation and without unsafe shared fallback identity behavior.
 
 ### Next safe step (after this sync)
 - **Next supplier-safe step:** **Y30.4 — supplier-offer execution linkage workflow / linkage operations**.
