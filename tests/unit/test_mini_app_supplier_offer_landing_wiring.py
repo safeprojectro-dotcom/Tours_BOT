@@ -230,6 +230,7 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
         shell.booking_detail_screen = SimpleNamespace(telegram_user_id=None)
         shell.my_requests_list_screen = SimpleNamespace(telegram_user_id=None)
         shell.my_request_detail_screen = SimpleNamespace(telegram_user_id=None)
+        shell.custom_request_screen = SimpleNamespace(telegram_user_id=None)
         shell.settings_screen = SimpleNamespace(telegram_user_id=None)
 
         MiniAppShell._apply_resolved_identity_to_user_scoped_screens(shell)
@@ -238,6 +239,7 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
         self.assertEqual(shell.booking_detail_screen.telegram_user_id, 556677)
         self.assertEqual(shell.my_requests_list_screen.telegram_user_id, 556677)
         self.assertEqual(shell.my_request_detail_screen.telegram_user_id, 556677)
+        self.assertEqual(shell.custom_request_screen.telegram_user_id, 556677)
         self.assertEqual(shell.settings_screen.telegram_user_id, 556677)
 
     def test_apply_resolved_identity_keeps_fail_closed_when_missing(self) -> None:
@@ -247,6 +249,7 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
         shell.booking_detail_screen = SimpleNamespace(telegram_user_id=100001)
         shell.my_requests_list_screen = SimpleNamespace(telegram_user_id=100001)
         shell.my_request_detail_screen = SimpleNamespace(telegram_user_id=100001)
+        shell.custom_request_screen = SimpleNamespace(telegram_user_id=100001)
         shell.settings_screen = SimpleNamespace(telegram_user_id=100001)
 
         MiniAppShell._apply_resolved_identity_to_user_scoped_screens(shell)
@@ -255,6 +258,7 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
         self.assertIsNone(shell.booking_detail_screen.telegram_user_id)
         self.assertIsNone(shell.my_requests_list_screen.telegram_user_id)
         self.assertIsNone(shell.my_request_detail_screen.telegram_user_id)
+        self.assertIsNone(shell.custom_request_screen.telegram_user_id)
         self.assertIsNone(shell.settings_screen.telegram_user_id)
 
 

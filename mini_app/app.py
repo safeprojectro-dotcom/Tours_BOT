@@ -3441,7 +3441,7 @@ class CustomRequestScreen:
         page: ft.Page,
         *,
         api_client: MiniAppApiClient,
-        dev_telegram_user_id: int,
+        telegram_user_id: int | None,
         on_close: Callable[[], None],
         language_code: str,
         on_continue_rfq_booking: Callable[[int], None] | None = None,
@@ -3449,7 +3449,7 @@ class CustomRequestScreen:
     ) -> None:
         self.page = page
         self.api_client = api_client
-        self._dev_telegram_user_id = dev_telegram_user_id
+        self.telegram_user_id = telegram_user_id
         self.on_close = on_close
         self.on_continue_rfq_booking = on_continue_rfq_booking
         self.on_open_my_requests = on_open_my_requests
@@ -3601,6 +3601,14 @@ class CustomRequestScreen:
         if self._submit_in_progress:
             return
         lg = self.language_code
+        if self.telegram_user_id is None:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "identity_required_my_data")),
+                action="OK",
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
         route_snapshot = (self.route_notes.value or "").strip()
         excerpt = route_snapshot[:280] + ("…" if len(route_snapshot) > 280 else "")
         end_raw = (self.end_date.value or "").strip()
@@ -3626,7 +3634,7 @@ class CustomRequestScreen:
         try:
             route = route_snapshot
             body: dict[str, object] = {
-                "telegram_user_id": self._dev_telegram_user_id,
+                "telegram_user_id": self.telegram_user_id,
                 "request_type": self.request_type.value or "group_trip",
                 "travel_date_start": start_raw,
                 "route_notes": route,
@@ -4340,7 +4348,7 @@ class MiniAppShell:
         self.custom_request_screen = CustomRequestScreen(
             page,
             api_client=self.api_client,
-            dev_telegram_user_id=self._dev_telegram_user_id,
+            telegram_user_id=self._resolved_telegram_user_id,
             on_close=self.close_custom_request,
             language_code=settings.mini_app_default_language,
             on_continue_rfq_booking=self.open_rfq_bridge_booking,
@@ -4779,6 +4787,7 @@ class MiniAppShell:
         self.booking_detail_screen.telegram_user_id = tid
         self.my_requests_list_screen.telegram_user_id = tid
         self.my_request_detail_screen.telegram_user_id = tid
+        self.custom_request_screen.telegram_user_id = tid
         self.settings_screen.telegram_user_id = tid
 
     def _trace_identity_probe(self, *, context: str, app_env: str) -> None:
