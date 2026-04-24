@@ -82,6 +82,17 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
         )
         self.assertEqual(resolved, 777001)
 
+    def test_runtime_identity_resolution_reads_direct_bridge_injected_query_key(self) -> None:
+        resolved = MiniAppShell.resolve_runtime_telegram_user_id(
+            app_env="production",
+            route="/bookings?tg_bridge_user_id=777114",
+            page_url=None,
+            page_query=None,
+            dev_telegram_user_id=100001,
+            allow_dev_fallback=False,
+        )
+        self.assertEqual(resolved, 777114)
+
     def test_runtime_identity_resolution_reads_init_data_from_page_query_mapping(self) -> None:
         resolved = MiniAppShell.resolve_runtime_telegram_user_id(
             app_env="production",
@@ -94,6 +105,17 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
             allow_dev_fallback=False,
         )
         self.assertEqual(resolved, 888002)
+
+    def test_runtime_identity_resolution_reads_direct_bridge_key_from_page_query(self) -> None:
+        resolved = MiniAppShell.resolve_runtime_telegram_user_id(
+            app_env="production",
+            route="/bookings",
+            page_url=None,
+            page_query={"tg_bridge_user_id": "990011"},
+            dev_telegram_user_id=100001,
+            allow_dev_fallback=False,
+        )
+        self.assertEqual(resolved, 990011)
 
     def test_runtime_identity_resolution_reads_querystring_object_to_dict(self) -> None:
         class _QueryStringLike:

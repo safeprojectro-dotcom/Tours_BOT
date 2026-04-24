@@ -4843,7 +4843,7 @@ class MiniAppShell:
             parsed = parse_qs(value, keep_blank_values=False)
         except Exception:
             return None
-        for key in ("telegram_user_id", "tg_user_id", "tguid", "user_id"):
+        for key in ("telegram_user_id", "tg_user_id", "tguid", "user_id", "tg_bridge_user_id"):
             vals = parsed.get(key)
             if not vals:
                 continue
@@ -4956,7 +4956,7 @@ class MiniAppShell:
         query_map = MiniAppShell._query_object_to_dict(page_query)
         if query_map:
             raw_init_data: str | None = None
-            for key in ("telegram_user_id", "tg_user_id", "tguid", "user_id"):
+            for key in ("telegram_user_id", "tg_user_id", "tguid", "user_id", "tg_bridge_user_id"):
                 raw = query_map.get(key)
                 if raw is None:
                     continue
