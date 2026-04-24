@@ -11,6 +11,7 @@ Start examples:
 
 from __future__ import annotations
 
+import logging
 import os
 
 import flet as ft
@@ -20,6 +21,10 @@ from mini_app.app import main as app_main
 
 def run_mini_app() -> None:
     """Run the Flet web UI. Uses PORT/FLET_HOST when set (Railway, Docker)."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     port = 0
     host: str | None = None
     port_raw = os.environ.get("PORT") or os.environ.get("FLET_SERVER_PORT")
