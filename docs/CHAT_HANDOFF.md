@@ -198,6 +198,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 
 ### Next safe step (after this sync)
 - **Next supplier-safe step:** **Y30.4 — supplier-offer execution linkage workflow / linkage operations**.
+- Architecture continuity anchor before next tracks: **`docs/DESIGN_1_SUPPLIER_MARKETPLACE_ARCHITECTURE_CHECKPOINT.md`** (accepted intermediate checkpoint for Design 1 boundaries/order/non-goals).
 
 ### Do-not-reopen items
 - Do not reopen closed tracks for redesign by default (including completed 5g/U/V/W/X/A1 blocks).
