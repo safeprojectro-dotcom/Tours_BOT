@@ -117,13 +117,10 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
         )
         self.assertEqual(resolved, 990011)
 
-    def test_query_string_has_key_detects_tg_bridge_key(self) -> None:
-        self.assertTrue(
-            MiniAppShell._query_string_has_key("foo=1&tg_bridge_user_id=777114", "tg_bridge_user_id")
-        )
-        self.assertFalse(
-            MiniAppShell._query_string_has_key("foo=1&bar=2", "tg_bridge_user_id")
-        )
+    def test_query_like_to_dict_supports_plain_query_string(self) -> None:
+        query_map = MiniAppShell._query_like_to_dict("foo=1&tg_bridge_user_id=777114")
+        self.assertEqual(query_map.get("foo"), "1")
+        self.assertEqual(query_map.get("tg_bridge_user_id"), "777114")
 
     def test_runtime_identity_resolution_reads_querystring_object_to_dict(self) -> None:
         class _QueryStringLike:
@@ -142,6 +139,45 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
             allow_dev_fallback=False,
         )
         self.assertEqual(resolved, 918273)
+
+    def test_runtime_identity_resolution_reads_non_callable_to_dict_string(self) -> None:
+        class _QueryStringLike:
+            @property
+            def to_dict(self) -> str:
+                return "tg_bridge_user_id=919191"
+
+        resolved = MiniAppShell.resolve_runtime_telegram_user_id(
+            app_env="production",
+            route="/bookings",
+            page_url=None,
+            page_query=_QueryStringLike(),
+            dev_telegram_user_id=100001,
+            allow_dev_fallback=False,
+        )
+        self.assertEqual(resolved, 919191)
+
+    def test_runtime_identity_resolution_reads_page_query_string_surface(self) -> None:
+        resolved = MiniAppShell.resolve_runtime_telegram_user_id(
+            app_env="production",
+            route="/bookings",
+            page_url=None,
+            page_query=None,
+            page_query_string="tg_bridge_user_id=828282",
+            dev_telegram_user_id=100001,
+            allow_dev_fallback=False,
+        )
+        self.assertEqual(resolved, 828282)
+
+    def test_runtime_identity_resolution_reads_iterable_query_pairs(self) -> None:
+        resolved = MiniAppShell.resolve_runtime_telegram_user_id(
+            app_env="production",
+            route="/bookings",
+            page_url=None,
+            page_query=[("tg_bridge_user_id", "737373")],
+            dev_telegram_user_id=100001,
+            allow_dev_fallback=False,
+        )
+        self.assertEqual(resolved, 737373)
 
     def test_runtime_identity_resolution_reads_fragment_query_path(self) -> None:
         resolved = MiniAppShell.resolve_runtime_telegram_user_id(

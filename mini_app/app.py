@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import json
 import logging
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from urllib.parse import parse_qs, unquote_plus, urlsplit
@@ -4200,6 +4200,7 @@ class MiniAppShell:
             route=page.route,
             page_url=getattr(page, "url", None),
             page_query=getattr(page, "query", None),
+            page_query_string=getattr(page, "query_string", None),
             dev_telegram_user_id=settings.mini_app_dev_telegram_user_id,
             allow_dev_fallback=self._allow_dev_identity_fallback,
         )
@@ -4786,24 +4787,26 @@ class MiniAppShell:
         route = self.page.route
         page_url = getattr(self.page, "url", None)
         page_query = getattr(self.page, "query", None)
-        runtime_identity = self._extract_runtime_telegram_user_id(
+        page_query_string = getattr(self.page, "query_string", None)
+        runtime_identity, runtime_source = self._extract_runtime_telegram_identity(
             route=route,
             page_url=page_url,
             page_query=page_query,
+            page_query_string=page_query_string,
         )
         fallback_used = (
             runtime_identity is None
             and self._resolved_telegram_user_id is not None
             and self._resolved_telegram_user_id == self._dev_telegram_user_id
         )
-        winning_branch = "runtime" if runtime_identity is not None else ("dev_fallback" if fallback_used else "none")
+        source_label = runtime_source if runtime_source != "none" else ("dev_fallback" if fallback_used else "none")
         logger.info(
             "mini_app_identity context=%s app_env=%s route=%s has_identity=%s source=%s",
             context,
             (app_env or "").strip().lower(),
             route or "/",
             self._resolved_telegram_user_id is not None,
-            winning_branch,
+            source_label,
         )
 
     def _refresh_runtime_identity_from_current_context(self) -> None:
@@ -4815,6 +4818,7 @@ class MiniAppShell:
             route=self.page.route,
             page_url=getattr(self.page, "url", None),
             page_query=getattr(self.page, "query", None),
+            page_query_string=getattr(self.page, "query_string", None),
             dev_telegram_user_id=self._dev_telegram_user_id,
             allow_dev_fallback=self._allow_dev_identity_fallback,
         )
@@ -4847,45 +4851,143 @@ class MiniAppShell:
 
     @staticmethod
     def _query_object_to_dict(page_query: object | None) -> dict[str, str]:
-        if page_query is None:
-            return {}
-        if isinstance(page_query, Mapping):
-            out: dict[str, str] = {}
-            for k, v in page_query.items():
-                if k is None:
-                    continue
-                out[str(k)] = "" if v is None else str(v)
-            return out
-        # Flet QueryString object exposes `to_dict` property.
-        raw = getattr(page_query, "to_dict", None)
-        if isinstance(raw, Mapping):
-            out: dict[str, str] = {}
-            for k, v in raw.items():
-                if k is None:
-                    continue
-                out[str(k)] = "" if v is None else str(v)
-            return out
-        if callable(raw):
-            try:
-                computed = raw()
-            except Exception:
-                computed = None
-            if isinstance(computed, Mapping):
-                out: dict[str, str] = {}
-                for k, v in computed.items():
-                    if k is None:
-                        continue
-                    out[str(k)] = "" if v is None else str(v)
-                return out
-        return {}
+        return MiniAppShell._query_like_to_dict(page_query)
 
     @staticmethod
-    def _extract_runtime_telegram_user_id(
+    def _query_string_to_dict(value: str | None) -> dict[str, str]:
+        if not value:
+            return {}
+        query = value.strip()
+        if not query:
+            return {}
+        if query.startswith("?"):
+            query = query[1:]
+        if not query:
+            return {}
+        try:
+            parsed = parse_qs(query, keep_blank_values=False)
+        except Exception:
+            return {}
+        out: dict[str, str] = {}
+        for key, values in parsed.items():
+            if key is None or not values:
+                continue
+            out[str(key)] = str(values[-1])
+        return out
+
+    @staticmethod
+    def _mapping_to_dict(mapping: Mapping[object, object]) -> dict[str, str]:
+        out: dict[str, str] = {}
+        for key, value in mapping.items():
+            if key is None:
+                continue
+            out[str(key)] = "" if value is None else str(value)
+        return out
+
+    @staticmethod
+    def _pairs_to_dict(pairs: Iterable[object]) -> dict[str, str]:
+        out: dict[str, str] = {}
+        for pair in pairs:
+            if not isinstance(pair, tuple | list) or len(pair) != 2:
+                continue
+            key, value = pair
+            if key is None:
+                continue
+            out[str(key)] = "" if value is None else str(value)
+        return out
+
+    @staticmethod
+    def _query_like_to_dict(value: object | None, *, _depth: int = 0) -> dict[str, str]:
+        if value is None or _depth > 3:
+            return {}
+        if isinstance(value, str):
+            return MiniAppShell._query_string_to_dict(value)
+        if isinstance(value, Mapping):
+            return MiniAppShell._mapping_to_dict(value)
+
+        merged: dict[str, str] = {}
+
+        try:
+            to_dict_attr = getattr(value, "to_dict", None)
+        except Exception:
+            to_dict_attr = None
+        if to_dict_attr is not None:
+            candidate = to_dict_attr
+            if callable(candidate):
+                try:
+                    candidate = candidate()
+                except Exception:
+                    candidate = None
+            nested = MiniAppShell._query_like_to_dict(candidate, _depth=_depth + 1)
+            if nested:
+                merged.update(nested)
+
+        try:
+            items_attr = getattr(value, "items", None)
+        except Exception:
+            items_attr = None
+        if callable(items_attr):
+            try:
+                items_value = items_attr()
+            except Exception:
+                items_value = None
+            if isinstance(items_value, Mapping):
+                merged.update(MiniAppShell._mapping_to_dict(items_value))
+            elif isinstance(items_value, Iterable) and not isinstance(items_value, str | bytes):
+                merged.update(MiniAppShell._pairs_to_dict(items_value))
+
+        if not merged and isinstance(value, Iterable) and not isinstance(value, str | bytes):
+            merged.update(MiniAppShell._pairs_to_dict(value))
+
+        for attr_name in (
+            "telegram_user_id",
+            "tg_user_id",
+            "tguid",
+            "user_id",
+            "tg_bridge_user_id",
+            "tgWebAppData",
+            "tg_web_app_data",
+            "init_data",
+            "webapp_data",
+        ):
+            if attr_name in merged:
+                continue
+            try:
+                attr_value = getattr(value, attr_name)
+            except Exception:
+                continue
+            if attr_value is None:
+                continue
+            merged[attr_name] = str(attr_value)
+
+        if not merged:
+            try:
+                as_text = str(value)
+            except Exception:
+                as_text = ""
+            if "=" in as_text:
+                merged.update(MiniAppShell._query_string_to_dict(as_text))
+        return merged
+
+    @staticmethod
+    def _extract_fragment_query(value: str | None) -> str | None:
+        if not value:
+            return None
+        fragment = value[1:] if value.startswith("#") else value
+        if "?" in fragment:
+            fragment = fragment.split("?", 1)[1]
+        if not fragment or "=" not in fragment:
+            return None
+        return fragment
+
+    @staticmethod
+    def _extract_runtime_telegram_identity(
         *,
         route: str | None,
         page_url: str | None,
         page_query: object | None,
-    ) -> int | None:
+        page_query_string: object | None = None,
+    ) -> tuple[int | None, str]:
         def _from_tg_init_data(init_data: str | None) -> int | None:
             if not init_data:
                 return None
@@ -4921,44 +5023,48 @@ class MiniAppShell:
                 return None
             return n if n > 0 else None
 
+        def _identity_from_query_string(query: str | None, source: str) -> tuple[int | None, str]:
+            if not query:
+                return None, "none"
+            candidate = MiniAppShell._parse_telegram_user_id_from_query_string(query)
+            if candidate is not None:
+                return candidate, f"{source}_user_id"
+            candidate = _from_tg_init_data(query)
+            if candidate is not None:
+                return candidate, f"{source}_init_data"
+            return None, "none"
+
         if route and "?" in route:
-            candidate = MiniAppShell._parse_telegram_user_id_from_query_string(route.split("?", 1)[1])
+            candidate, source = _identity_from_query_string(route.split("?", 1)[1], "route_query")
             if candidate is not None:
-                return candidate
-            candidate = _from_tg_init_data(route.split("?", 1)[1])
+                return candidate, source
+        route_fragment_query = MiniAppShell._extract_fragment_query(route.split("#", 1)[1] if route and "#" in route else None)
+        if route_fragment_query:
+            candidate, source = _identity_from_query_string(route_fragment_query, "route_fragment")
             if candidate is not None:
-                return candidate
+                return candidate, source
         split = None
-        fragment_raw: str | None = None
-        fragment_query: str | None = None
         if page_url:
             try:
                 split = urlsplit(page_url)
-                page_url_query = split.query
-                candidate = MiniAppShell._parse_telegram_user_id_from_query_string(page_url_query)
             except Exception:
-                candidate = None
+                split = None
+        page_url_query = split.query if split else None
+        if page_url_query:
+            candidate, source = _identity_from_query_string(page_url_query, "page_url_query")
             if candidate is not None:
-                return candidate
-            candidate = _from_tg_init_data(page_url_query)
+                return candidate, source
+        page_url_fragment_query = MiniAppShell._extract_fragment_query(split.fragment if split else None)
+        if page_url_fragment_query:
+            candidate, source = _identity_from_query_string(page_url_fragment_query, "page_url_fragment")
             if candidate is not None:
-                return candidate
-            fragment_query = None
-            try:
-                fragment_raw = split.fragment
-                if "?" in fragment_raw:
-                    fragment_query = fragment_raw.split("?", 1)[1]
-                elif "=" in fragment_raw:
-                    fragment_query = fragment_raw
-            except Exception:
-                fragment_query = None
-            candidate = MiniAppShell._parse_telegram_user_id_from_query_string(fragment_query)
-            if candidate is not None:
-                return candidate
-            candidate = _from_tg_init_data(fragment_query)
-            if candidate is not None:
-                return candidate
+                return candidate, source
         query_map = MiniAppShell._query_object_to_dict(page_query)
+        if page_query_string is not None:
+            query_map = {
+                **MiniAppShell._query_object_to_dict(page_query_string),
+                **query_map,
+            }
         if query_map:
             raw_init_data: str | None = None
             for key in ("telegram_user_id", "tg_user_id", "tguid", "user_id", "tg_bridge_user_id"):
@@ -4969,7 +5075,7 @@ class MiniAppShell:
                 if txt.isdigit():
                     n = int(txt)
                     if n > 0:
-                        return n
+                        return n, "page_query_user_id"
             for key in ("tgWebAppData", "tg_web_app_data", "init_data", "webapp_data"):
                 raw = query_map.get(key)
                 if raw is None:
@@ -4978,8 +5084,24 @@ class MiniAppShell:
                 break
             candidate = _from_tg_init_data(raw_init_data)
             if candidate is not None:
-                return candidate
-        return None
+                return candidate, "page_query_init_data"
+        return None, "none"
+
+    @staticmethod
+    def _extract_runtime_telegram_user_id(
+        *,
+        route: str | None,
+        page_url: str | None,
+        page_query: object | None,
+        page_query_string: object | None = None,
+    ) -> int | None:
+        candidate, _ = MiniAppShell._extract_runtime_telegram_identity(
+            route=route,
+            page_url=page_url,
+            page_query=page_query,
+            page_query_string=page_query_string,
+        )
+        return candidate
 
     @staticmethod
     def resolve_runtime_telegram_user_id(
@@ -4988,6 +5110,7 @@ class MiniAppShell:
         route: str | None,
         page_url: str | None,
         page_query: object | None,
+        page_query_string: object | None = None,
         dev_telegram_user_id: int,
         allow_dev_fallback: bool,
     ) -> int | None:
@@ -4995,6 +5118,7 @@ class MiniAppShell:
             route=route,
             page_url=page_url,
             page_query=page_query,
+            page_query_string=page_query_string,
         )
         if runtime_id is not None:
             return runtime_id
