@@ -70,6 +70,30 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
         )
         self.assertEqual(resolved, 4242)
 
+    def test_runtime_identity_resolution_reads_telegram_init_data_user(self) -> None:
+        resolved = MiniAppShell.resolve_runtime_telegram_user_id(
+            app_env="production",
+            route='/bookings?tgWebAppData=query_id%3DAQAA&user=%7B%22id%22%3A777001%2C%22first_name%22%3A%22A%22%7D',
+            page_url=None,
+            page_query=None,
+            dev_telegram_user_id=100001,
+            allow_dev_fallback=False,
+        )
+        self.assertEqual(resolved, 777001)
+
+    def test_runtime_identity_resolution_reads_init_data_from_page_query_mapping(self) -> None:
+        resolved = MiniAppShell.resolve_runtime_telegram_user_id(
+            app_env="production",
+            route="/bookings",
+            page_url=None,
+            page_query={
+                "tgWebAppData": 'query_id=AAAB&user={"id":888002,"first_name":"B"}',
+            },
+            dev_telegram_user_id=100001,
+            allow_dev_fallback=False,
+        )
+        self.assertEqual(resolved, 888002)
+
     def test_runtime_identity_resolution_disables_dev_fallback_outside_local(self) -> None:
         resolved = MiniAppShell.resolve_runtime_telegram_user_id(
             app_env="production",

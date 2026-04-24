@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import re
+import json
 from collections.abc import Callable, Mapping
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote_plus, urlsplit
 
 import flet as ft
 import httpx
@@ -4790,18 +4791,52 @@ class MiniAppShell:
         page_url: str | None,
         page_query: object | None,
     ) -> int | None:
+        def _from_tg_init_data(init_data: str | None) -> int | None:
+            if not init_data:
+                return None
+            try:
+                parsed = parse_qs(init_data, keep_blank_values=False)
+            except Exception:
+                return None
+            user_vals = parsed.get("user")
+            if not user_vals:
+                return None
+            raw_user = (user_vals[-1] or "").strip()
+            if not raw_user:
+                return None
+            try:
+                payload = json.loads(unquote_plus(raw_user))
+            except Exception:
+                return None
+            if not isinstance(payload, dict):
+                return None
+            raw_id = payload.get("id")
+            try:
+                n = int(raw_id)
+            except Exception:
+                return None
+            return n if n > 0 else None
+
         if route and "?" in route:
             candidate = MiniAppShell._parse_telegram_user_id_from_query_string(route.split("?", 1)[1])
             if candidate is not None:
                 return candidate
+            candidate = _from_tg_init_data(route.split("?", 1)[1])
+            if candidate is not None:
+                return candidate
         if page_url:
             try:
-                candidate = MiniAppShell._parse_telegram_user_id_from_query_string(urlsplit(page_url).query)
+                page_url_query = urlsplit(page_url).query
+                candidate = MiniAppShell._parse_telegram_user_id_from_query_string(page_url_query)
             except Exception:
                 candidate = None
             if candidate is not None:
                 return candidate
+            candidate = _from_tg_init_data(page_url_query)
+            if candidate is not None:
+                return candidate
         if isinstance(page_query, Mapping):
+            raw_init_data: str | None = None
             for key in ("telegram_user_id", "tg_user_id", "tguid", "user_id"):
                 raw = page_query.get(key)  # type: ignore[arg-type]
                 if raw is None:
@@ -4811,6 +4846,15 @@ class MiniAppShell:
                     n = int(txt)
                     if n > 0:
                         return n
+            for key in ("tgWebAppData", "tg_web_app_data", "init_data", "webapp_data"):
+                raw = page_query.get(key)  # type: ignore[arg-type]
+                if raw is None:
+                    continue
+                raw_init_data = str(raw)
+                break
+            candidate = _from_tg_init_data(raw_init_data)
+            if candidate is not None:
+                return candidate
         return None
 
     @staticmethod
