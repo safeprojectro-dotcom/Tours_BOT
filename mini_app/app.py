@@ -4797,22 +4797,52 @@ class MiniAppShell:
             and self._resolved_telegram_user_id == self._dev_telegram_user_id
         )
         query_keys: list[str] = []
+        query_map: dict[str, str] = {}
         try:
             query_map = MiniAppShell._query_object_to_dict(page_query)
             query_keys = sorted(query_map.keys())
         except Exception:
             query_keys = []
+        route_query = route.split("?", 1)[1] if route and "?" in route else None
+        try:
+            split_url = urlsplit(page_url) if page_url else None
+        except Exception:
+            split_url = None
+        page_url_query = split_url.query if split_url else None
+        fragment_query: str | None = None
+        if split_url:
+            try:
+                fragment = split_url.fragment
+                if "?" in fragment:
+                    fragment_query = fragment.split("?", 1)[1]
+                elif "=" in fragment and "&" in fragment:
+                    fragment_query = fragment
+            except Exception:
+                fragment_query = None
+        saw_tg_bridge_route = MiniAppShell._query_string_has_key(route_query, "tg_bridge_user_id")
+        saw_tg_bridge_page_url = MiniAppShell._query_string_has_key(page_url_query, "tg_bridge_user_id")
+        saw_tg_bridge_fragment = MiniAppShell._query_string_has_key(fragment_query, "tg_bridge_user_id")
+        saw_tg_bridge_page_query = "tg_bridge_user_id" in query_map
+        winning_branch = "runtime" if runtime_identity is not None else ("dev_fallback" if fallback_used else "none")
         logger.info(
             "mini_app_identity_probe context=%s app_env=%s resolved=%s runtime_source_resolved=%s "
-            "fallback_used=%s route_has_query=%s url_has_query=%s url_has_fragment=%s page_query_keys=%s",
+            "fallback_used=%s winning_branch=%s route_has_query=%s url_has_query=%s url_has_fragment=%s "
+            "saw_tg_bridge_route=%s saw_tg_bridge_page_url=%s saw_tg_bridge_fragment=%s "
+            "saw_tg_bridge_page_query=%s saw_tg_bridge_any=%s page_query_keys=%s",
             context,
             (app_env or "").strip().lower(),
             self._resolved_telegram_user_id is not None,
             runtime_identity is not None,
             fallback_used,
+            winning_branch,
             bool(route and "?" in route),
             bool(page_url and urlsplit(page_url).query),
             bool(page_url and urlsplit(page_url).fragment),
+            saw_tg_bridge_route,
+            saw_tg_bridge_page_url,
+            saw_tg_bridge_fragment,
+            saw_tg_bridge_page_query,
+            saw_tg_bridge_route or saw_tg_bridge_page_url or saw_tg_bridge_fragment or saw_tg_bridge_page_query,
             query_keys,
         )
 
@@ -4854,6 +4884,17 @@ class MiniAppShell:
             if n > 0:
                 return n
         return None
+
+    @staticmethod
+    def _query_string_has_key(value: str | None, key: str) -> bool:
+        if not value:
+            return False
+        try:
+            parsed = parse_qs(value, keep_blank_values=False)
+        except Exception:
+            return False
+        vals = parsed.get(key)
+        return bool(vals and (vals[-1] or "").strip())
 
     @staticmethod
     def _query_object_to_dict(page_query: object | None) -> dict[str, str]:

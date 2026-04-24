@@ -117,6 +117,14 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
         )
         self.assertEqual(resolved, 990011)
 
+    def test_query_string_has_key_detects_tg_bridge_key(self) -> None:
+        self.assertTrue(
+            MiniAppShell._query_string_has_key("foo=1&tg_bridge_user_id=777114", "tg_bridge_user_id")
+        )
+        self.assertFalse(
+            MiniAppShell._query_string_has_key("foo=1&bar=2", "tg_bridge_user_id")
+        )
+
     def test_runtime_identity_resolution_reads_querystring_object_to_dict(self) -> None:
         class _QueryStringLike:
             @property

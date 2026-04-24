@@ -76,14 +76,25 @@
   <script>
     (function injectTelegramBridgeIdentity() {
       var resolvedUserId = null;
+      var trace = {
+        entrypointActive: true,
+        bridgeObjectExists: false,
+        userIdFound: false,
+        injectedToHistory: false,
+        skippedAlreadyPresent: false,
+        source: "none"
+      };
       try {
         var tg = window.Telegram;
         var webApp = tg && tg.WebApp;
+        trace.bridgeObjectExists = !!webApp;
         if (webApp && webApp.initDataUnsafe && webApp.initDataUnsafe.user) {
           var rawId = webApp.initDataUnsafe.user.id;
           var parsed = Number(rawId);
           if (Number.isInteger(parsed) && parsed > 0) {
             resolvedUserId = parsed;
+            trace.userIdFound = true;
+            trace.source = "initDataUnsafe";
           }
         }
         if (!resolvedUserId && webApp && typeof webApp.initData === "string" && webApp.initData) {
@@ -94,6 +105,8 @@
             var parsedInitId = Number(parsedUser && parsedUser.id);
             if (Number.isInteger(parsedInitId) && parsedInitId > 0) {
               resolvedUserId = parsedInitId;
+              trace.userIdFound = true;
+              trace.source = "initData";
             }
           }
         }
@@ -109,13 +122,30 @@
           params.has("user_id") ||
           params.has("tg_bridge_user_id");
         if (alreadyHasIdentity) {
+          trace.skippedAlreadyPresent = true;
           return;
         }
         params.set("tg_bridge_user_id", String(resolvedUserId));
         currentUrl.search = params.toString();
         window.history.replaceState(window.history.state, "", currentUrl.toString());
+        trace.injectedToHistory = true;
       } catch (_err) {
         // no-op: keep fail-closed behavior when bridge is unavailable
+      } finally {
+        window.__mini_app_bridge_trace = trace;
+        try {
+          console.info(
+            "mini_app_bridge_trace",
+            "entrypoint_active=" + String(trace.entrypointActive),
+            "bridge_object_exists=" + String(trace.bridgeObjectExists),
+            "user_id_found=" + String(trace.userIdFound),
+            "injected_to_history=" + String(trace.injectedToHistory),
+            "skipped_already_present=" + String(trace.skippedAlreadyPresent),
+            "source=" + trace.source
+          );
+        } catch (_consoleErr) {
+          // ignore console errors
+        }
       }
     })();
   </script>
