@@ -730,7 +730,7 @@ open
 
 | Topic | Where tracked |
 |-------|----------------|
-| Production Telegram Web App init-data / Mini App API auth | This summary + acceptance doc; replaces dev `MINI_APP_DEV_TELEGRAM_USER_ID` when prioritized |
+| Production Telegram Web App init-data / Mini App API auth | **Resolved in Y30.4x:** local pinned SDK `assets/telegram-web-app.js` + bridge identity injection (`tg_bridge_user_id`) validated on runtime path; keep as regression-watch item only (see `docs/CHAT_HANDOFF.md`) |
 | Real payment provider (mock/staging paths today) | Section 3 |
 | Bot `MemoryStorage` | Section 2 |
 | Expiry/booking status semantics for admin/analytics | Section 1 |
