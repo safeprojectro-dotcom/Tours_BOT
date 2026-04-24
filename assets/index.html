@@ -106,38 +106,9 @@
         return null;
       }
 
-      function applySdkStatusToUrl(flags) {
-        var currentUrl = new URL(window.location.href);
-        var params = currentUrl.searchParams;
-        var changed = false;
-
-        function toFlag(value) {
-          return value === "1" ? "1" : "0";
-        }
-
-        function setIfDifferent(key, value) {
-          var normalized = String(value);
-          if (params.get(key) !== normalized) {
-            params.set(key, normalized);
-            changed = true;
-          }
-        }
-
-        setIfDifferent("tg_sdk_loaded", toFlag(flags.tg_sdk_loaded));
-        setIfDifferent("tg_sdk_error", toFlag(flags.tg_sdk_error));
-
-        if (changed) {
-          currentUrl.search = params.toString();
-          window.history.replaceState(window.history.state, "", currentUrl.toString());
-        }
-      }
-
       function extractBridgeSnapshot() {
         var tg = window.Telegram;
         var webApp = tg && tg.WebApp;
-        var hasTelegram = !!tg;
-        var hasWebApp = !!webApp;
-        var hasInitData = false;
         var resolvedUserId = null;
 
         if (webApp && typeof webApp.ready === "function") {
@@ -149,7 +120,6 @@
         }
 
         if (webApp && webApp.initDataUnsafe && webApp.initDataUnsafe.user) {
-          hasInitData = true;
           var unsafeId = Number(webApp.initDataUnsafe.user.id);
           if (Number.isInteger(unsafeId) && unsafeId > 0) {
             resolvedUserId = unsafeId;
@@ -157,17 +127,13 @@
         }
 
         if (webApp && typeof webApp.initData === "string" && webApp.initData) {
-          hasInitData = true;
           if (!resolvedUserId) {
             resolvedUserId = parseUserIdFromInitData(webApp.initData);
           }
         }
 
         return {
-          tg_bridge_seen: hasTelegram ? "1" : "0",
-          tg_bridge_webapp: hasWebApp ? "1" : "0",
-          tg_bridge_init: hasInitData ? "1" : "0",
-          tg_bridge_user: resolvedUserId ? "1" : "0",
+          has_user: !!resolvedUserId,
           tg_bridge_user_id: resolvedUserId ? String(resolvedUserId) : null
         };
       }
@@ -177,10 +143,6 @@
         var params = currentUrl.searchParams;
         var changed = false;
 
-        function toBridgeFlag(value) {
-          return value === "1" ? "1" : "0";
-        }
-
         function setIfDifferent(key, value) {
           var normalized = String(value);
           if (params.get(key) !== normalized) {
@@ -188,11 +150,6 @@
             changed = true;
           }
         }
-
-        setIfDifferent("tg_bridge_seen", toBridgeFlag(snapshot.tg_bridge_seen));
-        setIfDifferent("tg_bridge_webapp", toBridgeFlag(snapshot.tg_bridge_webapp));
-        setIfDifferent("tg_bridge_init", toBridgeFlag(snapshot.tg_bridge_init));
-        setIfDifferent("tg_bridge_user", toBridgeFlag(snapshot.tg_bridge_user));
 
         var alreadyHasIdentity =
           params.has("telegram_user_id") ||
@@ -227,17 +184,14 @@
 
       function tryBridgeThenStartFlet() {
         var snapshot = {
-          tg_bridge_seen: "0",
-          tg_bridge_webapp: "0",
-          tg_bridge_init: "0",
-          tg_bridge_user: "0",
+          has_user: false,
           tg_bridge_user_id: null
         };
         try {
           snapshot = extractBridgeSnapshot();
           applyBridgeSnapshotToUrl(snapshot);
 
-          if (snapshot.tg_bridge_user === "1") {
+          if (snapshot.has_user) {
             loadPythonBootstrapOnce();
             return;
           }
@@ -257,10 +211,7 @@
         window.setTimeout(tryBridgeThenStartFlet, bridgeRetryDelayMs);
       }
 
-      applySdkStatusToUrl({ tg_sdk_loaded: "0", tg_sdk_error: "0" });
-
       if (window.Telegram && window.Telegram.WebApp) {
-        applySdkStatusToUrl({ tg_sdk_loaded: "1", tg_sdk_error: "0" });
         startBridgeOnce();
         return;
       }
@@ -269,11 +220,9 @@
       sdkScript.src = "telegram-web-app.js";
       sdkScript.async = true;
       sdkScript.onload = function () {
-        applySdkStatusToUrl({ tg_sdk_loaded: "1", tg_sdk_error: "0" });
         startBridgeOnce();
       };
       sdkScript.onerror = function () {
-        applySdkStatusToUrl({ tg_sdk_loaded: "0", tg_sdk_error: "1" });
         startBridgeOnce();
       };
       document.head.appendChild(sdkScript);
