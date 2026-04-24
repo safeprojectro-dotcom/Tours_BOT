@@ -191,13 +191,17 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - Root cause (resolved): Telegram WebView in current runtime could not reliably load external SDK URL `https://telegram.org/js/telegram-web-app.js`; bridge executed but `window.Telegram` stayed missing in page context.
 - Final production fix: bundled/pinned local SDK asset `assets/telegram-web-app.js` loaded by `assets/index.html` before bridge polling; bridge now extracts Telegram user id and writes only `tg_bridge_user_id` before `python.js` starts.
 - Verification evidence (confirmed): `has_identity=True`, `source=route_query_user_id`, and user-scoped routes (`/bookings`, `/custom-requests`, `/settings`, `/language-preference`) now receive Telegram identity.
-- User-scoped flow completion evidence (confirmed): after custom request create, `My requests` shows the new item; after reservation/payment completion, `My bookings` and booking detail resolve correctly for the same Telegram user scope (`POST /reservations` -> `GET /orders/{id}/reservation-overview` -> `POST /orders/{id}/payment-entry` -> `POST /orders/{id}/mock-payment-complete` -> `GET /bookings` -> `GET /orders/{id}/booking-status` all successful with matching `telegram_user_id` context).
+- User-scoped flow completion evidence (confirmed): `My bookings`, `My requests`, `Settings`, custom request submit/create, and reservation/payment continuation resolve in the same Telegram-user scope; after custom request create, `My requests` shows the new item; after reservation/payment completion, `My bookings` and booking detail resolve correctly for the same Telegram user (`POST /reservations` -> `GET /orders/{id}/reservation-overview` -> `POST /orders/{id}/payment-entry` -> `POST /orders/{id}/mock-payment-complete` -> `GET /bookings` -> `GET /orders/{id}/booking-status` with matching `telegram_user_id` context).
 - UX hardening (confirmed): expected `404` on `GET /mini-app/custom-requests/{id}/booking-bridge/preparation` for fresh requests is now rendered as a non-error waiting state in Mini App UI (no technical error surfacing for this normal condition).
 - Post-validation reminder: keep `MINI_APP_DEBUG_TRACE=False` in Railway by default; enable temporarily only for targeted diagnostics.
 - Guardrail: do not reopen Mini App identity bridge work unless a concrete runtime regression reappears (e.g., `has_identity=False` on Telegram WebApp launch path).
 
 ### Next safe step (after this sync)
-- **Next supplier-safe step:** **Y30.4 — supplier-offer execution linkage workflow / linkage operations**.
+- Supplier -> Conversion Bridge **runtime implementation has not started**; continue only behind an explicit design/implementation gate.
+- **Next safe order:**
+  1. Supplier -> Conversion Bridge design/implementation gate.
+  2. Admin operational visibility for bookings/requests.
+  3. Operator workflows.
 - Architecture continuity anchor before next tracks: **`docs/DESIGN_1_SUPPLIER_MARKETPLACE_ARCHITECTURE_CHECKPOINT.md`** (accepted intermediate checkpoint for Design 1 boundaries/order/non-goals).
 - Phase 7.1 continuation must pass design/review gate before runtime changes: **`docs/PHASE_7_1_SALES_MODE_FULL_BUS_REVIEW_GATE.md`**.
 
