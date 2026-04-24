@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 
 import flet as ft
 
@@ -27,6 +28,15 @@ def run_mini_app() -> None:
     )
     port = 0
     host: str | None = None
+    project_root = Path(__file__).resolve().parent.parent
+    root_assets_dir = project_root / "assets"
+    package_assets_dir = Path(__file__).resolve().parent / "assets"
+    if root_assets_dir.exists():
+        assets_dir = str(root_assets_dir)
+    elif package_assets_dir.exists():
+        assets_dir = str(package_assets_dir)
+    else:
+        assets_dir = "assets"
     port_raw = os.environ.get("PORT") or os.environ.get("FLET_SERVER_PORT")
     if port_raw:
         port = int(port_raw)
@@ -37,6 +47,7 @@ def run_mini_app() -> None:
         app_main,
         view=ft.AppView.WEB_BROWSER,
         no_cdn=True,
+        assets_dir=assets_dir,
         host=host,
         port=port,
     )
