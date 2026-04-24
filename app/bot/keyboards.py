@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.bot.constants import (
@@ -51,6 +51,10 @@ def _mini_app_bookings_url(mini_app_url: str | None) -> str | None:
     return f"{mini_app_url.rstrip('/')}/bookings"
 
 
+def _mini_app_web_app_button(*, text: str, url: str) -> InlineKeyboardButton:
+    return InlineKeyboardButton(text=text, web_app=WebAppInfo(url=url))
+
+
 def append_mini_app_url_buttons(
     builder: InlineKeyboardBuilder,
     *,
@@ -60,16 +64,11 @@ def append_mini_app_url_buttons(
     """Primary + secondary Mini App entry (catalog root and /bookings)."""
     if not mini_app_url:
         return
-    builder.row(
-        InlineKeyboardButton(
-            text=translate(language_code, "open_mini_app"),
-            url=mini_app_url,
-        )
-    )
+    builder.row(_mini_app_web_app_button(text=translate(language_code, "open_mini_app"), url=mini_app_url))
     bookings_url = _mini_app_bookings_url(mini_app_url)
     if bookings_url:
         builder.row(
-            InlineKeyboardButton(
+            _mini_app_web_app_button(
                 text=translate(language_code, "open_mini_app_bookings"),
                 url=bookings_url,
             )
@@ -136,10 +135,7 @@ def build_catalog_keyboard(
     )
     if mini_app_url:
         builder.row(
-            InlineKeyboardButton(
-                text=translate(language_code, "open_mini_app"),
-                url=mini_app_url,
-            )
+            _mini_app_web_app_button(text=translate(language_code, "open_mini_app"), url=mini_app_url)
         )
     builder.adjust(1)
     return builder.as_markup()
@@ -173,10 +169,7 @@ def build_tour_detail_keyboard(
     )
     if mini_app_url:
         builder.row(
-            InlineKeyboardButton(
-                text=translate(language_code, "open_mini_app"),
-                url=mini_app_url,
-            )
+            _mini_app_web_app_button(text=translate(language_code, "open_mini_app"), url=mini_app_url)
         )
     builder.adjust(1)
     return builder.as_markup()
@@ -305,10 +298,7 @@ def build_preparation_summary_keyboard(
     )
     if mini_app_url:
         builder.row(
-            InlineKeyboardButton(
-                text=translate(language_code, "open_mini_app"),
-                url=mini_app_url,
-            )
+            _mini_app_web_app_button(text=translate(language_code, "open_mini_app"), url=mini_app_url)
         )
     builder.adjust(1)
     return builder.as_markup()
@@ -335,10 +325,7 @@ def build_temporary_reservation_keyboard(
     )
     if mini_app_url:
         builder.row(
-            InlineKeyboardButton(
-                text=translate(language_code, "open_mini_app"),
-                url=mini_app_url,
-            )
+            _mini_app_web_app_button(text=translate(language_code, "open_mini_app"), url=mini_app_url)
         )
     builder.adjust(1)
     return builder.as_markup()
@@ -360,10 +347,7 @@ def build_payment_entry_keyboard(
     )
     if mini_app_url:
         builder.row(
-            InlineKeyboardButton(
-                text=translate(language_code, "open_mini_app"),
-                url=mini_app_url,
-            )
+            _mini_app_web_app_button(text=translate(language_code, "open_mini_app"), url=mini_app_url)
         )
     builder.adjust(1)
     return builder.as_markup()

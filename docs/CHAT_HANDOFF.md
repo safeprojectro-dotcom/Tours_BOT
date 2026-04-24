@@ -187,6 +187,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - Confirmed bug (closed): a high-severity privacy/isolation issue allowed different Telegram users to see the same data in `My bookings` / `My requests`.
 - Hotfix scope is narrow and identity-only: no booking-domain redesign, no requests-domain redesign, no supplier conversion-bridge redesign, and no Layer A / RFQ / payment semantic changes.
 - Compatibility remains additive for valid user flows: normal Mini App journeys continue to work, now with strict per-user data isolation and without unsafe shared fallback identity behavior.
+- Telegram private-chat Mini App CTA wiring now uses Telegram Web App launch buttons (`web_app=WebAppInfo(url=...)`) instead of plain URL buttons for the bot-side private entry surfaces (`Open Mini App` and `My bookings`) so Telegram can inject WebApp `initData` in WebView launches.
 
 ### Next safe step (after this sync)
 - **Next supplier-safe step:** **Y30.4 — supplier-offer execution linkage workflow / linkage operations**.
