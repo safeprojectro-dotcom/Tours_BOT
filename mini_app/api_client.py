@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+import time
 from decimal import Decimal
+from pathlib import Path
 
 import httpx
 
@@ -27,6 +30,32 @@ from app.schemas.mini_app import (
 )
 from app.schemas.payment import PaymentReconciliationRead
 from app.schemas.prepared import OrderSummaryRead, PaymentEntryRead, ReservationPreparationSummaryRead
+
+DEBUG_LOG_PATH = Path("debug-7dffdf.log")
+
+
+def _agent_debug_log(
+    *,
+    run_id: str,
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict[str, object],
+) -> None:
+    payload = {
+        "sessionId": "7dffdf",
+        "runId": run_id,
+        "hypothesisId": hypothesis_id,
+        "location": location,
+        "message": message,
+        "data": data,
+        "timestamp": int(time.time() * 1000),
+    }
+    try:
+        with DEBUG_LOG_PATH.open("a", encoding="utf-8") as fp:
+            fp.write(json.dumps(payload, ensure_ascii=True) + "\n")
+    except Exception:
+        return
 
 
 class MiniAppApiClient:
@@ -55,6 +84,15 @@ class MiniAppApiClient:
         limit: int = 50,
         offset: int = 0,
     ) -> MiniAppCustomRequestCustomerListRead:
+        # region agent log
+        _agent_debug_log(
+            run_id="baseline",
+            hypothesis_id="H4",
+            location="mini_app/api_client.py:list_custom_requests_for_customer",
+            message="outgoing identity on my-requests list",
+            data={"telegram_user_id_present": telegram_user_id > 0},
+        )
+        # endregion
         params: dict[str, object] = {
             "telegram_user_id": telegram_user_id,
             "limit": limit,
@@ -71,6 +109,15 @@ class MiniAppApiClient:
         request_id: int,
         telegram_user_id: int,
     ) -> MiniAppCustomRequestCustomerDetailRead:
+        # region agent log
+        _agent_debug_log(
+            run_id="baseline",
+            hypothesis_id="H4",
+            location="mini_app/api_client.py:get_custom_request_for_customer",
+            message="outgoing identity on my-request detail",
+            data={"telegram_user_id_present": telegram_user_id > 0, "request_id": request_id},
+        )
+        # endregion
         params = {"telegram_user_id": telegram_user_id}
         async with httpx.AsyncClient(base_url=self.base_url, timeout=15.0) as client:
             response = await client.get(f"/mini-app/custom-requests/{request_id}", params=params)
@@ -159,6 +206,15 @@ class MiniAppApiClient:
             return MiniAppSupportRequestResponse.model_validate(response.json())
 
     async def get_mini_app_settings(self, *, telegram_user_id: int | None = None) -> MiniAppSettingsRead:
+        # region agent log
+        _agent_debug_log(
+            run_id="baseline",
+            hypothesis_id="H4",
+            location="mini_app/api_client.py:get_mini_app_settings",
+            message="outgoing identity on settings get",
+            data={"telegram_user_id_present": telegram_user_id is not None and telegram_user_id > 0},
+        )
+        # endregion
         params: dict[str, object] = {}
         if telegram_user_id is not None:
             params["telegram_user_id"] = telegram_user_id
@@ -174,6 +230,15 @@ class MiniAppApiClient:
             return MiniAppSupplierOfferLandingRead.model_validate(response.json())
 
     async def post_language_preference(self, *, telegram_user_id: int, language_code: str) -> str:
+        # region agent log
+        _agent_debug_log(
+            run_id="baseline",
+            hypothesis_id="H4",
+            location="mini_app/api_client.py:post_language_preference",
+            message="outgoing identity on settings save",
+            data={"telegram_user_id_present": telegram_user_id > 0, "language_code_present": bool(language_code)},
+        )
+        # endregion
         body = {"telegram_user_id": telegram_user_id, "language_code": language_code}
         async with httpx.AsyncClient(base_url=self.base_url, timeout=10.0) as client:
             response = await client.post("/mini-app/language-preference", json=body)
@@ -187,6 +252,15 @@ class MiniAppApiClient:
         telegram_user_id: int,
         language_code: str | None = None,
     ) -> MiniAppBookingsListRead:
+        # region agent log
+        _agent_debug_log(
+            run_id="baseline",
+            hypothesis_id="H4",
+            location="mini_app/api_client.py:list_my_bookings",
+            message="outgoing identity on bookings list",
+            data={"telegram_user_id_present": telegram_user_id > 0, "language_code_present": bool(language_code)},
+        )
+        # endregion
         params = {"telegram_user_id": telegram_user_id, "language_code": language_code}
         filtered_params = {key: value for key, value in params.items() if value not in (None, "")}
         async with httpx.AsyncClient(base_url=self.base_url, timeout=15.0) as client:

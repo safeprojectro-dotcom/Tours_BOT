@@ -3,9 +3,11 @@ from __future__ import annotations
 import re
 import json
 import logging
+import time
 from collections.abc import Callable, Mapping
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from urllib.parse import parse_qs, unquote_plus, urlsplit
 
 import flet as ft
@@ -75,6 +77,31 @@ from mini_app.ui_strings import hold_timer_hint as _hold_timer_hint_i18n
 from mini_app.ui_strings import booking_facade_labels, payment_status_label, shell
 
 logger = logging.getLogger(__name__)
+DEBUG_LOG_PATH = Path("debug-7dffdf.log")
+
+
+def _agent_debug_log(
+    *,
+    run_id: str,
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict[str, object],
+) -> None:
+    payload = {
+        "sessionId": "7dffdf",
+        "runId": run_id,
+        "hypothesisId": hypothesis_id,
+        "location": location,
+        "message": message,
+        "data": data,
+        "timestamp": int(time.time() * 1000),
+    }
+    try:
+        with DEBUG_LOG_PATH.open("a", encoding="utf-8") as fp:
+            fp.write(json.dumps(payload, ensure_ascii=True) + "\n")
+    except Exception:
+        return
 
 
 def scrollable_page(*controls: ft.Control, padding: int = 16, spacing: float = 14) -> ft.Control:
@@ -4203,6 +4230,22 @@ class MiniAppShell:
             dev_telegram_user_id=settings.mini_app_dev_telegram_user_id,
             allow_dev_fallback=self._allow_dev_identity_fallback,
         )
+        # region agent log
+        _agent_debug_log(
+            run_id="baseline",
+            hypothesis_id="H2_H3",
+            location="mini_app/app.py:MiniAppShell.__init__",
+            message="startup identity snapshot",
+            data={
+                "route_present": bool(page.route),
+                "url_present": bool(getattr(page, "url", None)),
+                "query_present": bool(getattr(page, "query", None)),
+                "resolved_identity_present": self._resolved_telegram_user_id is not None,
+                "allow_dev_fallback": self._allow_dev_identity_fallback,
+                "identity_trace_enabled": self._identity_trace_enabled,
+            },
+        )
+        # endregion
         self._trace_identity_probe(context="startup", app_env=settings.app_env)
         self._modal_return_route: str = "/"
         self.catalog_screen = CatalogScreen(
@@ -4478,6 +4521,15 @@ class MiniAppShell:
         self.page.go(target)
 
     def handle_route_change(self, _: ft.RouteChangeEvent) -> None:
+        # region agent log
+        _agent_debug_log(
+            run_id="baseline",
+            hypothesis_id="H3",
+            location="mini_app/app.py:handle_route_change",
+            message="route change entered",
+            data={"route": self.page.route or "/", "resolved_identity_present": self._resolved_telegram_user_id is not None},
+        )
+        # endregion
         self._refresh_runtime_identity_from_current_context()
         self.page.views.clear()
         self.page.views.append(ft.View(route="/", controls=[self.catalog_screen.build()], padding=0, spacing=0))
@@ -4779,6 +4831,15 @@ class MiniAppShell:
         self.my_requests_list_screen.telegram_user_id = tid
         self.my_request_detail_screen.telegram_user_id = tid
         self.settings_screen.telegram_user_id = tid
+        # region agent log
+        _agent_debug_log(
+            run_id="baseline",
+            hypothesis_id="H3_H4",
+            location="mini_app/app.py:_apply_resolved_identity_to_user_scoped_screens",
+            message="identity applied to user scoped screens",
+            data={"resolved_identity_present": tid is not None},
+        )
+        # endregion
 
     def _trace_identity_probe(self, *, context: str, app_env: str) -> None:
         if not self._identity_trace_enabled:
@@ -4848,6 +4909,15 @@ class MiniAppShell:
 
     def _refresh_runtime_identity_from_current_context(self) -> None:
         if self._resolved_telegram_user_id is not None:
+            # region agent log
+            _agent_debug_log(
+                run_id="baseline",
+                hypothesis_id="H3",
+                location="mini_app/app.py:_refresh_runtime_identity_from_current_context",
+                message="refresh skipped already resolved identity",
+                data={"resolved_identity_present": True, "route": self.page.route or "/"},
+            )
+            # endregion
             return
         settings = get_mini_app_settings()
         refreshed = self.resolve_runtime_telegram_user_id(
@@ -4862,8 +4932,26 @@ class MiniAppShell:
             self._resolved_telegram_user_id = refreshed
             self._apply_resolved_identity_to_user_scoped_screens()
             self._trace_identity_probe(context="route_refresh_resolved", app_env=settings.app_env)
+            # region agent log
+            _agent_debug_log(
+                run_id="baseline",
+                hypothesis_id="H2_H3",
+                location="mini_app/app.py:_refresh_runtime_identity_from_current_context",
+                message="refresh resolved identity",
+                data={"resolved_identity_present": True, "route": self.page.route or "/"},
+            )
+            # endregion
         elif self._identity_trace_enabled:
             self._trace_identity_probe(context="route_refresh_unresolved", app_env=settings.app_env)
+        # region agent log
+        _agent_debug_log(
+            run_id="baseline",
+            hypothesis_id="H2_H3",
+            location="mini_app/app.py:_refresh_runtime_identity_from_current_context",
+            message="refresh unresolved identity",
+            data={"resolved_identity_present": self._resolved_telegram_user_id is not None, "route": self.page.route or "/"},
+        )
+        # endregion
 
     @staticmethod
     def _parse_telegram_user_id_from_query_string(value: str | None) -> int | None:
