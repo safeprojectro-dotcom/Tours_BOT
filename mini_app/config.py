@@ -16,6 +16,11 @@ class MiniAppSettings(BaseSettings):
         default=False,
         alias="MINI_APP_ALLOW_DEV_IDENTITY_FALLBACK",
     )
+    # When enabled, logs only non-sensitive Mini App identity source presence/branch diagnostics.
+    mini_app_identity_trace_enabled: bool = Field(
+        default=False,
+        alias="MINI_APP_IDENTITY_TRACE_ENABLED",
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",

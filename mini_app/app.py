@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import json
+import logging
 from collections.abc import Callable, Mapping
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
@@ -72,6 +73,8 @@ from mini_app.rfq_hub_cta import (
 )
 from mini_app.ui_strings import hold_timer_hint as _hold_timer_hint_i18n
 from mini_app.ui_strings import booking_facade_labels, payment_status_label, shell
+
+logger = logging.getLogger(__name__)
 
 
 def scrollable_page(*controls: ft.Control, padding: int = 16, spacing: float = 14) -> ft.Control:
@@ -4190,14 +4193,17 @@ class MiniAppShell:
         self.page = page
         self.api_client = MiniAppApiClient(settings.normalized_api_base_url)
         self._dev_telegram_user_id = settings.mini_app_dev_telegram_user_id
+        self._allow_dev_identity_fallback = settings.mini_app_allow_dev_identity_fallback
+        self._identity_trace_enabled = settings.mini_app_identity_trace_enabled
         self._resolved_telegram_user_id = self.resolve_runtime_telegram_user_id(
             app_env=settings.app_env,
             route=page.route,
             page_url=getattr(page, "url", None),
             page_query=getattr(page, "query", None),
             dev_telegram_user_id=settings.mini_app_dev_telegram_user_id,
-            allow_dev_fallback=settings.mini_app_allow_dev_identity_fallback,
+            allow_dev_fallback=self._allow_dev_identity_fallback,
         )
+        self._trace_identity_probe(context="startup", app_env=settings.app_env)
         self._modal_return_route: str = "/"
         self.catalog_screen = CatalogScreen(
             page,
@@ -4348,6 +4354,7 @@ class MiniAppShell:
             language_code=settings.mini_app_default_language,
             on_open_custom_request=self.open_custom_request_from_current_route,
         )
+        self._apply_resolved_identity_to_user_scoped_screens()
 
     def apply_language(self, code: str) -> None:
         self.catalog_screen.language_code = code
@@ -4471,6 +4478,7 @@ class MiniAppShell:
         self.page.go(target)
 
     def handle_route_change(self, _: ft.RouteChangeEvent) -> None:
+        self._refresh_runtime_identity_from_current_context()
         self.page.views.clear()
         self.page.views.append(ft.View(route="/", controls=[self.catalog_screen.build()], padding=0, spacing=0))
 
@@ -4764,6 +4772,63 @@ class MiniAppShell:
             return
         self.open_tour_preparation(tour_code)
 
+    def _apply_resolved_identity_to_user_scoped_screens(self) -> None:
+        tid = self._resolved_telegram_user_id
+        self.my_bookings_screen.telegram_user_id = tid
+        self.booking_detail_screen.telegram_user_id = tid
+        self.my_requests_list_screen.telegram_user_id = tid
+        self.my_request_detail_screen.telegram_user_id = tid
+        self.settings_screen.telegram_user_id = tid
+
+    def _trace_identity_probe(self, *, context: str, app_env: str) -> None:
+        if not self._identity_trace_enabled:
+            return
+        route = self.page.route
+        page_url = getattr(self.page, "url", None)
+        page_query = getattr(self.page, "query", None)
+        runtime_identity = self._extract_runtime_telegram_user_id(
+            route=route,
+            page_url=page_url,
+            page_query=page_query,
+        )
+        fallback_used = (
+            runtime_identity is None
+            and self._resolved_telegram_user_id is not None
+            and self._resolved_telegram_user_id == self._dev_telegram_user_id
+        )
+        logger.info(
+            "mini_app_identity_probe context=%s app_env=%s resolved=%s runtime_source_resolved=%s "
+            "fallback_used=%s route_has_query=%s url_has_query=%s url_has_fragment=%s page_query_keys=%s",
+            context,
+            (app_env or "").strip().lower(),
+            self._resolved_telegram_user_id is not None,
+            runtime_identity is not None,
+            fallback_used,
+            bool(route and "?" in route),
+            bool(page_url and urlsplit(page_url).query),
+            bool(page_url and urlsplit(page_url).fragment),
+            sorted(page_query.keys()) if isinstance(page_query, Mapping) else [],
+        )
+
+    def _refresh_runtime_identity_from_current_context(self) -> None:
+        if self._resolved_telegram_user_id is not None:
+            return
+        settings = get_mini_app_settings()
+        refreshed = self.resolve_runtime_telegram_user_id(
+            app_env=settings.app_env,
+            route=self.page.route,
+            page_url=getattr(self.page, "url", None),
+            page_query=getattr(self.page, "query", None),
+            dev_telegram_user_id=self._dev_telegram_user_id,
+            allow_dev_fallback=self._allow_dev_identity_fallback,
+        )
+        if refreshed is not None:
+            self._resolved_telegram_user_id = refreshed
+            self._apply_resolved_identity_to_user_scoped_screens()
+            self._trace_identity_probe(context="route_refresh_resolved", app_env=settings.app_env)
+        elif self._identity_trace_enabled:
+            self._trace_identity_probe(context="route_refresh_unresolved", app_env=settings.app_env)
+
     @staticmethod
     def _parse_telegram_user_id_from_query_string(value: str | None) -> int | None:
         if not value:
@@ -4800,6 +4865,15 @@ class MiniAppShell:
                 return None
             user_vals = parsed.get("user")
             if not user_vals:
+                packed = (
+                    parsed.get("tgWebAppData")
+                    or parsed.get("tg_web_app_data")
+                    or parsed.get("init_data")
+                    or parsed.get("webapp_data")
+                )
+                if packed:
+                    return _from_tg_init_data(unquote_plus((packed[-1] or "").strip()))
+            if not user_vals:
                 return None
             raw_user = (user_vals[-1] or "").strip()
             if not raw_user:
@@ -4826,13 +4900,29 @@ class MiniAppShell:
                 return candidate
         if page_url:
             try:
-                page_url_query = urlsplit(page_url).query
+                split = urlsplit(page_url)
+                page_url_query = split.query
                 candidate = MiniAppShell._parse_telegram_user_id_from_query_string(page_url_query)
             except Exception:
                 candidate = None
             if candidate is not None:
                 return candidate
             candidate = _from_tg_init_data(page_url_query)
+            if candidate is not None:
+                return candidate
+            fragment_query: str | None = None
+            try:
+                fragment = split.fragment
+                if "?" in fragment:
+                    fragment_query = fragment.split("?", 1)[1]
+                elif "=" in fragment and "&" in fragment:
+                    fragment_query = fragment
+            except Exception:
+                fragment_query = None
+            candidate = MiniAppShell._parse_telegram_user_id_from_query_string(fragment_query)
+            if candidate is not None:
+                return candidate
+            candidate = _from_tg_init_data(fragment_query)
             if candidate is not None:
                 return candidate
         if isinstance(page_query, Mapping):

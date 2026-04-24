@@ -73,7 +73,7 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
     def test_runtime_identity_resolution_reads_telegram_init_data_user(self) -> None:
         resolved = MiniAppShell.resolve_runtime_telegram_user_id(
             app_env="production",
-            route='/bookings?tgWebAppData=query_id%3DAQAA&user=%7B%22id%22%3A777001%2C%22first_name%22%3A%22A%22%7D',
+            route='/bookings?tgWebAppData=query_id%3DAQAA%26user%3D%257B%2522id%2522%253A777001%252C%2522first_name%2522%253A%2522A%2522%257D',
             page_url=None,
             page_query=None,
             dev_telegram_user_id=100001,
@@ -93,6 +93,17 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
             allow_dev_fallback=False,
         )
         self.assertEqual(resolved, 888002)
+
+    def test_runtime_identity_resolution_reads_fragment_query_path(self) -> None:
+        resolved = MiniAppShell.resolve_runtime_telegram_user_id(
+            app_env="production",
+            route="/",
+            page_url="https://mini.example/#/?tgWebAppData=query_id%3DAAAB%26user%3D%257B%2522id%2522%253A999003%257D",
+            page_query=None,
+            dev_telegram_user_id=100001,
+            allow_dev_fallback=False,
+        )
+        self.assertEqual(resolved, 999003)
 
     def test_runtime_identity_resolution_disables_dev_fallback_outside_local(self) -> None:
         resolved = MiniAppShell.resolve_runtime_telegram_user_id(
