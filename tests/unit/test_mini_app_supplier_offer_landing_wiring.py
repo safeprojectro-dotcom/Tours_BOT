@@ -228,6 +228,9 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
         shell._resolved_telegram_user_id = 556677
         shell.my_bookings_screen = SimpleNamespace(telegram_user_id=None)
         shell.booking_detail_screen = SimpleNamespace(telegram_user_id=None)
+        shell.reservation_preparation_screen = SimpleNamespace(telegram_user_id=None)
+        shell.reservation_success_screen = SimpleNamespace(telegram_user_id=None)
+        shell.payment_entry_screen = SimpleNamespace(telegram_user_id=None)
         shell.my_requests_list_screen = SimpleNamespace(telegram_user_id=None)
         shell.my_request_detail_screen = SimpleNamespace(telegram_user_id=None)
         shell.custom_request_screen = SimpleNamespace(telegram_user_id=None)
@@ -237,6 +240,9 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
 
         self.assertEqual(shell.my_bookings_screen.telegram_user_id, 556677)
         self.assertEqual(shell.booking_detail_screen.telegram_user_id, 556677)
+        self.assertEqual(shell.reservation_preparation_screen.telegram_user_id, 556677)
+        self.assertEqual(shell.reservation_success_screen.telegram_user_id, 556677)
+        self.assertEqual(shell.payment_entry_screen.telegram_user_id, 556677)
         self.assertEqual(shell.my_requests_list_screen.telegram_user_id, 556677)
         self.assertEqual(shell.my_request_detail_screen.telegram_user_id, 556677)
         self.assertEqual(shell.custom_request_screen.telegram_user_id, 556677)
@@ -247,6 +253,9 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
         shell._resolved_telegram_user_id = None
         shell.my_bookings_screen = SimpleNamespace(telegram_user_id=100001)
         shell.booking_detail_screen = SimpleNamespace(telegram_user_id=100001)
+        shell.reservation_preparation_screen = SimpleNamespace(telegram_user_id=100001)
+        shell.reservation_success_screen = SimpleNamespace(telegram_user_id=100001)
+        shell.payment_entry_screen = SimpleNamespace(telegram_user_id=100001)
         shell.my_requests_list_screen = SimpleNamespace(telegram_user_id=100001)
         shell.my_request_detail_screen = SimpleNamespace(telegram_user_id=100001)
         shell.custom_request_screen = SimpleNamespace(telegram_user_id=100001)
@@ -256,6 +265,9 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
 
         self.assertIsNone(shell.my_bookings_screen.telegram_user_id)
         self.assertIsNone(shell.booking_detail_screen.telegram_user_id)
+        self.assertIsNone(shell.reservation_preparation_screen.telegram_user_id)
+        self.assertIsNone(shell.reservation_success_screen.telegram_user_id)
+        self.assertIsNone(shell.payment_entry_screen.telegram_user_id)
         self.assertIsNone(shell.my_requests_list_screen.telegram_user_id)
         self.assertIsNone(shell.my_request_detail_screen.telegram_user_id)
         self.assertIsNone(shell.custom_request_screen.telegram_user_id)

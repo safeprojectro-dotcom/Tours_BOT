@@ -914,7 +914,7 @@ class ReservationPreparationScreen:
         *,
         api_client: MiniAppApiClient,
         default_language_code: str,
-        dev_telegram_user_id: int,
+        telegram_user_id: int | None,
         on_back: Callable[[str], None],
         on_reserved: Callable[[str, int], None],
         on_help: Callable[[], None],
@@ -924,7 +924,7 @@ class ReservationPreparationScreen:
         self.page = page
         self.api_client = api_client
         self.language_code = default_language_code
-        self.dev_telegram_user_id = dev_telegram_user_id
+        self.telegram_user_id = telegram_user_id
         self.on_back = on_back
         self.on_reserved = on_reserved
         self.on_help = on_help
@@ -954,7 +954,7 @@ class ReservationPreparationScreen:
             on_click=lambda _: self.page.run_task(self._confirm_reservation),
         )
         self.preparation_note = ft.Text(
-            shell(lg, "prep_note", dev_id=str(dev_telegram_user_id)),
+            shell(lg, "prep_note", dev_id=str(telegram_user_id or "—")),
             color=ft.Colors.ON_SURFACE_VARIANT,
         )
         self.nav_back = ft.TextButton(
@@ -982,7 +982,7 @@ class ReservationPreparationScreen:
         self.boarding_dropdown.label = shell(lg, "label_boarding")
         self.preview_button.text = shell(lg, "btn_preview_summary")
         self.confirm_reserve_button.text = shell(lg, "btn_confirm_reservation")
-        self.preparation_note.value = shell(lg, "prep_note", dev_id=str(self.dev_telegram_user_id))
+        self.preparation_note.value = shell(lg, "prep_note", dev_id=str(self.telegram_user_id or "—"))
         if self.loading_row.controls:
             self.loading_row.controls[1].value = shell(lg, "loading_reservation_options")
 
@@ -1208,6 +1208,9 @@ class ReservationPreparationScreen:
         if not self.current_tour_code:
             self._show_error("Tour not found.")
             return
+        if self.telegram_user_id is None:
+            self._show_error(shell(self.language_code, "identity_required_my_data"))
+            return
         if not self.seats_dropdown.value or not self.boarding_dropdown.value:
             self._show_error("Choose seats and a boarding point before confirming.")
             return
@@ -1219,7 +1222,7 @@ class ReservationPreparationScreen:
         try:
             summary = await self.api_client.create_temporary_reservation(
                 tour_code=self.current_tour_code,
-                telegram_user_id=self.dev_telegram_user_id,
+                telegram_user_id=self.telegram_user_id,
                 seats_count=int(self.seats_dropdown.value),
                 boarding_point_id=int(self.boarding_dropdown.value),
                 language_code=self.language_code,
@@ -1257,7 +1260,7 @@ class ReservationSuccessScreen:
         *,
         api_client: MiniAppApiClient,
         default_language_code: str,
-        dev_telegram_user_id: int,
+        telegram_user_id: int | None,
         on_back: Callable[[str], None],
         on_continue_to_payment: Callable[[str, int], None],
         on_help: Callable[[], None],
@@ -1267,7 +1270,7 @@ class ReservationSuccessScreen:
         self.page = page
         self.api_client = api_client
         self.language_code = default_language_code
-        self.dev_telegram_user_id = dev_telegram_user_id
+        self.telegram_user_id = telegram_user_id
         self.on_back = on_back
         self.on_continue_to_payment = on_continue_to_payment
         self.on_help = on_help
@@ -1342,6 +1345,9 @@ class ReservationSuccessScreen:
         if self.order_id is None:
             self._show_error("Missing order reference.")
             return
+        if self.telegram_user_id is None:
+            self._show_error(shell(self.language_code, "identity_required_my_data"))
+            return
 
         self._set_loading(True)
         self.error_text.visible = False
@@ -1352,7 +1358,7 @@ class ReservationSuccessScreen:
         try:
             overview = await self.api_client.get_reservation_overview(
                 order_id=self.order_id,
-                telegram_user_id=self.dev_telegram_user_id,
+                telegram_user_id=self.telegram_user_id,
                 language_code=self.language_code,
             )
         except httpx.HTTPStatusError as exc:
@@ -1573,14 +1579,19 @@ class RfqBridgeExecutionScreen:
                         closed_msg = shell(self.language_code, "rfq_bridge_closed_booking_path")
                 except Exception:
                     closed_msg = None
-            self._show_error(
-                closed_msg
-                or CatalogScreen._http_error_message(
-                    exc,
-                    default="Unable to load bridge booking for this request.",
-                ),
-            )
-            self._render_empty_flow()
+            if exc.response is not None and exc.response.status_code == 404:
+                self.error_text.visible = False
+                self._render_no_booking_step_state(
+                    message=closed_msg or shell(self.language_code, "rfq_bridge_no_step_yet")
+                )
+            else:
+                self._show_error(
+                    CatalogScreen._http_error_message(
+                        exc,
+                        default="Unable to load bridge booking for this request.",
+                    ),
+                )
+                self._render_empty_flow()
         except Exception:
             self._show_error("Unable to load bridge booking for this request.")
             self._render_empty_flow()
@@ -1601,6 +1612,16 @@ class RfqBridgeExecutionScreen:
 
     def _render_empty_flow(self) -> None:
         self.flow_column.controls.clear()
+
+    def _render_no_booking_step_state(self, *, message: str) -> None:
+        self.flow_column.controls = [
+            ft.Container(
+                bgcolor=ft.Colors.SURFACE_CONTAINER_HIGH,
+                border_radius=12,
+                padding=16,
+                content=ft.Text(message, color=ft.Colors.ON_SURFACE_VARIANT),
+            )
+        ]
 
     def _render_blocked_preparation(self, prep: MiniAppBridgeExecutionPreparationResponse) -> None:
         lg = self.language_code
@@ -1963,7 +1984,7 @@ class PaymentEntryScreen:
         *,
         api_client: MiniAppApiClient,
         default_language_code: str,
-        dev_telegram_user_id: int,
+        telegram_user_id: int | None,
         on_back: Callable[[str], None],
         on_help: Callable[[], None],
         on_open_settings: Callable[[], None],
@@ -1973,7 +1994,7 @@ class PaymentEntryScreen:
         self.page = page
         self.api_client = api_client
         self.language_code = default_language_code
-        self.dev_telegram_user_id = dev_telegram_user_id
+        self.telegram_user_id = telegram_user_id
         self.on_back = on_back
         self.on_help = on_help
         self.on_open_settings = on_open_settings
@@ -2068,6 +2089,11 @@ class PaymentEntryScreen:
             self.pay_now_button.visible = False
             self.bookings_after_pay_button.visible = False
             return
+        if self.telegram_user_id is None:
+            self._show_error(shell(self.language_code, "identity_required_my_data"))
+            self.pay_now_button.visible = False
+            self.bookings_after_pay_button.visible = False
+            return
 
         self._set_loading(True)
         self.error_text.visible = False
@@ -2079,7 +2105,7 @@ class PaymentEntryScreen:
         try:
             entry = await self.api_client.start_payment_entry(
                 order_id=self.order_id,
-                telegram_user_id=self.dev_telegram_user_id,
+                telegram_user_id=self.telegram_user_id,
             )
         except httpx.HTTPStatusError as exc:
             lg_err = self.language_code
@@ -2108,9 +2134,17 @@ class PaymentEntryScreen:
         lg = self.language_code
         if self.order_id is None:
             return
+        if self.telegram_user_id is None:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "identity_required_my_data")),
+                action="OK",
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
         try:
             r = await self.api_client.post_support_request(
-                telegram_user_id=self.dev_telegram_user_id,
+                telegram_user_id=self.telegram_user_id,
                 order_id=self.order_id,
                 screen_hint="payment",
             )
@@ -2202,7 +2236,7 @@ class PaymentEntryScreen:
         try:
             recon = await self.api_client.complete_mock_payment(
                 order_id=self.order_id,
-                telegram_user_id=self.dev_telegram_user_id,
+                telegram_user_id=self.telegram_user_id,
             )
         except httpx.HTTPStatusError as exc:
             lg = self.language_code
@@ -4287,7 +4321,7 @@ class MiniAppShell:
             page,
             api_client=self.api_client,
             default_language_code=settings.mini_app_default_language,
-            dev_telegram_user_id=self._dev_telegram_user_id,
+            telegram_user_id=self._resolved_telegram_user_id,
             on_back=self.open_tour_detail,
             on_reserved=self.open_reservation_success,
             on_help=self.open_help,
@@ -4298,7 +4332,7 @@ class MiniAppShell:
             page,
             api_client=self.api_client,
             default_language_code=settings.mini_app_default_language,
-            dev_telegram_user_id=self._dev_telegram_user_id,
+            telegram_user_id=self._resolved_telegram_user_id,
             on_back=self.open_tour_preparation,
             on_continue_to_payment=self.open_payment_entry,
             on_help=self.open_help,
@@ -4309,7 +4343,7 @@ class MiniAppShell:
             page,
             api_client=self.api_client,
             default_language_code=settings.mini_app_default_language,
-            dev_telegram_user_id=self._dev_telegram_user_id,
+            telegram_user_id=self._resolved_telegram_user_id,
             on_back=self.open_reservation_success_from_payment,
             on_help=self.open_help,
             on_open_settings=self.open_settings,
@@ -4785,6 +4819,9 @@ class MiniAppShell:
         tid = self._resolved_telegram_user_id
         self.my_bookings_screen.telegram_user_id = tid
         self.booking_detail_screen.telegram_user_id = tid
+        self.reservation_preparation_screen.telegram_user_id = tid
+        self.reservation_success_screen.telegram_user_id = tid
+        self.payment_entry_screen.telegram_user_id = tid
         self.my_requests_list_screen.telegram_user_id = tid
         self.my_request_detail_screen.telegram_user_id = tid
         self.custom_request_screen.telegram_user_id = tid
