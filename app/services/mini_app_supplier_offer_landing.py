@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
@@ -13,8 +14,17 @@ from app.schemas.mini_app import (
     MiniAppSupplierOfferLandingRead,
     MiniAppSupplierOfferPublicationContextRead,
 )
+from app.schemas.tour_sales_mode_policy import CatalogActionabilityState
 from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
 from app.services.tour_sales_mode_policy import TourSalesModePolicyService
+
+
+@dataclass(frozen=True)
+class SupplierOfferLandingActionability:
+    state: MiniAppSupplierOfferActionabilityState
+    has_execution_link: bool
+    linked_tour_id: int | None = None
+    linked_tour_code: str | None = None
 
 
 class MiniAppSupplierOfferLandingService:
@@ -28,40 +38,78 @@ class MiniAppSupplierOfferLandingService:
         session: Session,
         *,
         offer: SupplierOffer,
-    ) -> tuple[MiniAppSupplierOfferActionabilityState, str | None]:
+    ) -> SupplierOfferLandingActionability:
         active = self._links.get_active_for_offer(session, supplier_offer_id=offer.id, for_update=False)
         if active is None:
-            return MiniAppSupplierOfferActionabilityState.VIEW_ONLY, None
+            return SupplierOfferLandingActionability(
+                state=MiniAppSupplierOfferActionabilityState.VIEW_ONLY,
+                has_execution_link=False,
+            )
         tour = session.get(Tour, active.tour_id)
         if tour is None:
-            return MiniAppSupplierOfferActionabilityState.VIEW_ONLY, None
+            return SupplierOfferLandingActionability(
+                state=MiniAppSupplierOfferActionabilityState.UNAVAILABLE,
+                has_execution_link=True,
+            )
 
         now = datetime.now(UTC)
         if tour.status != TourStatus.OPEN_FOR_SALE:
-            return MiniAppSupplierOfferActionabilityState.VIEW_ONLY, tour.code
+            return SupplierOfferLandingActionability(
+                state=MiniAppSupplierOfferActionabilityState.VIEW_ONLY,
+                has_execution_link=True,
+                linked_tour_id=tour.id,
+                linked_tour_code=tour.code,
+            )
         if not tour_is_customer_catalog_visible(
             departure_datetime=tour.departure_datetime,
             sales_deadline=tour.sales_deadline,
             now=now,
         ):
-            return MiniAppSupplierOfferActionabilityState.VIEW_ONLY, tour.code
+            return SupplierOfferLandingActionability(
+                state=MiniAppSupplierOfferActionabilityState.VIEW_ONLY,
+                has_execution_link=True,
+                linked_tour_id=tour.id,
+                linked_tour_code=tour.code,
+            )
 
         if tour.sales_mode == TourSalesMode.PER_SEAT:
             if tour.seats_available <= 0:
-                return MiniAppSupplierOfferActionabilityState.SOLD_OUT, tour.code
-            return MiniAppSupplierOfferActionabilityState.BOOKABLE, tour.code
+                return SupplierOfferLandingActionability(
+                    state=MiniAppSupplierOfferActionabilityState.SOLD_OUT,
+                    has_execution_link=True,
+                    linked_tour_id=tour.id,
+                    linked_tour_code=tour.code,
+                )
+            return SupplierOfferLandingActionability(
+                state=MiniAppSupplierOfferActionabilityState.BOOKABLE,
+                has_execution_link=True,
+                linked_tour_id=tour.id,
+                linked_tour_code=tour.code,
+            )
 
         if tour.sales_mode == TourSalesMode.FULL_BUS:
-            if tour.seats_available <= 0:
-                return MiniAppSupplierOfferActionabilityState.SOLD_OUT, tour.code
             policy = TourSalesModePolicyService.policy_for_catalog_tour(tour)
-            if policy.mini_app_catalog_reservation_allowed:
-                return MiniAppSupplierOfferActionabilityState.BOOKABLE, tour.code
-            if policy.operator_path_required:
-                return MiniAppSupplierOfferActionabilityState.ASSISTED_ONLY, tour.code
-            return MiniAppSupplierOfferActionabilityState.VIEW_ONLY, tour.code
+            if policy.catalog_actionability_state == CatalogActionabilityState.BOOKABLE:
+                state = MiniAppSupplierOfferActionabilityState.BOOKABLE
+            elif policy.catalog_actionability_state == CatalogActionabilityState.ASSISTED_ONLY:
+                state = MiniAppSupplierOfferActionabilityState.ASSISTED_ONLY
+            elif policy.catalog_actionability_state == CatalogActionabilityState.VIEW_ONLY:
+                state = MiniAppSupplierOfferActionabilityState.VIEW_ONLY
+            else:
+                state = MiniAppSupplierOfferActionabilityState.UNAVAILABLE
+            return SupplierOfferLandingActionability(
+                state=state,
+                has_execution_link=True,
+                linked_tour_id=tour.id,
+                linked_tour_code=tour.code,
+            )
 
-        return MiniAppSupplierOfferActionabilityState.VIEW_ONLY, tour.code
+        return SupplierOfferLandingActionability(
+            state=MiniAppSupplierOfferActionabilityState.UNAVAILABLE,
+            has_execution_link=True,
+            linked_tour_id=tour.id,
+            linked_tour_code=tour.code,
+        )
 
     def get_published_offer_landing(
         self,
@@ -74,18 +122,13 @@ class MiniAppSupplierOfferLandingService:
             return None
         if row.lifecycle_status != SupplierOfferLifecycle.PUBLISHED:
             return None
-        actionability_state, linked_tour_code = self._resolve_actionability(session, offer=row)
-        execution_available = (
-            actionability_state == MiniAppSupplierOfferActionabilityState.BOOKABLE
-            and bool((linked_tour_code or "").strip())
+        actionability = self._resolve_actionability(session, offer=row)
+        execution_cta_enabled = (
+            actionability.state == MiniAppSupplierOfferActionabilityState.BOOKABLE
+            and actionability.has_execution_link
+            and actionability.linked_tour_id is not None
+            and bool((actionability.linked_tour_code or "").strip())
         )
-        if (
-            actionability_state == MiniAppSupplierOfferActionabilityState.BOOKABLE
-            and not execution_available
-        ):
-            # Fail-safe: never claim direct execution activation without authoritative target.
-            actionability_state = MiniAppSupplierOfferActionabilityState.VIEW_ONLY
-            linked_tour_code = None
         return MiniAppSupplierOfferLandingRead(
             supplier_offer_id=row.id,
             title=row.title,
@@ -98,10 +141,14 @@ class MiniAppSupplierOfferLandingService:
             seats_total=row.seats_total,
             base_price=row.base_price,
             currency=row.currency,
-            actionability_state=actionability_state,
-            linked_tour_code=linked_tour_code,
-            execution_activation_available=execution_available,
-            execution_target_tour_code=linked_tour_code if execution_available else None,
+            actionability_state=actionability.state,
+            has_execution_link=actionability.has_execution_link,
+            linked_tour_id=actionability.linked_tour_id,
+            linked_tour_code=actionability.linked_tour_code,
+            execution_activation_available=execution_cta_enabled,
+            execution_cta_enabled=execution_cta_enabled,
+            execution_target_tour_code=actionability.linked_tour_code if execution_cta_enabled else None,
+            fallback_cta=None if execution_cta_enabled else "browse_catalog",
             publication=MiniAppSupplierOfferPublicationContextRead(
                 lifecycle_status=row.lifecycle_status,
                 published_at=row.published_at,

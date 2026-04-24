@@ -57,8 +57,12 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
         )
         self.assertEqual(row.actionability_state, MiniAppSupplierOfferActionabilityState.VIEW_ONLY)
         self.assertEqual(row.actionability_state.value, "view_only")
+        self.assertFalse(row.has_execution_link)
+        self.assertIsNone(row.linked_tour_id)
         self.assertFalse(row.execution_activation_available)
+        self.assertFalse(row.execution_cta_enabled)
         self.assertIsNone(row.execution_target_tour_code)
+        self.assertEqual(row.fallback_cta, "browse_catalog")
 
     def test_runtime_identity_resolution_uses_runtime_query_when_present(self) -> None:
         resolved = MiniAppShell.resolve_runtime_telegram_user_id(

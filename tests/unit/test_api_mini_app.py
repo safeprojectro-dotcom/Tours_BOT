@@ -225,7 +225,11 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(body["publication"]["showcase_chat_id"], "-100123456")
         self.assertEqual(body["publication"]["showcase_message_id"], 9988)
         self.assertEqual(body["catalog_fallback_route"], "/")
+        self.assertEqual(body["fallback_cta"], "browse_catalog")
+        self.assertFalse(body["has_execution_link"])
+        self.assertIsNone(body["linked_tour_id"])
         self.assertFalse(body["execution_activation_available"])
+        self.assertFalse(body["execution_cta_enabled"])
         self.assertIsNone(body["execution_target_tour_code"])
 
     def test_supplier_offer_landing_rejects_unpublished_offer(self) -> None:
@@ -263,9 +267,13 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual(body["actionability_state"], "bookable")
+        self.assertTrue(body["has_execution_link"])
+        self.assertEqual(body["linked_tour_id"], tour.id)
         self.assertEqual(body["linked_tour_code"], "SUP-OFFER-BOOKABLE-PS")
         self.assertTrue(body["execution_activation_available"])
+        self.assertTrue(body["execution_cta_enabled"])
         self.assertEqual(body["execution_target_tour_code"], "SUP-OFFER-BOOKABLE-PS")
+        self.assertIsNone(body["fallback_cta"])
 
     def test_supplier_offer_landing_actionability_sold_out(self) -> None:
         supplier = self.create_supplier()
@@ -289,8 +297,42 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual(body["actionability_state"], "sold_out")
+        self.assertTrue(body["has_execution_link"])
+        self.assertEqual(body["linked_tour_id"], tour.id)
         self.assertFalse(body["execution_activation_available"])
+        self.assertFalse(body["execution_cta_enabled"])
         self.assertIsNone(body["execution_target_tour_code"])
+        self.assertEqual(body["fallback_cta"], "browse_catalog")
+
+    def test_supplier_offer_landing_actionability_full_bus_virgin_bookable(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(
+            supplier,
+            lifecycle_status=SupplierOfferLifecycle.PUBLISHED,
+            sales_mode=TourSalesMode.FULL_BUS,
+            title="Full-bus bookable",
+        )
+        tour = self.create_tour(
+            code="SUP-OFFER-FB-BOOKABLE",
+            sales_mode=TourSalesMode.FULL_BUS,
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=24,
+            seats_available=24,
+        )
+        self.session.add(SupplierOfferExecutionLink(supplier_offer_id=offer.id, tour_id=tour.id, link_status="active"))
+        self.session.commit()
+
+        response = self.client.get(f"/mini-app/supplier-offers/{offer.id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["actionability_state"], "bookable")
+        self.assertTrue(body["has_execution_link"])
+        self.assertEqual(body["linked_tour_id"], tour.id)
+        self.assertEqual(body["linked_tour_code"], "SUP-OFFER-FB-BOOKABLE")
+        self.assertTrue(body["execution_activation_available"])
+        self.assertTrue(body["execution_cta_enabled"])
+        self.assertEqual(body["execution_target_tour_code"], "SUP-OFFER-FB-BOOKABLE")
+        self.assertIsNone(body["fallback_cta"])
 
     def test_supplier_offer_landing_actionability_full_bus_assisted_only(self) -> None:
         supplier = self.create_supplier()
@@ -314,8 +356,12 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual(body["actionability_state"], "assisted_only")
+        self.assertTrue(body["has_execution_link"])
+        self.assertEqual(body["linked_tour_id"], tour.id)
         self.assertFalse(body["execution_activation_available"])
+        self.assertFalse(body["execution_cta_enabled"])
         self.assertIsNone(body["execution_target_tour_code"])
+        self.assertEqual(body["fallback_cta"], "browse_catalog")
 
     def test_supplier_offer_landing_actionability_falls_back_to_view_only_when_truth_insufficient(self) -> None:
         supplier = self.create_supplier()
@@ -331,9 +377,13 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual(body["actionability_state"], "view_only")
+        self.assertFalse(body["has_execution_link"])
+        self.assertIsNone(body["linked_tour_id"])
         self.assertIsNone(body["linked_tour_code"])
         self.assertFalse(body["execution_activation_available"])
+        self.assertFalse(body["execution_cta_enabled"])
         self.assertIsNone(body["execution_target_tour_code"])
+        self.assertEqual(body["fallback_cta"], "browse_catalog")
 
     def test_supplier_offer_landing_bookable_without_target_fails_safe(self) -> None:
         supplier = self.create_supplier()
@@ -350,6 +400,7 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         body = response.json()
         self.assertNotEqual(body["actionability_state"], "bookable")
         self.assertFalse(body["execution_activation_available"])
+        self.assertFalse(body["execution_cta_enabled"])
         self.assertIsNone(body["execution_target_tour_code"])
 
     def test_supplier_offer_landing_stops_execution_activation_after_link_closed(self) -> None:
@@ -375,8 +426,12 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(active_response.status_code, 200, active_response.text)
         active_body = active_response.json()
         self.assertEqual(active_body["actionability_state"], "bookable")
+        self.assertTrue(active_body["has_execution_link"])
+        self.assertEqual(active_body["linked_tour_id"], tour.id)
         self.assertTrue(active_body["execution_activation_available"])
+        self.assertTrue(active_body["execution_cta_enabled"])
         self.assertEqual(active_body["execution_target_tour_code"], "SUP-OFFER-LINK-CLOSE")
+        self.assertIsNone(active_body["fallback_cta"])
 
         link.link_status = "closed"
         link.close_reason = "unlinked"
@@ -388,8 +443,12 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(closed_response.status_code, 200, closed_response.text)
         closed_body = closed_response.json()
         self.assertEqual(closed_body["actionability_state"], "view_only")
+        self.assertFalse(closed_body["has_execution_link"])
+        self.assertIsNone(closed_body["linked_tour_id"])
         self.assertFalse(closed_body["execution_activation_available"])
+        self.assertFalse(closed_body["execution_cta_enabled"])
         self.assertIsNone(closed_body["execution_target_tour_code"])
+        self.assertEqual(closed_body["fallback_cta"], "browse_catalog")
 
     def test_preparation_route_returns_preparation_options_for_open_tour(self) -> None:
         tour = self.create_tour(

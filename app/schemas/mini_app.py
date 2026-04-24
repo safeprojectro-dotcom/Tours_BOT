@@ -218,6 +218,7 @@ class MiniAppSupplierOfferActionabilityState(StrEnum):
     SOLD_OUT = "sold_out"
     ASSISTED_ONLY = "assisted_only"
     VIEW_ONLY = "view_only"
+    UNAVAILABLE = "unavailable"
 
 
 class MiniAppSupplierOfferLandingRead(BaseModel):
@@ -233,9 +234,13 @@ class MiniAppSupplierOfferLandingRead(BaseModel):
     base_price: Decimal | None = None
     currency: str | None = None
     actionability_state: MiniAppSupplierOfferActionabilityState = MiniAppSupplierOfferActionabilityState.VIEW_ONLY
+    has_execution_link: bool = False
+    linked_tour_id: int | None = None
     linked_tour_code: str | None = None
     execution_activation_available: bool = False
+    execution_cta_enabled: bool = False
     execution_target_tour_code: str | None = None
+    fallback_cta: str | None = "browse_catalog"
     publication: MiniAppSupplierOfferPublicationContextRead
     catalog_fallback_route: str = Field(
         default="/",

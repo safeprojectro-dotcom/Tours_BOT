@@ -3953,7 +3953,7 @@ class SupplierOfferLandingScreen:
         state_value = getattr(state, "value", state)
         if state_value == MiniAppSupplierOfferActionabilityState.BOOKABLE.value:
             state_label = shell(lg, "supplier_offer_actionability_bookable")
-            if detail.execution_activation_available and (detail.execution_target_tour_code or "").strip():
+            if detail.execution_cta_enabled and (detail.execution_target_tour_code or "").strip():
                 hint_line = shell(lg, "supplier_offer_actionability_hint_bookable_ready")
                 self.bookable_placeholder_cta.visible = True
             else:
@@ -3969,6 +3969,11 @@ class SupplierOfferLandingScreen:
             state_label = shell(lg, "supplier_offer_actionability_assisted_only")
             hint_line = shell(lg, "supplier_offer_actionability_hint_assisted_only")
             self.actionability_badge.bgcolor = ft.Colors.AMBER_50
+            self.bookable_placeholder_cta.visible = False
+        elif state_value == MiniAppSupplierOfferActionabilityState.UNAVAILABLE.value:
+            state_label = shell(lg, "supplier_offer_actionability_view_only")
+            hint_line = shell(lg, "supplier_offer_actionability_hint_view_only")
+            self.actionability_badge.bgcolor = ft.Colors.BLUE_50
             self.bookable_placeholder_cta.visible = False
         else:
             state_label = shell(lg, "supplier_offer_actionability_view_only")
