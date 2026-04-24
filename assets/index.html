@@ -74,18 +74,29 @@
   </script>
 
   <script>
-    (function injectTelegramBridgeIdentity() {
-      var resolvedUserId = null;
-      try {
+    (function bootstrapTelegramBridgeBeforeFlet() {
+      function loadPythonBootstrapOnce() {
+        if (window.__fletPythonBootstrapLoaded) {
+          return;
+        }
+        window.__fletPythonBootstrapLoaded = true;
+        var script = document.createElement("script");
+        script.src = "python.js";
+        document.head.appendChild(script);
+      }
+
+      function resolveTelegramUserId() {
         var tg = window.Telegram;
         var webApp = tg && tg.WebApp;
+        var resolvedUserId = null;
+
         if (webApp && webApp.initDataUnsafe && webApp.initDataUnsafe.user) {
-          var rawId = webApp.initDataUnsafe.user.id;
-          var parsed = Number(rawId);
-          if (Number.isInteger(parsed) && parsed > 0) {
-            resolvedUserId = parsed;
+          var unsafeId = Number(webApp.initDataUnsafe.user.id);
+          if (Number.isInteger(unsafeId) && unsafeId > 0) {
+            resolvedUserId = unsafeId;
           }
         }
+
         if (!resolvedUserId && webApp && typeof webApp.initData === "string" && webApp.initData) {
           var initParams = new URLSearchParams(webApp.initData);
           var userPayload = initParams.get("user");
@@ -97,9 +108,10 @@
             }
           }
         }
-        if (!resolvedUserId) {
-          return;
-        }
+        return resolvedUserId;
+      }
+
+      function injectUserIdToUrl(userId) {
         var currentUrl = new URL(window.location.href);
         var params = currentUrl.searchParams;
         var alreadyHasIdentity =
@@ -108,21 +120,41 @@
           params.has("tguid") ||
           params.has("user_id") ||
           params.has("tg_bridge_user_id");
-        if (alreadyHasIdentity) {
+        if (!alreadyHasIdentity) {
+          params.set("tg_bridge_user_id", String(userId));
+          currentUrl.search = params.toString();
+          window.history.replaceState(window.history.state, "", currentUrl.toString());
+        }
+      }
+
+      var frameAttempts = 0;
+      var maxFrameAttempts = 20;
+
+      function tryBridgeThenStartFlet() {
+        try {
+          var userId = resolveTelegramUserId();
+          if (userId) {
+            injectUserIdToUrl(userId);
+            loadPythonBootstrapOnce();
+            return;
+          }
+        } catch (_err) {
+          // no-op: keep fail-closed behavior when bridge is unavailable
+        }
+
+        frameAttempts += 1;
+        if (frameAttempts >= maxFrameAttempts) {
+          loadPythonBootstrapOnce();
           return;
         }
-        params.set("tg_bridge_user_id", String(resolvedUserId));
-        currentUrl.search = params.toString();
-        window.history.replaceState(window.history.state, "", currentUrl.toString());
-      } catch (_err) {
-        // no-op: keep fail-closed behavior when bridge is unavailable
+        window.requestAnimationFrame(tryBridgeThenStartFlet);
       }
+
+      tryBridgeThenStartFlet();
     })();
   </script>
 
   <!-- fletAppConfig -->
-
-  <script src="python.js"></script>
 </head>
 
 <body>
