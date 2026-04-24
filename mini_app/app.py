@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 import json
 import logging
-from pathlib import Path
 from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
@@ -77,31 +76,6 @@ from mini_app.ui_strings import hold_timer_hint as _hold_timer_hint_i18n
 from mini_app.ui_strings import booking_facade_labels, payment_status_label, shell
 
 logger = logging.getLogger(__name__)
-
-
-def _agent_debug_log(
-    *,
-    run_id: str,
-    hypothesis_id: str,
-    location: str,
-    message: str,
-    data: dict[str, object],
-) -> None:
-    try:
-        log_path = Path(__file__).resolve().parents[1] / "debug-7dffdf.log"
-        payload = {
-            "sessionId": "7dffdf",
-            "runId": run_id,
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(datetime.now(UTC).timestamp() * 1000),
-        }
-        with log_path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=True) + "\n")
-    except Exception:
-        pass
 
 
 def scrollable_page(*controls: ft.Control, padding: int = 16, spacing: float = 14) -> ft.Control:
@@ -3573,41 +3547,8 @@ class CustomRequestScreen:
             on_click=self._on_submit_click,
         )
         self._submit_in_progress = False
-        # region agent log
-        _agent_debug_log(
-            run_id="pre-fix",
-            hypothesis_id="H1",
-            location="mini_app/app.py:3572",
-            message="custom_request_screen_initialized",
-            data={
-                "submit_disabled": bool(self.submit_btn.disabled),
-                "submit_in_progress": self._submit_in_progress,
-                "has_telegram_user_id": self.telegram_user_id is not None,
-                "has_on_click": self.submit_btn.on_click is not None,
-            },
-        )
-        # endregion
 
     def _on_submit_click(self, _: ft.ControlEvent) -> None:
-        # region agent log
-        _agent_debug_log(
-            run_id="pre-fix",
-            hypothesis_id="H1",
-            location="mini_app/app.py:3591",
-            message="custom_request_submit_clicked",
-            data={
-                "submit_disabled": bool(self.submit_btn.disabled),
-                "submit_in_progress": self._submit_in_progress,
-                "has_telegram_user_id": self.telegram_user_id is not None,
-            },
-        )
-        # endregion
-        logger.info(
-            "custom_request_submit_clicked disabled=%s in_progress=%s has_identity=%s",
-            bool(self.submit_btn.disabled),
-            self._submit_in_progress,
-            self.telegram_user_id is not None,
-        )
         if self._submit_in_progress:
             self.page.snack_bar = ft.SnackBar(
                 content=ft.Text(shell(self.language_code, "custom_request_submit_sending")),
@@ -3708,43 +3649,8 @@ class CustomRequestScreen:
         self._submit_in_progress = False
         self.submit_btn.disabled = False
         self.submit_btn.text = shell(lg, "custom_request_submit")
-        # region agent log
-        _agent_debug_log(
-            run_id="pre-fix",
-            hypothesis_id="H1",
-            location="mini_app/app.py:3661",
-            message="custom_request_submit_button_released",
-            data={
-                "submit_disabled": bool(self.submit_btn.disabled),
-                "submit_in_progress": self._submit_in_progress,
-            },
-        )
-        # endregion
 
     async def _submit_async(self) -> None:
-        # region agent log
-        _agent_debug_log(
-            run_id="pre-fix",
-            hypothesis_id="H1",
-            location="mini_app/app.py:3668",
-            message="custom_request_submit_start",
-            data={
-                "submit_disabled": bool(self.submit_btn.disabled),
-                "submit_in_progress": self._submit_in_progress,
-                "has_telegram_user_id": self.telegram_user_id is not None,
-                "start_len": len((self.start_date.value or "").strip()),
-                "end_len": len((self.end_date.value or "").strip()),
-                "route_notes_len": len((self.route_notes.value or "").strip()),
-                "group_size_len": len((self.group_size.value or "").strip()),
-            },
-        )
-        # endregion
-        logger.info(
-            "custom_request_submit_start disabled=%s in_progress=%s has_identity=%s",
-            bool(self.submit_btn.disabled),
-            self._submit_in_progress,
-            self.telegram_user_id is not None,
-        )
         if self._submit_in_progress:
             return
         lg = self.language_code
@@ -3767,18 +3673,6 @@ class CustomRequestScreen:
             route_notes=self.route_notes.value or "",
             group_size_raw=self.group_size.value or "",
         )
-        # region agent log
-        _agent_debug_log(
-            run_id="pre-fix",
-            hypothesis_id="H2",
-            location="mini_app/app.py:3701",
-            message="validate_custom_request_form_local",
-            data={
-                "local_key": local_key or "",
-            },
-        )
-        # endregion
-        logger.info("validate_custom_request_form_local local_key=%s", local_key or "")
         if local_key is not None:
             self.page.snack_bar = ft.SnackBar(content=ft.Text(shell(lg, local_key)), action="OK")
             self.page.snack_bar.open = True
@@ -3805,40 +3699,8 @@ class CustomRequestScreen:
             sp = (self.special.value or "").strip()
             if sp:
                 body["special_conditions"] = sp
-            # region agent log
-            _agent_debug_log(
-                run_id="pre-fix",
-                hypothesis_id="H4",
-                location="mini_app/app.py:3734",
-                message="custom_request_post_before",
-                data={
-                    "has_telegram_user_id": "telegram_user_id" in body,
-                    "has_end_date": "travel_date_end" in body,
-                    "has_group_size": "group_size" in body,
-                    "has_special_conditions": "special_conditions" in body,
-                },
-            )
-            # endregion
-            logger.info(
-                "custom_request_post_before has_identity=%s has_end_date=%s has_group_size=%s has_special=%s",
-                "telegram_user_id" in body,
-                "travel_date_end" in body,
-                "group_size" in body,
-                "special_conditions" in body,
-            )
             r = await self.api_client.post_custom_request(body=body)
         except httpx.HTTPStatusError as exc:
-            # region agent log
-            _agent_debug_log(
-                run_id="pre-fix",
-                hypothesis_id="H5",
-                location="mini_app/app.py:3748",
-                message="custom_request_post_http_error",
-                data={
-                    "status_code": exc.response.status_code if exc.response is not None else -1,
-                },
-            )
-            # endregion
             if exc.response is not None and exc.response.status_code == 422:
                 msg = message_for_custom_request_422(exc, lg)
             else:
@@ -3846,34 +3708,12 @@ class CustomRequestScreen:
             self.page.snack_bar = ft.SnackBar(content=ft.Text(msg), action="OK")
             self.page.snack_bar.open = True
         except Exception:
-            # region agent log
-            _agent_debug_log(
-                run_id="pre-fix",
-                hypothesis_id="H4",
-                location="mini_app/app.py:3764",
-                message="custom_request_submit_exception",
-                data={
-                    "error_type": "generic_exception",
-                },
-            )
-            # endregion
             self.page.snack_bar = ft.SnackBar(
                 content=ft.Text(shell(lg, "custom_request_error")),
                 action="OK",
             )
             self.page.snack_bar.open = True
         else:
-            # region agent log
-            _agent_debug_log(
-                run_id="pre-fix",
-                hypothesis_id="H5",
-                location="mini_app/app.py:3778",
-                message="custom_request_post_success",
-                data={
-                    "created_id_positive": bool(getattr(r, "id", 0) > 0),
-                },
-            )
-            # endregion
             submitted_ok = True
             self._reset_form_to_defaults()
             self._show_success_dialog(r.id, request_type_label=type_label, route_excerpt=excerpt or "—")
@@ -4715,28 +4555,6 @@ class MiniAppShell:
                 self._custom_request_return_route = "/"
             prefill = self._take_custom_request_prefill()
             self.custom_request_screen.apply_prefill(prefill)
-            # region agent log
-            _agent_debug_log(
-                run_id="pre-fix",
-                hypothesis_id="H3",
-                location="mini_app/app.py:4607",
-                message="custom_request_route_opened",
-                data={
-                    "has_resolved_telegram_user_id": self._resolved_telegram_user_id is not None,
-                    "screen_has_telegram_user_id": self.custom_request_screen.telegram_user_id is not None,
-                    "submit_disabled": bool(self.custom_request_screen.submit_btn.disabled),
-                    "submit_in_progress": self.custom_request_screen._submit_in_progress,
-                },
-            )
-            # endregion
-            logger.info(
-                "custom_request_route_opened has_resolved_identity=%s screen_has_identity=%s submit_disabled=%s in_progress=%s has_on_click=%s",
-                self._resolved_telegram_user_id is not None,
-                self.custom_request_screen.telegram_user_id is not None,
-                bool(self.custom_request_screen.submit_btn.disabled),
-                self.custom_request_screen._submit_in_progress,
-                self.custom_request_screen.submit_btn.on_click is not None,
-            )
             self.page.views.append(
                 ft.View(
                     route="/custom-request",
