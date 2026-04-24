@@ -151,17 +151,22 @@
         var params = currentUrl.searchParams;
         var changed = false;
 
+        function toBridgeFlag(value) {
+          return value === "1" ? "1" : "0";
+        }
+
         function setIfDifferent(key, value) {
-          if (params.get(key) !== value) {
-            params.set(key, value);
+          var normalized = String(value);
+          if (params.get(key) !== normalized) {
+            params.set(key, normalized);
             changed = true;
           }
         }
 
-        setIfDifferent("tg_bridge_seen", snapshot.tg_bridge_seen);
-        setIfDifferent("tg_bridge_webapp", snapshot.tg_bridge_webapp);
-        setIfDifferent("tg_bridge_init", snapshot.tg_bridge_init);
-        setIfDifferent("tg_bridge_user", snapshot.tg_bridge_user);
+        setIfDifferent("tg_bridge_seen", toBridgeFlag(snapshot.tg_bridge_seen));
+        setIfDifferent("tg_bridge_webapp", toBridgeFlag(snapshot.tg_bridge_webapp));
+        setIfDifferent("tg_bridge_init", toBridgeFlag(snapshot.tg_bridge_init));
+        setIfDifferent("tg_bridge_user", toBridgeFlag(snapshot.tg_bridge_user));
 
         var alreadyHasIdentity =
           params.has("telegram_user_id") ||
@@ -185,7 +190,13 @@
       var bridgeRetryDelayMs = 75;
 
       function tryBridgeThenStartFlet() {
-        var snapshot = null;
+        var snapshot = {
+          tg_bridge_seen: "0",
+          tg_bridge_webapp: "0",
+          tg_bridge_init: "0",
+          tg_bridge_user: "0",
+          tg_bridge_user_id: null
+        };
         try {
           snapshot = extractBridgeSnapshot();
           applyBridgeSnapshotToUrl(snapshot);
@@ -196,6 +207,7 @@
           }
         } catch (_err) {
           // no-op: keep fail-closed behavior when bridge is unavailable
+          applyBridgeSnapshotToUrl(snapshot);
         }
 
         bridgeAttempts += 1;

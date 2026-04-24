@@ -4788,6 +4788,12 @@ class MiniAppShell:
         page_url = getattr(self.page, "url", None)
         page_query = getattr(self.page, "query", None)
         page_query_string = getattr(self.page, "query_string", None)
+        bridge_flags = self._extract_bridge_status_flags(
+            route=route,
+            page_url=page_url,
+            page_query=page_query,
+            page_query_string=page_query_string,
+        )
         runtime_identity, runtime_source = self._extract_runtime_telegram_identity(
             route=route,
             page_url=page_url,
@@ -4801,12 +4807,16 @@ class MiniAppShell:
         )
         source_label = runtime_source if runtime_source != "none" else ("dev_fallback" if fallback_used else "none")
         logger.info(
-            "mini_app_identity context=%s app_env=%s route=%s has_identity=%s source=%s",
+            "mini_app_identity context=%s app_env=%s route=%s has_identity=%s source=%s bridge_seen=%s bridge_webapp=%s bridge_init=%s bridge_user=%s",
             context,
             (app_env or "").strip().lower(),
             route or "/",
             self._resolved_telegram_user_id is not None,
             source_label,
+            bridge_flags["bridge_seen"],
+            bridge_flags["bridge_webapp"],
+            bridge_flags["bridge_init"],
+            bridge_flags["bridge_user"],
         )
 
     def _refresh_runtime_identity_from_current_context(self) -> None:
@@ -5102,6 +5112,44 @@ class MiniAppShell:
             page_query_string=page_query_string,
         )
         return candidate
+
+    @staticmethod
+    def _extract_bridge_status_flags(
+        *,
+        route: str | None,
+        page_url: str | None,
+        page_query: object | None,
+        page_query_string: object | None = None,
+    ) -> dict[str, str]:
+        query_map = MiniAppShell._query_object_to_dict(page_query)
+        if page_query_string is not None:
+            query_map = {
+                **MiniAppShell._query_object_to_dict(page_query_string),
+                **query_map,
+            }
+        if route and "?" in route:
+            route_map = MiniAppShell._query_string_to_dict(route.split("?", 1)[1])
+            query_map = {**route_map, **query_map}
+        split = None
+        if page_url:
+            try:
+                split = urlsplit(page_url)
+            except Exception:
+                split = None
+        if split and split.query:
+            page_url_map = MiniAppShell._query_string_to_dict(split.query)
+            query_map = {**page_url_map, **query_map}
+
+        def _flag(key: str) -> str:
+            raw = query_map.get(key)
+            return "1" if str(raw).strip() == "1" else "0"
+
+        return {
+            "bridge_seen": _flag("tg_bridge_seen"),
+            "bridge_webapp": _flag("tg_bridge_webapp"),
+            "bridge_init": _flag("tg_bridge_init"),
+            "bridge_user": _flag("tg_bridge_user"),
+        }
 
     @staticmethod
     def resolve_runtime_telegram_user_id(
