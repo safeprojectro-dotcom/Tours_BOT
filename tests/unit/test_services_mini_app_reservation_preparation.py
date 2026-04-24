@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from app.models.enums import TourSalesMode, TourStatus
+from app.schemas.tour_sales_mode_policy import CatalogActionabilityState
 from app.services.mini_app_reservation_preparation import MiniAppReservationPreparationService
 from tests.unit.base import FoundationDBTestCase
 
@@ -34,6 +35,7 @@ class MiniAppReservationPreparationServiceTests(FoundationDBTestCase):
         self.assertTrue(result.preparation_only)
         self.assertTrue(result.sales_mode_policy.per_seat_self_service_allowed)
         self.assertTrue(result.sales_mode_policy.mini_app_catalog_reservation_allowed)
+        self.assertEqual(result.sales_mode_policy.catalog_actionability_state, CatalogActionabilityState.BOOKABLE)
 
     def test_get_preparation_full_bus_partial_returns_empty_seat_options(self) -> None:
         tour = self.create_tour(
@@ -59,6 +61,7 @@ class MiniAppReservationPreparationServiceTests(FoundationDBTestCase):
         self.assertEqual(result.seat_count_options, [])
         self.assertFalse(result.sales_mode_policy.per_seat_self_service_allowed)
         self.assertFalse(result.sales_mode_policy.mini_app_catalog_reservation_allowed)
+        self.assertEqual(result.sales_mode_policy.catalog_actionability_state, CatalogActionabilityState.ASSISTED_ONLY)
 
     def test_get_preparation_full_bus_virgin_returns_fixed_seat_option(self) -> None:
         tour = self.create_tour(
@@ -84,6 +87,7 @@ class MiniAppReservationPreparationServiceTests(FoundationDBTestCase):
         self.assertEqual(result.seat_count_options, [12])
         self.assertTrue(result.sales_mode_policy.mini_app_catalog_reservation_allowed)
         self.assertEqual(result.sales_mode_policy.catalog_charter_fixed_seats_count, 12)
+        self.assertEqual(result.sales_mode_policy.catalog_actionability_state, CatalogActionabilityState.BOOKABLE)
 
     def test_build_preparation_summary_returns_preview_only_summary(self) -> None:
         tour = self.create_tour(

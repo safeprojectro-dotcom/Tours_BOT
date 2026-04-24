@@ -471,6 +471,7 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertFalse(body["sales_mode_policy"]["per_seat_self_service_allowed"])
         self.assertTrue(body["sales_mode_policy"]["mini_app_catalog_reservation_allowed"])
         self.assertEqual(body["sales_mode_policy"]["catalog_charter_fixed_seats_count"], 40)
+        self.assertEqual(body["sales_mode_policy"]["catalog_actionability_state"], "bookable")
         self.assertTrue(body["sales_mode_policy"]["operator_path_required"])
 
         point_id = body["boarding_points"][0]["id"]
@@ -509,6 +510,7 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(body["seat_count_options"], [])
         self.assertFalse(body["sales_mode_policy"]["mini_app_catalog_reservation_allowed"])
         self.assertIsNone(body["sales_mode_policy"]["catalog_charter_fixed_seats_count"])
+        self.assertEqual(body["sales_mode_policy"]["catalog_actionability_state"], "assisted_only")
 
     def test_full_bus_reservation_post_rejected_when_partial_inventory(self) -> None:
         tour = self.create_tour(
@@ -687,6 +689,7 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         payload = response.json()
         self.assertFalse(payload["sales_mode_policy"]["per_seat_self_service_allowed"])
         self.assertFalse(payload["sales_mode_policy"]["mini_app_catalog_reservation_allowed"])
+        self.assertEqual(payload["sales_mode_policy"]["catalog_actionability_state"], "assisted_only")
         self.assertEqual(payload["tour"]["sales_mode"], "full_bus")
         self.assertEqual(payload["commercial_mode"], "supplier_route_full_bus")
 

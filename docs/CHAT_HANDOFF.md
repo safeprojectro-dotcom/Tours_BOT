@@ -1194,6 +1194,16 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 - **Parsing/building** is **centralized** in **`HandoffEntryService`** (and **read-side** labels in **`admin_handoff_queue`** / **`admin_read`**).
 - **Still not implemented** after Step **5:** **direct whole-bus reservation**, **whole-bus payment**, **full-bus pricing model**, **capacity model expansion**, **reservation engine rewrite**.
 
+### Phase 7.1 / Actionability boundary refinement (full_bus, read-side only)
+- Added explicit catalog actionability matrix in **`TourSalesModePolicyRead`** / **`TourSalesModePolicyService`**: **`bookable`** / **`assisted_only`** / **`view_only`** / **`blocked`**.
+- Full-bus boundaries are now formalized from current inventory truth:
+  - **`bookable`** only when `seats_total > 0` and `seats_available == seats_total` (virgin whole-bus capacity);
+  - **`assisted_only`** when `0 < seats_available < seats_total` (partial inventory / existing reservations);
+  - **`view_only`** when `seats_available <= 0`;
+  - **`blocked`** for invalid/inconsistent snapshots (fail-safe default; never bookable).
+- Mini App read rendering now gates reserve/preparation controls by policy actionability (`bookable` only), preventing false-positive self-service on full-bus surfaces.
+- Scope preserved: **no** Layer A booking/payment semantic changes, **no** RFQ/supplier-flow changes, **no** identity-bridge changes.
+
 ### Phase 7.1 / Sales Mode / Step 1 completed
 - **Status:** **finalized / frozen** — treat Step **1** as **done**; extend **`sales_mode`** behavior only via **Step 2+** with explicit scope.
 - **Sub-track:** **Phase 7.1 — tour sales mode** (**separate** from closed **Phase 7** **`group_followup_*`** chain; **do not** reopen **Phase 7** for this work).

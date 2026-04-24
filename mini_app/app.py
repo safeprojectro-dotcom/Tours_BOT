@@ -45,6 +45,7 @@ from app.schemas.prepared import (
     PaymentEntryRead,
     ReservationPreparationSummaryRead,
 )
+from app.schemas.tour_sales_mode_policy import CatalogActionabilityState, TourSalesModePolicyRead
 from app.schemas.tour import BoardingPointRead
 from mini_app.api_client import MiniAppApiClient
 from mini_app.booking_grouping import partition_bookings_for_my_bookings_ui
@@ -105,6 +106,13 @@ def _payment_status_user_label(status: PaymentStatus, lang: str | None) -> str:
 
 def _hold_timer_hint(expires_at: datetime | None, lang: str | None) -> str:
     return _hold_timer_hint_i18n(expires_at, lang, format_dt=CatalogScreen._format_datetime)
+
+
+def _policy_is_catalog_bookable(policy: TourSalesModePolicyRead) -> bool:
+    return (
+        policy.catalog_actionability_state == CatalogActionabilityState.BOOKABLE
+        and policy.mini_app_catalog_reservation_allowed
+    )
 
 
 def _format_request_datetime(value: datetime) -> str:
@@ -318,7 +326,7 @@ class CatalogScreen:
         )
         description = card.short_description or shell(lg, "catalog_card_no_description")
         assisted_line = None
-        if not card.sales_mode_policy.mini_app_catalog_reservation_allowed:
+        if not _policy_is_catalog_bookable(card.sales_mode_policy):
             assisted_line = ft.Text(
                 shell(lg, "catalog_card_assisted_notice"),
                 color=ft.Colors.TERTIARY,
@@ -711,7 +719,7 @@ class TourDetailScreen:
     ) -> ft.Control:
         lg = self.language_code
         if detail.is_available:
-            if detail.sales_mode_policy.mini_app_catalog_reservation_allowed:
+            if _policy_is_catalog_bookable(detail.sales_mode_policy):
                 return ft.Row(
                     [
                         ft.ElevatedButton(
@@ -1090,7 +1098,7 @@ class ReservationPreparationScreen:
             ),
         ]
 
-        if not preparation.sales_mode_policy.mini_app_catalog_reservation_allowed:
+        if not _policy_is_catalog_bookable(preparation.sales_mode_policy):
             self.preparation_note.visible = False
             prep_assisted_children: list[ft.Control] = [
                 ft.Text(shell(lg, "preparation_assisted_title"), weight=ft.FontWeight.W_600),
@@ -1667,7 +1675,7 @@ class RfqBridgeExecutionScreen:
             ),
         ]
 
-        if not preparation.sales_mode_policy.mini_app_catalog_reservation_allowed:
+        if not _policy_is_catalog_bookable(preparation.sales_mode_policy):
             self.flow_column.controls.extend(
                 header_rows
                 + [

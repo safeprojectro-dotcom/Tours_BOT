@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from pydantic import ValidationError
 
 from app.models.enums import TourSalesMode, TourStatus
-from app.schemas.tour_sales_mode_policy import TourSalesModePolicyRead
+from app.schemas.tour_sales_mode_policy import CatalogActionabilityState, TourSalesModePolicyRead
 from app.services.tour_sales_mode_policy import TourSalesModePolicyService
 from tests.unit.base import FoundationDBTestCase
 
@@ -22,6 +23,7 @@ class TourSalesModePolicyTests(FoundationDBTestCase):
         self.assertFalse(p.operator_path_required)
         self.assertTrue(p.mini_app_catalog_reservation_allowed)
         self.assertIsNone(p.catalog_charter_fixed_seats_count)
+        self.assertEqual(p.catalog_actionability_state, CatalogActionabilityState.BOOKABLE)
 
     def test_full_bus_policy_output(self) -> None:
         p = TourSalesModePolicyService.policy_for_sales_mode(TourSalesMode.FULL_BUS)
@@ -31,6 +33,7 @@ class TourSalesModePolicyTests(FoundationDBTestCase):
         self.assertTrue(p.operator_path_required)
         self.assertFalse(p.mini_app_catalog_reservation_allowed)
         self.assertIsNone(p.catalog_charter_fixed_seats_count)
+        self.assertEqual(p.catalog_actionability_state, CatalogActionabilityState.ASSISTED_ONLY)
 
     def test_large_seat_count_does_not_imply_full_bus(self) -> None:
         """Policy follows `sales_mode` only — never seat totals."""
@@ -72,6 +75,7 @@ class TourSalesModePolicyTests(FoundationDBTestCase):
         p = TourSalesModePolicyService.policy_for_catalog_tour(tour)
         self.assertTrue(p.mini_app_catalog_reservation_allowed)
         self.assertEqual(p.catalog_charter_fixed_seats_count, 30)
+        self.assertEqual(p.catalog_actionability_state, CatalogActionabilityState.BOOKABLE)
 
     def test_policy_for_catalog_tour_full_bus_partial_blocks_mini_app_hold(self) -> None:
         tour = self.create_tour(
@@ -85,6 +89,46 @@ class TourSalesModePolicyTests(FoundationDBTestCase):
         p = TourSalesModePolicyService.policy_for_catalog_tour(tour)
         self.assertFalse(p.mini_app_catalog_reservation_allowed)
         self.assertIsNone(p.catalog_charter_fixed_seats_count)
+        self.assertEqual(p.catalog_actionability_state, CatalogActionabilityState.ASSISTED_ONLY)
+
+    def test_policy_for_catalog_tour_full_bus_zero_seats_is_blocked(self) -> None:
+        tour = self.create_tour(
+            code="POL-CAT-ZERO",
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=0,
+            seats_available=0,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.session.commit()
+        p = TourSalesModePolicyService.policy_for_catalog_tour(tour)
+        self.assertFalse(p.mini_app_catalog_reservation_allowed)
+        self.assertIsNone(p.catalog_charter_fixed_seats_count)
+        self.assertEqual(p.catalog_actionability_state, CatalogActionabilityState.BLOCKED)
+
+    def test_policy_for_catalog_tour_full_bus_sold_out_is_view_only(self) -> None:
+        tour = self.create_tour(
+            code="POL-CAT-SOLDOUT",
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=30,
+            seats_available=0,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.session.commit()
+        p = TourSalesModePolicyService.policy_for_catalog_tour(tour)
+        self.assertFalse(p.mini_app_catalog_reservation_allowed)
+        self.assertIsNone(p.catalog_charter_fixed_seats_count)
+        self.assertEqual(p.catalog_actionability_state, CatalogActionabilityState.VIEW_ONLY)
+
+    def test_policy_for_catalog_tour_full_bus_invalid_snapshot_is_blocked(self) -> None:
+        invalid_snapshot = SimpleNamespace(
+            sales_mode=TourSalesMode.FULL_BUS,
+            seats_total=20,
+            seats_available=25,
+        )
+        p = TourSalesModePolicyService.policy_for_catalog_tour(invalid_snapshot)
+        self.assertFalse(p.mini_app_catalog_reservation_allowed)
+        self.assertIsNone(p.catalog_charter_fixed_seats_count)
+        self.assertEqual(p.catalog_actionability_state, CatalogActionabilityState.BLOCKED)
 
     def test_default_orm_tour_is_per_seat_policy(self) -> None:
         """Tours without explicit `sales_mode` in factory still get PER_SEAT policy (DB + ORM default)."""

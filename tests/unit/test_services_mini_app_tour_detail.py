@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from app.models.enums import CustomerCommercialMode, TourSalesMode, TourStatus
+from app.schemas.tour_sales_mode_policy import CatalogActionabilityState
 from app.services.mini_app_tour_detail import MiniAppTourDetailService
 from tests.unit.base import FoundationDBTestCase
 
@@ -46,6 +47,7 @@ class MiniAppTourDetailServiceTests(FoundationDBTestCase):
         self.assertEqual(len(result.boarding_points), 1)
         self.assertTrue(result.sales_mode_policy.per_seat_self_service_allowed)
         self.assertTrue(result.sales_mode_policy.mini_app_catalog_reservation_allowed)
+        self.assertEqual(result.sales_mode_policy.catalog_actionability_state, CatalogActionabilityState.BOOKABLE)
         self.assertEqual(result.commercial_mode, CustomerCommercialMode.SUPPLIER_ROUTE_PER_SEAT)
 
     def test_get_tour_detail_full_bus_virgin_allows_catalog_reservation(self) -> None:
@@ -72,6 +74,7 @@ class MiniAppTourDetailServiceTests(FoundationDBTestCase):
         self.assertEqual(result.commercial_mode, CustomerCommercialMode.SUPPLIER_ROUTE_FULL_BUS)
         self.assertTrue(result.sales_mode_policy.mini_app_catalog_reservation_allowed)
         self.assertEqual(result.sales_mode_policy.catalog_charter_fixed_seats_count, 40)
+        self.assertEqual(result.sales_mode_policy.catalog_actionability_state, CatalogActionabilityState.BOOKABLE)
 
     def test_get_tour_detail_full_bus_partial_blocks_catalog_reservation(self) -> None:
         tour = self.create_tour(
@@ -96,6 +99,7 @@ class MiniAppTourDetailServiceTests(FoundationDBTestCase):
         assert result is not None
         self.assertFalse(result.sales_mode_policy.mini_app_catalog_reservation_allowed)
         self.assertIsNone(result.sales_mode_policy.catalog_charter_fixed_seats_count)
+        self.assertEqual(result.sales_mode_policy.catalog_actionability_state, CatalogActionabilityState.ASSISTED_ONLY)
 
     def test_get_tour_detail_returns_none_for_past_departure_open_tour(self) -> None:
         tour = self.create_tour(

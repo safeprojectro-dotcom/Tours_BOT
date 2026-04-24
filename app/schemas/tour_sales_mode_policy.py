@@ -6,9 +6,18 @@ Not wired into customer surfaces in Step 2.
 
 from __future__ import annotations
 
+from enum import StrEnum
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import TourSalesMode
+
+
+class CatalogActionabilityState(StrEnum):
+    BOOKABLE = "bookable"
+    ASSISTED_ONLY = "assisted_only"
+    VIEW_ONLY = "view_only"
+    BLOCKED = "blocked"
 
 
 class TourSalesModePolicyRead(BaseModel):
@@ -34,4 +43,10 @@ class TourSalesModePolicyRead(BaseModel):
     catalog_charter_fixed_seats_count: int | None = Field(
         default=None,
         description="When full-bus catalog self-serve is allowed, reservation must use exactly this seats_count (typically seats_total).",
+    )
+    catalog_actionability_state: CatalogActionabilityState = Field(
+        description=(
+            "Customer-facing actionability for current catalog context. "
+            "`blocked` is fail-safe for invalid/inconsistent inventory snapshots."
+        ),
     )
