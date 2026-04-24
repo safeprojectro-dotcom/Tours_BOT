@@ -4195,6 +4195,7 @@ class MiniAppShell:
             page_url=getattr(page, "url", None),
             page_query=getattr(page, "query", None),
             dev_telegram_user_id=settings.mini_app_dev_telegram_user_id,
+            allow_dev_fallback=settings.mini_app_allow_dev_identity_fallback,
         )
         self._modal_return_route: str = "/"
         self.catalog_screen = CatalogScreen(
@@ -4820,6 +4821,7 @@ class MiniAppShell:
         page_url: str | None,
         page_query: object | None,
         dev_telegram_user_id: int,
+        allow_dev_fallback: bool,
     ) -> int | None:
         runtime_id = MiniAppShell._extract_runtime_telegram_user_id(
             route=route,
@@ -4829,7 +4831,7 @@ class MiniAppShell:
         if runtime_id is not None:
             return runtime_id
         env = (app_env or "").strip().lower()
-        if env in {"local", "test"} and dev_telegram_user_id > 0:
+        if allow_dev_fallback and env in {"local", "test"} and dev_telegram_user_id > 0:
             return dev_telegram_user_id
         return None
 

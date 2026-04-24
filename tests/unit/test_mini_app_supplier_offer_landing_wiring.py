@@ -66,6 +66,7 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
             page_url=None,
             page_query=None,
             dev_telegram_user_id=100001,
+            allow_dev_fallback=False,
         )
         self.assertEqual(resolved, 4242)
 
@@ -76,6 +77,7 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
             page_url=None,
             page_query=None,
             dev_telegram_user_id=100001,
+            allow_dev_fallback=True,
         )
         self.assertIsNone(resolved)
 
@@ -86,8 +88,20 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
             page_url=None,
             page_query=None,
             dev_telegram_user_id=100001,
+            allow_dev_fallback=True,
         )
         self.assertEqual(resolved, 100001)
+
+    def test_runtime_identity_resolution_requires_explicit_flag_for_dev_fallback(self) -> None:
+        resolved = MiniAppShell.resolve_runtime_telegram_user_id(
+            app_env="local",
+            route="/bookings",
+            page_url=None,
+            page_query=None,
+            dev_telegram_user_id=100001,
+            allow_dev_fallback=False,
+        )
+        self.assertIsNone(resolved)
 
 
 if __name__ == "__main__":
