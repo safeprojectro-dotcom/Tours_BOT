@@ -227,3 +227,48 @@ class CustomMarketplaceTrack5aTests(FoundationDBTestCase):
             },
         )
         self.assertEqual(put.status_code, 200, put.text)
+
+    def test_my_requests_is_isolated_between_telegram_users(self) -> None:
+        self.create_user(telegram_user_id=130_010)
+        self.create_user(telegram_user_id=130_011)
+        self.session.commit()
+
+        r_a = self.client.post(
+            "/mini-app/custom-requests",
+            json={
+                "telegram_user_id": 130_010,
+                "request_type": "other",
+                "travel_date_start": "2026-11-20",
+                "route_notes": "Request A",
+            },
+        )
+        r_b = self.client.post(
+            "/mini-app/custom-requests",
+            json={
+                "telegram_user_id": 130_011,
+                "request_type": "custom_route",
+                "travel_date_start": "2026-11-21",
+                "route_notes": "Request B",
+            },
+        )
+        self.assertEqual(r_a.status_code, 201, r_a.text)
+        self.assertEqual(r_b.status_code, 201, r_b.text)
+        req_a = r_a.json()["id"]
+        req_b = r_b.json()["id"]
+
+        list_a = self.client.get("/mini-app/custom-requests", params={"telegram_user_id": 130_010})
+        list_b = self.client.get("/mini-app/custom-requests", params={"telegram_user_id": 130_011})
+        self.assertEqual(list_a.status_code, 200, list_a.text)
+        self.assertEqual(list_b.status_code, 200, list_b.text)
+        ids_a = {it["id"] for it in list_a.json()["items"]}
+        ids_b = {it["id"] for it in list_b.json()["items"]}
+        self.assertIn(req_a, ids_a)
+        self.assertNotIn(req_b, ids_a)
+        self.assertIn(req_b, ids_b)
+        self.assertNotIn(req_a, ids_b)
+
+        other_user_detail = self.client.get(
+            f"/mini-app/custom-requests/{req_a}",
+            params={"telegram_user_id": 130_011},
+        )
+        self.assertEqual(other_user_detail.status_code, 404)

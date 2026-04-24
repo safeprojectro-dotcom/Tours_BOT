@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
+from urllib.parse import parse_qs, urlsplit
 
 import flet as ft
 import httpx
@@ -2269,7 +2270,7 @@ class MyBookingsScreen:
         *,
         api_client: MiniAppApiClient,
         language_code: str,
-        dev_telegram_user_id: int,
+        telegram_user_id: int | None,
         on_back_catalog: Callable[[], None],
         on_open_booking: Callable[[int], None],
         on_help: Callable[[], None],
@@ -2279,7 +2280,7 @@ class MyBookingsScreen:
         self.page = page
         self.api_client = api_client
         self.language_code = language_code
-        self.dev_telegram_user_id = dev_telegram_user_id
+        self.telegram_user_id = telegram_user_id
         self.on_back_catalog = on_back_catalog
         self.on_open_booking = on_open_booking
         self.on_help = on_help
@@ -2360,9 +2361,15 @@ class MyBookingsScreen:
         self.loading_row.visible = True
         self.error_text.visible = False
         self.page.update()
+        if self.telegram_user_id is None:
+            self._show_error(shell(self.language_code, "identity_required_my_data"))
+            self._render(None)
+            self.loading_row.visible = False
+            self.page.update()
+            return
         try:
             data = await self.api_client.list_my_bookings(
-                telegram_user_id=self.dev_telegram_user_id,
+                telegram_user_id=self.telegram_user_id,
                 language_code=self.language_code,
             )
         except httpx.HTTPStatusError as exc:
@@ -2424,9 +2431,17 @@ class MyBookingsScreen:
 
     async def _log_support_my_bookings_async(self) -> None:
         lg = self.language_code
+        if self.telegram_user_id is None:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "identity_required_my_data")),
+                action="OK",
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
         try:
             r = await self.api_client.post_support_request(
-                telegram_user_id=self.dev_telegram_user_id,
+                telegram_user_id=self.telegram_user_id,
                 order_id=None,
                 screen_hint="my_bookings",
             )
@@ -2503,7 +2518,7 @@ class BookingDetailScreen:
         *,
         api_client: MiniAppApiClient,
         language_code: str,
-        dev_telegram_user_id: int,
+        telegram_user_id: int | None,
         on_back_to_bookings: Callable[[], None],
         on_browse_tours: Callable[[], None],
         on_pay_now: Callable[[str, int], None],
@@ -2514,7 +2529,7 @@ class BookingDetailScreen:
         self.page = page
         self.api_client = api_client
         self.language_code = language_code
-        self.dev_telegram_user_id = dev_telegram_user_id
+        self.telegram_user_id = telegram_user_id
         self.on_back_to_bookings = on_back_to_bookings
         self.on_browse_tours = on_browse_tours
         self.on_pay_now = on_pay_now
@@ -2592,13 +2607,18 @@ class BookingDetailScreen:
         self.sync_shell_labels()
         if self.order_id is None:
             return
+        if self.telegram_user_id is None:
+            self._show_error(shell(self.language_code, "identity_required_my_data"))
+            self._render(None)
+            self.page.update()
+            return
         self.loading_row.visible = True
         self.error_text.visible = False
         self.page.update()
         try:
             detail = await self.api_client.get_booking_status(
                 order_id=self.order_id,
-                telegram_user_id=self.dev_telegram_user_id,
+                telegram_user_id=self.telegram_user_id,
                 language_code=self.language_code,
             )
         except httpx.HTTPStatusError as exc:
@@ -2712,9 +2732,17 @@ class BookingDetailScreen:
         lg = self.language_code
         if self.order_id is None:
             return
+        if self.telegram_user_id is None:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(shell(lg, "identity_required_my_data")),
+                action="OK",
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
         try:
             r = await self.api_client.post_support_request(
-                telegram_user_id=self.dev_telegram_user_id,
+                telegram_user_id=self.telegram_user_id,
                 order_id=self.order_id,
                 screen_hint="booking_detail",
             )
@@ -2753,7 +2781,7 @@ class MyRequestsListScreen:
         *,
         api_client: MiniAppApiClient,
         language_code: str,
-        dev_telegram_user_id: int,
+        telegram_user_id: int | None,
         on_back_catalog: Callable[[], None],
         on_open_detail: Callable[[int], None],
         on_help: Callable[[], None],
@@ -2763,7 +2791,7 @@ class MyRequestsListScreen:
         self.page = page
         self.api_client = api_client
         self.language_code = language_code
-        self.dev_telegram_user_id = dev_telegram_user_id
+        self.telegram_user_id = telegram_user_id
         self.on_back_catalog = on_back_catalog
         self.on_open_detail = on_open_detail
         self.on_help = on_help
@@ -2825,9 +2853,16 @@ class MyRequestsListScreen:
         self.error_text.visible = False
         self.items_column.controls.clear()
         self.page.update()
+        if self.telegram_user_id is None:
+            self.error_text.value = shell(self.language_code, "identity_required_my_data")
+            self.error_text.visible = True
+            self._render(None)
+            self.loading_row.visible = False
+            self.page.update()
+            return
         try:
             data = await self.api_client.list_custom_requests_for_customer(
-                telegram_user_id=self.dev_telegram_user_id,
+                telegram_user_id=self.telegram_user_id,
             )
         except httpx.HTTPStatusError as exc:
             self.error_text.value = CatalogScreen._http_error_message(
@@ -2949,7 +2984,7 @@ class MyRequestDetailScreen:
         *,
         api_client: MiniAppApiClient,
         language_code: str,
-        dev_telegram_user_id: int,
+        telegram_user_id: int | None,
         on_back_list: Callable[[], None],
         on_open_bridge: Callable[[int], None],
         on_continue_payment: Callable[[str, int], None],
@@ -2961,7 +2996,7 @@ class MyRequestDetailScreen:
         self.page = page
         self.api_client = api_client
         self.language_code = language_code
-        self.dev_telegram_user_id = dev_telegram_user_id
+        self.telegram_user_id = telegram_user_id
         self.on_back_list = on_back_list
         self.on_open_bridge = on_open_bridge
         self.on_continue_payment = on_continue_payment
@@ -3060,6 +3095,11 @@ class MyRequestDetailScreen:
         self._payment_tour_code = None
         if self.request_id is None:
             return
+        if self.telegram_user_id is None:
+            self.error_text.value = shell(self.language_code, "identity_required_my_data")
+            self.error_text.visible = True
+            self.page.update()
+            return
         self.loading_row.visible = True
         self.page.update()
         detail: MiniAppCustomRequestCustomerDetailRead | None = None
@@ -3069,7 +3109,7 @@ class MyRequestDetailScreen:
         try:
             detail = await self.api_client.get_custom_request_for_customer(
                 request_id=self.request_id,
-                telegram_user_id=self.dev_telegram_user_id,
+                telegram_user_id=self.telegram_user_id,
             )
         except httpx.HTTPStatusError as exc:
             self.error_text.value = CatalogScreen._http_error_message(
@@ -3082,7 +3122,7 @@ class MyRequestDetailScreen:
             self.error_text.visible = True
         try:
             bookings = await self.api_client.list_my_bookings(
-                telegram_user_id=self.dev_telegram_user_id,
+                telegram_user_id=self.telegram_user_id,
                 language_code=self.language_code,
             )
         except Exception:
@@ -3091,7 +3131,7 @@ class MyRequestDetailScreen:
             try:
                 prep = await self.api_client.get_booking_bridge_preparation(
                     request_id=self.request_id,
-                    telegram_user_id=self.dev_telegram_user_id,
+                    telegram_user_id=self.telegram_user_id,
                     language_code=self.language_code,
                 )
             except httpx.HTTPStatusError as exc:
@@ -3120,7 +3160,7 @@ class MyRequestDetailScreen:
             try:
                 elig = await self.api_client.get_booking_bridge_payment_eligibility(
                     request_id=self.request_id,
-                    telegram_user_id=self.dev_telegram_user_id,
+                    telegram_user_id=self.telegram_user_id,
                     order_id=hold_order_id,
                 )
             except Exception:
@@ -4027,7 +4067,7 @@ class SettingsScreen:
         page: ft.Page,
         *,
         api_client: MiniAppApiClient,
-        dev_telegram_user_id: int,
+        telegram_user_id: int | None,
         on_language_applied: Callable[[str], None],
         on_close: Callable[[], None],
         language_code: str,
@@ -4035,7 +4075,7 @@ class SettingsScreen:
     ) -> None:
         self.page = page
         self.api_client = api_client
-        self.dev_telegram_user_id = dev_telegram_user_id
+        self.telegram_user_id = telegram_user_id
         self.on_language_applied = on_language_applied
         self.on_close = on_close
         self.language_code = language_code
@@ -4086,7 +4126,7 @@ class SettingsScreen:
         self.error_text.visible = False
         self.page.update()
         try:
-            snap = await self.api_client.get_mini_app_settings(telegram_user_id=self.dev_telegram_user_id)
+            snap = await self.api_client.get_mini_app_settings(telegram_user_id=self.telegram_user_id)
         except httpx.HTTPStatusError as exc:
             self.hint_text.value = CatalogScreen._http_error_message(exc, default="Unable to load settings.")
             self.language_dropdown.options = []
@@ -4114,9 +4154,15 @@ class SettingsScreen:
         self.save_button.disabled = True
         self.error_text.visible = False
         self.page.update()
+        if self.telegram_user_id is None:
+            self.error_text.value = shell(self.language_code, "identity_required_my_data")
+            self.error_text.visible = True
+            self.save_button.disabled = False
+            self.page.update()
+            return
         try:
             applied = await self.api_client.post_language_preference(
-                telegram_user_id=self.dev_telegram_user_id,
+                telegram_user_id=self.telegram_user_id,
                 language_code=str(code),
             )
         except httpx.HTTPStatusError as exc:
@@ -4143,6 +4189,13 @@ class MiniAppShell:
         self.page = page
         self.api_client = MiniAppApiClient(settings.normalized_api_base_url)
         self._dev_telegram_user_id = settings.mini_app_dev_telegram_user_id
+        self._resolved_telegram_user_id = self.resolve_runtime_telegram_user_id(
+            app_env=settings.app_env,
+            route=page.route,
+            page_url=getattr(page, "url", None),
+            page_query=getattr(page, "query", None),
+            dev_telegram_user_id=settings.mini_app_dev_telegram_user_id,
+        )
         self._modal_return_route: str = "/"
         self.catalog_screen = CatalogScreen(
             page,
@@ -4159,7 +4212,7 @@ class MiniAppShell:
             page,
             api_client=self.api_client,
             language_code=settings.mini_app_default_language,
-            dev_telegram_user_id=self._dev_telegram_user_id,
+            telegram_user_id=self._resolved_telegram_user_id,
             on_back_catalog=self.open_catalog,
             on_open_booking=self.open_booking_detail,
             on_help=self.open_help,
@@ -4170,7 +4223,7 @@ class MiniAppShell:
             page,
             api_client=self.api_client,
             language_code=settings.mini_app_default_language,
-            dev_telegram_user_id=self._dev_telegram_user_id,
+            telegram_user_id=self._resolved_telegram_user_id,
             on_back_catalog=self.open_catalog,
             on_open_detail=self.open_my_request_detail,
             on_help=self.open_help,
@@ -4181,7 +4234,7 @@ class MiniAppShell:
             page,
             api_client=self.api_client,
             language_code=settings.mini_app_default_language,
-            dev_telegram_user_id=self._dev_telegram_user_id,
+            telegram_user_id=self._resolved_telegram_user_id,
             on_back_list=self.open_my_requests,
             on_open_bridge=self.open_rfq_bridge_booking,
             on_continue_payment=self.open_payment_entry,
@@ -4194,7 +4247,7 @@ class MiniAppShell:
             page,
             api_client=self.api_client,
             language_code=settings.mini_app_default_language,
-            dev_telegram_user_id=self._dev_telegram_user_id,
+            telegram_user_id=self._resolved_telegram_user_id,
             on_back_to_bookings=self.open_bookings,
             on_browse_tours=self.open_catalog,
             on_pay_now=self.open_payment_entry,
@@ -4287,7 +4340,7 @@ class MiniAppShell:
         self.settings_screen = SettingsScreen(
             page,
             api_client=self.api_client,
-            dev_telegram_user_id=self._dev_telegram_user_id,
+            telegram_user_id=self._resolved_telegram_user_id,
             on_language_applied=self.apply_language,
             on_close=self.close_modal,
             language_code=settings.mini_app_default_language,
@@ -4326,7 +4379,7 @@ class MiniAppShell:
 
     async def hydrate_language_from_server(self) -> None:
         try:
-            snap = await self.api_client.get_mini_app_settings(telegram_user_id=self._dev_telegram_user_id)
+            snap = await self.api_client.get_mini_app_settings(telegram_user_id=self._resolved_telegram_user_id)
         except Exception:
             return
         self.apply_language(snap.resolved_language)
@@ -4708,6 +4761,77 @@ class MiniAppShell:
             self.open_reservation_success(tour_code, order_id)
             return
         self.open_tour_preparation(tour_code)
+
+    @staticmethod
+    def _parse_telegram_user_id_from_query_string(value: str | None) -> int | None:
+        if not value:
+            return None
+        try:
+            parsed = parse_qs(value, keep_blank_values=False)
+        except Exception:
+            return None
+        for key in ("telegram_user_id", "tg_user_id", "tguid", "user_id"):
+            vals = parsed.get(key)
+            if not vals:
+                continue
+            raw = (vals[-1] or "").strip()
+            if not raw.isdigit():
+                continue
+            n = int(raw)
+            if n > 0:
+                return n
+        return None
+
+    @staticmethod
+    def _extract_runtime_telegram_user_id(
+        *,
+        route: str | None,
+        page_url: str | None,
+        page_query: object | None,
+    ) -> int | None:
+        if route and "?" in route:
+            candidate = MiniAppShell._parse_telegram_user_id_from_query_string(route.split("?", 1)[1])
+            if candidate is not None:
+                return candidate
+        if page_url:
+            try:
+                candidate = MiniAppShell._parse_telegram_user_id_from_query_string(urlsplit(page_url).query)
+            except Exception:
+                candidate = None
+            if candidate is not None:
+                return candidate
+        if isinstance(page_query, Mapping):
+            for key in ("telegram_user_id", "tg_user_id", "tguid", "user_id"):
+                raw = page_query.get(key)  # type: ignore[arg-type]
+                if raw is None:
+                    continue
+                txt = str(raw).strip()
+                if txt.isdigit():
+                    n = int(txt)
+                    if n > 0:
+                        return n
+        return None
+
+    @staticmethod
+    def resolve_runtime_telegram_user_id(
+        *,
+        app_env: str,
+        route: str | None,
+        page_url: str | None,
+        page_query: object | None,
+        dev_telegram_user_id: int,
+    ) -> int | None:
+        runtime_id = MiniAppShell._extract_runtime_telegram_user_id(
+            route=route,
+            page_url=page_url,
+            page_query=page_query,
+        )
+        if runtime_id is not None:
+            return runtime_id
+        env = (app_env or "").strip().lower()
+        if env in {"local", "test"} and dev_telegram_user_id > 0:
+            return dev_telegram_user_id
+        return None
 
     @staticmethod
     def _extract_booking_detail_order_id(route: str | None) -> int | None:

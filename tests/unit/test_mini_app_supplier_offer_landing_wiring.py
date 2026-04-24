@@ -59,6 +59,36 @@ class MiniAppSupplierOfferLandingWiringTests(unittest.TestCase):
         self.assertFalse(row.execution_activation_available)
         self.assertIsNone(row.execution_target_tour_code)
 
+    def test_runtime_identity_resolution_uses_runtime_query_when_present(self) -> None:
+        resolved = MiniAppShell.resolve_runtime_telegram_user_id(
+            app_env="production",
+            route="/bookings?telegram_user_id=4242",
+            page_url=None,
+            page_query=None,
+            dev_telegram_user_id=100001,
+        )
+        self.assertEqual(resolved, 4242)
+
+    def test_runtime_identity_resolution_disables_dev_fallback_outside_local(self) -> None:
+        resolved = MiniAppShell.resolve_runtime_telegram_user_id(
+            app_env="production",
+            route="/bookings",
+            page_url=None,
+            page_query=None,
+            dev_telegram_user_id=100001,
+        )
+        self.assertIsNone(resolved)
+
+    def test_runtime_identity_resolution_keeps_dev_fallback_in_local(self) -> None:
+        resolved = MiniAppShell.resolve_runtime_telegram_user_id(
+            app_env="local",
+            route="/bookings",
+            page_url=None,
+            page_query=None,
+            dev_telegram_user_id=100001,
+        )
+        self.assertEqual(resolved, 100001)
+
 
 if __name__ == "__main__":
     unittest.main()

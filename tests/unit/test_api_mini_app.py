@@ -865,6 +865,63 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         )
         self.assertEqual(detail_other.status_code, 404)
 
+    def test_bookings_list_is_isolated_between_telegram_users(self) -> None:
+        tour = self.create_tour(
+            code="MINI-BOOKINGS-ISOLATION",
+            title_default="Isolation Tour",
+            departure_datetime=datetime(2026, 7, 15, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 7, 16, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=10,
+            base_price="60.00",
+        )
+        self.create_translation(tour, language_code="en", title="Isolation Tour EN")
+        point = self.create_boarding_point(tour)
+        self.session.commit()
+
+        user_a = 999_994
+        user_b = 999_995
+        reserve_a = self.client.post(
+            f"/mini-app/tours/{tour.code}/reservations",
+            params={"language_code": "en"},
+            json={
+                "telegram_user_id": user_a,
+                "seats_count": 1,
+                "boarding_point_id": point.id,
+            },
+        )
+        reserve_b = self.client.post(
+            f"/mini-app/tours/{tour.code}/reservations",
+            params={"language_code": "en"},
+            json={
+                "telegram_user_id": user_b,
+                "seats_count": 2,
+                "boarding_point_id": point.id,
+            },
+        )
+        self.assertEqual(reserve_a.status_code, 200, reserve_a.text)
+        self.assertEqual(reserve_b.status_code, 200, reserve_b.text)
+        order_a = reserve_a.json()["order"]["id"]
+        order_b = reserve_b.json()["order"]["id"]
+
+        list_a = self.client.get("/mini-app/bookings", params={"telegram_user_id": user_a, "language_code": "en"})
+        list_b = self.client.get("/mini-app/bookings", params={"telegram_user_id": user_b, "language_code": "en"})
+        self.assertEqual(list_a.status_code, 200, list_a.text)
+        self.assertEqual(list_b.status_code, 200, list_b.text)
+        ids_a = {it["summary"]["order"]["id"] for it in list_a.json()["items"]}
+        ids_b = {it["summary"]["order"]["id"] for it in list_b.json()["items"]}
+        self.assertIn(order_a, ids_a)
+        self.assertNotIn(order_b, ids_a)
+        self.assertIn(order_b, ids_b)
+        self.assertNotIn(order_a, ids_b)
+
+    def test_bookings_and_requests_endpoints_require_explicit_identity(self) -> None:
+        no_bookings_identity = self.client.get("/mini-app/bookings")
+        self.assertEqual(no_bookings_identity.status_code, 422)
+
+        no_requests_identity = self.client.get("/mini-app/custom-requests")
+        self.assertEqual(no_requests_identity.status_code, 422)
+
     def test_mini_app_help_route_returns_structure(self) -> None:
         response = self.client.get("/mini-app/help")
         self.assertEqual(response.status_code, 200)

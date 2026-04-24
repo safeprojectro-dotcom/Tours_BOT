@@ -198,6 +198,7 @@ _STR: dict[str, dict[str, str]] = {
         "payment_support_body": "Payment or checkout problem? Log a support request — the team may review it later. This is not a live chat.",
         "support_request_success": "Support request recorded. Reference: {ref}",
         "support_request_error": "Could not record the support request right now. Please try again later.",
+        "identity_required_my_data": "Unable to verify your Telegram identity for this session. Reopen the Mini App from Telegram.",
         "btn_custom_request": "Custom trip request",
         "custom_request_title": "Custom trip / group request",
         "custom_request_intro": "Use this for a different route, date, group size, or transport setup than a ready-made catalog departure. "
@@ -498,6 +499,7 @@ _STR: dict[str, dict[str, str]] = {
         "payment_support_body": "Problemă la plată sau la checkout? Trimite o cerere de suport — echipa o poate analiza ulterior. Acesta nu este un chat live.",
         "support_request_success": "Cererea de suport a fost înregistrată. Referință: {ref}",
         "support_request_error": "Cererea de suport nu a putut fi înregistrată acum. Încearcă din nou mai târziu.",
+        "identity_required_my_data": "Nu putem verifica identitatea Telegram pentru această sesiune. Redeschide Mini App din Telegram.",
         "btn_custom_request": "Cerere personalizată",
         "custom_request_title": "Cerere excursie / grup",
         "custom_request_intro": "Folosește acest formular pentru alt traseu, altă dată, altă mărime de grup sau alt aranjament decât o plecare fixă din catalog. "
