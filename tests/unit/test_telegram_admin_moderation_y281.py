@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.bot.constants import (
     ADMIN_OPS_REQUEST_MARK_UNDER_REVIEW_PREFIX,
+    ADMIN_OPS_REQUEST_OPERATOR_DECISION_PREFIX,
     ADMIN_OFFERS_ACTION_APPROVE,
     ADMIN_OFFERS_ACTION_CALLBACK_PREFIX,
     ADMIN_OFFERS_ACTION_CLOSE_LINK,
@@ -30,6 +31,7 @@ from app.models.enums import (
     CustomMarketplaceRequestSource,
     CustomMarketplaceRequestStatus,
     CustomMarketplaceRequestType,
+    OperatorWorkflowIntent,
     PaymentStatus,
     SupplierOfferLifecycle,
     SupplierOfferPaymentMode,
@@ -535,6 +537,73 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
 
         detail_buttons = asyncio.run(body())
         self.assertNotIn("mark under review", detail_buttons)
+        self.assertIn("need manual follow-up", detail_buttons)
+
+    def test_admin_ops_under_review_with_intent_hides_need_manual_button(self) -> None:
+        viewer = self.create_user(telegram_user_id=990_001, first_name="V3", last_name="iewer")
+        cust = self.create_user(telegram_user_id=353_512)
+        row = CustomMarketplaceRequest(
+            user_id=cust.id,
+            request_type=CustomMarketplaceRequestType.CUSTOM_ROUTE,
+            travel_date_start=date(2026, 10, 22),
+            route_notes="Y37.4 intent set",
+            group_size=1,
+            source_channel=CustomMarketplaceRequestSource.MINI_APP,
+            status=CustomMarketplaceRequestStatus.UNDER_REVIEW,
+            assigned_operator_id=viewer.id,
+            operator_workflow_intent=OperatorWorkflowIntent.NEED_MANUAL_FOLLOWUP,
+        )
+        self.session.add(row)
+        self.session.commit()
+        rid = row.id
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990_001)
+            detail_cb = _callback(telegram_user_id=990_001, data=f"ao:rd:{rid}:0", message=message)
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.cmd_admin_requests(message, state)
+                await admin_moderation.admin_ops_read_navigation(detail_cb, state)
+            t = self._all_answer_texts(message)
+            b = self._last_reply_button_texts_lower(message)
+            return t, b
+
+        text, detail_buttons = asyncio.run(body())
+        self.assertIn("next step: need manual follow-up", text.lower())
+        self.assertNotIn("need manual follow-up", detail_buttons)
+
+    def test_admin_ops_operator_decision_callback_refreshes_detail(self) -> None:
+        viewer = self.create_user(telegram_user_id=990_001, first_name="V4", last_name="iewer")
+        cust = self.create_user(telegram_user_id=353_513)
+        row = CustomMarketplaceRequest(
+            user_id=cust.id,
+            request_type=CustomMarketplaceRequestType.CUSTOM_ROUTE,
+            travel_date_start=date(2026, 10, 23),
+            route_notes="Y37.4 od callback",
+            group_size=1,
+            source_channel=CustomMarketplaceRequestSource.MINI_APP,
+            status=CustomMarketplaceRequestStatus.UNDER_REVIEW,
+            assigned_operator_id=viewer.id,
+        )
+        self.session.add(row)
+        self.session.commit()
+        rid = row.id
+        short_cb = f"{ADMIN_OPS_REQUEST_OPERATOR_DECISION_PREFIX}{rid}:0"
+        self.assertTrue(len(short_cb.encode("utf-8")) <= 64, short_cb)
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990_001)
+            od_cb = _callback(telegram_user_id=990_001, data=short_cb, message=message)
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_ops_request_operator_decision_handler(od_cb, state)
+            t = self._all_answer_texts(message)
+            c = self._inline_callback_data(message)
+            return t, c
+
+        text, callbacks = asyncio.run(body())
+        self.assertIn("next step: need manual follow-up", text.lower())
+        self.assertNotIn(ADMIN_OPS_REQUEST_OPERATOR_DECISION_PREFIX, " ".join(callbacks))
 
     def test_admin_ops_assigned_to_other_hides_assign_shows_operator_in_list(self) -> None:
         self.create_user(telegram_user_id=990001)

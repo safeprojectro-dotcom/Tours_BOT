@@ -8,7 +8,13 @@ from sqlalchemy.orm import Session
 
 from app.api.admin_auth import require_admin_api_token
 from app.db.session import get_db
-from app.models.enums import BookingStatus, CustomMarketplaceRequestStatus, SupplierOfferLifecycle, TourStatus
+from app.models.enums import (
+    BookingStatus,
+    CustomMarketplaceRequestStatus,
+    OperatorWorkflowIntent,
+    SupplierOfferLifecycle,
+    TourStatus,
+)
 from app.models.supplier import Supplier
 from app.schemas.admin import (
     AdminBoardingPointCreate,
@@ -81,6 +87,7 @@ from app.services.custom_marketplace_request_service import (
     CustomMarketplaceRequestMarkUnderReviewNotAllowedError,
     CustomMarketplaceRequestNotAssignableError,
     CustomMarketplaceRequestNotFoundError,
+    CustomMarketplaceRequestOperatorDecisionNotAllowedError,
     CustomMarketplaceRequestService,
     CustomMarketplaceValidationError,
 )
@@ -97,6 +104,7 @@ from app.schemas.custom_marketplace import (
     AdminCustomRequestBookingBridgeReplace,
     AdminCustomRequestPatch,
     AdminCustomRequestResolutionApply,
+    AdminOperatorDecisionApply,
     CustomMarketplaceRequestDetailRead,
     CustomMarketplaceRequestListRead,
     CustomMarketplaceRequestRead,
@@ -1314,6 +1322,45 @@ def post_admin_custom_request_mark_under_review(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     except CustomMarketplaceRequestAssignConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from None
+    db.commit()
+    return row
+
+
+@router.post("/custom-requests/{request_id}/operator-decision", response_model=CustomMarketplaceRequestRead)
+def post_admin_custom_request_operator_decision(
+    request_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminOperatorDecisionApply = Body(...),
+    x_admin_actor_telegram_id: str | None = Header(default=None, alias="X-Admin-Actor-Telegram-Id"),
+) -> CustomMarketplaceRequestRead:
+    """Y37.4: set operator workflow intent (v1: need_manual_followup only) when under_review and assigned to actor."""
+    if x_admin_actor_telegram_id is None or not str(x_admin_actor_telegram_id).strip().isdigit():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-Admin-Actor-Telegram-Id header is required (Telegram user id of the operator).",
+        )
+    actor_tg = int(str(x_admin_actor_telegram_id).strip())
+    user = UserRepository().get_by_telegram_user_id(db, telegram_user_id=actor_tg)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No User record for the given X-Admin-Actor-Telegram-Id.",
+        )
+    try:
+        row = CustomMarketplaceRequestService().set_operator_decision(
+            db,
+            request_id=request_id,
+            actor_user_id=user.id,
+            decision=OperatorWorkflowIntent.NEED_MANUAL_FOLLOWUP,
+        )
+    except CustomMarketplaceRequestNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found.") from None
+    except CustomMarketplaceRequestOperatorDecisionNotAllowedError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    except CustomMarketplaceRequestAssignConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from None
+    except CustomMarketplaceValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     db.commit()
     return row
 

@@ -44,6 +44,7 @@ from app.bot.constants import (
     ADMIN_OPS_REQUEST_ASSIGN_ME_PREFIX,
     ADMIN_OPS_REQUEST_DETAIL_PREFIX,
     ADMIN_OPS_REQUEST_MARK_UNDER_REVIEW_PREFIX,
+    ADMIN_OPS_REQUEST_OPERATOR_DECISION_PREFIX,
     ADMIN_OPS_REQUESTS_PAGE_PREFIX,
 )
 from app.bot.messages import translate
@@ -51,7 +52,12 @@ from app.bot.services import TelegramUserContextService
 from app.bot.state import AdminModerationState
 from app.core.config import get_settings
 from app.db.session import SessionLocal
-from app.models.enums import CustomMarketplaceRequestStatus, SupplierOfferLifecycle, TourStatus
+from app.models.enums import (
+    CustomMarketplaceRequestStatus,
+    OperatorWorkflowIntent,
+    SupplierOfferLifecycle,
+    TourStatus,
+)
 from app.repositories.user import UserRepository
 from app.models.supplier import Supplier
 from app.models.tour import Tour
@@ -62,7 +68,9 @@ from app.services.custom_marketplace_request_service import (
     CustomMarketplaceRequestMarkUnderReviewNotAllowedError,
     CustomMarketplaceRequestNotAssignableError,
     CustomMarketplaceRequestNotFoundError,
+    CustomMarketplaceRequestOperatorDecisionNotAllowedError,
     CustomMarketplaceRequestService,
+    CustomMarketplaceValidationError,
 )
 from app.services.supplier_offer_execution_link_service import (
     SupplierOfferExecutionLinkNotFoundError,
@@ -378,6 +386,13 @@ def _admin_ops_request_detail_text(
         request,
         viewer_telegram_user_id=viewer_telegram_user_id,
     )
+    oi = getattr(request, "operator_workflow_intent", None)
+    if oi is None:
+        operator_intent = translate(language_code, "admin_ops_operator_intent_unset")
+    elif oi == OperatorWorkflowIntent.NEED_MANUAL_FOLLOWUP:
+        operator_intent = translate(language_code, "admin_ops_operator_intent_need_manual_followup")
+    else:
+        operator_intent = _enum_value(oi)
     return translate(
         language_code,
         "admin_ops_request_detail",
@@ -392,6 +407,7 @@ def _admin_ops_request_detail_text(
         route=_truncate_line(request.route_notes, max_len=300),
         selected_response=str(request.selected_supplier_response_id or "-"),
         bridge=bridge,
+        operator_intent=operator_intent,
         created_at=_short_dt(request.created_at),
         updated_at=_short_dt(request.updated_at),
     )
@@ -421,6 +437,13 @@ def _admin_ops_request_detail_keyboard(
                 text=translate(language_code, "admin_ops_request_mark_under_review"),
                 callback_data=f"{ADMIN_OPS_REQUEST_MARK_UNDER_REVIEW_PREFIX}{request_id}:{page}",
             )
+        elif is_me and st == CustomMarketplaceRequestStatus.UNDER_REVIEW:
+            oi = getattr(request, "operator_workflow_intent", None)
+            if oi is None:
+                kb.button(
+                    text=translate(language_code, "admin_ops_request_need_manual_followup"),
+                    callback_data=f"{ADMIN_OPS_REQUEST_OPERATOR_DECISION_PREFIX}{request_id}:{page}",
+                )
     kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=list_callback)
     kb.adjust(1)
     return kb
@@ -1397,6 +1420,73 @@ async def admin_ops_request_mark_under_review_handler(query: CallbackQuery, stat
             await query.answer(exc.message, show_alert=True)
             return
         except CustomMarketplaceRequestAssignConflictError as exc:
+            await query.answer(exc.message, show_alert=True)
+            return
+        session.commit()
+        try:
+            detail = CustomMarketplaceRequestService().get_admin_detail(session, request_id=request_id)
+        except CustomMarketplaceRequestNotFoundError:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+    await query.message.answer(
+        _admin_ops_request_detail_text(
+            lg,
+            detail,
+            viewer_telegram_user_id=query.from_user.id,
+        ),
+        reply_markup=_admin_ops_request_detail_keyboard(
+            lg,
+            list_callback=f"{ADMIN_OPS_REQUESTS_PAGE_PREFIX}{page}",
+            request_id=request_id,
+            page=page,
+            request=detail.request,
+            viewer_telegram_user_id=query.from_user.id,
+        ).as_markup(),
+    )
+    await query.answer()
+
+
+@router.callback_query(F.data.startswith(ADMIN_OPS_REQUEST_OPERATOR_DECISION_PREFIX))
+async def admin_ops_request_operator_decision_handler(query: CallbackQuery, state: FSMContext) -> None:
+    if query.from_user is None or query.data is None or query.message is None:
+        return
+    with SessionLocal() as session:
+        lg = _user_service().resolve_language(
+            session,
+            telegram_user_id=query.from_user.id,
+            telegram_language_code=query.from_user.language_code,
+        )
+    if await _deny_if_not_allowed(query, language_code=lg):
+        await state.clear()
+        return
+    raw = query.data.removeprefix(ADMIN_OPS_REQUEST_OPERATOR_DECISION_PREFIX).split(":")
+    request_id = int(raw[0]) if raw and raw[0].isdigit() else 0
+    page = int(raw[1]) if len(raw) > 1 and raw[1].isdigit() else 0
+    with SessionLocal() as session:
+        actor = UserRepository().get_by_telegram_user_id(
+            session,
+            telegram_user_id=query.from_user.id,
+        )
+        if actor is None:
+            await query.answer("No user profile for this Telegram account.", show_alert=True)
+            return
+        try:
+            CustomMarketplaceRequestService().set_operator_decision(
+                session,
+                request_id=request_id,
+                actor_user_id=actor.id,
+                decision=OperatorWorkflowIntent.NEED_MANUAL_FOLLOWUP,
+            )
+        except CustomMarketplaceRequestNotFoundError:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        except CustomMarketplaceRequestOperatorDecisionNotAllowedError as exc:
+            await query.answer(exc.message, show_alert=True)
+            return
+        except CustomMarketplaceRequestAssignConflictError as exc:
+            await query.answer(exc.message, show_alert=True)
+            return
+        except CustomMarketplaceValidationError as exc:
             await query.answer(exc.message, show_alert=True)
             return
         session.commit()

@@ -13,6 +13,7 @@ from app.models.enums import (
     CustomerCommercialMode,
     CustomMarketplaceRequestSource,
     CustomMarketplaceRequestStatus,
+    OperatorWorkflowIntent,
     SupplierCustomRequestResponseKind,
     SupplierOfferPaymentMode,
     TourSalesMode,
@@ -84,6 +85,12 @@ class CustomMarketplaceRequestNotAssignableError(Exception):
 
 
 class CustomMarketplaceRequestMarkUnderReviewNotAllowedError(Exception):
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__(message)
+
+
+class CustomMarketplaceRequestOperatorDecisionNotAllowedError(Exception):
     def __init__(self, message: str) -> None:
         self.message = message
         super().__init__(message)
@@ -270,6 +277,9 @@ class CustomMarketplaceRequestService:
                 "assigned_operator_telegram_user_id": None,
                 "customer_telegram_user_id": None,
                 "customer_summary": None,
+                "operator_workflow_intent": None,
+                "operator_workflow_intent_set_at": None,
+                "operator_workflow_intent_set_by_user_id": None,
             },
         )
 
@@ -498,6 +508,45 @@ class CustomMarketplaceRequestService:
                 f"Cannot mark as under review from status {row.status.value}.",
             )
         row.status = CustomMarketplaceRequestStatus.UNDER_REVIEW
+        session.add(row)
+        session.flush()
+        session.refresh(row)
+        row = self._requests.get_for_operator_assignment(session, request_id=request_id)
+        if row is None:
+            raise CustomMarketplaceRequestNotFoundError
+        return self._read_with_operational_list_hints(row, session)
+
+    def set_operator_decision(
+        self,
+        session: Session,
+        *,
+        request_id: int,
+        actor_user_id: int,
+        decision: OperatorWorkflowIntent,
+    ) -> CustomMarketplaceRequestRead:
+        """Y37.4: persist operator workflow intent when under_review and assigned to actor; idempotent if same intent+actor."""
+        if decision != OperatorWorkflowIntent.NEED_MANUAL_FOLLOWUP:
+            raise CustomMarketplaceValidationError("Only need_manual_followup is supported in this version.")
+        row = self._requests.get_for_operator_assignment(session, request_id=request_id)
+        if row is None:
+            raise CustomMarketplaceRequestNotFoundError
+        if row.assigned_operator_id is None:
+            raise CustomMarketplaceRequestOperatorDecisionNotAllowedError(
+                "Request is not assigned to an operator.",
+            )
+        if row.assigned_operator_id != actor_user_id:
+            raise CustomMarketplaceRequestAssignConflictError()
+        if row.status != CustomMarketplaceRequestStatus.UNDER_REVIEW:
+            raise CustomMarketplaceRequestOperatorDecisionNotAllowedError(
+                "Operator decision is only allowed when status is under_review.",
+            )
+        if row.operator_workflow_intent == OperatorWorkflowIntent.NEED_MANUAL_FOLLOWUP:
+            if row.operator_workflow_intent_set_by_user_id in (None, actor_user_id):
+                return self._read_with_operational_list_hints(row, session)
+        now = datetime.now(UTC)
+        row.operator_workflow_intent = decision
+        row.operator_workflow_intent_set_at = now
+        row.operator_workflow_intent_set_by_user_id = actor_user_id
         session.add(row)
         session.flush()
         session.refresh(row)

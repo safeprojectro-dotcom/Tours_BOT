@@ -14,6 +14,7 @@ from app.models.enums import (
     CustomMarketplaceRequestSource,
     CustomMarketplaceRequestStatus,
     CustomMarketplaceRequestType,
+    OperatorWorkflowIntent,
     SupplierCustomRequestResponseKind,
     SupplierOfferPaymentMode,
     TourSalesMode,
@@ -71,6 +72,18 @@ class CustomMarketplaceRequest(TimestampMixin, Base):
         nullable=True,
     )
     assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    operator_workflow_intent: Mapped[OperatorWorkflowIntent | None] = mapped_column(
+        sqlalchemy_enum(OperatorWorkflowIntent, name="operator_workflow_intent"),
+        nullable=True,
+    )
+    operator_workflow_intent_set_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    operator_workflow_intent_set_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     user: Mapped["User"] = relationship(
         back_populates="custom_marketplace_requests",
@@ -85,6 +98,11 @@ class CustomMarketplaceRequest(TimestampMixin, Base):
         "User",
         back_populates="ops_assigned_custom_marketplace_requests_by_actor",
         foreign_keys="[CustomMarketplaceRequest.assigned_by_user_id]",
+    )
+    operator_workflow_intent_set_by: Mapped["User | None"] = relationship(
+        "User",
+        back_populates="ops_set_operator_workflow_intent_on_requests",
+        foreign_keys="[CustomMarketplaceRequest.operator_workflow_intent_set_by_user_id]",
     )
     supplier_responses: Mapped[list["SupplierCustomRequestResponse"]] = relationship(
         "SupplierCustomRequestResponse",

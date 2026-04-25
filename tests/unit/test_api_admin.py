@@ -427,6 +427,79 @@ class AdminRouteTests(FoundationDBTestCase):
         ids = {x["id"] for x in list_a.json()["items"]}
         self.assertIn(rid, ids)
 
+    def test_admin_custom_request_operator_decision(self) -> None:
+        self.create_user(telegram_user_id=352_500)
+        op = self.create_user(telegram_user_id=352_501)
+        self.create_user(telegram_user_id=352_502)
+        self.session.commit()
+
+        c = self.client.post(
+            "/mini-app/custom-requests",
+            json={
+                "telegram_user_id": 352_500,
+                "request_type": "custom_route",
+                "travel_date_start": "2026-11-01",
+                "route_notes": "Y37.4 operator decision",
+                "group_size": 2,
+            },
+        )
+        self.assertEqual(c.status_code, 201, c.text)
+        rid = c.json()["id"]
+        headers = {"Authorization": "Bearer test-admin-secret", "X-Admin-Actor-Telegram-Id": "352501"}
+        body = {"decision": "need_manual_followup"}
+
+        d0 = self.client.post(
+            f"/admin/custom-requests/{rid}/operator-decision",
+            headers=headers,
+            json=body,
+        )
+        self.assertEqual(d0.status_code, 400, d0.text)
+
+        self.client.post(f"/admin/custom-requests/{rid}/assign-to-me", headers=headers)
+        d1 = self.client.post(
+            f"/admin/custom-requests/{rid}/operator-decision",
+            headers=headers,
+            json=body,
+        )
+        self.assertEqual(d1.status_code, 400, d1.text)
+        self.assertIn("under_review", d1.json()["detail"].lower())
+
+        self.client.post(f"/admin/custom-requests/{rid}/mark-under-review", headers=headers)
+        d2 = self.client.post(
+            f"/admin/custom-requests/{rid}/operator-decision",
+            headers=headers,
+            json=body,
+        )
+        self.assertEqual(d2.status_code, 200, d2.text)
+        j2 = d2.json()
+        self.assertEqual(j2["operator_workflow_intent"], "need_manual_followup")
+        self.assertEqual(j2["status"], "under_review")
+        self.assertIsNotNone(j2.get("operator_workflow_intent_set_at"))
+
+        d2b = self.client.post(
+            f"/admin/custom-requests/{rid}/operator-decision",
+            headers=headers,
+            json=body,
+        )
+        self.assertEqual(d2b.status_code, 200, d2b.text)
+        self.assertEqual(d2b.json()["operator_workflow_intent"], "need_manual_followup")
+
+        headers_other = {
+            "Authorization": "Bearer test-admin-secret",
+            "X-Admin-Actor-Telegram-Id": "352502",
+        }
+        d3 = self.client.post(
+            f"/admin/custom-requests/{rid}/operator-decision",
+            headers=headers_other,
+            json=body,
+        )
+        self.assertEqual(d3.status_code, 409, d3.text)
+
+        list_m = self.client.get("/mini-app/custom-requests", params={"telegram_user_id": 352_500})
+        self.assertEqual(list_m.status_code, 200, list_m.text)
+        item = next(x for x in list_m.json()["items"] if x["id"] == rid)
+        self.assertNotIn("operator_workflow_intent", item)
+
     def test_admin_tour_list_includes_past_departure_tour(self) -> None:
         """Admin read paths are not filtered by customer catalog time windows."""
         past = self.create_tour(

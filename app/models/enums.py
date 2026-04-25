@@ -110,6 +110,13 @@ class CustomMarketplaceRequestType(StrEnum):
     OTHER = "other"
 
 
+class OperatorWorkflowIntent(StrEnum):
+    """Y37.4: operator-only next-step intent on an RFQ — orthogonal to `CustomMarketplaceRequestStatus`."""
+
+    NEED_MANUAL_FOLLOWUP = "need_manual_followup"
+    # Future: NEED_SUPPLIER_OFFER, etc. (separate product iterations — extend DB enum + this class)
+
+
 class CustomMarketplaceRequestStatus(StrEnum):
     """Custom request lifecycle — separate from order/booking states (Track 4–5a)."""
 

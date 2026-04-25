@@ -53,3 +53,8 @@ class User(TimestampMixin, Base):
         back_populates="assigned_by",
         foreign_keys="CustomMarketplaceRequest.assigned_by_user_id",
     )
+    ops_set_operator_workflow_intent_on_requests: Mapped[list["CustomMarketplaceRequest"]] = relationship(
+        "CustomMarketplaceRequest",
+        back_populates="operator_workflow_intent_set_by",
+        foreign_keys="CustomMarketplaceRequest.operator_workflow_intent_set_by_user_id",
+    )

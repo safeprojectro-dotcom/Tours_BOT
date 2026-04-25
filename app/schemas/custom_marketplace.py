@@ -16,6 +16,7 @@ from app.models.enums import (
     CustomMarketplaceRequestStatus,
     CustomMarketplaceRequestType,
     CustomRequestBookingBridgeStatus,
+    OperatorWorkflowIntent,
     SupplierCustomRequestResponseKind,
     SupplierOfferPaymentMode,
     TourSalesMode,
@@ -260,6 +261,18 @@ class CustomMarketplaceRequestRead(BaseModel):
     source_channel: CustomMarketplaceRequestSource
     status: CustomMarketplaceRequestStatus
     admin_intervention_note: str | None
+    operator_workflow_intent: OperatorWorkflowIntent | None = Field(
+        default=None,
+        description="Y37.4: machine-readable operator next-step intent; admin/ops only.",
+    )
+    operator_workflow_intent_set_at: datetime | None = Field(
+        default=None,
+        description="When the operator set workflow intent; admin/ops only.",
+    )
+    operator_workflow_intent_set_by_user_id: int | None = Field(
+        default=None,
+        description="Internal users.id of the actor who set intent; admin/ops only.",
+    )
     selected_supplier_response_id: int | None = None
     commercial_resolution_kind: CommercialResolutionKind | None = None
     created_at: datetime
@@ -427,6 +440,16 @@ class SupplierCustomRequestResponseUpsert(BaseModel):
                 payment_mode=self.supplier_declared_payment_mode,
             )
         return self
+
+
+class AdminOperatorDecisionApply(BaseModel):
+    """Y37.4: first slice — one decision value only (extend enum + body in later tracks)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    decision: Literal["need_manual_followup"] = Field(
+        description="V1: only need_manual_followup (internal follow-up, no automated supplier/bridge/booking).",
+    )
 
 
 class AdminCustomRequestPatch(BaseModel):
