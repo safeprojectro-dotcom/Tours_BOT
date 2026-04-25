@@ -19,6 +19,7 @@ from app.models.enums import (
     TourSalesMode,
     TourStatus,
 )
+from app.schemas.admin_customer_summary import AdminCustomerSummary
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
 
 
@@ -250,6 +251,7 @@ class AdminOrderListItem(BaseModel):
     id: int
     user_id: int
     customer_telegram_user_id: int | None = None
+    customer_summary: AdminCustomerSummary | None = None
     tour_id: int
     tour_code: str
     tour_title_default: str
@@ -510,6 +512,7 @@ class AdminOrderDetailRead(BaseModel):
     id: int
     user_id: int
     customer_telegram_user_id: int | None = None
+    customer_summary: AdminCustomerSummary | None = None
     lifecycle_kind: AdminOrderLifecycleKind
     lifecycle_summary: str = Field(
         description="Primary admin-facing interpretation of order state (see OPEN_QUESTIONS_AND_TECH_DEBT).",

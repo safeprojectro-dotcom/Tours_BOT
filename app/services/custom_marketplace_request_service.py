@@ -37,6 +37,7 @@ from app.schemas.custom_marketplace import (
     SupplierCustomRequestResponseUpsert,
 )
 from app.models.tour import Tour
+from app.services.admin_customer_summary import build_admin_customer_summary_from_user
 from app.services.custom_request_booking_bridge_service import CustomRequestBookingBridgeService
 from app.services.custom_request_lifecycle_preview import CustomRequestLifecyclePreviewService
 from app.services.effective_commercial_execution_policy import EffectiveCommercialExecutionPolicyService
@@ -239,7 +240,15 @@ class CustomMarketplaceRequestService:
             selected_supplier_response_id=row.selected_supplier_response_id,
         )
         base = CustomMarketplaceRequestRead.model_validate(row, from_attributes=True)
-        return base.model_copy(update={"operational_hints": hints})
+        tg = row.user.telegram_user_id if row.user is not None else None
+        cs = build_admin_customer_summary_from_user(row.user)
+        return base.model_copy(
+            update={
+                "operational_hints": hints,
+                "customer_telegram_user_id": tg,
+                "customer_summary": cs,
+            },
+        )
 
     def create_from_mini_app(
         self,
@@ -319,6 +328,7 @@ class CustomMarketplaceRequestService:
                 base.model_copy(
                     update={
                         "customer_telegram_user_id": r.user.telegram_user_id if r.user is not None else None,
+                        "customer_summary": build_admin_customer_summary_from_user(r.user),
                         "operational_hints": hints,
                     },
                 )
@@ -366,7 +376,10 @@ class CustomMarketplaceRequestService:
         )
         return CustomMarketplaceRequestDetailRead(
             request=CustomMarketplaceRequestRead.model_validate(row, from_attributes=True).model_copy(
-                update={"customer_telegram_user_id": tg},
+                update={
+                    "customer_telegram_user_id": tg,
+                    "customer_summary": build_admin_customer_summary_from_user(row.user),
+                },
             ),
             responses=responses,
             customer_telegram_user_id=tg,

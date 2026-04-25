@@ -46,6 +46,7 @@ from app.services.admin_handoff_queue import (
     compute_group_followup_visibility,
     compute_handoff_queue_fields,
 )
+from app.services.admin_customer_summary import build_admin_customer_summary_from_user
 from app.services.admin_order_action_preview import compute_admin_action_preview
 from app.services.admin_order_move_inspection import compute_move_placement_snapshot
 from app.services.admin_order_move_readiness import compute_move_readiness
@@ -222,10 +223,12 @@ class AdminReadService:
             )
         t = order.tour
         bp = order.boarding_point
+        cust_summary = build_admin_customer_summary_from_user(order.user)
         return AdminOrderDetailRead(
             id=order.id,
             user_id=order.user_id,
             customer_telegram_user_id=order.user.telegram_user_id if order.user is not None else None,
+            customer_summary=cust_summary,
             lifecycle_kind=kind,
             lifecycle_summary=summary,
             persistence_snapshot=AdminOrderPersistenceSnapshot(
@@ -436,6 +439,7 @@ class AdminReadService:
                     id=o.id,
                     user_id=o.user_id,
                     customer_telegram_user_id=o.user.telegram_user_id if o.user is not None else None,
+                    customer_summary=build_admin_customer_summary_from_user(o.user),
                     tour_id=o.tour_id,
                     tour_code=tour_code,
                     tour_title_default=tour_title,

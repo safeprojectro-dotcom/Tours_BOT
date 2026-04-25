@@ -20,6 +20,7 @@ from app.models.enums import (
     SupplierOfferPaymentMode,
     TourSalesMode,
 )
+from app.schemas.admin_customer_summary import AdminCustomerSummary
 from app.schemas.custom_request_notification import (
     AdminPreparedCustomRequestLifecycleMessageRead,
     MiniAppCustomRequestActivityPreviewRead,
@@ -225,6 +226,10 @@ class CustomMarketplaceRequestRead(BaseModel):
     customer_telegram_user_id: int | None = Field(
         default=None,
         description="Admin/ops read-side customer Telegram id; None outside admin-populated surfaces.",
+    )
+    customer_summary: AdminCustomerSummary | None = Field(
+        default=None,
+        description="Admin/ops read-side customer label; None outside admin-populated surfaces.",
     )
     request_type: CustomMarketplaceRequestType
     travel_date_start: date

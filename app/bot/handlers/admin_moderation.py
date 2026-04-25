@@ -170,6 +170,14 @@ def _truncate_line(value: str | None, *, max_len: int = 72) -> str:
     return f"{text[: max_len - 1].rstrip()}…"
 
 
+def _admin_ops_customer_display(*, customer_summary, customer_telegram_user_id: int | None, user_id: int) -> str:
+    if customer_summary is not None and getattr(customer_summary, "summary_line", None):
+        return _truncate_line(customer_summary.summary_line, max_len=100)
+    if customer_telegram_user_id is not None:
+        return f"customer: tg:{customer_telegram_user_id}"
+    return f"customer: user_id:{user_id}"
+
+
 def _admin_ops_orders_text(language_code: str | None, *, page: int, items: list) -> str:
     if not items:
         return translate(language_code, "admin_ops_orders_empty")
@@ -182,7 +190,11 @@ def _admin_ops_orders_text(language_code: str | None, *, page: int, items: list)
                 order_id=str(item.id),
                 tour_code=item.tour_code or "-",
                 status=f"{_enum_value(item.booking_status)}/{_enum_value(item.payment_status)}",
-                customer=str(item.customer_telegram_user_id or item.user_id),
+                customer=_admin_ops_customer_display(
+                    customer_summary=getattr(item, "customer_summary", None),
+                    customer_telegram_user_id=getattr(item, "customer_telegram_user_id", None),
+                    user_id=item.user_id,
+                ),
             )
         )
     return "\n".join(lines)
@@ -205,11 +217,18 @@ def _admin_ops_orders_keyboard(language_code: str | None, *, page: int, items: l
 
 
 def _admin_ops_order_detail_text(language_code: str | None, detail) -> str:
+    csum = _admin_ops_customer_display(
+        customer_summary=getattr(detail, "customer_summary", None),
+        customer_telegram_user_id=getattr(detail, "customer_telegram_user_id", None),
+        user_id=detail.user_id,
+    )
+    ctid = detail.customer_telegram_user_id
     return translate(
         language_code,
         "admin_ops_order_detail",
         order_id=str(detail.id),
-        customer=str(detail.customer_telegram_user_id or detail.user_id),
+        customer=csum,
+        customer_telegram_id="-" if ctid is None else str(ctid),
         tour_id=str(detail.tour.id),
         tour_code=detail.tour.code,
         tour_title=detail.tour.title_default,
@@ -244,7 +263,11 @@ def _admin_ops_requests_text(language_code: str | None, *, page: int, items: lis
                 "admin_ops_request_row",
                 request_id=str(item.id),
                 status=_enum_value(item.status),
-                customer=str(item.customer_telegram_user_id or item.user_id),
+                customer=_admin_ops_customer_display(
+                    customer_summary=getattr(item, "customer_summary", None),
+                    customer_telegram_user_id=getattr(item, "customer_telegram_user_id", None),
+                    user_id=item.user_id,
+                ),
                 summary=_truncate_line(summary),
             )
         )
@@ -271,11 +294,18 @@ def _admin_ops_request_detail_text(language_code: str | None, detail) -> str:
     request = detail.request
     bridge = detail.booking_bridge.bridge_status.value if detail.booking_bridge is not None else "-"
     travel_end = f" - {request.travel_date_end.isoformat()}" if request.travel_date_end is not None else ""
+    ctid = detail.customer_telegram_user_id or request.customer_telegram_user_id
+    csum = _admin_ops_customer_display(
+        customer_summary=getattr(request, "customer_summary", None),
+        customer_telegram_user_id=ctid,
+        user_id=request.user_id,
+    )
     return translate(
         language_code,
         "admin_ops_request_detail",
         request_id=str(request.id),
-        customer=str(detail.customer_telegram_user_id or request.customer_telegram_user_id or request.user_id),
+        customer=csum,
+        customer_telegram_id="-" if ctid is None else str(ctid),
         status=_enum_value(request.status),
         request_type=_enum_value(request.request_type),
         travel_date=f"{request.travel_date_start.isoformat()}{travel_end}",
