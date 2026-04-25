@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -16,14 +16,17 @@ from app.bot.constants import (
     ADMIN_OFFERS_ACTION_CONFIRM_REPLACE_LINK,
     ADMIN_OFFERS_ACTION_CREATE_LINK,
     ADMIN_OFFERS_ACTION_LINK_STATUS,
+    ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE,
+    ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR,
     ADMIN_OFFERS_ACTION_PUBLISH,
     ADMIN_OFFERS_ACTION_REJECT,
     ADMIN_OFFERS_ACTION_REPLACE_LINK,
     ADMIN_OFFERS_ACTION_RETRACT,
+    ADMIN_OFFERS_ACTION_SELECT_LINK_TOUR,
 )
 from app.bot.handlers import admin_moderation
 from app.core.config import get_settings
-from app.models.enums import SupplierOfferLifecycle, SupplierOfferPaymentMode, TourSalesMode
+from app.models.enums import SupplierOfferLifecycle, SupplierOfferPaymentMode, TourSalesMode, TourStatus
 from app.models.supplier import SupplierOfferExecutionLink
 from tests.unit.base import FoundationDBTestCase
 
@@ -86,6 +89,11 @@ def _callback(*, telegram_user_id: int, data: str, message: MagicMock) -> MagicM
     cb.message = message
     cb.answer = AsyncMock()
     return cb
+
+
+def _action_data(action: str, offer_id: int, *parts: object) -> str:
+    suffix = ":".join([action, str(offer_id), *(str(part) for part in parts)])
+    return f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{suffix}"
 
 
 class TelegramAdminModerationY281Tests(FoundationDBTestCase):
@@ -280,6 +288,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
     def test_admin_can_create_execution_link_from_explicit_tour_input(self) -> None:
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
         tour = self.create_tour(code="TG-LINK-CREATE", sales_mode=TourSalesMode.PER_SEAT)
+        tour_id = tour.id
         self.session.commit()
 
         async def body() -> str:
@@ -287,18 +296,24 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             message = _private_message(telegram_user_id=990001)
             start_cb = _callback(
                 telegram_user_id=990001,
-                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_CREATE_LINK}:{offer_id}",
+                data=_action_data(ADMIN_OFFERS_ACTION_CREATE_LINK, offer_id),
+                message=message,
+            )
+            manual_cb = _callback(
+                telegram_user_id=990001,
+                data=_action_data(ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR, offer_id, "create"),
                 message=message,
             )
             input_message = _private_message(telegram_user_id=990001)
-            input_message.text = str(tour.id)
+            input_message.text = str(tour_id)
             confirm_cb = _callback(
                 telegram_user_id=990001,
-                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_CONFIRM_CREATE_LINK}:{offer_id}",
+                data=_action_data(ADMIN_OFFERS_ACTION_CONFIRM_CREATE_LINK, offer_id),
                 message=message,
             )
             with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
                 await admin_moderation.admin_offer_action(start_cb, state)
+                await admin_moderation.admin_offer_action(manual_cb, state)
                 await admin_moderation.admin_offer_execution_link_tour_input(input_message, state)
                 await admin_moderation.admin_offer_action(confirm_cb, state)
             return "\n".join(
@@ -313,7 +328,153 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         links = self.session.query(SupplierOfferExecutionLink).filter_by(supplier_offer_id=offer_id).all()
         active = [link for link in links if link.link_status == "active"]
         self.assertEqual(len(active), 1)
-        self.assertEqual(active[0].tour_id, tour.id)
+        self.assertEqual(active[0].tour_id, tour_id)
+
+    def test_admin_link_candidate_list_filters_same_sales_mode(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        compatible = self.create_tour(code="TG-CANDIDATE-OK", title_default="Compatible", sales_mode=TourSalesMode.PER_SEAT)
+        mismatch = self.create_tour(code="TG-CANDIDATE-BAD", title_default="Mismatch", sales_mode=TourSalesMode.FULL_BUS)
+        self.session.commit()
+        self.assertGreater(compatible.id, 0)
+        self.assertGreater(mismatch.id, 0)
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            start_cb = _callback(
+                telegram_user_id=990001,
+                data=_action_data(ADMIN_OFFERS_ACTION_CREATE_LINK, offer_id),
+                message=message,
+            )
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(start_cb, state)
+            return self._all_answer_texts(message), self._inline_button_texts(message)
+
+        text, buttons = asyncio.run(body())
+        self.assertIn("compatible execution tours", text)
+        self.assertIn("tg-candidate-ok", text)
+        self.assertIn("compatible", text)
+        self.assertIn("open_for_sale", text)
+        self.assertIn("per_seat", text)
+        self.assertIn("seats:", text)
+        self.assertNotIn("tg-candidate-bad", text)
+        self.assertIn(f"select tour #{compatible.id}", buttons)
+        self.assertIn("manual tour_id/code input", buttons)
+
+    def test_admin_link_candidate_list_empty_keeps_no_state_change(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        self.session.query(admin_moderation.Tour).filter(
+            admin_moderation.Tour.sales_mode == TourSalesMode.PER_SEAT
+        ).update({admin_moderation.Tour.status: TourStatus.CANCELLED})
+        self.create_tour(code="TG-NO-CANDIDATE", sales_mode=TourSalesMode.FULL_BUS)
+        self.session.commit()
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            start_cb = _callback(
+                telegram_user_id=990001,
+                data=_action_data(ADMIN_OFFERS_ACTION_CREATE_LINK, offer_id),
+                message=message,
+            )
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(start_cb, state)
+            return self._all_answer_texts(message), self._inline_button_texts(message)
+
+        text, buttons = asyncio.run(body())
+        self.assertIn("no compatible existing tours", text)
+        self.assertIn("no link was changed", text)
+        self.assertIn("manual tour_id/code input", buttons)
+        links = self.session.query(SupplierOfferExecutionLink).filter_by(supplier_offer_id=offer_id).all()
+        self.assertEqual(links, [])
+
+    def test_admin_selects_candidate_and_creates_execution_link(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        tour = self.create_tour(code="TG-LINK-CANDIDATE", sales_mode=TourSalesMode.PER_SEAT)
+        tour_id = tour.id
+        self.session.commit()
+
+        async def body() -> str:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            start_cb = _callback(
+                telegram_user_id=990001,
+                data=_action_data(ADMIN_OFFERS_ACTION_CREATE_LINK, offer_id),
+                message=message,
+            )
+            select_cb = _callback(
+                telegram_user_id=990001,
+                data=_action_data(ADMIN_OFFERS_ACTION_SELECT_LINK_TOUR, offer_id, "create", tour_id),
+                message=message,
+            )
+            confirm_cb = _callback(
+                telegram_user_id=990001,
+                data=_action_data(ADMIN_OFFERS_ACTION_CONFIRM_CREATE_LINK, offer_id),
+                message=message,
+            )
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(start_cb, state)
+                await admin_moderation.admin_offer_action(select_cb, state)
+                await admin_moderation.admin_offer_action(confirm_cb, state)
+            return self._all_answer_texts(message)
+
+        text = asyncio.run(body())
+        self.assertIn("compatible execution tours", text)
+        self.assertIn("confirm execution link target", text)
+        self.assertIn("execution link created", text)
+        active = [
+            link
+            for link in self.session.query(SupplierOfferExecutionLink).filter_by(supplier_offer_id=offer_id).all()
+            if link.link_status == "active"
+        ]
+        self.assertEqual(len(active), 1)
+        self.assertEqual(active[0].tour_id, tour_id)
+
+    def test_admin_link_candidate_pagination_preserves_mode_and_selects_page_two(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        base_departure = datetime.now(UTC) + timedelta(days=10)
+        tours = [
+            self.create_tour(
+                code=f"TG-PAGE-{idx}",
+                sales_mode=TourSalesMode.PER_SEAT,
+                departure_datetime=base_departure + timedelta(days=idx),
+            )
+            for idx in range(6)
+        ]
+        target_id = tours[-1].id
+        self.session.commit()
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            page_one_cb = _callback(
+                telegram_user_id=990001,
+                data=_action_data(ADMIN_OFFERS_ACTION_CREATE_LINK, offer_id),
+                message=message,
+            )
+            page_two_cb = _callback(
+                telegram_user_id=990001,
+                data=_action_data(ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE, offer_id, "create", 1),
+                message=message,
+            )
+            select_cb = _callback(
+                telegram_user_id=990001,
+                data=_action_data(ADMIN_OFFERS_ACTION_SELECT_LINK_TOUR, offer_id, "create", target_id),
+                message=message,
+            )
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(page_one_cb, state)
+                await admin_moderation.admin_offer_action(page_two_cb, state)
+                await admin_moderation.admin_offer_action(select_cb, state)
+            return self._all_answer_texts(message), self._inline_button_texts(message)
+
+        text, buttons = asyncio.run(body())
+        self.assertIn("page 1", text)
+        self.assertIn("page 2", text)
+        self.assertIn("tg-page-5", text)
+        self.assertIn("confirm execution link target", text)
+        self.assertIn("next", buttons)
+        self.assertIn("prev", buttons)
 
     def test_admin_can_replace_execution_link_and_old_link_is_closed(self) -> None:
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
@@ -330,18 +491,24 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             message = _private_message(telegram_user_id=990001)
             start_cb = _callback(
                 telegram_user_id=990001,
-                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_REPLACE_LINK}:{offer_id}",
+                data=_action_data(ADMIN_OFFERS_ACTION_REPLACE_LINK, offer_id),
+                message=message,
+            )
+            manual_cb = _callback(
+                telegram_user_id=990001,
+                data=_action_data(ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR, offer_id, "replace"),
                 message=message,
             )
             input_message = _private_message(telegram_user_id=990001)
             input_message.text = new_tour_code
             confirm_cb = _callback(
                 telegram_user_id=990001,
-                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_CONFIRM_REPLACE_LINK}:{offer_id}",
+                data=_action_data(ADMIN_OFFERS_ACTION_CONFIRM_REPLACE_LINK, offer_id),
                 message=message,
             )
             with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
                 await admin_moderation.admin_offer_action(start_cb, state)
+                await admin_moderation.admin_offer_action(manual_cb, state)
                 await admin_moderation.admin_offer_execution_link_tour_input(input_message, state)
                 await admin_moderation.admin_offer_action(confirm_cb, state)
             return "\n".join(
@@ -349,6 +516,52 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             )
 
         text = asyncio.run(body())
+        self.assertIn("confirm execution link target", text)
+        self.assertIn("execution link replaced", text)
+        links = self.session.query(SupplierOfferExecutionLink).filter_by(supplier_offer_id=offer_id).all()
+        active = [link for link in links if link.link_status == "active"]
+        closed = [link for link in links if link.link_status == "closed"]
+        self.assertEqual(len(active), 1)
+        self.assertEqual(active[0].tour_id, new_tour_id)
+        self.assertEqual(len(closed), 1)
+        self.assertEqual(closed[0].tour_id, old_tour_id)
+        self.assertEqual(closed[0].close_reason, "replaced")
+
+    def test_admin_selects_candidate_and_replaces_execution_link(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        old_tour = self.create_tour(code="TG-CAND-OLD", sales_mode=TourSalesMode.PER_SEAT)
+        new_tour = self.create_tour(code="TG-CAND-NEW", sales_mode=TourSalesMode.PER_SEAT)
+        old_tour_id = old_tour.id
+        new_tour_id = new_tour.id
+        self.session.add(SupplierOfferExecutionLink(supplier_offer_id=offer_id, tour_id=old_tour_id, link_status="active"))
+        self.session.commit()
+
+        async def body() -> str:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            start_cb = _callback(
+                telegram_user_id=990001,
+                data=_action_data(ADMIN_OFFERS_ACTION_REPLACE_LINK, offer_id),
+                message=message,
+            )
+            select_cb = _callback(
+                telegram_user_id=990001,
+                data=_action_data(ADMIN_OFFERS_ACTION_SELECT_LINK_TOUR, offer_id, "replace", new_tour_id),
+                message=message,
+            )
+            confirm_cb = _callback(
+                telegram_user_id=990001,
+                data=_action_data(ADMIN_OFFERS_ACTION_CONFIRM_REPLACE_LINK, offer_id),
+                message=message,
+            )
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(start_cb, state)
+                await admin_moderation.admin_offer_action(select_cb, state)
+                await admin_moderation.admin_offer_action(confirm_cb, state)
+            return self._all_answer_texts(message)
+
+        text = asyncio.run(body())
+        self.assertIn("compatible execution tours", text)
         self.assertIn("confirm execution link target", text)
         self.assertIn("execution link replaced", text)
         links = self.session.query(SupplierOfferExecutionLink).filter_by(supplier_offer_id=offer_id).all()
@@ -370,13 +583,19 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             message = _private_message(telegram_user_id=990001)
             start_cb = _callback(
                 telegram_user_id=990001,
-                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_CREATE_LINK}:{offer_id}",
+                data=_action_data(ADMIN_OFFERS_ACTION_CREATE_LINK, offer_id),
+                message=message,
+            )
+            manual_cb = _callback(
+                telegram_user_id=990001,
+                data=_action_data(ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR, offer_id, "create"),
                 message=message,
             )
             input_message = _private_message(telegram_user_id=990001)
             input_message.text = str(mismatched_tour.id)
             with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
                 await admin_moderation.admin_offer_action(start_cb, state)
+                await admin_moderation.admin_offer_action(manual_cb, state)
                 await admin_moderation.admin_offer_execution_link_tour_input(input_message, state)
             return "\n".join(
                 [self._all_answer_texts(message), self._all_answer_texts(input_message)]

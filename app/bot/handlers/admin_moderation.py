@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -16,10 +18,13 @@ from app.bot.constants import (
     ADMIN_OFFERS_ACTION_CONFIRM_REPLACE_LINK,
     ADMIN_OFFERS_ACTION_CREATE_LINK,
     ADMIN_OFFERS_ACTION_LINK_STATUS,
+    ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE,
+    ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR,
     ADMIN_OFFERS_ACTION_PUBLISH,
     ADMIN_OFFERS_ACTION_REJECT,
     ADMIN_OFFERS_ACTION_REPLACE_LINK,
     ADMIN_OFFERS_ACTION_RETRACT,
+    ADMIN_OFFERS_ACTION_SELECT_LINK_TOUR,
     ADMIN_OFFERS_NAV_BACK,
     ADMIN_OFFERS_NAV_HOME,
     ADMIN_OFFERS_NAV_NEXT,
@@ -30,7 +35,7 @@ from app.bot.services import TelegramUserContextService
 from app.bot.state import AdminModerationState
 from app.core.config import get_settings
 from app.db.session import SessionLocal
-from app.models.enums import SupplierOfferLifecycle
+from app.models.enums import SupplierOfferLifecycle, TourStatus
 from app.models.supplier import Supplier
 from app.models.tour import Tour
 from app.schemas.supplier_admin import SupplierOfferRead
@@ -55,6 +60,22 @@ _QUEUE_LIMIT = 20
 _QUEUE_MODE_MODERATION = "moderation"
 _QUEUE_MODE_APPROVED = "approved"
 _QUEUE_MODE_PUBLISHED = "published"
+_LINK_TOUR_PAGE_SIZE = 5
+_LINK_SELECTION_ACTIONS = (
+    ADMIN_OFFERS_ACTION_APPROVE,
+    ADMIN_OFFERS_ACTION_REJECT,
+    ADMIN_OFFERS_ACTION_PUBLISH,
+    ADMIN_OFFERS_ACTION_RETRACT,
+    ADMIN_OFFERS_ACTION_LINK_STATUS,
+    ADMIN_OFFERS_ACTION_CLOSE_LINK,
+    ADMIN_OFFERS_ACTION_CREATE_LINK,
+    ADMIN_OFFERS_ACTION_REPLACE_LINK,
+    ADMIN_OFFERS_ACTION_CONFIRM_CREATE_LINK,
+    ADMIN_OFFERS_ACTION_CONFIRM_REPLACE_LINK,
+    ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE,
+    ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR,
+    ADMIN_OFFERS_ACTION_SELECT_LINK_TOUR,
+)
 
 
 def _user_service() -> TelegramUserContextService:
@@ -284,6 +305,146 @@ def _link_confirm_keyboard(language_code: str | None, *, mode: str, offer_id: in
     return kb
 
 
+def _link_action_callback(action: str, offer_id: int, *parts: object) -> str:
+    suffix = ":".join([action, str(offer_id), *(str(part) for part in parts)])
+    return f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{suffix}"
+
+
+def _compatible_tours_for_offer(session, *, offer_id: int, page: int) -> tuple[list[Tour], bool]:
+    offer = SupplierOfferModerationService()._offers.get_any(session, offer_id=offer_id)
+    if offer is None:
+        raise SupplierOfferExecutionLinkNotFoundError
+    offset = max(page, 0) * _LINK_TOUR_PAGE_SIZE
+    candidates = (
+        session.query(Tour)
+        .filter(Tour.sales_mode == offer.sales_mode)
+        .filter(Tour.status.notin_([TourStatus.CANCELLED, TourStatus.COMPLETED]))
+        .filter(Tour.departure_datetime > datetime.now(UTC))
+        .order_by(Tour.departure_datetime.asc(), Tour.id.asc())
+        .offset(offset)
+        .limit(_LINK_TOUR_PAGE_SIZE + 1)
+        .all()
+    )
+    return candidates[:_LINK_TOUR_PAGE_SIZE], len(candidates) > _LINK_TOUR_PAGE_SIZE
+
+
+def _link_tour_candidates_text(
+    language_code: str | None,
+    *,
+    offer_id: int,
+    mode: str,
+    page: int,
+    tours: list[Tour],
+) -> str:
+    lines = [
+        translate(
+            language_code,
+            "admin_offer_link_candidates_title",
+            offer_id=str(offer_id),
+            mode=mode,
+            page=str(page + 1),
+        )
+    ]
+    for tour in tours:
+        lines.append(
+            translate(
+                language_code,
+                "admin_offer_link_candidate_row",
+                tour_id=str(tour.id),
+                tour_code=tour.code,
+                tour_title=tour.title_default,
+                tour_status=_enum_value(tour.status),
+                tour_sales_mode=_enum_value(tour.sales_mode),
+                departure=tour.departure_datetime.isoformat(timespec="minutes").replace("T", " "),
+                seats_available=str(tour.seats_available),
+                seats_total=str(tour.seats_total),
+            )
+        )
+    return "\n\n".join(lines)
+
+
+def _link_tour_candidates_keyboard(
+    language_code: str | None,
+    *,
+    offer_id: int,
+    mode: str,
+    page: int,
+    tours: list[Tour],
+    has_next: bool,
+) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    for tour in tours:
+        kb.button(
+            text=translate(language_code, "admin_offer_link_select_tour", tour_id=str(tour.id)),
+            callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_SELECT_LINK_TOUR, offer_id, mode, tour.id),
+        )
+    if page > 0:
+        kb.button(
+            text=translate(language_code, "admin_offer_nav_prev"),
+            callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE, offer_id, mode, page - 1),
+        )
+    if has_next:
+        kb.button(
+            text=translate(language_code, "admin_offer_nav_next"),
+            callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE, offer_id, mode, page + 1),
+        )
+    kb.button(
+        text=translate(language_code, "admin_offer_link_manual_input"),
+        callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR, offer_id, mode),
+    )
+    kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=ADMIN_OFFERS_NAV_BACK)
+    kb.button(text=translate(language_code, "admin_offer_nav_home"), callback_data=ADMIN_OFFERS_NAV_HOME)
+    kb.adjust(1)
+    return kb
+
+
+async def _show_link_tour_candidates(
+    message,
+    state: FSMContext,
+    session,
+    language_code: str | None,
+    *,
+    offer_id: int,
+    mode: str,
+    page: int = 0,
+) -> None:
+    page = max(page, 0)
+    tours, has_next = _compatible_tours_for_offer(session, offer_id=offer_id, page=page)
+    await state.set_state(AdminModerationState.awaiting_execution_link_tour)
+    await state.update_data(
+        current_offer_id=offer_id,
+        pending_link_mode=mode,
+        pending_link_offer_id=offer_id,
+        pending_link_tour_id=None,
+        pending_link_page=page,
+    )
+    if not tours:
+        kb = InlineKeyboardBuilder()
+        kb.button(
+            text=translate(language_code, "admin_offer_link_manual_input"),
+            callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR, offer_id, mode),
+        )
+        kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=ADMIN_OFFERS_NAV_BACK)
+        kb.button(text=translate(language_code, "admin_offer_nav_home"), callback_data=ADMIN_OFFERS_NAV_HOME)
+        kb.adjust(1)
+        await message.answer(
+            translate(language_code, "admin_offer_link_candidates_empty", offer_id=str(offer_id)),
+            reply_markup=kb.as_markup(),
+        )
+        return
+    await message.answer(
+        _link_tour_candidates_text(language_code, offer_id=offer_id, mode=mode, page=page, tours=tours),
+        reply_markup=_link_tour_candidates_keyboard(
+            language_code,
+            offer_id=offer_id,
+            mode=mode,
+            page=page,
+            tours=tours,
+            has_next=has_next,
+        ).as_markup(),
+    )
+
+
 def _link_status_keyboard(language_code: str | None, *, offer_id: int, has_active_link: bool) -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     if has_active_link:
@@ -481,16 +642,20 @@ async def admin_queue_navigation(query: CallbackQuery, state: FSMContext) -> Non
     await query.answer()
 
 
-def _parse_action(data: str) -> tuple[str, int] | None:
+def _parse_action(data: str) -> tuple[str, int, tuple[str, ...]] | None:
     raw = data.removeprefix(ADMIN_OFFERS_ACTION_CALLBACK_PREFIX)
-    parts = raw.rsplit(":", 1)
-    if len(parts) != 2:
-        return None
-    action_name, offer_id_raw = parts
-    try:
-        return action_name, int(offer_id_raw)
-    except ValueError:
-        return None
+    for action_name in sorted(_LINK_SELECTION_ACTIONS, key=len, reverse=True):
+        prefix = f"{action_name}:"
+        if not raw.startswith(prefix):
+            continue
+        parts = raw.removeprefix(prefix).split(":")
+        if not parts:
+            return None
+        try:
+            return action_name, int(parts[0]), tuple(parts[1:])
+        except ValueError:
+            return None
+    return None
 
 
 def _refresh_queue(current_offer_id: int, *, session, mode: str) -> tuple[list[int], int, int]:
@@ -528,7 +693,7 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
         )
         await query.answer()
         return
-    action_name, offer_id = parsed
+    action_name, offer_id, action_args = parsed
     moderation = SupplierOfferModerationService()
     try:
         with SessionLocal() as session:
@@ -559,9 +724,91 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                     await query.message.answer(translate(lg, "admin_offer_link_close_missing"))
                     await query.answer()
                     return
+                await _show_link_tour_candidates(
+                    query.message,
+                    state,
+                    session,
+                    lg,
+                    offer_id=offer_id,
+                    mode=mode,
+                    page=0,
+                )
+                await query.answer()
+                return
+            if action_name == ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE:
+                if len(action_args) != 2:
+                    await query.message.answer(translate(lg, "admin_offer_link_confirm_missing"))
+                    await query.answer()
+                    return
+                mode = action_args[0]
+                try:
+                    page = int(action_args[1])
+                except ValueError:
+                    page = 0
+                if mode not in {"create", "replace"}:
+                    await query.message.answer(translate(lg, "admin_offer_link_confirm_missing"))
+                    await query.answer()
+                    return
+                await _show_link_tour_candidates(
+                    query.message,
+                    state,
+                    session,
+                    lg,
+                    offer_id=offer_id,
+                    mode=mode,
+                    page=page,
+                )
+                await query.answer()
+                return
+            if action_name == ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR:
+                mode = action_args[0] if action_args else None
+                if mode not in {"create", "replace"}:
+                    await query.message.answer(translate(lg, "admin_offer_link_confirm_missing"))
+                    await query.answer()
+                    return
                 await state.set_state(AdminModerationState.awaiting_execution_link_tour)
                 await state.update_data(current_offer_id=offer_id, pending_link_mode=mode, pending_link_offer_id=offer_id)
                 await query.message.answer(translate(lg, "admin_offer_link_target_prompt", offer_id=str(offer_id)))
+                await query.answer()
+                return
+            if action_name == ADMIN_OFFERS_ACTION_SELECT_LINK_TOUR:
+                if len(action_args) != 2:
+                    await query.message.answer(translate(lg, "admin_offer_link_confirm_missing"))
+                    await query.answer()
+                    return
+                mode = action_args[0]
+                try:
+                    tour_id = int(action_args[1])
+                except ValueError:
+                    await query.message.answer(translate(lg, "admin_offer_link_target_missing"))
+                    await query.answer()
+                    return
+                if mode not in {"create", "replace"}:
+                    await query.message.answer(translate(lg, "admin_offer_link_confirm_missing"))
+                    await query.answer()
+                    return
+                service = SupplierOfferExecutionLinkService()
+                service._validate_link_target(session, offer_id=offer_id, tour_id=tour_id)
+                if mode == "create" and _has_active_execution_link(session, offer_id=offer_id):
+                    await query.message.answer(translate(lg, "admin_offer_link_create_active_exists"))
+                    await query.answer()
+                    return
+                tour = session.get(Tour, tour_id)
+                if tour is None:
+                    await query.message.answer(translate(lg, "admin_offer_link_target_missing"))
+                    await query.answer()
+                    return
+                await state.set_state(AdminModerationState.awaiting_execution_link_tour)
+                await state.update_data(
+                    current_offer_id=offer_id,
+                    pending_link_mode=mode,
+                    pending_link_offer_id=offer_id,
+                    pending_link_tour_id=tour_id,
+                )
+                await query.message.answer(
+                    _link_target_preview_text(session, lg, offer_id=offer_id, tour=tour),
+                    reply_markup=_link_confirm_keyboard(lg, mode=mode, offer_id=offer_id).as_markup(),
+                )
                 await query.answer()
                 return
             if action_name in (ADMIN_OFFERS_ACTION_CONFIRM_CREATE_LINK, ADMIN_OFFERS_ACTION_CONFIRM_REPLACE_LINK):
