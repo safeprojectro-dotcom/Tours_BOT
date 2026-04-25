@@ -39,6 +39,10 @@ from app.bot.constants import (
     ADMIN_OFFERS_NAV_HOME,
     ADMIN_OFFERS_NAV_NEXT,
     ADMIN_OFFERS_NAV_PREV,
+    ADMIN_OPS_ORDER_DETAIL_PREFIX,
+    ADMIN_OPS_ORDERS_PAGE_PREFIX,
+    ADMIN_OPS_REQUEST_DETAIL_PREFIX,
+    ADMIN_OPS_REQUESTS_PAGE_PREFIX,
 )
 from app.bot.messages import translate
 from app.bot.services import TelegramUserContextService
@@ -49,6 +53,11 @@ from app.models.enums import SupplierOfferLifecycle, TourStatus
 from app.models.supplier import Supplier
 from app.models.tour import Tour
 from app.schemas.supplier_admin import SupplierOfferRead
+from app.services.admin_read import AdminReadService
+from app.services.custom_marketplace_request_service import (
+    CustomMarketplaceRequestNotFoundError,
+    CustomMarketplaceRequestService,
+)
 from app.services.supplier_offer_execution_link_service import (
     SupplierOfferExecutionLinkNotFoundError,
     SupplierOfferExecutionLinkService,
@@ -71,6 +80,7 @@ _QUEUE_MODE_MODERATION = "moderation"
 _QUEUE_MODE_APPROVED = "approved"
 _QUEUE_MODE_PUBLISHED = "published"
 _LINK_TOUR_PAGE_SIZE = 5
+_ADMIN_OPS_PAGE_SIZE = 5
 _LINK_TOUR_SEARCH_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 _LINK_SELECTION_ACTIONS = (
     ADMIN_OFFERS_ACTION_APPROVE,
@@ -129,12 +139,153 @@ def _detail_keyboard(language_code: str | None, offer: SupplierOfferRead) -> Inl
             text=title,
             callback_data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{action_payload}",
         )
+    kb.button(
+        text=translate(language_code, "admin_ops_orders_button"),
+        callback_data=f"{ADMIN_OPS_ORDERS_PAGE_PREFIX}0",
+    )
+    kb.button(
+        text=translate(language_code, "admin_ops_requests_button"),
+        callback_data=f"{ADMIN_OPS_REQUESTS_PAGE_PREFIX}0",
+    )
     kb.button(text=translate(language_code, "admin_offer_nav_prev"), callback_data=ADMIN_OFFERS_NAV_PREV)
     kb.button(text=translate(language_code, "admin_offer_nav_next"), callback_data=ADMIN_OFFERS_NAV_NEXT)
     kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=ADMIN_OFFERS_NAV_BACK)
     kb.button(text=translate(language_code, "admin_offer_nav_home"), callback_data=ADMIN_OFFERS_NAV_HOME)
     kb.adjust(2, 2, 2)
     return kb
+
+
+def _short_dt(value: datetime | None) -> str:
+    if value is None:
+        return "-"
+    return value.isoformat(timespec="minutes").replace("T", " ")
+
+
+def _truncate_line(value: str | None, *, max_len: int = 72) -> str:
+    text = " ".join((value or "").split())
+    if not text:
+        return "-"
+    if len(text) <= max_len:
+        return text
+    return f"{text[: max_len - 1].rstrip()}…"
+
+
+def _admin_ops_orders_text(language_code: str | None, *, page: int, items: list) -> str:
+    if not items:
+        return translate(language_code, "admin_ops_orders_empty")
+    lines = [translate(language_code, "admin_ops_orders_title", page=str(page + 1))]
+    for item in items:
+        lines.append(
+            translate(
+                language_code,
+                "admin_ops_order_row",
+                order_id=str(item.id),
+                tour_code=item.tour_code or "-",
+                status=f"{_enum_value(item.booking_status)}/{_enum_value(item.payment_status)}",
+                customer=str(item.customer_telegram_user_id or item.user_id),
+            )
+        )
+    return "\n".join(lines)
+
+
+def _admin_ops_orders_keyboard(language_code: str | None, *, page: int, items: list, has_next: bool) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    for item in items:
+        kb.button(
+            text=translate(language_code, "admin_ops_order_view", order_id=str(item.id)),
+            callback_data=f"{ADMIN_OPS_ORDER_DETAIL_PREFIX}{item.id}:{page}",
+        )
+    if page > 0:
+        kb.button(text=translate(language_code, "admin_offer_nav_prev"), callback_data=f"{ADMIN_OPS_ORDERS_PAGE_PREFIX}{page - 1}")
+    if has_next:
+        kb.button(text=translate(language_code, "admin_offer_nav_next"), callback_data=f"{ADMIN_OPS_ORDERS_PAGE_PREFIX}{page + 1}")
+    kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=ADMIN_OFFERS_NAV_BACK)
+    kb.adjust(1)
+    return kb
+
+
+def _admin_ops_order_detail_text(language_code: str | None, detail) -> str:
+    return translate(
+        language_code,
+        "admin_ops_order_detail",
+        order_id=str(detail.id),
+        customer=str(detail.customer_telegram_user_id or detail.user_id),
+        tour_id=str(detail.tour.id),
+        tour_code=detail.tour.code,
+        tour_title=detail.tour.title_default,
+        departure=_short_dt(detail.tour.departure_datetime),
+        seats=str(detail.seats_count),
+        booking_status=_enum_value(detail.persistence_snapshot.booking_status),
+        payment_status=_enum_value(detail.persistence_snapshot.payment_status),
+        cancellation_status=_enum_value(detail.persistence_snapshot.cancellation_status),
+        lifecycle=detail.lifecycle_summary,
+        reservation_expires_at=_short_dt(detail.reservation_expires_at),
+        created_at=_short_dt(detail.created_at),
+        updated_at=_short_dt(detail.updated_at),
+    )
+
+
+def _admin_ops_detail_keyboard(language_code: str | None, *, list_callback: str) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=list_callback)
+    kb.adjust(1)
+    return kb
+
+
+def _admin_ops_requests_text(language_code: str | None, *, page: int, items: list) -> str:
+    if not items:
+        return translate(language_code, "admin_ops_requests_empty")
+    lines = [translate(language_code, "admin_ops_requests_title", page=str(page + 1))]
+    for item in items:
+        summary = item.operational_hints.scan_summary_line if item.operational_hints is not None else item.route_notes
+        lines.append(
+            translate(
+                language_code,
+                "admin_ops_request_row",
+                request_id=str(item.id),
+                status=_enum_value(item.status),
+                customer=str(item.customer_telegram_user_id or item.user_id),
+                summary=_truncate_line(summary),
+            )
+        )
+    return "\n".join(lines)
+
+
+def _admin_ops_requests_keyboard(language_code: str | None, *, page: int, items: list, has_next: bool) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    for item in items:
+        kb.button(
+            text=translate(language_code, "admin_ops_request_view", request_id=str(item.id)),
+            callback_data=f"{ADMIN_OPS_REQUEST_DETAIL_PREFIX}{item.id}:{page}",
+        )
+    if page > 0:
+        kb.button(text=translate(language_code, "admin_offer_nav_prev"), callback_data=f"{ADMIN_OPS_REQUESTS_PAGE_PREFIX}{page - 1}")
+    if has_next:
+        kb.button(text=translate(language_code, "admin_offer_nav_next"), callback_data=f"{ADMIN_OPS_REQUESTS_PAGE_PREFIX}{page + 1}")
+    kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=ADMIN_OFFERS_NAV_BACK)
+    kb.adjust(1)
+    return kb
+
+
+def _admin_ops_request_detail_text(language_code: str | None, detail) -> str:
+    request = detail.request
+    bridge = detail.booking_bridge.bridge_status.value if detail.booking_bridge is not None else "-"
+    travel_end = f" - {request.travel_date_end.isoformat()}" if request.travel_date_end is not None else ""
+    return translate(
+        language_code,
+        "admin_ops_request_detail",
+        request_id=str(request.id),
+        customer=str(detail.customer_telegram_user_id or request.customer_telegram_user_id or request.user_id),
+        status=_enum_value(request.status),
+        request_type=_enum_value(request.request_type),
+        travel_date=f"{request.travel_date_start.isoformat()}{travel_end}",
+        group_size=str(request.group_size or "-"),
+        route=_truncate_line(request.route_notes, max_len=300),
+        selected_response=str(request.selected_supplier_response_id or "-"),
+        bridge=bridge,
+        created_at=_short_dt(request.created_at),
+        updated_at=_short_dt(request.updated_at),
+    )
 
 
 def _queue_lifecycle(mode: str) -> SupplierOfferLifecycle:
@@ -828,6 +979,154 @@ async def cmd_admin_approved(message: Message, state: FSMContext) -> None:
 @router.message(Command("admin_published"))
 async def cmd_admin_published(message: Message, state: FSMContext) -> None:
     await _open_queue(message, state, queue_mode=_QUEUE_MODE_PUBLISHED)
+
+
+async def _show_admin_ops_orders(message, language_code: str | None, *, page: int) -> None:
+    page = max(page, 0)
+    with SessionLocal() as session:
+        result = AdminReadService().list_orders(
+            session,
+            limit=_ADMIN_OPS_PAGE_SIZE + 1,
+            offset=page * _ADMIN_OPS_PAGE_SIZE,
+        )
+    items = result.items[:_ADMIN_OPS_PAGE_SIZE]
+    has_next = len(result.items) > _ADMIN_OPS_PAGE_SIZE
+    await message.answer(
+        _admin_ops_orders_text(language_code, page=page, items=items),
+        reply_markup=_admin_ops_orders_keyboard(
+            language_code,
+            page=page,
+            items=items,
+            has_next=has_next,
+        ).as_markup(),
+    )
+
+
+async def _show_admin_ops_requests(message, language_code: str | None, *, page: int) -> None:
+    page = max(page, 0)
+    with SessionLocal() as session:
+        items_full = CustomMarketplaceRequestService().list_for_admin(
+            session,
+            limit=_ADMIN_OPS_PAGE_SIZE + 1,
+            offset=page * _ADMIN_OPS_PAGE_SIZE,
+        )
+    items = items_full[:_ADMIN_OPS_PAGE_SIZE]
+    has_next = len(items_full) > _ADMIN_OPS_PAGE_SIZE
+    await message.answer(
+        _admin_ops_requests_text(language_code, page=page, items=items),
+        reply_markup=_admin_ops_requests_keyboard(
+            language_code,
+            page=page,
+            items=items,
+            has_next=has_next,
+        ).as_markup(),
+    )
+
+
+@router.message(Command("admin_orders"))
+async def cmd_admin_orders(message: Message, state: FSMContext) -> None:
+    if message.from_user is None:
+        return
+    with SessionLocal() as session:
+        lg = _user_service().resolve_language(
+            session,
+            telegram_user_id=message.from_user.id,
+            telegram_language_code=message.from_user.language_code,
+        )
+    if await _deny_if_not_allowed(message, language_code=lg):
+        await state.clear()
+        return
+    await _show_admin_ops_orders(message, lg, page=0)
+
+
+@router.message(Command("admin_requests"))
+async def cmd_admin_requests(message: Message, state: FSMContext) -> None:
+    if message.from_user is None:
+        return
+    with SessionLocal() as session:
+        lg = _user_service().resolve_language(
+            session,
+            telegram_user_id=message.from_user.id,
+            telegram_language_code=message.from_user.language_code,
+        )
+    if await _deny_if_not_allowed(message, language_code=lg):
+        await state.clear()
+        return
+    await _show_admin_ops_requests(message, lg, page=0)
+
+
+@router.callback_query(
+    F.data.startswith(ADMIN_OPS_ORDERS_PAGE_PREFIX)
+    | F.data.startswith(ADMIN_OPS_ORDER_DETAIL_PREFIX)
+    | F.data.startswith(ADMIN_OPS_REQUESTS_PAGE_PREFIX)
+    | F.data.startswith(ADMIN_OPS_REQUEST_DETAIL_PREFIX)
+)
+async def admin_ops_read_navigation(query: CallbackQuery, state: FSMContext) -> None:
+    if query.from_user is None or query.data is None or query.message is None:
+        return
+    with SessionLocal() as session:
+        lg = _user_service().resolve_language(
+            session,
+            telegram_user_id=query.from_user.id,
+            telegram_language_code=query.from_user.language_code,
+        )
+    if await _deny_if_not_allowed(query, language_code=lg):
+        await state.clear()
+        return
+
+    if query.data.startswith(ADMIN_OPS_ORDERS_PAGE_PREFIX):
+        raw_page = query.data.removeprefix(ADMIN_OPS_ORDERS_PAGE_PREFIX)
+        page = int(raw_page) if raw_page.isdigit() else 0
+        await _show_admin_ops_orders(query.message, lg, page=page)
+        await query.answer()
+        return
+
+    if query.data.startswith(ADMIN_OPS_REQUESTS_PAGE_PREFIX):
+        raw_page = query.data.removeprefix(ADMIN_OPS_REQUESTS_PAGE_PREFIX)
+        page = int(raw_page) if raw_page.isdigit() else 0
+        await _show_admin_ops_requests(query.message, lg, page=page)
+        await query.answer()
+        return
+
+    if query.data.startswith(ADMIN_OPS_ORDER_DETAIL_PREFIX):
+        raw = query.data.removeprefix(ADMIN_OPS_ORDER_DETAIL_PREFIX).split(":")
+        order_id = int(raw[0]) if raw and raw[0].isdigit() else 0
+        page = int(raw[1]) if len(raw) > 1 and raw[1].isdigit() else 0
+        with SessionLocal() as session:
+            detail = AdminReadService().get_order_detail(session, order_id=order_id)
+        if detail is None:
+            await query.message.answer(translate(lg, "admin_offer_no_current"))
+            await query.answer()
+            return
+        await query.message.answer(
+            _admin_ops_order_detail_text(lg, detail),
+            reply_markup=_admin_ops_detail_keyboard(
+                lg,
+                list_callback=f"{ADMIN_OPS_ORDERS_PAGE_PREFIX}{page}",
+            ).as_markup(),
+        )
+        await query.answer()
+        return
+
+    if query.data.startswith(ADMIN_OPS_REQUEST_DETAIL_PREFIX):
+        raw = query.data.removeprefix(ADMIN_OPS_REQUEST_DETAIL_PREFIX).split(":")
+        request_id = int(raw[0]) if raw and raw[0].isdigit() else 0
+        page = int(raw[1]) if len(raw) > 1 and raw[1].isdigit() else 0
+        try:
+            with SessionLocal() as session:
+                detail = CustomMarketplaceRequestService().get_admin_detail(session, request_id=request_id)
+        except CustomMarketplaceRequestNotFoundError:
+            await query.message.answer(translate(lg, "admin_offer_no_current"))
+            await query.answer()
+            return
+        await query.message.answer(
+            _admin_ops_request_detail_text(lg, detail),
+            reply_markup=_admin_ops_detail_keyboard(
+                lg,
+                list_callback=f"{ADMIN_OPS_REQUESTS_PAGE_PREFIX}{page}",
+            ).as_markup(),
+        )
+        await query.answer()
 
 
 @router.callback_query(F.data.in_({ADMIN_OFFERS_NAV_HOME, ADMIN_OFFERS_NAV_BACK, ADMIN_OFFERS_NAV_NEXT, ADMIN_OFFERS_NAV_PREV}))

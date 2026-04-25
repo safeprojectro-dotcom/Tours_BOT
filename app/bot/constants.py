@@ -92,6 +92,11 @@ ADMIN_OFFERS_NAV_PREV = "admin:offers:nav:prev"
 ADMIN_OFFERS_NAV_BACK = "admin:offers:nav:back"
 ADMIN_OFFERS_NAV_HOME = "admin:offers:nav:home"
 
+ADMIN_OPS_ORDERS_PAGE_PREFIX = "ao:o:"
+ADMIN_OPS_ORDER_DETAIL_PREFIX = "ao:od:"
+ADMIN_OPS_REQUESTS_PAGE_PREFIX = "ao:r:"
+ADMIN_OPS_REQUEST_DETAIL_PREFIX = "ao:rd:"
+
 ADMIN_SUPPLIERS_ACTION_CALLBACK_PREFIX = "admin:suppliers:action:"
 ADMIN_SUPPLIERS_NAV_CALLBACK_PREFIX = "admin:suppliers:nav:"
 ADMIN_SUPPLIERS_ACTION_APPROVE = "admin:suppliers:action:approve"

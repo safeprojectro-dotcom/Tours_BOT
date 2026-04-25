@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import unittest
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -23,7 +23,18 @@ from app.bot.constants import (
 )
 from app.bot.handlers import admin_moderation
 from app.core.config import get_settings
-from app.models.enums import SupplierOfferLifecycle, SupplierOfferPaymentMode, TourSalesMode, TourStatus
+from app.models.custom_marketplace_request import CustomMarketplaceRequest
+from app.models.enums import (
+    BookingStatus,
+    CustomMarketplaceRequestSource,
+    CustomMarketplaceRequestStatus,
+    CustomMarketplaceRequestType,
+    PaymentStatus,
+    SupplierOfferLifecycle,
+    SupplierOfferPaymentMode,
+    TourSalesMode,
+    TourStatus,
+)
 from app.models.supplier import SupplierOfferExecutionLink
 from tests.unit.base import FoundationDBTestCase
 
@@ -189,6 +200,132 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         text = asyncio.run(body())
         self.assertIn("admin moderation queue", text)
         self.assertIn("offer #", text)
+
+    def test_admin_workspace_includes_read_only_orders_and_requests_buttons(self) -> None:
+        self._create_offer(lifecycle=SupplierOfferLifecycle.READY_FOR_MODERATION)
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.cmd_admin_offers(message, state)
+            return self._all_answer_texts(message), self._inline_button_texts(message)
+
+        text, buttons = asyncio.run(body())
+        self.assertIn("admin moderation queue", text)
+        self.assertIn("📦 orders", buttons)
+        self.assertIn("📨 requests", buttons)
+
+    def test_non_allowlisted_admin_ops_orders_is_denied(self) -> None:
+        async def body() -> str:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990099)
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.cmd_admin_orders(message, state)
+            return message.answer.call_args[0][0].lower()
+
+        text = asyncio.run(body())
+        self.assertIn("not available", text)
+
+    def test_admin_ops_orders_pagination_and_detail_are_read_only(self) -> None:
+        user = self.create_user(telegram_user_id=353_001)
+        tour = self.create_tour(code="TG-ADM-ORDER-UI", title_default="Telegram Admin Orders")
+        point = self.create_boarding_point(tour)
+        orders = [
+            self.create_order(
+                user,
+                tour,
+                point,
+                booking_status=BookingStatus.RESERVED,
+                payment_status=PaymentStatus.AWAITING_PAYMENT,
+            )
+            for _ in range(6)
+        ]
+        target = orders[-1]
+        target_id = target.id
+        self.session.commit()
+
+        async def body() -> tuple[str, list[str], list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            next_cb = _callback(
+                telegram_user_id=990001,
+                data="ao:o:1",
+                message=message,
+            )
+            detail_cb = _callback(
+                telegram_user_id=990001,
+                data=f"ao:od:{target_id}:0",
+                message=message,
+            )
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.cmd_admin_orders(message, state)
+                await admin_moderation.admin_ops_read_navigation(next_cb, state)
+                await admin_moderation.admin_ops_read_navigation(detail_cb, state)
+            return self._all_answer_texts(message), self._inline_button_texts(message), self._inline_callback_data(message)
+
+        text, buttons, callbacks = asyncio.run(body())
+        self.assertIn("admin orders", text)
+        self.assertIn("page 1", text)
+        self.assertIn("page 2", text)
+        self.assertIn("view order #", "\n".join(buttons))
+        self.assertIn("order #", text)
+        self.assertIn("telegram admin orders", text)
+        self.assertIn("customer telegram: 353001", text)
+        self.assertIn("back", buttons)
+        self.assertIn("ao:o:1", callbacks)
+        self.assertTrue(all(len(callback.encode("utf-8")) <= 64 for callback in callbacks))
+
+    def test_admin_ops_requests_pagination_and_detail_are_read_only(self) -> None:
+        user = self.create_user(telegram_user_id=353_101)
+        rows: list[CustomMarketplaceRequest] = []
+        for idx in range(6):
+            row = CustomMarketplaceRequest(
+                user_id=user.id,
+                request_type=CustomMarketplaceRequestType.CUSTOM_ROUTE,
+                travel_date_start=date(2026, 10, min(idx + 1, 28)),
+                route_notes=f"Telegram admin request route {idx}",
+                group_size=idx + 1,
+                source_channel=CustomMarketplaceRequestSource.MINI_APP,
+                status=CustomMarketplaceRequestStatus.OPEN,
+            )
+            self.session.add(row)
+            self.session.flush()
+            rows.append(row)
+        target = rows[-1]
+        target_id = target.id
+        self.session.commit()
+
+        async def body() -> tuple[str, list[str], list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            next_cb = _callback(
+                telegram_user_id=990001,
+                data="ao:r:1",
+                message=message,
+            )
+            detail_cb = _callback(
+                telegram_user_id=990001,
+                data=f"ao:rd:{target_id}:0",
+                message=message,
+            )
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.cmd_admin_requests(message, state)
+                await admin_moderation.admin_ops_read_navigation(next_cb, state)
+                await admin_moderation.admin_ops_read_navigation(detail_cb, state)
+            return self._all_answer_texts(message), self._inline_button_texts(message), self._inline_callback_data(message)
+
+        text, buttons, callbacks = asyncio.run(body())
+        self.assertIn("admin requests", text)
+        self.assertIn("page 1", text)
+        self.assertIn("page 2", text)
+        self.assertIn("view request #", "\n".join(buttons))
+        self.assertIn("request #", text)
+        self.assertIn("customer telegram: 353101", text)
+        self.assertIn("telegram admin request route", text)
+        self.assertIn("back", buttons)
+        self.assertIn("ao:r:1", callbacks)
+        self.assertTrue(all(len(callback.encode("utf-8")) <= 64 for callback in callbacks))
 
     def test_admin_queue_shows_ready_for_moderation_only(self) -> None:
         ready_id = self._create_offer(lifecycle=SupplierOfferLifecycle.READY_FOR_MODERATION)
