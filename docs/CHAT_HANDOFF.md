@@ -46,6 +46,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Y32.6 design gate:** Telegram admin create/replace execution-link UI gate created in **`docs/OPERATOR_LINK_CREATE_REPLACE_UI_GATE.md`** (docs-only): defines safe tour-selection UX, compatibility filters, create/replace flows, confirmation/danger messages, fail-safe behavior, tests required, and first safe runtime-slice recommendation. It preserves no auto-tour creation, `supplier_offer != tour`, no Mini App changes, and direct booking CTA controlled only by active authoritative link plus linked-tour bookability.
 - **Y32.7 accepted smoke:** Telegram admin create execution-link UI is accepted via **`docs/HANDOFF_Y32_7_OPERATOR_LINK_CREATE_REPLACE_UI_ACCEPTED.md`**. Smoke tested `/admin_published` -> offer detail -> `Execution link` with offer `#5` and explicit `tour_id=3`; confirmation showed offer/tour `sales_mode`, tour status, seats, and Mini App CTA warning; link was created as `supplier_offer_id=5 -> tour_id=3`; status/history showed active link plus previous closed history. DB confirmed active link `id=3` for offer `#5` and closed historical link `id=2`. No auto-tour creation, Mini App, Layer A booking/payment, identity bridge, runtime schema, or migration changes were made.
 - **Y32.7 replace guard smoke:** Telegram admin create/replace safety guard is accepted via **`docs/HANDOFF_Y32_7_OPERATOR_LINK_REPLACE_GUARD_SMOKE.md`**. Create/view/close flows were validated, replace action appears only when an active link exists and requests explicit `tour_id` or exact tour code, sales-mode mismatch is blocked with clear admin feedback and no state change, and single-active-link/fail-closed behavior matches `OPERATOR_EXECUTION_LINK_WORKFLOW_GATE`. No auto-tour creation, Mini App, Layer A booking/payment, identity bridge, runtime schema, or migration changes were made.
+- **Y32.8 design gate:** Telegram admin compatible tour-selection UI gate created in **`docs/OPERATOR_LINK_TOUR_SELECTION_UI_GATE.md`** (docs-only): defines why manual ID/code is insufficient, required filters, tour list card format, pagination/search rules, create/replace flows with selection, fail-safe behavior, tests required, and first safe runtime-slice recommendation. It keeps existing-tour-only selection, same-`sales_mode` filtering, no auto-tour creation, no Mini App changes, and direct booking CTA controlled only by active authoritative link plus linked-tour bookability.
 
 ### Supplier continuity truth (Y2/Y2.3/Y2.1a/Y24/Y25/Y27/Y28 accepted)
 - Supplier v1 model is **supplier entity + one primary Telegram-bound operator**.
@@ -169,6 +170,14 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
   - critical safety guard confirmed: `sales_mode` mismatch is blocked with a clear admin error and no state change;
   - behavior matches **`docs/OPERATOR_EXECUTION_LINK_WORKFLOW_GATE.md`**: single active link, no auto-tour creation, strict compatibility validation, and fail-closed behavior;
   - expected limitations remain: manual ID/code only, no paginated tour search UI yet, and no second compatible `full_bus` tour for full replace smoke.
+- Y32.8 Telegram admin compatible tour-selection UI design gate (accepted, docs-only):
+  - design source: **`docs/OPERATOR_LINK_TOUR_SELECTION_UI_GATE.md`**;
+  - goal is to let operators choose compatible tours without already knowing `tour_id` / exact tour code;
+  - candidate list must remain existing-tour-only, same-`sales_mode`, future, and not cancelled/completed;
+  - cards must show tour id/code/title/status/`sales_mode`/departure/seats and a Mini App CTA/actionability warning;
+  - pagination must preserve offer id, create/replace mode, query/filter context, and page;
+  - search must be bounded and must not auto-select, auto-link, or auto-create tours;
+  - first safe runtime slice should add a compatible paginated list first, keeping manual ID/code as fallback and reusing existing confirmation/service validation.
 - Multi-operator organization / RBAC is explicitly postponed beyond Y2.1.
 - Supplier legal/compliance identity is now required for pending onboarding approvals:
   - **`legal_entity_type`**
@@ -269,6 +278,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - Telegram admin create/replace UI gate is now documented in **`docs/OPERATOR_LINK_CREATE_REPLACE_UI_GATE.md`**; next runtime work must start with explicit existing tour id/code selection, compatibility preview, and confirmation.
 - Telegram admin create execution-link UI smoke is accepted in **`docs/HANDOFF_Y32_7_OPERATOR_LINK_CREATE_REPLACE_UI_ACCEPTED.md`**; explicit tour target create flow works, and paginated compatible tour search/list UI remains postponed.
 - Telegram admin replace guard smoke is accepted in **`docs/HANDOFF_Y32_7_OPERATOR_LINK_REPLACE_GUARD_SMOKE.md`**; mismatch guard/no-state-change behavior is confirmed, while paginated compatible tour search/list UI remains postponed.
+- Telegram admin compatible tour-selection UI gate is now documented in **`docs/OPERATOR_LINK_TOUR_SELECTION_UI_GATE.md`**; next runtime work should add a same-`sales_mode` paginated candidate list before broader search.
 - **Next safe order:**
   1. Operator/admin workflow for creating/replacing/closing execution links.
   2. Admin operational visibility for bookings/requests.
