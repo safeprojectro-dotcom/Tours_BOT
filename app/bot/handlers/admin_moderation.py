@@ -9,6 +9,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from sqlalchemy import or_
 
 from app.bot.constants import (
     ADMIN_OFFERS_ACTION_APPROVE,
@@ -353,7 +354,12 @@ def _compatible_tours_for_offer(
     )
     normalized_code_query = (code_query or "").strip()
     if normalized_code_query:
-        query = query.filter(Tour.code.ilike(f"%{normalized_code_query}%"))
+        query = query.filter(
+            or_(
+                Tour.code.ilike(f"%{normalized_code_query}%"),
+                Tour.title_default.ilike(f"%{normalized_code_query}%"),
+            )
+        )
     candidates = (
         query.order_by(Tour.departure_datetime.asc(), Tour.id.asc()).offset(offset).limit(_LINK_TOUR_PAGE_SIZE + 1).all()
     )
