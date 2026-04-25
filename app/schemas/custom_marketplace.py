@@ -231,6 +231,26 @@ class CustomMarketplaceRequestRead(BaseModel):
         default=None,
         description="Admin/ops read-side customer label; None outside admin-populated surfaces.",
     )
+    assigned_operator_id: int | None = Field(
+        default=None,
+        description="Internal users.id of the assigned operator; admin/ops only when populated.",
+    )
+    assigned_by_user_id: int | None = Field(
+        default=None,
+        description="Internal users.id of the actor who last set assignment; admin/ops only.",
+    )
+    assigned_at: datetime | None = Field(
+        default=None,
+        description="When the request was last assigned; admin/ops only.",
+    )
+    operator_summary: AdminCustomerSummary | None = Field(
+        default=None,
+        description="Label for assigned operator (User-backed); admin/ops only.",
+    )
+    assigned_operator_telegram_user_id: int | None = Field(
+        default=None,
+        description="Telegram id of assigned operator; admin/ops only (for client-side match).",
+    )
     request_type: CustomMarketplaceRequestType
     travel_date_start: date
     travel_date_end: date | None

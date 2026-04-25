@@ -329,7 +329,40 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         self.assertIn("telegram admin request route", text)
         self.assertIn("back", buttons)
         self.assertIn("ao:r:1", callbacks)
+        self.assertIn("owner", text.lower())
         self.assertTrue(all(len(callback.encode("utf-8")) <= 64 for callback in callbacks))
+
+    def test_admin_ops_request_assign_to_me_telegram(self) -> None:
+        self.create_user(telegram_user_id=990001)
+        cust = self.create_user(telegram_user_id=353_300)
+        row = CustomMarketplaceRequest(
+            user_id=cust.id,
+            request_type=CustomMarketplaceRequestType.CUSTOM_ROUTE,
+            travel_date_start=date(2026, 11, 1),
+            route_notes="Assign callback test",
+            group_size=2,
+            source_channel=CustomMarketplaceRequestSource.MINI_APP,
+            status=CustomMarketplaceRequestStatus.OPEN,
+        )
+        self.session.add(row)
+        self.session.commit()
+        rid = row.id
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            assign_cb = _callback(
+                telegram_user_id=990001,
+                data=f"ao:am:{rid}:0",
+                message=message,
+            )
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_ops_request_assign_to_me_handler(assign_cb, state)
+            return self._all_answer_texts(message), self._inline_callback_data(message)
+
+        text, callbacks = asyncio.run(body())
+        self.assertIn("assigned to you", text.lower())
+        self.assertNotIn("ao:am:", " ".join(callbacks))
 
     def test_admin_queue_shows_ready_for_moderation_only(self) -> None:
         ready_id = self._create_offer(lifecycle=SupplierOfferLifecycle.READY_FOR_MODERATION)

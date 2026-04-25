@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -66,6 +67,30 @@ class CustomMarketplaceValidationError(Exception):
     def __init__(self, message: str) -> None:
         self.message = message
         super().__init__(message)
+
+
+class CustomMarketplaceRequestAssignConflictError(Exception):
+    """Request is already assigned to a different operator."""
+
+    def __init__(self, message: str = "Request is already assigned to another operator.") -> None:
+        self.message = message
+        super().__init__(message)
+
+
+class CustomMarketplaceRequestNotAssignableError(Exception):
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__(message)
+
+
+_CUSTOM_REQUEST_NOT_ASSIGNABLE_STATUSES = frozenset(
+    {
+        CustomMarketplaceRequestStatus.CANCELLED,
+        CustomMarketplaceRequestStatus.FULFILLED,
+        CustomMarketplaceRequestStatus.CLOSED_ASSISTED,
+        CustomMarketplaceRequestStatus.CLOSED_EXTERNAL,
+    },
+)
 
 
 def customer_visible_summary(row: CustomMarketplaceRequest) -> str:
@@ -227,6 +252,35 @@ class CustomMarketplaceRequestService:
         self._responses = SupplierCustomRequestResponseRepository()
         self._users = UserRepository()
 
+    @staticmethod
+    def _strip_supplier_request_read(read: CustomMarketplaceRequestRead) -> CustomMarketplaceRequestRead:
+        """Hide admin/ops-only fields from supplier portal read models."""
+        return read.model_copy(
+            update={
+                "assigned_operator_id": None,
+                "assigned_by_user_id": None,
+                "assigned_at": None,
+                "operator_summary": None,
+                "assigned_operator_telegram_user_id": None,
+                "customer_telegram_user_id": None,
+                "customer_summary": None,
+            },
+        )
+
+    def _admin_read_extras_for_request(self, session: Session, row: CustomMarketplaceRequest) -> dict:
+        op = row.assigned_operator
+        if op is None and row.assigned_operator_id is not None:
+            op = self._users.get(session, row.assigned_operator_id)
+        return {
+            "customer_telegram_user_id": row.user.telegram_user_id if row.user is not None else None,
+            "customer_summary": build_admin_customer_summary_from_user(row.user),
+            "assigned_operator_id": row.assigned_operator_id,
+            "assigned_by_user_id": row.assigned_by_user_id,
+            "assigned_at": row.assigned_at,
+            "operator_summary": build_admin_customer_summary_from_user(op) if op is not None else None,
+            "assigned_operator_telegram_user_id": op.telegram_user_id if op is not None else None,
+        }
+
     def _read_with_operational_list_hints(self, row: CustomMarketplaceRequest, session: Session) -> CustomMarketplaceRequestRead:
         counts = self._responses.count_proposed_for_requests(session, request_ids=[row.id])
         hints = build_operational_list_hints(
@@ -240,13 +294,11 @@ class CustomMarketplaceRequestService:
             selected_supplier_response_id=row.selected_supplier_response_id,
         )
         base = CustomMarketplaceRequestRead.model_validate(row, from_attributes=True)
-        tg = row.user.telegram_user_id if row.user is not None else None
-        cs = build_admin_customer_summary_from_user(row.user)
+        extra = self._admin_read_extras_for_request(session, row)
         return base.model_copy(
             update={
+                **extra,
                 "operational_hints": hints,
-                "customer_telegram_user_id": tg,
-                "customer_summary": cs,
             },
         )
 
@@ -324,11 +376,11 @@ class CustomMarketplaceRequestService:
                 selected_supplier_response_id=r.selected_supplier_response_id,
             )
             base = CustomMarketplaceRequestRead.model_validate(r, from_attributes=True)
+            extra = self._admin_read_extras_for_request(session, r)
             out.append(
                 base.model_copy(
                     update={
-                        "customer_telegram_user_id": r.user.telegram_user_id if r.user is not None else None,
-                        "customer_summary": build_admin_customer_summary_from_user(r.user),
+                        **extra,
                         "operational_hints": hints,
                     },
                 )
@@ -376,10 +428,7 @@ class CustomMarketplaceRequestService:
         )
         return CustomMarketplaceRequestDetailRead(
             request=CustomMarketplaceRequestRead.model_validate(row, from_attributes=True).model_copy(
-                update={
-                    "customer_telegram_user_id": tg,
-                    "customer_summary": build_admin_customer_summary_from_user(row.user),
-                },
+                update=self._admin_read_extras_for_request(session, row),
             ),
             responses=responses,
             customer_telegram_user_id=tg,
@@ -388,6 +437,36 @@ class CustomMarketplaceRequestService:
             operational_hints=op_detail,
             prepared_customer_lifecycle_message=prepared_msg,
         )
+
+    def assign_to_me(
+        self,
+        session: Session,
+        *,
+        request_id: int,
+        actor_user_id: int,
+    ) -> CustomMarketplaceRequestRead:
+        row = self._requests.get_for_operator_assignment(session, request_id=request_id)
+        if row is None:
+            raise CustomMarketplaceRequestNotFoundError
+        if row.status in _CUSTOM_REQUEST_NOT_ASSIGNABLE_STATUSES:
+            raise CustomMarketplaceRequestNotAssignableError(
+                f"Cannot assign request in status {row.status.value}.",
+            )
+        if row.assigned_operator_id is not None and row.assigned_operator_id != actor_user_id:
+            raise CustomMarketplaceRequestAssignConflictError()
+        if row.assigned_operator_id == actor_user_id:
+            return self._read_with_operational_list_hints(row, session)
+        now = datetime.now(UTC)
+        row.assigned_operator_id = actor_user_id
+        row.assigned_by_user_id = actor_user_id
+        row.assigned_at = now
+        session.add(row)
+        session.flush()
+        session.refresh(row)
+        row = self._requests.get_for_operator_assignment(session, request_id=request_id)
+        if row is None:
+            raise CustomMarketplaceRequestNotFoundError
+        return self._read_with_operational_list_hints(row, session)
 
     def admin_patch(
         self,
@@ -519,7 +598,8 @@ class CustomMarketplaceRequestService:
                 response_repository=self._responses,
             )
             base = CustomMarketplaceRequestRead.model_validate(r, from_attributes=True)
-            out.append(base.model_copy(update={"supplier_portal_hints": hints}))
+            stripped = self._strip_supplier_request_read(base)
+            out.append(stripped.model_copy(update={"supplier_portal_hints": hints}))
         return out
 
     def get_open_for_supplier(
@@ -550,7 +630,8 @@ class CustomMarketplaceRequestService:
             supplier_id=supplier_id,
             response_repository=self._responses,
         )
-        req_read = CustomMarketplaceRequestRead.model_validate(row, from_attributes=True).model_copy(
+        base = CustomMarketplaceRequestRead.model_validate(row, from_attributes=True)
+        req_read = self._strip_supplier_request_read(base).model_copy(
             update={"supplier_portal_hints": hints},
         )
         return CustomMarketplaceRequestDetailRead(

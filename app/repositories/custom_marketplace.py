@@ -35,6 +35,25 @@ class CustomMarketplaceRequestRepository:
                 ),
                 selectinload(CustomMarketplaceRequest.selected_supplier_response),
                 selectinload(CustomMarketplaceRequest.user),
+                selectinload(CustomMarketplaceRequest.assigned_operator),
+                selectinload(CustomMarketplaceRequest.assigned_by),
+            )
+        )
+        return session.scalars(stmt).first()
+
+    def get_for_operator_assignment(
+        self,
+        session: Session,
+        *,
+        request_id: int,
+    ) -> CustomMarketplaceRequest | None:
+        """Load request with users needed for assign-to-me and admin summaries."""
+        stmt = (
+            select(CustomMarketplaceRequest)
+            .where(CustomMarketplaceRequest.id == request_id)
+            .options(
+                selectinload(CustomMarketplaceRequest.user),
+                selectinload(CustomMarketplaceRequest.assigned_operator),
             )
         )
         return session.scalars(stmt).first()
@@ -49,7 +68,10 @@ class CustomMarketplaceRequestRepository:
     ) -> list[CustomMarketplaceRequest]:
         stmt = (
             select(CustomMarketplaceRequest)
-            .options(selectinload(CustomMarketplaceRequest.user))
+            .options(
+                selectinload(CustomMarketplaceRequest.user),
+                selectinload(CustomMarketplaceRequest.assigned_operator),
+            )
             .order_by(
                 CustomMarketplaceRequest.created_at.desc(),
                 CustomMarketplaceRequest.id.desc(),

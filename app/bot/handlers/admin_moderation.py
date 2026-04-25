@@ -41,6 +41,7 @@ from app.bot.constants import (
     ADMIN_OFFERS_NAV_PREV,
     ADMIN_OPS_ORDER_DETAIL_PREFIX,
     ADMIN_OPS_ORDERS_PAGE_PREFIX,
+    ADMIN_OPS_REQUEST_ASSIGN_ME_PREFIX,
     ADMIN_OPS_REQUEST_DETAIL_PREFIX,
     ADMIN_OPS_REQUESTS_PAGE_PREFIX,
 )
@@ -50,11 +51,14 @@ from app.bot.state import AdminModerationState
 from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.models.enums import SupplierOfferLifecycle, TourStatus
+from app.repositories.user import UserRepository
 from app.models.supplier import Supplier
 from app.models.tour import Tour
 from app.schemas.supplier_admin import SupplierOfferRead
 from app.services.admin_read import AdminReadService
 from app.services.custom_marketplace_request_service import (
+    CustomMarketplaceRequestAssignConflictError,
+    CustomMarketplaceRequestNotAssignableError,
     CustomMarketplaceRequestNotFoundError,
     CustomMarketplaceRequestService,
 )
@@ -178,6 +182,42 @@ def _admin_ops_customer_display(*, customer_summary, customer_telegram_user_id: 
     return f"customer: user_id:{user_id}"
 
 
+def _admin_ops_request_owner_line(
+    language_code: str | None,
+    request,
+    *,
+    viewer_telegram_user_id: int,
+) -> str:
+    if not getattr(request, "assigned_operator_id", None):
+        return translate(language_code, "admin_ops_owner_unassigned")
+    otg = getattr(request, "assigned_operator_telegram_user_id", None)
+    if otg is not None and otg == viewer_telegram_user_id:
+        return translate(language_code, "admin_ops_owner_you")
+    osum = getattr(request, "operator_summary", None)
+    if osum is not None and getattr(osum, "summary_line", None):
+        return _truncate_line(osum.summary_line, max_len=120)
+    return "—"
+
+
+def _admin_ops_request_owner_list_badge(
+    language_code: str | None,
+    item,
+    *,
+    viewer_telegram_user_id: int,
+) -> str:
+    if not getattr(item, "assigned_operator_id", None):
+        return "—"
+    otg = getattr(item, "assigned_operator_telegram_user_id", None)
+    if otg is not None and otg == viewer_telegram_user_id:
+        return translate(language_code, "admin_ops_owner_you")
+    osum = getattr(item, "operator_summary", None)
+    if osum is not None and getattr(osum, "display_name", None):
+        return _truncate_line(osum.display_name, max_len=14)
+    if osum is not None and getattr(osum, "summary_line", None):
+        return _truncate_line(osum.summary_line, max_len=14)
+    return "op"
+
+
 def _admin_ops_orders_text(language_code: str | None, *, page: int, items: list) -> str:
     if not items:
         return translate(language_code, "admin_ops_orders_empty")
@@ -251,7 +291,13 @@ def _admin_ops_detail_keyboard(language_code: str | None, *, list_callback: str)
     return kb
 
 
-def _admin_ops_requests_text(language_code: str | None, *, page: int, items: list) -> str:
+def _admin_ops_requests_text(
+    language_code: str | None,
+    *,
+    page: int,
+    items: list,
+    viewer_telegram_user_id: int,
+) -> str:
     if not items:
         return translate(language_code, "admin_ops_requests_empty")
     lines = [translate(language_code, "admin_ops_requests_title", page=str(page + 1))]
@@ -269,6 +315,11 @@ def _admin_ops_requests_text(language_code: str | None, *, page: int, items: lis
                     user_id=item.user_id,
                 ),
                 summary=_truncate_line(summary),
+                owner=_admin_ops_request_owner_list_badge(
+                    language_code,
+                    item,
+                    viewer_telegram_user_id=viewer_telegram_user_id,
+                ),
             )
         )
     return "\n".join(lines)
@@ -290,7 +341,12 @@ def _admin_ops_requests_keyboard(language_code: str | None, *, page: int, items:
     return kb
 
 
-def _admin_ops_request_detail_text(language_code: str | None, detail) -> str:
+def _admin_ops_request_detail_text(
+    language_code: str | None,
+    detail,
+    *,
+    viewer_telegram_user_id: int,
+) -> str:
     request = detail.request
     bridge = detail.booking_bridge.bridge_status.value if detail.booking_bridge is not None else "-"
     travel_end = f" - {request.travel_date_end.isoformat()}" if request.travel_date_end is not None else ""
@@ -300,12 +356,18 @@ def _admin_ops_request_detail_text(language_code: str | None, detail) -> str:
         customer_telegram_user_id=ctid,
         user_id=request.user_id,
     )
+    owner = _admin_ops_request_owner_line(
+        language_code,
+        request,
+        viewer_telegram_user_id=viewer_telegram_user_id,
+    )
     return translate(
         language_code,
         "admin_ops_request_detail",
         request_id=str(request.id),
         customer=csum,
         customer_telegram_id="-" if ctid is None else str(ctid),
+        owner=owner,
         status=_enum_value(request.status),
         request_type=_enum_value(request.request_type),
         travel_date=f"{request.travel_date_start.isoformat()}{travel_end}",
@@ -316,6 +378,31 @@ def _admin_ops_request_detail_text(language_code: str | None, detail) -> str:
         created_at=_short_dt(request.created_at),
         updated_at=_short_dt(request.updated_at),
     )
+
+
+def _admin_ops_request_detail_keyboard(
+    language_code: str | None,
+    *,
+    list_callback: str,
+    request_id: int,
+    page: int,
+    request,
+    viewer_telegram_user_id: int,
+) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    if getattr(request, "assigned_operator_id", None) is None:
+        kb.button(
+            text=translate(language_code, "admin_ops_request_assign_to_me"),
+            callback_data=f"{ADMIN_OPS_REQUEST_ASSIGN_ME_PREFIX}{request_id}:{page}",
+        )
+    else:
+        otg = getattr(request, "assigned_operator_telegram_user_id", None)
+        if otg is not None and otg != viewer_telegram_user_id:
+            # Assigned to someone else: no action in this slice
+            pass
+    kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=list_callback)
+    kb.adjust(1)
+    return kb
 
 
 def _queue_lifecycle(mode: str) -> SupplierOfferLifecycle:
@@ -1032,7 +1119,13 @@ async def _show_admin_ops_orders(message, language_code: str | None, *, page: in
     )
 
 
-async def _show_admin_ops_requests(message, language_code: str | None, *, page: int) -> None:
+async def _show_admin_ops_requests(
+    message,
+    language_code: str | None,
+    *,
+    page: int,
+    viewer_telegram_user_id: int,
+) -> None:
     page = max(page, 0)
     with SessionLocal() as session:
         items_full = CustomMarketplaceRequestService().list_for_admin(
@@ -1043,7 +1136,12 @@ async def _show_admin_ops_requests(message, language_code: str | None, *, page: 
     items = items_full[:_ADMIN_OPS_PAGE_SIZE]
     has_next = len(items_full) > _ADMIN_OPS_PAGE_SIZE
     await message.answer(
-        _admin_ops_requests_text(language_code, page=page, items=items),
+        _admin_ops_requests_text(
+            language_code,
+            page=page,
+            items=items,
+            viewer_telegram_user_id=viewer_telegram_user_id,
+        ),
         reply_markup=_admin_ops_requests_keyboard(
             language_code,
             page=page,
@@ -1082,7 +1180,12 @@ async def cmd_admin_requests(message: Message, state: FSMContext) -> None:
     if await _deny_if_not_allowed(message, language_code=lg):
         await state.clear()
         return
-    await _show_admin_ops_requests(message, lg, page=0)
+    await _show_admin_ops_requests(
+        message,
+        lg,
+        page=0,
+        viewer_telegram_user_id=message.from_user.id,
+    )
 
 
 @router.callback_query(
@@ -1114,7 +1217,12 @@ async def admin_ops_read_navigation(query: CallbackQuery, state: FSMContext) -> 
     if query.data.startswith(ADMIN_OPS_REQUESTS_PAGE_PREFIX):
         raw_page = query.data.removeprefix(ADMIN_OPS_REQUESTS_PAGE_PREFIX)
         page = int(raw_page) if raw_page.isdigit() else 0
-        await _show_admin_ops_requests(query.message, lg, page=page)
+        await _show_admin_ops_requests(
+            query.message,
+            lg,
+            page=page,
+            viewer_telegram_user_id=query.from_user.id,
+        )
         await query.answer()
         return
 
@@ -1150,13 +1258,85 @@ async def admin_ops_read_navigation(query: CallbackQuery, state: FSMContext) -> 
             await query.answer()
             return
         await query.message.answer(
-            _admin_ops_request_detail_text(lg, detail),
-            reply_markup=_admin_ops_detail_keyboard(
+            _admin_ops_request_detail_text(
+                lg,
+                detail,
+                viewer_telegram_user_id=query.from_user.id,
+            ),
+            reply_markup=_admin_ops_request_detail_keyboard(
                 lg,
                 list_callback=f"{ADMIN_OPS_REQUESTS_PAGE_PREFIX}{page}",
+                request_id=request_id,
+                page=page,
+                request=detail.request,
+                viewer_telegram_user_id=query.from_user.id,
             ).as_markup(),
         )
         await query.answer()
+        return
+
+
+@router.callback_query(F.data.startswith(ADMIN_OPS_REQUEST_ASSIGN_ME_PREFIX))
+async def admin_ops_request_assign_to_me_handler(query: CallbackQuery, state: FSMContext) -> None:
+    if query.from_user is None or query.data is None or query.message is None:
+        return
+    with SessionLocal() as session:
+        lg = _user_service().resolve_language(
+            session,
+            telegram_user_id=query.from_user.id,
+            telegram_language_code=query.from_user.language_code,
+        )
+    if await _deny_if_not_allowed(query, language_code=lg):
+        await state.clear()
+        return
+    raw = query.data.removeprefix(ADMIN_OPS_REQUEST_ASSIGN_ME_PREFIX).split(":")
+    request_id = int(raw[0]) if raw and raw[0].isdigit() else 0
+    page = int(raw[1]) if len(raw) > 1 and raw[1].isdigit() else 0
+    with SessionLocal() as session:
+        actor = UserRepository().get_by_telegram_user_id(
+            session,
+            telegram_user_id=query.from_user.id,
+        )
+        if actor is None:
+            await query.answer("No user profile for this Telegram account.", show_alert=True)
+            return
+        try:
+            CustomMarketplaceRequestService().assign_to_me(
+                session,
+                request_id=request_id,
+                actor_user_id=actor.id,
+            )
+        except CustomMarketplaceRequestNotFoundError:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        except CustomMarketplaceRequestNotAssignableError as exc:
+            await query.answer(exc.message, show_alert=True)
+            return
+        except CustomMarketplaceRequestAssignConflictError as exc:
+            await query.answer(exc.message, show_alert=True)
+            return
+        session.commit()
+        try:
+            detail = CustomMarketplaceRequestService().get_admin_detail(session, request_id=request_id)
+        except CustomMarketplaceRequestNotFoundError:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+    await query.message.answer(
+        _admin_ops_request_detail_text(
+            lg,
+            detail,
+            viewer_telegram_user_id=query.from_user.id,
+        ),
+        reply_markup=_admin_ops_request_detail_keyboard(
+            lg,
+            list_callback=f"{ADMIN_OPS_REQUESTS_PAGE_PREFIX}{page}",
+            request_id=request_id,
+            page=page,
+            request=detail.request,
+            viewer_telegram_user_id=query.from_user.id,
+        ).as_markup(),
+    )
+    await query.answer()
 
 
 @router.callback_query(F.data.in_({ADMIN_OFFERS_NAV_HOME, ADMIN_OFFERS_NAV_BACK, ADMIN_OFFERS_NAV_NEXT, ADMIN_OFFERS_NAV_PREV}))

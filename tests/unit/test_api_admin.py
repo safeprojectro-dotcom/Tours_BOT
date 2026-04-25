@@ -255,6 +255,64 @@ class AdminRouteTests(FoundationDBTestCase):
         )
         self.assertEqual(other_detail.status_code, 404)
 
+    def test_admin_custom_request_assign_to_me(self) -> None:
+        self.create_user(telegram_user_id=352_100)  # customer
+        op = self.create_user(telegram_user_id=352_200)  # operator for assign
+        other = self.create_user(telegram_user_id=352_201)
+        self.session.commit()
+
+        create = self.client.post(
+            "/mini-app/custom-requests",
+            json={
+                "telegram_user_id": 352_100,
+                "request_type": "custom_route",
+                "travel_date_start": "2026-10-01",
+                "route_notes": "Assign test route",
+                "group_size": 2,
+            },
+        )
+        self.assertEqual(create.status_code, 201, create.text)
+        rid = create.json()["id"]
+        headers = {
+            "Authorization": "Bearer test-admin-secret",
+            "X-Admin-Actor-Telegram-Id": "352200",
+        }
+        r0 = self.client.post(f"/admin/custom-requests/{rid}/assign-to-me", headers=headers)
+        self.assertEqual(r0.status_code, 200, r0.text)
+        j0 = r0.json()
+        self.assertEqual(j0["assigned_operator_id"], op.id)
+        self.assertIsNotNone(j0.get("assigned_at"))
+        self.assertEqual(j0["assigned_by_user_id"], op.id)
+        self.assertEqual(j0["assigned_operator_telegram_user_id"], 352_200)
+
+        r1 = self.client.post(f"/admin/custom-requests/{rid}/assign-to-me", headers=headers)
+        self.assertEqual(r1.status_code, 200, r1.text)
+        self.assertEqual(r1.json()["assigned_operator_id"], op.id)
+
+        headers_b = {
+            "Authorization": "Bearer test-admin-secret",
+            "X-Admin-Actor-Telegram-Id": "352201",
+        }
+        r_conflict = self.client.post(f"/admin/custom-requests/{rid}/assign-to-me", headers=headers_b)
+        self.assertEqual(r_conflict.status_code, 409, r_conflict.text)
+
+        no_actor = self.client.post(
+            f"/admin/custom-requests/{rid}/assign-to-me",
+            headers={"Authorization": "Bearer test-admin-secret"},
+        )
+        self.assertEqual(no_actor.status_code, 400)
+
+        admin_list = self.client.get("/admin/custom-requests", headers={"Authorization": "Bearer test-admin-secret"})
+        self.assertEqual(admin_list.status_code, 200)
+        row = next(x for x in admin_list.json()["items"] if x["id"] == rid)
+        self.assertEqual(row["assigned_operator_id"], op.id)
+
+        list_a = self.client.get("/mini-app/custom-requests", params={"telegram_user_id": 352_100})
+        self.assertEqual(list_a.status_code, 200)
+        row_m = next(x for x in list_a.json()["items"] if x["id"] == rid)
+        self.assertNotIn("assigned_operator_id", row_m)
+        self.assertIn("customer_visible_summary", row_m)
+
     def test_admin_tour_list_includes_past_departure_tour(self) -> None:
         """Admin read paths are not filtered by customer catalog time windows."""
         past = self.create_tour(

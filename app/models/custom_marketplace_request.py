@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint
@@ -61,8 +61,31 @@ class CustomMarketplaceRequest(TimestampMixin, Base):
         sqlalchemy_enum(CommercialResolutionKind, name="commercial_resolution_kind"),
         nullable=True,
     )
+    assigned_operator_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    assigned_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    user: Mapped["User"] = relationship(back_populates="custom_marketplace_requests")
+    user: Mapped["User"] = relationship(
+        back_populates="custom_marketplace_requests",
+        foreign_keys="[CustomMarketplaceRequest.user_id]",
+    )
+    assigned_operator: Mapped["User | None"] = relationship(
+        "User",
+        back_populates="ops_assigned_custom_marketplace_requests",
+        foreign_keys="[CustomMarketplaceRequest.assigned_operator_id]",
+    )
+    assigned_by: Mapped["User | None"] = relationship(
+        "User",
+        foreign_keys="[CustomMarketplaceRequest.assigned_by_user_id]",
+        overlaps="assigned_operator,ops_assigned_custom_marketplace_requests",
+    )
     supplier_responses: Mapped[list["SupplierCustomRequestResponse"]] = relationship(
         "SupplierCustomRequestResponse",
         back_populates="request",
