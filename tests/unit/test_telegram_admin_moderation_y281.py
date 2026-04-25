@@ -11,6 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from app.bot.constants import (
     ADMIN_OFFERS_ACTION_APPROVE,
     ADMIN_OFFERS_ACTION_CALLBACK_PREFIX,
+    ADMIN_OFFERS_ACTION_CLOSE_LINK,
+    ADMIN_OFFERS_ACTION_LINK_STATUS,
     ADMIN_OFFERS_ACTION_PUBLISH,
     ADMIN_OFFERS_ACTION_REJECT,
     ADMIN_OFFERS_ACTION_RETRACT,
@@ -18,6 +20,7 @@ from app.bot.constants import (
 from app.bot.handlers import admin_moderation
 from app.core.config import get_settings
 from app.models.enums import SupplierOfferLifecycle, SupplierOfferPaymentMode, TourSalesMode
+from app.models.supplier import SupplierOfferExecutionLink
 from tests.unit.base import FoundationDBTestCase
 
 
@@ -241,7 +244,58 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         self.assertIn("publish", approved_buttons)
         self.assertNotIn("retract", approved_buttons)
         self.assertIn("retract", published_buttons)
+        self.assertIn("execution link", published_buttons)
         self.assertNotIn("publish", published_buttons)
+
+    def test_admin_can_view_execution_link_status_and_history(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        tour = self.create_tour(code="TG-LINK-STATUS", sales_mode=TourSalesMode.PER_SEAT)
+        self.session.add(SupplierOfferExecutionLink(supplier_offer_id=offer_id, tour_id=tour.id, link_status="active"))
+        self.session.commit()
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            cb = _callback(
+                telegram_user_id=990001,
+                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_LINK_STATUS}:{offer_id}",
+                message=message,
+            )
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(cb, state)
+            return self._all_answer_texts(message), self._inline_button_texts(message)
+
+        text, buttons = asyncio.run(body())
+        self.assertIn("execution link status", text)
+        self.assertIn("active link", text)
+        self.assertIn("tg-link-status", text)
+        self.assertIn("link history", text)
+        self.assertIn("close active link", buttons)
+
+    def test_admin_can_close_active_execution_link_from_status_screen(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        tour = self.create_tour(code="TG-LINK-CLOSE", sales_mode=TourSalesMode.PER_SEAT)
+        self.session.add(SupplierOfferExecutionLink(supplier_offer_id=offer_id, tour_id=tour.id, link_status="active"))
+        self.session.commit()
+
+        async def body() -> str:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            cb = _callback(
+                telegram_user_id=990001,
+                data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_CLOSE_LINK}:{offer_id}",
+                message=message,
+            )
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(cb, state)
+            return self._all_answer_texts(message)
+
+        text = asyncio.run(body())
+        self.assertIn("closed", text)
+        self.assertIn("no active execution link", text)
+        links = self.session.query(SupplierOfferExecutionLink).filter_by(supplier_offer_id=offer_id).all()
+        self.assertEqual([link for link in links if link.link_status == "active"], [])
+        self.assertEqual(links[0].close_reason, "unlinked")
 
     def test_admin_can_approve_from_allowed_state(self) -> None:
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.READY_FOR_MODERATION)

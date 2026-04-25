@@ -11,6 +11,8 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.bot.constants import (
     ADMIN_OFFERS_ACTION_APPROVE,
     ADMIN_OFFERS_ACTION_CALLBACK_PREFIX,
+    ADMIN_OFFERS_ACTION_CLOSE_LINK,
+    ADMIN_OFFERS_ACTION_LINK_STATUS,
     ADMIN_OFFERS_ACTION_PUBLISH,
     ADMIN_OFFERS_ACTION_REJECT,
     ADMIN_OFFERS_ACTION_RETRACT,
@@ -26,8 +28,13 @@ from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.models.enums import SupplierOfferLifecycle
 from app.models.supplier import Supplier
+from app.models.tour import Tour
 from app.schemas.supplier_admin import SupplierOfferRead
-from app.services.supplier_offer_execution_link_service import SupplierOfferExecutionLinkService
+from app.services.supplier_offer_execution_link_service import (
+    SupplierOfferExecutionLinkNotFoundError,
+    SupplierOfferExecutionLinkService,
+    SupplierOfferExecutionLinkValidationError,
+)
 from app.services.supplier_offer_moderation_service import (
     SupplierOfferModerationNotFoundError,
     SupplierOfferModerationService,
@@ -68,6 +75,12 @@ def _action_button_rows(language_code: str | None, offer: SupplierOfferRead) -> 
         rows.append((translate(language_code, "admin_offer_action_publish"), f"{ADMIN_OFFERS_ACTION_PUBLISH}:{offer.id}"))
     if offer.lifecycle_status == SupplierOfferLifecycle.PUBLISHED:
         rows.append((translate(language_code, "admin_offer_action_retract"), f"{ADMIN_OFFERS_ACTION_RETRACT}:{offer.id}"))
+        rows.append(
+            (
+                translate(language_code, "admin_offer_action_link_status"),
+                f"{ADMIN_OFFERS_ACTION_LINK_STATUS}:{offer.id}",
+            )
+        )
     return rows
 
 
@@ -164,6 +177,62 @@ def _offer_detail_text(session, language_code: str | None, *, offer: SupplierOff
             )
         )
     return "\n".join(lines)
+
+
+def _link_history_text(session, language_code: str | None, *, offer_id: int) -> tuple[str, bool]:
+    links = SupplierOfferExecutionLinkService().list_links_for_offer(session, offer_id=offer_id)
+    active = next((link for link in links if link.link_status == "active"), None)
+    lines = [translate(language_code, "admin_offer_link_status_title", offer_id=str(offer_id))]
+    if active is None:
+        lines.append(translate(language_code, "admin_offer_link_status_none"))
+    else:
+        tour = session.get(Tour, active.tour_id)
+        lines.append(
+            translate(
+                language_code,
+                "admin_offer_link_status_active",
+                tour_id=str(active.tour_id),
+                tour_code=tour.code if tour is not None else "-",
+                tour_status=getattr(tour.status, "value", str(tour.status)) if tour is not None else "-",
+                sales_mode=getattr(tour.sales_mode, "value", str(tour.sales_mode)) if tour is not None else "-",
+                seats_available=str(tour.seats_available) if tour is not None else "-",
+                seats_total=str(tour.seats_total) if tour is not None else "-",
+            )
+        )
+
+    if not links:
+        lines.append(translate(language_code, "admin_offer_link_history_empty"))
+    else:
+        lines.append(translate(language_code, "admin_offer_link_history_title"))
+        for link in links[:5]:
+            lines.append(
+                translate(
+                    language_code,
+                    "admin_offer_link_history_row",
+                    link_id=str(link.id),
+                    tour_id=str(link.tour_id),
+                    status=link.link_status,
+                    reason=link.close_reason or "-",
+                    created_at=link.created_at.isoformat(timespec="minutes").replace("T", " "),
+                    closed_at=link.closed_at.isoformat(timespec="minutes").replace("T", " ")
+                    if link.closed_at is not None
+                    else "-",
+                )
+            )
+    return "\n".join(lines), active is not None
+
+
+def _link_status_keyboard(language_code: str | None, *, offer_id: int, has_active_link: bool) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    if has_active_link:
+        kb.button(
+            text=translate(language_code, "admin_offer_action_close_link"),
+            callback_data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_CLOSE_LINK}:{offer_id}",
+        )
+    kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=ADMIN_OFFERS_NAV_BACK)
+    kb.button(text=translate(language_code, "admin_offer_nav_home"), callback_data=ADMIN_OFFERS_NAV_HOME)
+    kb.adjust(1, 2)
+    return kb
 
 
 async def _deny_if_not_allowed(message: Message | CallbackQuery, *, language_code: str | None) -> bool:
@@ -400,6 +469,29 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                 await query.message.answer(translate(lg, "admin_offer_reject_prompt", offer_id=str(offer_id)))
                 await query.answer()
                 return
+            if action_name == ADMIN_OFFERS_ACTION_LINK_STATUS:
+                text, has_active = _link_history_text(session, lg, offer_id=offer_id)
+                await query.message.answer(
+                    text,
+                    reply_markup=_link_status_keyboard(lg, offer_id=offer_id, has_active_link=has_active).as_markup(),
+                )
+                await query.answer()
+                return
+            if action_name == ADMIN_OFFERS_ACTION_CLOSE_LINK:
+                SupplierOfferExecutionLinkService().close_active_link(
+                    session,
+                    offer_id=offer_id,
+                    reason="unlinked",
+                )
+                session.commit()
+                await query.message.answer(translate(lg, "admin_offer_link_close_done", offer_id=str(offer_id)))
+                text, has_active = _link_history_text(session, lg, offer_id=offer_id)
+                await query.message.answer(
+                    text,
+                    reply_markup=_link_status_keyboard(lg, offer_id=offer_id, has_active_link=has_active).as_markup(),
+                )
+                await query.answer()
+                return
             if action_name == ADMIN_OFFERS_ACTION_APPROVE:
                 moderation.approve(session, offer_id=offer_id)
                 session.commit()
@@ -459,7 +551,14 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
             elif not queue_ids:
                 await state.clear()
                 await query.message.answer(translate(lg, _queue_empty_key(queue_mode)))
-    except (SupplierOfferModerationNotFoundError, SupplierOfferModerationStateError, SupplierOfferPublicationConfigError) as exc:
+    except SupplierOfferExecutionLinkNotFoundError:
+        await query.message.answer(translate(lg, "admin_offer_link_close_missing"))
+    except (
+        SupplierOfferModerationNotFoundError,
+        SupplierOfferModerationStateError,
+        SupplierOfferPublicationConfigError,
+        SupplierOfferExecutionLinkValidationError,
+    ) as exc:
         detail = getattr(exc, "message", str(exc))
         await query.message.answer(translate(lg, "admin_offer_action_unavailable", detail=detail))
     await query.answer()
