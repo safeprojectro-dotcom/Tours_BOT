@@ -105,6 +105,14 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
   - compatibility is additive: landing payload gained optional execution activation fields (`execution_activation_available`, `execution_target_tour_code`); existing clients can ignore them;
   - `supplier_offer` and Layer A `tour` remain separate entities; activation uses explicit linkage truth only (no uncontrolled automatic mapping);
   - operational limitation remains explicit: without rows in **`supplier_offer_execution_links`**, landing still works with safe fallback (no direct execution CTA, catalog path remains available), so scenario B/C is testable even when scenario A is not operationally available yet.
+- Y32.1 Supplier Conversion Bridge read-side actionability truth (accepted):
+  - landing/read-side resolver exposes `actionability_state`, `has_execution_link`, safe `linked_tour_id` / `linked_tour_code`, `execution_cta_enabled`, and `fallback_cta`;
+  - `execution_activation_available` remains as backward-compatible alias of `execution_cta_enabled`;
+  - direct booking CTA is enabled only when the supplier offer has an active authoritative execution link and the linked tour is currently `bookable` by execution / `sales_mode` policy;
+  - no active link => `view_only` with `browse_catalog` fallback;
+  - linked `full_bus` partial inventory => `assisted_only`, no execution CTA;
+  - sold out or invalid linked tour => no false booking CTA;
+  - guardrails preserved: no auto-create tour, `supplier_offer != tour`, no Layer A booking/payment changes, no RFQ changes, no identity bridge changes, no coupons/incidents/admin workflows.
 - Multi-operator organization / RBAC is explicitly postponed beyond Y2.1.
 - Supplier legal/compliance identity is now required for pending onboarding approvals:
   - **`legal_entity_type`**
@@ -198,11 +206,11 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - Guardrail: do not reopen Mini App identity bridge work unless a concrete runtime regression reappears (e.g., `has_identity=False` on Telegram WebApp launch path).
 
 ### Next safe step (after this sync)
-- Supplier -> Conversion Bridge **runtime implementation has not started**; continue only behind an explicit design/implementation gate.
+- Supplier -> Conversion Bridge **read-side actionability runtime slice (Y32.1) is implemented and accepted**; continue only with explicitly scoped operational slices.
 - **Next safe order:**
-  1. Supplier -> Conversion Bridge design/implementation gate.
+  1. Operator/admin workflow for creating/replacing/closing execution links.
   2. Admin operational visibility for bookings/requests.
-  3. Operator workflows.
+  3. Incident/disruption design gate.
 - Implementation gate document: **`docs/SUPPLIER_CONVERSION_BRIDGE_IMPLEMENTATION_GATE.md`**.
 - Architecture continuity anchor before next tracks: **`docs/DESIGN_1_SUPPLIER_MARKETPLACE_ARCHITECTURE_CHECKPOINT.md`** (accepted intermediate checkpoint for Design 1 boundaries/order/non-goals).
 - Phase 7.1 continuation must pass design/review gate before runtime changes: **`docs/PHASE_7_1_SALES_MODE_FULL_BUS_REVIEW_GATE.md`**.
@@ -1366,7 +1374,7 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 - **`tour.sales_mode` (Phase 7.1):** tour-level **commercial source of truth**; **`TourSalesModePolicyService`** is the **single service-layer interpretation** — **Mini App** and **private bot** (Steps **3–4**) **consume** that policy on read-side/CTA paths; **do not** duplicate commercial rules in UI-only layers
 
 ### Not Implemented Yet
-- **Next (forward, active supplier-offer bridge sub-track):** **Y30.4 — supplier-offer execution linkage workflow / linkage operations** (narrow continuation after Y30.3 activation contract): operationally manage authoritative linkage availability for scenario A while preserving Layer A and RFQ boundaries.
+- **Next (forward, active supplier-offer bridge sub-track):** operator/admin workflow for creating, replacing, and closing authoritative execution links. Y32.1 already hardened read-side landing actionability; the next operational slice should manage linkage availability explicitly while preserving Layer A and RFQ boundaries.
 - **Parallel separate thread (unchanged):** **Phase 7.1 / Sales Mode / Step 6+** — product/design for **scope beyond** the **closed** catalog virgin Mode 2 Mini App path (**`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**): charter **pricing**, **supplier-defined** policy, **private-bot** charter UX, **E2E** coverage, **full** i18n — **not** a default reopening of **5g.4**; **separate** from Phase **7** handoff/operator chain expansion. Optional **later** slices: group **rate limits** — product-scoped.
 - **Phase 7.1 — explicitly postponed (beyond closed 5g.4):** **`full_bus_price`**; **`bus_capacity`**; **pricing expansion**; non-catalog or **non-virgin** whole-bus **execution** rules beyond current **`TourSalesModePolicyService`**; **`TemporaryReservationService` / reservation engine refactor**; **broad operator workflow rewrite**; any **“many seats ⇒ whole bus”** heuristic; **old Phase 7** **`grp_followup_*`** chain expansion; broader **payment** / **availability** / **seat-semantics** changes driven by **`sales_mode`** without an explicit slice — **unless** product approves a scoped implementation.
 - **Group / handoff (Phase 7 — closed):** Steps **1–17** + **final consolidation** + **`docs/PHASE_7_REVIEW.md`** = **rules + helpers + group gating + escalation wording + deep links + private `/start`** + **narrow** **`handoffs`** write on **`/start grp_followup`** (**Step 7**) + **focused tests** (**Step 8**) + **admin read visibility** (**Step 9**) + **narrow `assign-operator`** (**Step 10**) + **read-side work-state labels** (**Step 11**) + **narrow `mark-in-work`** (**Step 12**) + **narrow `resolve-group-followup`** + **`group_followup_resolution_label`** (**Steps 13–14**) + **`group_followup_queue_state`** + **`group_followup_queue`** list filter (**Step 15**) + **private resolved confirmation** on **`grp_followup`** (**Step 16**) + **private readiness/history** (**Step 17**) + **aligned private/admin wording** (**consolidation**); **group** chat path (Steps **3–4**) still **no** DB handoff rows — **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** §**19**.
@@ -1377,6 +1385,7 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
   - auto-create Layer A tours from supplier offers;
   - auto-link workflow automation for Layer A tours from supplier offers;
   - coupon logic;
+  - incident/disruption runtime behavior (design gate first);
   - broad supplier-offer conversion activation workflow redesign end-to-end;
   - waitlist redesign tied to supplier-offer conversion;
   - publication pipeline redesign / broad publication-flow redesign;
@@ -1390,12 +1399,13 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 ## Next Safe Step
 
 ### Next safe step
-**Y30 post-sync default:** **Y30.4 — supplier-offer execution linkage workflow / linkage operations** (narrow continuation after Y30.3 execution activation contract).  
-**Secondary product track (separate):** **Phase 7.1 / Sales Mode / Step 6+** for scope beyond closed **5g.4**. **Do not** reopen **5g.4** unless fixing a regression.
+**Y32.1 post-sync default:** operator/admin workflow for creating, replacing, and closing authoritative supplier-offer execution links.  
+**Secondary safe tracks (separate):** admin operational visibility for bookings/requests; incident/disruption design gate. **Do not** reopen **5g.4** unless fixing a regression.
 
 **Goal:**
-- Prioritize Y30.4 linkage operations over shipped Y30.3 activation baseline:
+- Prioritize linkage operations over shipped Y32.1 read-side actionability baseline:
   - preserve Y30.1 stable landing + Y30.2 actionability + Y30.3 guarded activation contract;
+  - preserve Y32.1 additive landing fields (`has_execution_link`, `linked_tour_id`, `execution_cta_enabled`, `fallback_cta`) and compatibility alias `execution_activation_available`;
   - make authoritative linkage workflow/operations explicit so scenario A can be enabled operationally, not by inferred mapping;
   - keep visibility != bookability explicit on landing;
   - keep fail-safe fallback behavior when linkage is absent;
