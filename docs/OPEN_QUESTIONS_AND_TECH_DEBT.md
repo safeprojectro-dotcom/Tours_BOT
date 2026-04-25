@@ -32,6 +32,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - Before supplier/RFQ/bridge **implementation**, **accept** the Y38 gate and schedule **separate** minimal slices; **do not** auto-contact or notify suppliers from intent set alone. **Canonical “what’s next” after Y38:** `docs/SUPPLIER_INTERACTION_GATE.md` — section *Post–Y38: explicit next step* (Layer C is complete as implemented; in-code supplier automation is not next until a new gate + ticket).
 - **Y39 (design, canonical):** **`docs/SUPPLIER_ENTRY_POINTS.md`** — **explicit** future entry types only; **`operator_workflow_intent`** and **`operator-decision`** are **not** triggers; first in-app supplier slice must **name** one **family** + **surface** (see that doc). **No** runtime in Y39; preserves Y38.
 - **Y40 (design, canonical):** **`docs/SUPPLIER_EXECUTION_FLOW.md`** — after a Y39 start, **stages** (entry → validate → **audit** record → attempt → result → optional review); **operator intent = decision**; **entry = start**; **flow =** controlled pipeline; invariants: idempotency, audit, **retry** safety, no hidden triggers, **fail-closed**, explicit permissions. **No** `app/` in Y40; no messaging/RFQ/booking/Mini App/execution links/identity/notifications. **Cites** Y38 + Y39.
+- **Y41 (design, canonical):** **`docs/SUPPLIER_EXECUTION_DATA_CONTRACT.md`** — **logical** **execution request** + **attempt** + **result/audit** field lists; **status** set for requests; `operator_workflow_intent` **snapshot** on request, **not** live trigger, **not** primary execution state. **No** migrations/models in Y41. Forbids coupling to **orders**/**payments**/**bookings**, **Mini App**, **execution links**, **identity bridge**, **customer** notifications. **Cites** Y38–Y40.
 
 ---
 
@@ -65,8 +66,8 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - This checkpoint: **no** supplier messaging, **no** new RFQ implementation, **no** booking/order/payment, **no** Mini App, **no** execution links, **no** identity bridge, **no** notifications.
 
 ### Next safe step
-- **Pipeline design (Y40):** see **`docs/SUPPLIER_EXECUTION_FLOW.md`** for **stages** and **invariants**; implementation must align when code ships.
-- When a first **in-app** supplier-interaction slice is **scoped:** open a ticket that cites **Y38** + **Y39** + **Y40**; **name** **entry family** + **surface**; map to **Y40** **stages**; add idempotency/audit; **do not** wire `operator-decision` as executor.
+- **Pipeline design (Y40):** see **`docs/SUPPLIER_EXECUTION_FLOW.md`** for **stages** and **invariants**; implementation must align when code ships. **Data contract (Y41):** **`docs/SUPPLIER_EXECUTION_DATA_CONTRACT.md`** before persisting execution rows.
+- When a first **in-app** supplier-interaction slice is **scoped:** open a ticket that cites **Y38** + **Y39** + **Y40** + **Y41**; **name** **entry family** + **surface**; map to **Y40** **stages** and **Y41** **records**; add idempotency/audit; **do not** wire `operator-decision` as executor.
 
 ---
 
@@ -82,7 +83,25 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - This checkpoint: **no** supplier **messaging**, **no** new **RFQ** implementation, **no** **booking/order/payment**, **no** **Mini App**, **no** **execution links**, **no** **identity bridge**, **no** **customer** notifications.
 
 ### Next safe step
-- First **in-app** supplier slice: ticket cites **Y38 + Y39 + Y40**; **name** one Y39 family + surface; **map** to Y40 **stages**; still **uncouple** from `POST .../operator-decision` as **executor**.
+- **Data contract (Y41):** see **`docs/SUPPLIER_EXECUTION_DATA_CONTRACT.md`** before the first **migration** implementing execution persistence.
+- First **in-app** supplier slice: ticket cites **Y38 + Y39 + Y40 + Y41**; **name** one Y39 family + surface; **map** to Y40 **stages** and Y41 **records**; still **uncouple** from `POST .../operator-decision` as **executor**. **Migrations** = separate ticket after this design is accepted for implementation.
+
+---
+
+## Checkpoint Sync — Y41 supplier execution data contract (design-only, accepted)
+
+**Docs-only.** **No** Alembic, **no** models, **no** `app/` or `tests/`. Complements Y38–Y40.
+
+### Accepted state
+- **Logical** **execution request** record fields: `id`, `source_entry_point`, `source_entity_type`, `source_entity_id`, `operator_workflow_intent_snapshot`, `requested_by_user_id`, `status`, `idempotency_key`, `created_at`, `updated_at` (see doc for meaning).
+- **Logical** **execution attempt** record fields: `id`, `execution_request_id`, `attempt_number`, `channel_type`, `target_supplier_ref`, `status`, `provider_reference`, `error_code`, `error_message`, `created_at`.
+- **Logical** **result/audit** fields: `final_status`, `completed_at`, `completed_by`, `raw_response_reference`, `audit_notes`.
+- **Request `status` boundaries** (non-Layer-C): `pending`, `validated`, `blocked`, `attempted`, `succeeded`, `failed`, `cancelled`.
+- **Intent:** `operator_workflow_intent` may be **snapshotted**; **must not** be a **live trigger** or **primary** execution state.
+- **Separation:** no mutation of **orders** / **payments** / **bookings**; no **Mini App** dependency; no **execution link** or **identity bridge** mutation; no **customer** notifications from this line by default. **No** RFQ schema added by Y41.
+
+### Next safe step
+- Implement a **persistence** slice: migration + models that **map** to this contract, ticket cites **Y38–Y41**; out-of-schema behavior unchanged until then.
 
 ---
 
