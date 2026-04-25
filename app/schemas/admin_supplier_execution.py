@@ -1,10 +1,10 @@
-"""Y44: read-only admin API for supplier execution persistence (Y43)."""
+"""Y44: admin read DTOs; Y46: trigger body/response for supplier execution requests (Y43)."""
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import (
     OperatorWorkflowIntent,
@@ -66,3 +66,24 @@ class AdminSupplierExecutionRequestDetailRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     attempts: list[AdminSupplierExecutionAttemptRead] = Field(default_factory=list)
+
+
+class AdminSupplierExecutionTriggerBody(BaseModel):
+    """Y46: payload for `POST /admin/supplier-execution-requests` (admin explicit; no supplier contact)."""
+
+    idempotency_key: str = Field(..., min_length=1, max_length=128)
+    source_entity_type: SupplierExecutionSourceEntityType
+    source_entity_id: int = Field(..., ge=1)
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def idempotency_not_blank(cls, v: str) -> str:
+        s = v.strip()
+        if not s:
+            raise ValueError("idempotency_key must be non-blank")
+        return s
+
+
+class AdminSupplierExecutionTriggerResponse(BaseModel):
+    request: AdminSupplierExecutionRequestDetailRead
+    idempotent_replay: bool = False

@@ -1,14 +1,22 @@
-"""Y44: read-only admin API for supplier execution requests — no mutation paths."""
+"""Y44 admin read; Y46 safe admin trigger POST (no supplier contact, no attempt rows from trigger)."""
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi.testclient import TestClient
 from sqlalchemy import event, func, select
+
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
-from app.models import SupplierExecutionRequest
+from app.models import SupplierExecutionAttempt, SupplierExecutionRequest
+from app.models.custom_marketplace_request import CustomMarketplaceRequest
+from app.models.user import User
 from app.models.enums import (
+    CustomMarketplaceRequestSource,
+    CustomMarketplaceRequestStatus,
+    CustomMarketplaceRequestType,
     OperatorWorkflowIntent,
     SupplierExecutionAttemptChannel,
     SupplierExecutionAttemptStatus,
@@ -20,6 +28,13 @@ from app.repositories import supplier_execution as se_repo
 from tests.unit.base import FoundationDBTestCase
 
 _ADMIN_HEADERS = {"Authorization": "Bearer test-admin-secret"}
+
+
+def _actor_headers(telegram_user_id: int) -> dict[str, str]:
+    return {
+        **_ADMIN_HEADERS,
+        "X-Admin-Actor-Telegram-Id": str(telegram_user_id),
+    }
 
 
 class AdminSupplierExecutionReadRouteTests(FoundationDBTestCase):
@@ -53,6 +68,9 @@ class AdminSupplierExecutionReadRouteTests(FoundationDBTestCase):
 
     def _count_requests(self) -> int:
         return self.session.scalar(select(func.count()).select_from(SupplierExecutionRequest)) or 0
+
+    def _count_attempts(self) -> int:
+        return self.session.scalar(select(func.count()).select_from(SupplierExecutionAttempt)) or 0
 
     def test_admin_unauthorized_without_token(self) -> None:
         r = self.client.get("/admin/supplier-execution-requests")
@@ -141,3 +159,183 @@ class AdminSupplierExecutionReadRouteTests(FoundationDBTestCase):
     def test_detail_404(self) -> None:
         r = self.client.get("/admin/supplier-execution-requests/999999", headers=_ADMIN_HEADERS)
         self.assertEqual(r.status_code, 404)
+
+    def _make_cmr(self, *, user_tg: int, intent: OperatorWorkflowIntent | None = None) -> CustomMarketplaceRequest:
+        u = self.create_user(telegram_user_id=user_tg)
+        row = CustomMarketplaceRequest(
+            user_id=u.id,
+            request_type=CustomMarketplaceRequestType.CUSTOM_ROUTE,
+            travel_date_start=date(2026, 6, 1),
+            travel_date_end=None,
+            route_notes="Y45 route",
+            group_size=4,
+            source_channel=CustomMarketplaceRequestSource.MINI_APP,
+            status=CustomMarketplaceRequestStatus.UNDER_REVIEW,
+            operator_workflow_intent=intent,
+        )
+        self.session.add(row)
+        self.session.flush()
+        return row
+
+    def test_y45_post_trigger_requires_actor_header(self) -> None:
+        self._make_cmr(user_tg=555_100)
+        r = self.client.post(
+            "/admin/supplier-execution-requests",
+            headers=_ADMIN_HEADERS,
+            json={
+                "idempotency_key": "y45-actor-1",
+                "source_entity_type": "custom_marketplace_request",
+                "source_entity_id": 1,
+            },
+        )
+        self.assertEqual(r.status_code, 400)
+
+    def test_y45_post_trigger_unauthorized_without_admin_token(self) -> None:
+        r = self.client.post(
+            "/admin/supplier-execution-requests",
+            json={
+                "idempotency_key": "x",
+                "source_entity_type": "custom_marketplace_request",
+                "source_entity_id": 1,
+            },
+        )
+        self.assertEqual(r.status_code, 401)
+
+    def test_y45_post_trigger_404_missing_source(self) -> None:
+        self.create_user(telegram_user_id=555_101)
+        r = self.client.post(
+            "/admin/supplier-execution-requests",
+            headers=_actor_headers(555_101),
+            json={
+                "idempotency_key": "y45-miss-1",
+                "source_entity_type": "custom_marketplace_request",
+                "source_entity_id": 9_999_999,
+            },
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_y45_post_trigger_201_and_idempotent_200(self) -> None:
+        cmr = self._make_cmr(
+            user_tg=555_201,
+            intent=OperatorWorkflowIntent.NEED_MANUAL_FOLLOWUP,
+        )
+        n0 = self._count_requests()
+        p1 = {
+            "idempotency_key": "y45-idem-1",
+            "source_entity_type": "custom_marketplace_request",
+            "source_entity_id": cmr.id,
+        }
+        r1 = self.client.post(
+            "/admin/supplier-execution-requests",
+            headers=_actor_headers(555_201),
+            json=p1,
+        )
+        self.assertEqual(r1.status_code, 201)
+        self.assertEqual(self._count_requests(), n0 + 1)
+        b1 = r1.json()
+        self.assertFalse(b1.get("idempotent_replay", True))
+        self.assertEqual(b1["request"]["status"], "validated")
+        self.assertEqual(b1["request"]["source_entry_point"], "admin_explicit")
+        self.assertEqual(b1["request"]["idempotency_key"], "y45-idem-1")
+        self.assertEqual(b1["request"]["operator_workflow_intent_snapshot"], "need_manual_followup")
+        req_user = self.session.scalars(select(User).where(User.telegram_user_id == 555_201)).first()
+        self.assertIsNotNone(req_user)
+        self.assertEqual(b1["request"]["requested_by_user_id"], req_user.id)
+
+        r2 = self.client.post(
+            "/admin/supplier-execution-requests",
+            headers=_actor_headers(555_201),
+            json=p1,
+        )
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(self._count_requests(), n0 + 1)
+        b2 = r2.json()
+        self.assertTrue(b2.get("idempotent_replay", False))
+        self.assertEqual(b2["request"]["id"], b1["request"]["id"])
+
+    def test_y45_idempotency_key_conflict_409(self) -> None:
+        a = self._make_cmr(user_tg=555_301)
+        b = self._make_cmr(user_tg=555_302)
+        key = "y45-same-key-conflict"
+        r_ok = self.client.post(
+            "/admin/supplier-execution-requests",
+            headers=_actor_headers(555_301),
+            json={
+                "idempotency_key": key,
+                "source_entity_type": "custom_marketplace_request",
+                "source_entity_id": a.id,
+            },
+        )
+        self.assertEqual(r_ok.status_code, 201)
+        r_bad = self.client.post(
+            "/admin/supplier-execution-requests",
+            headers=_actor_headers(555_301),
+            json={
+                "idempotency_key": key,
+                "source_entity_type": "custom_marketplace_request",
+                "source_entity_id": b.id,
+            },
+        )
+        self.assertEqual(r_bad.status_code, 409)
+
+    def test_y46_post_503_when_admin_token_disabled(self) -> None:
+        get_settings().admin_api_token = None
+        r = self.client.post(
+            "/admin/supplier-execution-requests",
+            headers=_actor_headers(999_001),
+            json={
+                "idempotency_key": "y46-503",
+                "source_entity_type": "custom_marketplace_request",
+                "source_entity_id": 1,
+            },
+        )
+        self.assertEqual(r.status_code, 503)
+        get_settings().admin_api_token = "test-admin-secret"
+
+    def test_y46_post_422_blank_idempotency_key(self) -> None:
+        self.create_user(telegram_user_id=556_001)
+        r = self.client.post(
+            "/admin/supplier-execution-requests",
+            headers=_actor_headers(556_001),
+            json={
+                "idempotency_key": "   ",
+                "source_entity_type": "custom_marketplace_request",
+                "source_entity_id": 1,
+            },
+        )
+        self.assertEqual(r.status_code, 422)
+
+    def test_y46_post_creates_no_attempt_rows(self) -> None:
+        cmr = self._make_cmr(user_tg=556_101)
+        na = self._count_attempts()
+        r = self.client.post(
+            "/admin/supplier-execution-requests",
+            headers=_actor_headers(556_101),
+            json={
+                "idempotency_key": "y46-no-attempts",
+                "source_entity_type": "custom_marketplace_request",
+                "source_entity_id": cmr.id,
+            },
+        )
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(self._count_attempts(), na)
+        self.assertEqual(len(r.json()["request"]["attempts"]), 0)
+
+    def test_y46_post_does_not_mutate_source_cmr(self) -> None:
+        cmr = self._make_cmr(user_tg=556_201, intent=OperatorWorkflowIntent.NEED_SUPPLIER_OFFER)
+        before_notes = cmr.route_notes
+        before_status = cmr.status
+        self.session.expire(cmr)
+        r = self.client.post(
+            "/admin/supplier-execution-requests",
+            headers=_actor_headers(556_201),
+            json={
+                "idempotency_key": "y46-cmr-readonly",
+                "source_entity_type": "custom_marketplace_request",
+                "source_entity_id": cmr.id,
+            },
+        )
+        self.assertEqual(r.status_code, 201)
+        self.session.refresh(cmr)
+        self.assertEqual(cmr.route_notes, before_notes)
+        self.assertEqual(cmr.status, before_status)
