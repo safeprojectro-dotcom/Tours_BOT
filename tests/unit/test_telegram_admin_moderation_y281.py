@@ -371,8 +371,10 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         self.assertIn("seats:", text)
         self.assertNotIn("tg-candidate-bad", text)
         self.assertIn(f"select tour #{compatible.id}", buttons)
+        self.assertIn("search compatible tours", buttons)
         self.assertIn("manual tour_id/code input", buttons)
         self.assertIn(f"el:pick:{offer_id}:create:{compatible.id}", callbacks)
+        self.assertIn(f"el:search:{offer_id}:create", callbacks)
         self.assertIn(f"el:manual:{offer_id}:create", callbacks)
         self.assertTrue(callbacks)
         self.assertTrue(all(len(callback.encode("utf-8")) <= 64 for callback in callbacks))
@@ -400,12 +402,251 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         text, buttons, callbacks = asyncio.run(body())
         self.assertIn("no compatible existing tours", text)
         self.assertIn("no link was changed", text)
+        self.assertIn("search compatible tours", buttons)
         self.assertIn("manual tour_id/code input", buttons)
+        self.assertIn(f"el:search:{offer_id}:create", callbacks)
         self.assertIn(f"el:manual:{offer_id}:create", callbacks)
         self.assertTrue(callbacks)
         self.assertTrue(all(len(callback.encode("utf-8")) <= 64 for callback in callbacks))
         links = self.session.query(SupplierOfferExecutionLink).filter_by(supplier_offer_id=offer_id).all()
         self.assertEqual(links, [])
+
+    def test_admin_link_code_search_button_enters_search_state(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        self.create_tour(code="TG-SEARCH-ENTRY", sales_mode=TourSalesMode.PER_SEAT)
+        self.session.commit()
+
+        async def body() -> tuple[str, object, dict]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            start_cb = _callback(
+                telegram_user_id=990001,
+                data=_action_data(ADMIN_OFFERS_ACTION_CREATE_LINK, offer_id),
+                message=message,
+            )
+            search_cb = _callback(
+                telegram_user_id=990001,
+                data=f"el:search:{offer_id}:create",
+                message=message,
+            )
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(start_cb, state)
+                await admin_moderation.admin_offer_action(search_cb, state)
+            return self._all_answer_texts(message), state.last_state, state.data
+
+        text, last_state, data = asyncio.run(body())
+        self.assertIn("send tour code or part of code", text)
+        self.assertEqual(last_state, admin_moderation.AdminModerationState.awaiting_execution_link_tour_code_search)
+        self.assertEqual(data["pending_link_offer_id"], offer_id)
+        self.assertEqual(data["pending_link_mode"], "create")
+
+    def test_admin_link_code_search_exact_match_filters_same_sales_mode(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        compatible = self.create_tour(code="TG-CODE-EXACT", sales_mode=TourSalesMode.PER_SEAT)
+        mismatch = self.create_tour(code="TG-CODE-EXACT-BUS", sales_mode=TourSalesMode.FULL_BUS)
+        compatible_id = compatible.id
+        mismatch_id = mismatch.id
+        self.session.commit()
+
+        async def body() -> tuple[str, list[str], list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            start_cb = _callback(
+                telegram_user_id=990001,
+                data=_action_data(ADMIN_OFFERS_ACTION_CREATE_LINK, offer_id),
+                message=message,
+            )
+            search_cb = _callback(
+                telegram_user_id=990001,
+                data=f"el:search:{offer_id}:create",
+                message=message,
+            )
+            input_message = _private_message(telegram_user_id=990001)
+            input_message.text = "TG-CODE-EXACT"
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(start_cb, state)
+                await admin_moderation.admin_offer_action(search_cb, state)
+                await admin_moderation.admin_offer_execution_link_tour_code_search_input(input_message, state)
+            return (
+                "\n".join([self._all_answer_texts(message), self._all_answer_texts(input_message)]),
+                self._inline_button_texts(input_message),
+                self._inline_callback_data(input_message),
+            )
+
+        text, buttons, callbacks = asyncio.run(body())
+        self.assertIn("compatible tour code search results", text)
+        self.assertIn("tg-code-exact", text)
+        self.assertNotIn("tg-code-exact-bus", text)
+        self.assertIn(f"select tour #{compatible_id}", buttons)
+        self.assertIn("back to compatible list", buttons)
+        self.assertIn("manual tour_id/code input", buttons)
+        self.assertIn(f"el:pick:{offer_id}:create:{compatible_id}", callbacks)
+        self.assertIn(f"el:list:{offer_id}:create:0", callbacks)
+        self.assertIn(f"el:manual:{offer_id}:create", callbacks)
+        self.assertNotIn(f"el:pick:{offer_id}:create:{mismatch_id}", callbacks)
+        self.assertTrue(callbacks)
+        self.assertTrue(all(len(callback.encode("utf-8")) <= 64 for callback in callbacks))
+
+    def test_admin_link_code_search_partial_match_returns_compatible_tour(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        target = self.create_tour(code="TG-PARTIAL-CODE-777", sales_mode=TourSalesMode.PER_SEAT)
+        other = self.create_tour(code="TG-OTHER-CODE-888", sales_mode=TourSalesMode.PER_SEAT)
+        target_id = target.id
+        other_id = other.id
+        self.session.commit()
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            start_cb = _callback(
+                telegram_user_id=990001,
+                data=_action_data(ADMIN_OFFERS_ACTION_CREATE_LINK, offer_id),
+                message=message,
+            )
+            search_cb = _callback(
+                telegram_user_id=990001,
+                data=f"el:search:{offer_id}:create",
+                message=message,
+            )
+            input_message = _private_message(telegram_user_id=990001)
+            input_message.text = "partial-code"
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(start_cb, state)
+                await admin_moderation.admin_offer_action(search_cb, state)
+                await admin_moderation.admin_offer_execution_link_tour_code_search_input(input_message, state)
+            return self._all_answer_texts(input_message), self._inline_callback_data(input_message)
+
+        text, callbacks = asyncio.run(body())
+        self.assertIn("tg-partial-code-777", text)
+        self.assertNotIn("tg-other-code-888", text)
+        self.assertIn(f"el:pick:{offer_id}:create:{target_id}", callbacks)
+        self.assertNotIn(f"el:pick:{offer_id}:create:{other_id}", callbacks)
+        self.assertTrue(all(len(callback.encode("utf-8")) <= 64 for callback in callbacks))
+
+    def test_admin_link_code_search_no_results_keeps_no_state_change(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        self.create_tour(code="TG-SEARCH-NOMATCH", sales_mode=TourSalesMode.PER_SEAT)
+        self.session.commit()
+
+        async def body() -> tuple[str, list[str], list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            search_cb = _callback(
+                telegram_user_id=990001,
+                data=f"el:search:{offer_id}:create",
+                message=message,
+            )
+            input_message = _private_message(telegram_user_id=990001)
+            input_message.text = "DOES-NOT-EXIST"
+            await state.update_data(pending_link_offer_id=offer_id, pending_link_mode="create")
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(search_cb, state)
+                await admin_moderation.admin_offer_execution_link_tour_code_search_input(input_message, state)
+            return (
+                self._all_answer_texts(input_message),
+                self._inline_button_texts(input_message),
+                self._inline_callback_data(input_message),
+            )
+
+        text, buttons, callbacks = asyncio.run(body())
+        self.assertIn("no compatible tours found", text)
+        self.assertIn("no link was changed", text)
+        self.assertIn("back to compatible list", buttons)
+        self.assertIn("manual tour_id/code input", buttons)
+        self.assertIn(f"el:list:{offer_id}:create:0", callbacks)
+        self.assertIn(f"el:manual:{offer_id}:create", callbacks)
+        self.assertTrue(callbacks)
+        self.assertTrue(all(len(callback.encode("utf-8")) <= 64 for callback in callbacks))
+        links = self.session.query(SupplierOfferExecutionLink).filter_by(supplier_offer_id=offer_id).all()
+        self.assertEqual(links, [])
+
+    def test_admin_link_code_search_pagination_preserves_query_in_state(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        base_departure = datetime.now(UTC) + timedelta(days=10)
+        tours = [
+            self.create_tour(
+                code=f"TG-SEARCH-PAGE-{idx}",
+                sales_mode=TourSalesMode.PER_SEAT,
+                departure_datetime=base_departure + timedelta(days=idx),
+            )
+            for idx in range(6)
+        ]
+        target_id = tours[-1].id
+        self.session.commit()
+
+        async def body() -> tuple[str, list[str], list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            search_cb = _callback(
+                telegram_user_id=990001,
+                data=f"el:search:{offer_id}:create",
+                message=message,
+            )
+            input_message = _private_message(telegram_user_id=990001)
+            input_message.text = "SEARCH-PAGE"
+            page_two_cb = _callback(
+                telegram_user_id=990001,
+                data=f"el:slist:{offer_id}:create:1",
+                message=message,
+            )
+            await state.update_data(pending_link_offer_id=offer_id, pending_link_mode="create")
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(search_cb, state)
+                await admin_moderation.admin_offer_execution_link_tour_code_search_input(input_message, state)
+                await admin_moderation.admin_offer_action(page_two_cb, state)
+            return (
+                "\n".join([self._all_answer_texts(message), self._all_answer_texts(input_message)]),
+                self._inline_button_texts(message) + self._inline_button_texts(input_message),
+                self._inline_callback_data(message) + self._inline_callback_data(input_message),
+            )
+
+        text, buttons, callbacks = asyncio.run(body())
+        self.assertIn("page 1", text)
+        self.assertIn("page 2", text)
+        self.assertIn("tg-search-page-5", text)
+        self.assertIn("next", buttons)
+        self.assertIn("prev", buttons)
+        self.assertIn(f"el:slist:{offer_id}:create:1", callbacks)
+        self.assertIn(f"el:pick:{offer_id}:create:{target_id}", callbacks)
+        self.assertTrue(all(len(callback.encode("utf-8")) <= 64 for callback in callbacks))
+
+    def test_admin_selects_code_search_result_and_opens_confirmation(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        tour = self.create_tour(code="TG-SEARCH-CONFIRM", sales_mode=TourSalesMode.PER_SEAT)
+        tour_id = tour.id
+        self.session.commit()
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            search_cb = _callback(
+                telegram_user_id=990001,
+                data=f"el:search:{offer_id}:create",
+                message=message,
+            )
+            input_message = _private_message(telegram_user_id=990001)
+            input_message.text = "SEARCH-CONFIRM"
+            select_cb = _callback(
+                telegram_user_id=990001,
+                data=f"el:pick:{offer_id}:create:{tour_id}",
+                message=message,
+            )
+            await state.update_data(pending_link_offer_id=offer_id, pending_link_mode="create")
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(search_cb, state)
+                await admin_moderation.admin_offer_execution_link_tour_code_search_input(input_message, state)
+                await admin_moderation.admin_offer_action(select_cb, state)
+            return (
+                "\n".join([self._all_answer_texts(message), self._all_answer_texts(input_message)]),
+                self._inline_callback_data(message) + self._inline_callback_data(input_message),
+            )
+
+        text, callbacks = asyncio.run(body())
+        self.assertIn("compatible tour code search results", text)
+        self.assertIn("confirm execution link target", text)
+        self.assertIn("mini app cta appears only", text)
+        self.assertIn(f"el:pick:{offer_id}:create:{tour_id}", callbacks)
+        self.assertTrue(all(len(callback.encode("utf-8")) <= 64 for callback in callbacks))
 
     def test_admin_selects_candidate_and_creates_execution_link(self) -> None:
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
