@@ -535,6 +535,10 @@ def _link_tour_search_results_keyboard(
             callback_data=callback_data,
         )
     kb.button(
+        text=translate(language_code, "admin_offer_link_new_search"),
+        callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_SEARCH_LINK_TOUR, offer_id, mode),
+    )
+    kb.button(
         text=translate(language_code, "admin_offer_link_back_to_candidates"),
         callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE, offer_id, mode, 0),
     )
@@ -543,7 +547,6 @@ def _link_tour_search_results_keyboard(
         callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR, offer_id, mode),
     )
     kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=ADMIN_OFFERS_NAV_BACK)
-    kb.button(text=translate(language_code, "admin_offer_nav_home"), callback_data=ADMIN_OFFERS_NAV_HOME)
     kb.adjust(1)
     return kb
 
@@ -622,6 +625,10 @@ async def _show_link_tour_code_search_results(
     if not search_display:
         kb = InlineKeyboardBuilder()
         kb.button(
+            text=translate(language_code, "admin_offer_link_new_search"),
+            callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_SEARCH_LINK_TOUR, offer_id, mode),
+        )
+        kb.button(
             text=translate(language_code, "admin_offer_link_back_to_candidates"),
             callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE, offer_id, mode, 0),
         )
@@ -656,6 +663,10 @@ async def _show_link_tour_code_search_results(
     )
     if not tours:
         kb = InlineKeyboardBuilder()
+        kb.button(
+            text=translate(language_code, "admin_offer_link_new_search"),
+            callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_SEARCH_LINK_TOUR, offer_id, mode),
+        )
         kb.button(
             text=translate(language_code, "admin_offer_link_back_to_candidates"),
             callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE, offer_id, mode, 0),

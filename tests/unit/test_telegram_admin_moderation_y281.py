@@ -484,9 +484,11 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         self.assertIn("tg-code-exact", text)
         self.assertNotIn("tg-code-exact-bus", text)
         self.assertIn(f"select tour #{compatible_id} (tg-code-exact)", buttons)
+        self.assertIn("new search", buttons)
         self.assertIn("back to compatible list", buttons)
         self.assertIn("manual tour_id/code input", buttons)
         self.assertIn(f"el:pick:{offer_id}:create:{compatible_id}", callbacks)
+        self.assertIn(f"el:search:{offer_id}:create", callbacks)
         self.assertIn(f"el:list:{offer_id}:create:0", callbacks)
         self.assertIn(f"el:manual:{offer_id}:create", callbacks)
         self.assertNotIn(f"el:pick:{offer_id}:create:{mismatch_id}", callbacks)
@@ -819,9 +821,11 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         self.assertIn("try removing the date", text)
         self.assertIn("using a shorter query", text)
         self.assertIn("manual tour_id/code input", text)
+        self.assertIn("new search", buttons)
         self.assertIn("back to compatible list", buttons)
         self.assertIn("manual tour_id/code input", buttons)
         self.assertIn("back", buttons)
+        self.assertIn(f"el:search:{offer_id}:create", callbacks)
         self.assertIn(f"el:list:{offer_id}:create:0", callbacks)
         self.assertIn(f"el:manual:{offer_id}:create", callbacks)
         self.assertIn("admin:offers:nav:back", callbacks)
@@ -829,6 +833,42 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         self.assertTrue(all(len(callback.encode("utf-8")) <= 64 for callback in callbacks))
         links = self.session.query(SupplierOfferExecutionLink).filter_by(supplier_offer_id=offer_id).all()
         self.assertEqual(links, [])
+
+    def test_admin_link_search_result_new_search_reenters_prompt(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        self.create_tour(code="TG-NEW-SEARCH", sales_mode=TourSalesMode.PER_SEAT)
+        self.session.commit()
+
+        async def body() -> tuple[str, list[str], object, dict]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            search_cb = _callback(
+                telegram_user_id=990001,
+                data=f"el:search:{offer_id}:create",
+                message=message,
+            )
+            input_message = _private_message(telegram_user_id=990001)
+            input_message.text = "NEW-SEARCH"
+            new_search_cb = _callback(
+                telegram_user_id=990001,
+                data=f"el:search:{offer_id}:create",
+                message=input_message,
+            )
+            await state.update_data(pending_link_offer_id=offer_id, pending_link_mode="create")
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(search_cb, state)
+                await admin_moderation.admin_offer_execution_link_tour_code_search_input(input_message, state)
+                result_buttons = self._inline_button_texts(input_message)
+                await admin_moderation.admin_offer_action(new_search_cb, state)
+            return self._all_answer_texts(input_message), result_buttons, state.last_state, state.data
+
+        text, result_buttons, last_state, data = asyncio.run(body())
+        self.assertIn("new search", result_buttons)
+        self.assertIn("send tour code or title", text)
+        self.assertIn(f"compatible tours for offer #{offer_id}", text)
+        self.assertEqual(last_state, admin_moderation.AdminModerationState.awaiting_execution_link_tour_code_search)
+        self.assertEqual(data["pending_link_offer_id"], offer_id)
+        self.assertEqual(data["pending_link_mode"], "create")
 
     def test_admin_link_code_search_pagination_preserves_query_in_state(self) -> None:
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)

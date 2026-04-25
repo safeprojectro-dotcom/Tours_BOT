@@ -195,6 +195,7 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "admin_offer_link_candidate_row": "Tour #{tour_id} ({tour_code})\n{tour_title} | status: {tour_status} | sales mode: {tour_sales_mode}\nDeparture: {departure} | Seats: {seats_available}/{seats_total}\nCTA: Mini App enables direct booking only if linked tour is bookable.",
         "admin_offer_link_select_tour": "Select tour #{tour_id} ({tour_code})",
         "admin_offer_link_search": "Search compatible tours",
+        "admin_offer_link_new_search": "New search",
         "admin_offer_link_search_prompt": "Send tour code or title. You can also add date YYYY-MM-DD. Search stays limited to compatible tours for offer #{offer_id}.",
         "admin_offer_link_search_results_title": "Search results for offer #{offer_id}\nMode: {mode}\nQuery: {query}\nDate: {date}\nPage: {page}",
         "admin_offer_link_search_empty": "No compatible tours found.\nSearch: \"{query}\"\nNo link was changed.\nTry removing the date, using a shorter query, or using manual tour_id/code input.",
