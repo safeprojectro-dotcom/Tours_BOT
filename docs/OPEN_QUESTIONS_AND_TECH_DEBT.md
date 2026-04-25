@@ -31,6 +31,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Y38 — Supplier interaction gate (design, canonical):** **`docs/SUPPLIER_INTERACTION_GATE.md`**. It defines: operator workflow **decision-only**; **`operator_workflow_intent`** does **not** execute supplier logic; supplier interaction is a **separate future layer**; no automatic supplier messages, RFQ, bridge, booking, payment, Mini App, execution links, identity bridge, or customer notifications from intent; future supplier logic may **consume intent as input only** and must **not** be triggered **directly** by intent setting; Y36 / Y37.2 / Y37.4 / Y37.5 behavior **unchanged** by the gate file itself. (Legacy path **`docs/Y38_SUPPLIER_INTENT_INTERACTION_DESIGN_GATE.md`** redirects to the canonical file.)
 - Before supplier/RFQ/bridge **implementation**, **accept** the Y38 gate and schedule **separate** minimal slices; **do not** auto-contact or notify suppliers from intent set alone. **Canonical “what’s next” after Y38:** `docs/SUPPLIER_INTERACTION_GATE.md` — section *Post–Y38: explicit next step* (Layer C is complete as implemented; in-code supplier automation is not next until a new gate + ticket).
 - **Y39 (design, canonical):** **`docs/SUPPLIER_ENTRY_POINTS.md`** — **explicit** future entry types only; **`operator_workflow_intent`** and **`operator-decision`** are **not** triggers; first in-app supplier slice must **name** one **family** + **surface** (see that doc). **No** runtime in Y39; preserves Y38.
+- **Y40 (design, canonical):** **`docs/SUPPLIER_EXECUTION_FLOW.md`** — after a Y39 start, **stages** (entry → validate → **audit** record → attempt → result → optional review); **operator intent = decision**; **entry = start**; **flow =** controlled pipeline; invariants: idempotency, audit, **retry** safety, no hidden triggers, **fail-closed**, explicit permissions. **No** `app/` in Y40; no messaging/RFQ/booking/Mini App/execution links/identity/notifications. **Cites** Y38 + Y39.
 
 ---
 
@@ -64,7 +65,24 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - This checkpoint: **no** supplier messaging, **no** new RFQ implementation, **no** booking/order/payment, **no** Mini App, **no** execution links, **no** identity bridge, **no** notifications.
 
 ### Next safe step
-- When a first **in-app** supplier-interaction slice is **scoped:** open a ticket that cites **Y38** + **Y39** and names the chosen **entry family** + **surface**; add API/job spec and security; **still** do not wire `operator-decision` as executor.
+- **Pipeline design (Y40):** see **`docs/SUPPLIER_EXECUTION_FLOW.md`** for **stages** and **invariants**; implementation must align when code ships.
+- When a first **in-app** supplier-interaction slice is **scoped:** open a ticket that cites **Y38** + **Y39** + **Y40**; **name** **entry family** + **surface**; map to **Y40** **stages**; add idempotency/audit; **do not** wire `operator-decision` as executor.
+
+---
+
+## Checkpoint Sync — Y40 supplier execution flow (design-only, accepted)
+
+**Docs-only.** Complements Y38 and Y39; **no** `app/`, `tests/`, or migrations. Source: [`docs/SUPPLIER_EXECUTION_FLOW.md`](SUPPLIER_EXECUTION_FLOW.md).
+
+### Accepted state
+- **Distinction (Y40):** `operator_workflow_intent` = **decision data**; **Y39** entry = **start signal**; **execution flow** = **controlled pipeline** after the start.
+- **Logical stages (future code):** explicit entry point → **validation** → **execution request / audit** record → **supplier action attempt** → **result recording** → **operator/admin review** (if needed). Concrete persistence/APIs **TBD** per implementation ticket.
+- **Safety invariants (required when implemented):** idempotency, **auditability**, **retry** safety, **no hidden triggers**, **fail-closed** behavior, **explicit permissions**.
+- **May eventually (only in a future slice, not in Y40):** prepare supplier **contact**; **send** message / **record** response — when **explicitly** in scope. **Y40** itself adds no runtime.
+- This checkpoint: **no** supplier **messaging**, **no** new **RFQ** implementation, **no** **booking/order/payment**, **no** **Mini App**, **no** **execution links**, **no** **identity bridge**, **no** **customer** notifications.
+
+### Next safe step
+- First **in-app** supplier slice: ticket cites **Y38 + Y39 + Y40**; **name** one Y39 family + surface; **map** to Y40 **stages**; still **uncouple** from `POST .../operator-decision` as **executor**.
 
 ---
 
