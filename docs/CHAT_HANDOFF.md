@@ -48,6 +48,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Y32.7 replace guard smoke:** Telegram admin create/replace safety guard is accepted via **`docs/HANDOFF_Y32_7_OPERATOR_LINK_REPLACE_GUARD_SMOKE.md`**. Create/view/close flows were validated, replace action appears only when an active link exists and requests explicit `tour_id` or exact tour code, sales-mode mismatch is blocked with clear admin feedback and no state change, and single-active-link/fail-closed behavior matches `OPERATOR_EXECUTION_LINK_WORKFLOW_GATE`. No auto-tour creation, Mini App, Layer A booking/payment, identity bridge, runtime schema, or migration changes were made.
 - **Y32.8 design gate:** Telegram admin compatible tour-selection UI gate created in **`docs/OPERATOR_LINK_TOUR_SELECTION_UI_GATE.md`** (docs-only): defines why manual ID/code is insufficient, required filters, tour list card format, pagination/search rules, create/replace flows with selection, fail-safe behavior, tests required, and first safe runtime-slice recommendation. It keeps existing-tour-only selection, same-`sales_mode` filtering, no auto-tour creation, no Mini App changes, and direct booking CTA controlled only by active authoritative link plus linked-tour bookability.
 - **Y32.9 accepted runtime:** Telegram admin compatible tour-selection UI is accepted via **`docs/HANDOFF_Y32_9_OPERATOR_LINK_TOUR_SELECTION_ACCEPTED.md`**. `/admin_published` -> offer detail -> `Execution link` -> create/replace now shows same-`sales_mode` compatible tour candidates with id/code/title/status/`sales_mode`/departure/seats/CTA warning; selecting a candidate opens confirmation; confirm replace closes the previous active link as `replaced`, leaves exactly one active link, and refreshes status/history. `BUTTON_DATA_INVALID` was fixed with compact callback data (`el:list:{offer_id}:{mode}:{page}`, `el:pick:{offer_id}:{mode}:{tour_id}`, `el:manual:{offer_id}:{mode}`). No auto-tour creation, Mini App, Layer A booking/payment, identity bridge, runtime schema, or migration changes were made.
+- **Y33.1 design gate:** Telegram admin bounded tour-search/refinement gate created in **`docs/OPERATOR_LINK_TOUR_SEARCH_GATE.md`** (docs-only): defines search input UX, supported exact/partial code search, title text search, optional date hint/filter, compatibility filters, result card format, pagination/search-state rules, fail-safe behavior, tests required, and first safe runtime-slice recommendation. Search remains refinement only: same-`sales_mode` filter always applies, search never auto-links, selected results still go through confirmation, manual fallback remains, and direct booking CTA remains controlled only by active authoritative link plus linked-tour bookability.
 
 ### Supplier continuity truth (Y2/Y2.3/Y2.1a/Y24/Y25/Y27/Y28 accepted)
 - Supplier v1 model is **supplier entity + one primary Telegram-bound operator**.
@@ -190,6 +191,14 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
   - `BUTTON_DATA_INVALID` regression was fixed by compact callback data: `el:list:{offer_id}:{mode}:{page}`, `el:pick:{offer_id}:{mode}:{tour_id}`, `el:manual:{offer_id}:{mode}`;
   - safety preserved: no auto-tour creation, `supplier_offer != tour`, one active link per offer, `sales_mode` compatibility enforced, Mini App remains read-only execution truth consumer, no Layer A booking/payment, identity bridge, or migration changes;
   - postponed: bounded search by tour code/title/date, better operator filtering, and multi-page stress test with more candidates.
+- Y33.1 Telegram admin bounded tour-search/refinement design gate (accepted, docs-only):
+  - design source: **`docs/OPERATOR_LINK_TOUR_SEARCH_GATE.md`**;
+  - goal is to refine compatible tour selection by exact/partial tour code, title text, and optional `YYYY-MM-DD` date hint/filter;
+  - search always preserves same-`sales_mode`, existing-tour-only, future, and not-cancelled/not-completed compatibility rules;
+  - search result selection still opens the existing confirmation screen and never auto-links;
+  - manual `tour_id` / exact tour-code fallback remains available;
+  - pagination/search state must preserve offer id, create/replace mode, query/date context, and page without exceeding Telegram callback-data limits;
+  - first safe runtime slice should implement exact/partial tour-code search before title/date refinements.
 - Multi-operator organization / RBAC is explicitly postponed beyond Y2.1.
 - Supplier legal/compliance identity is now required for pending onboarding approvals:
   - **`legal_entity_type`**
@@ -292,6 +301,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - Telegram admin replace guard smoke is accepted in **`docs/HANDOFF_Y32_7_OPERATOR_LINK_REPLACE_GUARD_SMOKE.md`**; mismatch guard/no-state-change behavior is confirmed, while paginated compatible tour search/list UI remains postponed.
 - Telegram admin compatible tour-selection UI gate is now documented in **`docs/OPERATOR_LINK_TOUR_SELECTION_UI_GATE.md`**; next runtime work should add a same-`sales_mode` paginated candidate list before broader search.
 - Telegram admin compatible tour-selection UI is accepted in **`docs/HANDOFF_Y32_9_OPERATOR_LINK_TOUR_SELECTION_ACCEPTED.md`**; next safe iteration is Y33 bounded search/refinement by tour code/title/date.
+- Telegram admin bounded tour-search/refinement gate is now documented in **`docs/OPERATOR_LINK_TOUR_SEARCH_GATE.md`**; next runtime work should start with exact/partial tour-code search while preserving confirmation and compact callback constraints.
 - **Next safe order:**
   1. Operator/admin workflow for creating/replacing/closing execution links.
   2. Admin operational visibility for bookings/requests.
