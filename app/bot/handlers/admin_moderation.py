@@ -439,7 +439,8 @@ def _link_tour_search_results_text(
     offer_id: int,
     mode: str,
     page: int,
-    search_display: str,
+    search_query: str,
+    search_date: date | None,
     tours: list[Tour],
 ) -> str:
     lines = [
@@ -448,7 +449,8 @@ def _link_tour_search_results_text(
             "admin_offer_link_search_results_title",
             offer_id=str(offer_id),
             mode=mode,
-            query=search_display,
+            query=search_query or "-",
+            date=search_date.isoformat() if search_date is not None else "-",
             page=str(page + 1),
         )
     ]
@@ -473,7 +475,7 @@ def _link_tour_candidates_keyboard(
     for tour in tours:
         callback_data = _link_action_callback(ADMIN_OFFERS_ACTION_SELECT_LINK_TOUR, offer_id, mode, tour.id)
         kb.button(
-            text=translate(language_code, "admin_offer_link_select_tour", tour_id=str(tour.id)),
+            text=translate(language_code, "admin_offer_link_select_tour", tour_id=str(tour.id), tour_code=tour.code),
             callback_data=callback_data,
         )
     if page > 0:
@@ -517,7 +519,7 @@ def _link_tour_search_results_keyboard(
     for tour in tours:
         callback_data = _link_action_callback(ADMIN_OFFERS_ACTION_SELECT_LINK_TOUR, offer_id, mode, tour.id)
         kb.button(
-            text=translate(language_code, "admin_offer_link_select_tour", tour_id=str(tour.id)),
+            text=translate(language_code, "admin_offer_link_select_tour", tour_id=str(tour.id), tour_code=tour.code),
             callback_data=callback_data,
         )
     if page > 0:
@@ -675,7 +677,8 @@ async def _show_link_tour_code_search_results(
             offer_id=offer_id,
             mode=mode,
             page=page,
-            search_display=search_display,
+            search_query=normalized_search_query,
+            search_date=search_date,
             tours=tours,
         ),
         reply_markup=_link_tour_search_results_keyboard(
