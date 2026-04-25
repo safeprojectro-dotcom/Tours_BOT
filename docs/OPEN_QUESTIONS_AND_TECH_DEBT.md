@@ -7,6 +7,32 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ---
 
+## Checkpoint Sync — Y37.5 operator decision expansion (2026-04-25)
+
+**Docs-only acceptance** after **Y37.5** (second operator intent), closing the **Y37.4** + **Y37.5** operator **decision** intent chain. **No code, migration, or test changes** in this checkpoint.
+
+### Accepted state
+- **Y37.4** first operator intent **`need_manual_followup`** is **live** (admin API + Telegram internal ops).
+- **Y37.5** added second intent **`need_supplier_offer`** (same service rules, idempotency, permissions as Y37.4).
+- **Migration `20260501_20`** applied (adds **`need_supplier_offer`** to **`operator_workflow_intent`** enum).
+- Telegram admin request detail shows **readable labels** for both intents: **Need manual follow-up**, **Need supplier offer** (buttons when **Owner = you**, **under_review**, **intent** unset; **Next step** after selection).
+- **Raw enum display** for **`NEED_SUPPLIER_OFFER`** on the **Next step** line was **fixed** (must show human label, not `need_supplier_offer` string).
+- Operator workflow intent remains **internal admin/ops only** (not a customer or supplier surface).
+- **No** supplier action, RFQ automation, bridge, booking, payment, Mini App, customer notification, execution-link mutation, or identity bridge side effects in this slice.
+
+### Tests (recorded for acceptance)
+- `python -m pytest tests/unit/test_api_admin.py::AdminRouteTests::test_admin_custom_request_operator_decision`
+- `python -m pytest tests/unit/test_telegram_admin_moderation_y281.py` — **54** passed (full file)
+
+### Still genuinely open / postponed
+- Semantics and automation for **`need_supplier_offer`** toward suppliers, RFQ, or bridge are **not** defined or implemented here.
+
+### Next safe step pointer
+- Before supplier/RFQ/bridge implementation that **acts on** **`need_supplier_offer`**, create a separate **Y38** supplier-intent handoff/design gate.
+- **Do not** let **`need_supplier_offer`** automatically contact or notify suppliers yet.
+
+---
+
 ## Checkpoint Sync — Y36.2 + Y36.2A + Y36.3 (2026-04-25)
 
 Documentation stabilization after **operator assignment** runtime on custom marketplace requests (RFQ) and the production **SQLAlchemy mapper** recovery. **No code changes** in this checkpoint.
