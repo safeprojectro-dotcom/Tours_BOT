@@ -417,6 +417,76 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertEqual(body["items"][1]["link_status"], "closed")
         self.assertEqual(body["items"][1]["close_reason"], "replaced")
 
+    def test_operator_execution_link_workflow_routes_create_replace_close_and_list(self) -> None:
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        mock_cfg = SimpleNamespace(
+            telegram_bot_token="dummy-token",
+            telegram_offer_showcase_channel_id="-10012345",
+            telegram_bot_username="testbot",
+            telegram_mini_app_url="https://example.com/mini",
+        )
+        tour_a = self.create_tour(code="LNK-WF-A", sales_mode=TourSalesMode.PER_SEAT)
+        tour_b = self.create_tour(code="LNK-WF-B", sales_mode=TourSalesMode.PER_SEAT)
+        self.session.commit()
+        with (
+            patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
+            patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=124),
+        ):
+            self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
+            self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
+
+        created = self.client.post(
+            f"/admin/supplier-offers/{oid}/link-tour",
+            headers=headers,
+            json={"tour_id": tour_a.id, "link_note": "initial"},
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        self.assertEqual(created.json()["link_status"], "active")
+        self.assertEqual(created.json()["tour_id"], tour_a.id)
+
+        duplicate_create = self.client.post(
+            f"/admin/supplier-offers/{oid}/link-tour",
+            headers=headers,
+            json={"tour_id": tour_a.id},
+        )
+        self.assertEqual(duplicate_create.status_code, 400)
+        self.assertIn("Active execution link already exists", duplicate_create.text)
+
+        replaced = self.client.post(
+            f"/admin/supplier-offers/{oid}/replace-link",
+            headers=headers,
+            json={"tour_id": tour_b.id, "link_note": "replacement"},
+        )
+        self.assertEqual(replaced.status_code, 200, replaced.text)
+        self.assertEqual(replaced.json()["link_status"], "active")
+        self.assertEqual(replaced.json()["tour_id"], tour_b.id)
+
+        history = self.client.get(f"/admin/supplier-offers/{oid}/links", headers=headers)
+        self.assertEqual(history.status_code, 200, history.text)
+        body = history.json()
+        self.assertEqual(body["total_returned"], 2)
+        active_items = [item for item in body["items"] if item["link_status"] == "active"]
+        self.assertEqual(len(active_items), 1)
+        self.assertEqual(active_items[0]["tour_id"], tour_b.id)
+        closed_items = [item for item in body["items"] if item["link_status"] == "closed"]
+        self.assertEqual(len(closed_items), 1)
+        self.assertEqual(closed_items[0]["close_reason"], "replaced")
+
+        closed = self.client.post(
+            f"/admin/supplier-offers/{oid}/close-link",
+            headers=headers,
+            json={"reason": "unlinked"},
+        )
+        self.assertEqual(closed.status_code, 200, closed.text)
+        self.assertEqual(closed.json()["link_status"], "closed")
+        self.assertEqual(closed.json()["close_reason"], "unlinked")
+
+        links = self.session.query(SupplierOfferExecutionLink).filter_by(supplier_offer_id=oid).all()
+        active_after_close = [link for link in links if link.link_status == "active"]
+        self.assertEqual(active_after_close, [])
+
     def test_showcase_html_contains_cta_links(self) -> None:
         supplier = self.create_supplier(code="HTML-S")
         offer = self.create_supplier_offer(
@@ -438,7 +508,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertIn("Abonează-te la canal", html)
         self.assertNotIn("<test>", html)  # escaped
         self.assertRegex(html, r'href="https://t\.me/mybot\?start=supoffer_')
-        self.assertRegex(html, r'href="https://t\.me/mybot/myapp"')
+        self.assertRegex(html, r'href="https://t\.me/mybot/myapp/supplier-offers/\d+"')
 
     def test_deep_link_helpers(self) -> None:
         self.assertEqual(supplier_offer_start_payload(7), "supoffer_7")

@@ -1083,6 +1083,48 @@ def post_admin_supplier_offer_execution_link(
     return row
 
 
+@router.post("/supplier-offers/{offer_id}/link-tour", response_model=SupplierOfferExecutionLinkRead)
+def post_admin_supplier_offer_link_tour(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminSupplierOfferExecutionLinkBody = Body(...),
+) -> SupplierOfferExecutionLinkRead:
+    try:
+        row = SupplierOfferExecutionLinkService().create_link_for_offer(
+            db,
+            offer_id=offer_id,
+            tour_id=payload.tour_id,
+            link_note=payload.link_note,
+        )
+    except SupplierOfferExecutionLinkNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    except SupplierOfferExecutionLinkValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return row
+
+
+@router.post("/supplier-offers/{offer_id}/replace-link", response_model=SupplierOfferExecutionLinkRead)
+def post_admin_supplier_offer_replace_link(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminSupplierOfferExecutionLinkBody = Body(...),
+) -> SupplierOfferExecutionLinkRead:
+    try:
+        row = SupplierOfferExecutionLinkService().replace_link_for_offer(
+            db,
+            offer_id=offer_id,
+            tour_id=payload.tour_id,
+            link_note=payload.link_note,
+        )
+    except SupplierOfferExecutionLinkNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    except SupplierOfferExecutionLinkValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return row
+
+
 @router.get("/supplier-offers/{offer_id}/execution-links", response_model=SupplierOfferExecutionLinkListRead)
 def list_admin_supplier_offer_execution_links(
     offer_id: int,
@@ -1098,8 +1140,45 @@ def list_admin_supplier_offer_execution_links(
     return SupplierOfferExecutionLinkListRead(items=items, total_returned=len(items))
 
 
+@router.get("/supplier-offers/{offer_id}/links", response_model=SupplierOfferExecutionLinkListRead)
+def list_admin_supplier_offer_links(
+    offer_id: int,
+    db: Session = Depends(get_db),
+) -> SupplierOfferExecutionLinkListRead:
+    try:
+        items = SupplierOfferExecutionLinkService().list_links_for_offer(
+            db,
+            offer_id=offer_id,
+        )
+    except SupplierOfferExecutionLinkNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    return SupplierOfferExecutionLinkListRead(items=items, total_returned=len(items))
+
+
 @router.post("/supplier-offers/{offer_id}/execution-link/close", response_model=SupplierOfferExecutionLinkRead)
 def post_admin_supplier_offer_execution_link_close(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminSupplierOfferExecutionLinkCloseBody | None = Body(default=None),
+) -> SupplierOfferExecutionLinkRead:
+    body = payload or AdminSupplierOfferExecutionLinkCloseBody()
+    try:
+        row = SupplierOfferExecutionLinkService().close_active_link(
+            db,
+            offer_id=offer_id,
+            reason=body.reason,
+        )
+    except SupplierOfferExecutionLinkNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Active execution link not found.") from None
+    except SupplierOfferExecutionLinkValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    assert row is not None
+    return row
+
+
+@router.post("/supplier-offers/{offer_id}/close-link", response_model=SupplierOfferExecutionLinkRead)
+def post_admin_supplier_offer_close_link(
     offer_id: int,
     db: Session = Depends(get_db),
     payload: AdminSupplierOfferExecutionLinkCloseBody | None = Body(default=None),

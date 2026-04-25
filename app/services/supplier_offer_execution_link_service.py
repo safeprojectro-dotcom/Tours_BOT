@@ -68,6 +68,47 @@ class SupplierOfferExecutionLinkService:
         tour_id: int,
         link_note: str | None = None,
     ) -> SupplierOfferExecutionLinkRead:
+        return self.replace_link_for_offer(
+            session,
+            offer_id=offer_id,
+            tour_id=tour_id,
+            link_note=link_note,
+        )
+
+    def create_link_for_offer(
+        self,
+        session: Session,
+        *,
+        offer_id: int,
+        tour_id: int,
+        link_note: str | None = None,
+    ) -> SupplierOfferExecutionLinkRead:
+        self._validate_link_target(session, offer_id=offer_id, tour_id=tour_id)
+        active = self._links.get_active_for_offer(session, supplier_offer_id=offer_id, for_update=True)
+        if active is not None:
+            raise SupplierOfferExecutionLinkValidationError("Active execution link already exists for this offer.")
+
+        row = SupplierOfferExecutionLink(
+            supplier_offer_id=offer_id,
+            tour_id=tour_id,
+            link_status="active",
+            close_reason=None,
+            link_note=(link_note or "").strip() or None,
+            closed_at=None,
+        )
+        session.add(row)
+        session.flush()
+        session.refresh(row)
+        return self._to_read(row)
+
+    def replace_link_for_offer(
+        self,
+        session: Session,
+        *,
+        offer_id: int,
+        tour_id: int,
+        link_note: str | None = None,
+    ) -> SupplierOfferExecutionLinkRead:
         self._validate_link_target(session, offer_id=offer_id, tour_id=tour_id)
         now = datetime.now(UTC)
         active = self._links.get_active_for_offer(session, supplier_offer_id=offer_id, for_update=True)
