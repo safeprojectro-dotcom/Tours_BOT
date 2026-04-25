@@ -172,6 +172,23 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
                         callbacks.append(callback_data)
         return callbacks
 
+    @staticmethod
+    def _last_reply_button_texts_lower(message: MagicMock) -> list[str]:
+        if not message.answer.call_args_list:
+            return []
+        call = message.answer.call_args_list[-1]
+        markup = call.kwargs.get("reply_markup")
+        if markup is None:
+            return []
+        texts: list[str] = []
+        inline_rows = getattr(markup, "inline_keyboard", None) or []
+        for row in inline_rows:
+            for btn in row:
+                txt = getattr(btn, "text", None)
+                if isinstance(txt, str):
+                    texts.append(txt.lower())
+        return texts
+
     def test_non_allowlisted_telegram_user_is_denied(self) -> None:
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.READY_FOR_MODERATION)
         self.assertGreater(offer_id, 0)
@@ -363,6 +380,130 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         text, callbacks = asyncio.run(body())
         self.assertIn("assigned to you", text.lower())
         self.assertNotIn("ao:am:", " ".join(callbacks))
+
+    def test_admin_ops_list_shows_compact_owner_em_dash_when_unassigned(self) -> None:
+        user = self.create_user(telegram_user_id=353_501)
+        row = CustomMarketplaceRequest(
+            user_id=user.id,
+            request_type=CustomMarketplaceRequestType.CUSTOM_ROUTE,
+            travel_date_start=date(2026, 10, 5),
+            route_notes="Owner dash list",
+            group_size=2,
+            source_channel=CustomMarketplaceRequestSource.MINI_APP,
+            status=CustomMarketplaceRequestStatus.OPEN,
+        )
+        self.session.add(row)
+        self.session.commit()
+
+        async def body() -> str:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.cmd_admin_requests(message, state)
+            return self._all_answer_texts(message)
+
+        text = asyncio.run(body())
+        self.assertIn("owner: \u2014", text)
+
+    def test_admin_ops_detail_unassigned_shows_assign_to_me_and_callbacks_within_limit(self) -> None:
+        user = self.create_user(telegram_user_id=353_502)
+        row = CustomMarketplaceRequest(
+            user_id=user.id,
+            request_type=CustomMarketplaceRequestType.CUSTOM_ROUTE,
+            travel_date_start=date(2026, 10, 6),
+            route_notes="Detail unassigned",
+            group_size=2,
+            source_channel=CustomMarketplaceRequestSource.MINI_APP,
+            status=CustomMarketplaceRequestStatus.OPEN,
+        )
+        self.session.add(row)
+        self.session.commit()
+        rid = row.id
+
+        async def body() -> tuple[list[str], list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            detail_cb = _callback(
+                telegram_user_id=990001,
+                data=f"ao:rd:{rid}:0",
+                message=message,
+            )
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.cmd_admin_requests(message, state)
+                await admin_moderation.admin_ops_read_navigation(detail_cb, state)
+            return self._last_reply_button_texts_lower(message), self._inline_callback_data(message)
+
+        buttons, callbacks = asyncio.run(body())
+        self.assertIn("assign to me", buttons)
+        self.assertTrue(all(len(c.encode("utf-8")) <= 64 for c in callbacks))
+
+    def test_admin_ops_assigned_to_me_hides_assign_shows_list_you(self) -> None:
+        viewer = self.create_user(telegram_user_id=990001, first_name="V", last_name="iewer")
+        cust = self.create_user(telegram_user_id=353_503)
+        row = CustomMarketplaceRequest(
+            user_id=cust.id,
+            request_type=CustomMarketplaceRequestType.CUSTOM_ROUTE,
+            travel_date_start=date(2026, 10, 7),
+            route_notes="Y36 me",
+            group_size=1,
+            source_channel=CustomMarketplaceRequestSource.MINI_APP,
+            status=CustomMarketplaceRequestStatus.OPEN,
+            assigned_operator_id=viewer.id,
+        )
+        self.session.add(row)
+        self.session.commit()
+        rid = row.id
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            detail_cb = _callback(telegram_user_id=990001, data=f"ao:rd:{rid}:0", message=message)
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.cmd_admin_requests(message, state)
+                await admin_moderation.admin_ops_read_navigation(detail_cb, state)
+            t = self._all_answer_texts(message)
+            b = self._last_reply_button_texts_lower(message)
+            return t, b
+
+        text, detail_buttons = asyncio.run(body())
+        self.assertIn("owner: you", text)
+        self.assertIn("assigned to you", text)
+        self.assertNotIn("assign to me", detail_buttons)
+
+    def test_admin_ops_assigned_to_other_hides_assign_shows_operator_in_list(self) -> None:
+        self.create_user(telegram_user_id=990001)
+        other = self.create_user(telegram_user_id=990002, first_name="Alice", last_name="Otherop")
+        cust = self.create_user(telegram_user_id=353_504)
+        row = CustomMarketplaceRequest(
+            user_id=cust.id,
+            request_type=CustomMarketplaceRequestType.CUSTOM_ROUTE,
+            travel_date_start=date(2026, 10, 8),
+            route_notes="Y36 other",
+            group_size=1,
+            source_channel=CustomMarketplaceRequestSource.MINI_APP,
+            status=CustomMarketplaceRequestStatus.OPEN,
+            assigned_operator_id=other.id,
+        )
+        self.session.add(row)
+        self.session.commit()
+        rid = row.id
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            detail_cb = _callback(telegram_user_id=990001, data=f"ao:rd:{rid}:0", message=message)
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.cmd_admin_requests(message, state)
+                await admin_moderation.admin_ops_read_navigation(detail_cb, state)
+            t = self._all_answer_texts(message)
+            b = self._last_reply_button_texts_lower(message)
+            return t, b
+
+        text, detail_buttons = asyncio.run(body())
+        self.assertIn("owner: alice", text)
+        self.assertNotIn("assign to me", detail_buttons)
+        self.assertNotIn("assigned to you", text)
+        self.assertIn("owner: customer", text)
 
     def test_admin_queue_shows_ready_for_moderation_only(self) -> None:
         ready_id = self._create_offer(lifecycle=SupplierOfferLifecycle.READY_FOR_MODERATION)

@@ -189,7 +189,7 @@ def _admin_ops_request_owner_line(
     viewer_telegram_user_id: int,
 ) -> str:
     if not getattr(request, "assigned_operator_id", None):
-        return translate(language_code, "admin_ops_owner_unassigned")
+        return translate(language_code, "admin_ops_owner_dash")
     otg = getattr(request, "assigned_operator_telegram_user_id", None)
     if otg is not None and otg == viewer_telegram_user_id:
         return translate(language_code, "admin_ops_owner_you")
@@ -206,10 +206,10 @@ def _admin_ops_request_owner_list_badge(
     viewer_telegram_user_id: int,
 ) -> str:
     if not getattr(item, "assigned_operator_id", None):
-        return "—"
+        return translate(language_code, "admin_ops_owner_dash")
     otg = getattr(item, "assigned_operator_telegram_user_id", None)
     if otg is not None and otg == viewer_telegram_user_id:
-        return translate(language_code, "admin_ops_owner_you")
+        return translate(language_code, "admin_ops_owner_list_you")
     osum = getattr(item, "operator_summary", None)
     if osum is not None and getattr(osum, "display_name", None):
         return _truncate_line(osum.display_name, max_len=14)
