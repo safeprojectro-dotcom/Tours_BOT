@@ -7,6 +7,37 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ---
 
+## Checkpoint Sync — Y36.2 + Y36.2A + Y36.3 (2026-04-25)
+
+Documentation stabilization after **operator assignment** runtime on custom marketplace requests (RFQ) and the production **SQLAlchemy mapper** recovery. **No code changes** in this checkpoint.
+
+### Accepted runtime state (Y36.3)
+- **Y36.2 — Assign to me** works for **custom marketplace requests** (admin API + Telegram).
+- **Y36.2A** fixed the production **SQLAlchemy mapper** crash (symmetric **`User`** ↔ **`CustomMarketplaceRequest`** relationships).
+- **Railway migration** for RFQ assignment columns is **applied** (**`20260429_18`**).
+- **Telegram admin requests** UI (**`/admin_requests`**) shows **Owner** / **Assign to me** / **Assigned to you** as implemented.
+
+### Resolved and accepted (not open questions)
+- **Y36.2 — Assign to me** is implemented for **custom marketplace requests** only: **`POST /admin/custom-requests/{request_id}/assign-to-me`** (actor **`X-Admin-Actor-Telegram-Id`** → **`User.id`**); Telegram **`/admin_requests`** shows **Owner** and **Assign to me**; assignment fields are internal **`users.id`**; request **lifecycle `status`** is unchanged by assignment in this slice; **bookings/payment**, **Mini App `My requests` privacy**, **supplier routes**, **execution links**, and **identity bridge** were **not** changed for this feature.
+- **Migration `20260429_18`** added **`assigned_operator_id`**, **`assigned_by_user_id`**, **`assigned_at`** on **`custom_marketplace_requests`** (FKs to **`users.id`**). **Production (Railway):** migration applied via **`railway ssh`** with **`python -m alembic upgrade head`**, head verified with **`python -m alembic current`**.
+- **Y36.2A — ORM regression fix:** `CustomMarketplaceRequest.assigned_operator` required **`User.ops_assigned_custom_marketplace_requests`**; the **`assigned_by`** side now has a symmetric inverse (**`User.ops_assigned_custom_marketplace_requests_by_actor`**). **`tests/unit/test_model_mappers.py`** calls **`configure_mappers()`** after importing **`app.models`**. **No** additional migration in Y36.2A.
+
+### Production smoke (recorded)
+- Bot recovered after deploy; **`/admin_requests`** works; request detail shows **Owner**; **Assign to me** updates display to **Assigned to you** for the acting operator.
+
+### Tests (as confirmed for this handoff)
+- `python -m compileall app tests/unit/test_api_admin.py tests/unit/test_telegram_admin_moderation_y281.py`
+- `python -m pytest tests/unit/test_api_admin.py -k "assign"` — 21 passed
+- `python -m pytest tests/unit/test_telegram_admin_moderation_y281.py -k "admin_ops"` — 4 passed
+
+### Still genuinely open / postponed
+- **Reassign**, **unassign**, and full assignment **history/audit** UI remain **postponed** (see **`docs/OPERATOR_ASSIGNMENT_GATE.md`**) until separately gated.
+
+### Next safe step pointer
+- **Y36.4** only after this docs checkpoint is **committed, pushed, and deployed**. **Y36.4** may cover operator-assignment **UI polish** or **list filtering** on admin/ops read surfaces. **Do not** implement **reassign** / **unassign** without a **separate design gate** (out of scope for Y36.4 unless explicitly accepted).
+
+---
+
 ## Checkpoint Sync — UVXWA1 (2026-04-19)
 
 Documentation synchronization checkpoint after completion of Tracks **5g.4a–5g.4e**, **5g.5**, **5g.5b**, **U1/U2/U3**, **V1–V4**, **W1–W3**, **X1/X2**, **A1**, plus key hotfixes and production fixes.
