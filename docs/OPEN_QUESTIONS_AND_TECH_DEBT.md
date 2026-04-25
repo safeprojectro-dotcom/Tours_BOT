@@ -28,8 +28,27 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - Semantics and automation for **`need_supplier_offer`** toward suppliers, RFQ, or bridge are **not** defined or implemented here.
 
 ### Next safe step pointer
-- Before supplier/RFQ/bridge implementation that **acts on** **`need_supplier_offer`**, create a separate **Y38** supplier-intent handoff/design gate.
-- **Do not** let **`need_supplier_offer`** automatically contact or notify suppliers yet.
+- **Y38 — Supplier interaction gate (design, canonical):** **`docs/SUPPLIER_INTERACTION_GATE.md`**. It defines: operator workflow **decision-only**; **`operator_workflow_intent`** does **not** execute supplier logic; supplier interaction is a **separate future layer**; no automatic supplier messages, RFQ, bridge, booking, payment, Mini App, execution links, identity bridge, or customer notifications from intent; future supplier logic may **consume intent as input only** and must **not** be triggered **directly** by intent setting; Y36 / Y37.2 / Y37.4 / Y37.5 behavior **unchanged** by the gate file itself. (Legacy path **`docs/Y38_SUPPLIER_INTENT_INTERACTION_DESIGN_GATE.md`** redirects to the canonical file.)
+- Before supplier/RFQ/bridge **implementation**, **accept** the Y38 gate and schedule **separate** minimal slices; **do not** auto-contact or notify suppliers from intent set alone. **Canonical “what’s next” after Y38:** `docs/SUPPLIER_INTERACTION_GATE.md` — section *Post–Y38: explicit next step* (Layer C is complete as implemented; in-code supplier automation is not next until a new gate + ticket).
+
+---
+
+## Checkpoint Sync — Y38 supplier interaction gate (post–Layer C boundary)
+
+**Docs-only.** Y38 is **not** a runtime or migration. Source of truth: [`docs/SUPPLIER_INTERACTION_GATE.md`](SUPPLIER_INTERACTION_GATE.md) — **Post–Y38: explicit next step** (and boundary sections above it).
+
+### Accepted state (Y38 boundary)
+- **Layer C** (Y36 assign-to-me, Y37.2 `under_review`, Y37.4 / Y37.5 **`operator_workflow_intent`**) is **decision-only**: no execution, no side effects in supplier/RFQ/bridge/Layer A/customer/identity/execution-link paths.
+- **`operator_workflow_intent`**: stored for **admin/ops**; **not** an action, **not** a trigger, **not** a workflow executor.
+- **Supplier interaction** is **not** part of operator workflow, **not** implemented under Y38, and must **not** be **directly** triggered by intent. A **future** supplier layer may **read** intent only under a **separate** gate and implementation.
+
+### Explicit next step (see gate file; do not guess elsewhere)
+- **In-code supplier/RFQ automation or intent-as-trigger:** **not** next — use the table in `SUPPLIER_INTERACTION_GATE.md`.
+- **When a supplier feature is scoped:** a **new** design gate and ticket first; then minimal code — still **uncoupled** from `POST .../operator-decision`.
+- **Interim (ops):** manual / existing off-product processes remain OK; do not bypass the gate in **new** code.
+
+### Still open
+- The **concrete** first supplier-interaction feature (if any) is **TBD**; not defined by this checkpoint.
 
 ---
 
