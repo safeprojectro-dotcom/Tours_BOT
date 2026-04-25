@@ -34,7 +34,32 @@ Documentation stabilization after **operator assignment** runtime on custom mark
 - **Reassign**, **unassign**, and full assignment **history/audit** UI remain **postponed** (see **`docs/OPERATOR_ASSIGNMENT_GATE.md`**) until separately gated.
 
 ### Next safe step pointer
-- **Y36.4** only after this docs checkpoint is **committed, pushed, and deployed**. **Y36.4** may cover operator-assignment **UI polish** or **list filtering** on admin/ops read surfaces. **Do not** implement **reassign** / **unassign** without a **separate design gate** (out of scope for Y36.4 unless explicitly accepted).
+- **Y36.4** only after this docs checkpoint is **committed, pushed, and deployed**. **Y36.4** may cover operator-assignment **UI polish** or **list filtering** on admin/ops read surfaces. **Do not** implement **reassign** / **unassign** without a **separate design gate** (out of scope for Y36.4 unless explicitly accepted). **Update:** the **Y36.5** section below is the post-**Y36.4** **acceptance** checkpoint; treat it as the current pointer for this track.
+
+---
+
+## Checkpoint Sync — Y36.5 (2026-04-25)
+
+**Docs-only acceptance** after **Y36.4** production smoke, closing the **Y36.2** (runtime) + **Y36.2A** (ORM) + **Y36.4** (Telegram UI) operator-assignment chain. **No code changes** in this checkpoint.
+
+### Accepted state
+- **Y36.2 — Assign to me** for **custom marketplace requests** (admin API + Telegram **`/admin_requests`**). Assignment stores internal **`users.id`** via **`assigned_operator_id`** and **`assigned_by_user_id`** (and **`assigned_at`**); not raw Telegram id in those columns.
+- **Migration `20260429_18`** is **applied on Railway production** (operational path as run in production: **`alembic upgrade head`**, head verified e.g. **`alembic current`**).
+- **Request lifecycle / `CustomMarketplaceRequest.status`** is **not** changed by assignment in this slice.
+- **Y36.2A —** SQLAlchemy **mapper** crash fixed with symmetric **`User` ↔ `CustomMarketplaceRequest`** relationships (**`ops_assigned_custom_marketplace_requests`**, **`ops_assigned_custom_marketplace_requests_by_actor`**). **Mapper smoke:** **`tests/unit/test_model_mappers.py`** (`import app.models` + **`configure_mappers()`**).
+- **Y36.4 —** Telegram **UI polish** accepted: list shows **Owner** early; unassigned owner **—**; self on list = compact **you**; detail = **Assigned to you** when you own it; **Assign to me** is **not** shown after assignment.
+- **Production smoke (recorded):** **`/admin_requests`** works; detail shows **Owner**; **Assign to me** updates **Owner** to **Assigned to you**; **Railway** logs: webhook **200**, **no** mapper / `InvalidRequestError` class of failures.
+
+### Tests (recorded for acceptance)
+- `python -m compileall app tests/unit/test_api_admin.py tests/unit/test_telegram_admin_moderation_y281.py`
+- `python -m pytest tests/unit/test_api_admin.py -k "assign"` — **21** passed
+- `python -m pytest tests/unit/test_telegram_admin_moderation_y281.py -k "admin_ops"` — **8** passed when the full `admin_ops` slice is run (a narrower local run may show **4**)
+- Y36.4-focused coverage lives in the same `admin_ops` tests; full slice **8** passed in acceptance run
+
+### Next safe step pointer
+- **Do not** implement **reassign** / **unassign** (or ad hoc **resolve** / **close**) without a **dedicated design gate** first.
+- **Recommended next (pick one, product-prioritized):** **Y37** — operator custom-request **workflow** design gate, or **Y36.6** — small **formatting** polish (e.g. request dates / customer summary line) without changing assignment semantics.
+- **Execution links**, **Mini App**, **Layer A** booking/payment, **supplier** routes, and **identity bridge** remain out of scope for this assignment track unless explicitly scoped.
 
 ---
 
