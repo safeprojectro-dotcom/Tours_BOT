@@ -111,10 +111,10 @@ class CustomMarketplaceRequestType(StrEnum):
 
 
 class OperatorWorkflowIntent(StrEnum):
-    """Y37.4: operator-only next-step intent on an RFQ — orthogonal to `CustomMarketplaceRequestStatus`."""
+    """Y37.4/Y37.5: operator-only next-step intent on an RFQ — orthogonal to `CustomMarketplaceRequestStatus`."""
 
     NEED_MANUAL_FOLLOWUP = "need_manual_followup"
-    # Future: NEED_SUPPLIER_OFFER, etc. (separate product iterations — extend DB enum + this class)
+    NEED_SUPPLIER_OFFER = "need_supplier_offer"
 
 
 class CustomMarketplaceRequestStatus(StrEnum):

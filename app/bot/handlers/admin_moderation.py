@@ -44,7 +44,8 @@ from app.bot.constants import (
     ADMIN_OPS_REQUEST_ASSIGN_ME_PREFIX,
     ADMIN_OPS_REQUEST_DETAIL_PREFIX,
     ADMIN_OPS_REQUEST_MARK_UNDER_REVIEW_PREFIX,
-    ADMIN_OPS_REQUEST_OPERATOR_DECISION_PREFIX,
+    ADMIN_OPS_REQUEST_OP_INTENT_MANUAL_PREFIX,
+    ADMIN_OPS_REQUEST_OP_INTENT_SUPPLIER_PREFIX,
     ADMIN_OPS_REQUESTS_PAGE_PREFIX,
 )
 from app.bot.messages import translate
@@ -391,6 +392,8 @@ def _admin_ops_request_detail_text(
         operator_intent = translate(language_code, "admin_ops_operator_intent_unset")
     elif oi == OperatorWorkflowIntent.NEED_MANUAL_FOLLOWUP:
         operator_intent = translate(language_code, "admin_ops_operator_intent_need_manual_followup")
+    elif oi == OperatorWorkflowIntent.NEED_SUPPLIER_OFFER:
+        operator_intent = translate(language_code, "admin_ops_operator_intent_need_supplier_offer")
     else:
         operator_intent = _enum_value(oi)
     return translate(
@@ -442,7 +445,11 @@ def _admin_ops_request_detail_keyboard(
             if oi is None:
                 kb.button(
                     text=translate(language_code, "admin_ops_request_need_manual_followup"),
-                    callback_data=f"{ADMIN_OPS_REQUEST_OPERATOR_DECISION_PREFIX}{request_id}:{page}",
+                    callback_data=f"{ADMIN_OPS_REQUEST_OP_INTENT_MANUAL_PREFIX}{request_id}:{page}",
+                )
+                kb.button(
+                    text=translate(language_code, "admin_ops_request_need_supplier_offer"),
+                    callback_data=f"{ADMIN_OPS_REQUEST_OP_INTENT_SUPPLIER_PREFIX}{request_id}:{page}",
                 )
     kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=list_callback)
     kb.adjust(1)
@@ -1446,7 +1453,10 @@ async def admin_ops_request_mark_under_review_handler(query: CallbackQuery, stat
     await query.answer()
 
 
-@router.callback_query(F.data.startswith(ADMIN_OPS_REQUEST_OPERATOR_DECISION_PREFIX))
+@router.callback_query(
+    F.data.startswith(ADMIN_OPS_REQUEST_OP_INTENT_MANUAL_PREFIX)
+    | F.data.startswith(ADMIN_OPS_REQUEST_OP_INTENT_SUPPLIER_PREFIX)
+)
 async def admin_ops_request_operator_decision_handler(query: CallbackQuery, state: FSMContext) -> None:
     if query.from_user is None or query.data is None or query.message is None:
         return
@@ -1459,7 +1469,13 @@ async def admin_ops_request_operator_decision_handler(query: CallbackQuery, stat
     if await _deny_if_not_allowed(query, language_code=lg):
         await state.clear()
         return
-    raw = query.data.removeprefix(ADMIN_OPS_REQUEST_OPERATOR_DECISION_PREFIX).split(":")
+    assert query.data is not None
+    if query.data.startswith(ADMIN_OPS_REQUEST_OP_INTENT_MANUAL_PREFIX):
+        decision = OperatorWorkflowIntent.NEED_MANUAL_FOLLOWUP
+        raw = query.data.removeprefix(ADMIN_OPS_REQUEST_OP_INTENT_MANUAL_PREFIX).split(":")
+    else:
+        decision = OperatorWorkflowIntent.NEED_SUPPLIER_OFFER
+        raw = query.data.removeprefix(ADMIN_OPS_REQUEST_OP_INTENT_SUPPLIER_PREFIX).split(":")
     request_id = int(raw[0]) if raw and raw[0].isdigit() else 0
     page = int(raw[1]) if len(raw) > 1 and raw[1].isdigit() else 0
     with SessionLocal() as session:
@@ -1475,7 +1491,7 @@ async def admin_ops_request_operator_decision_handler(query: CallbackQuery, stat
                 session,
                 request_id=request_id,
                 actor_user_id=actor.id,
-                decision=OperatorWorkflowIntent.NEED_MANUAL_FOLLOWUP,
+                decision=decision,
             )
         except CustomMarketplaceRequestNotFoundError:
             await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)

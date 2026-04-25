@@ -443,12 +443,12 @@ class SupplierCustomRequestResponseUpsert(BaseModel):
 
 
 class AdminOperatorDecisionApply(BaseModel):
-    """Y37.4: first slice — one decision value only (extend enum + body in later tracks)."""
+    """Y37.4/Y37.5: operator intent only — no supplier/bridge/booking side effects."""
 
     model_config = ConfigDict(extra="forbid")
 
-    decision: Literal["need_manual_followup"] = Field(
-        description="V1: only need_manual_followup (internal follow-up, no automated supplier/bridge/booking).",
+    decision: Literal["need_manual_followup", "need_supplier_offer"] = Field(
+        description="need_manual_followup or need_supplier_offer (coordination labels only).",
     )
 
 

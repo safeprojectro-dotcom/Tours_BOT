@@ -1333,7 +1333,7 @@ def post_admin_custom_request_operator_decision(
     payload: AdminOperatorDecisionApply = Body(...),
     x_admin_actor_telegram_id: str | None = Header(default=None, alias="X-Admin-Actor-Telegram-Id"),
 ) -> CustomMarketplaceRequestRead:
-    """Y37.4: set operator workflow intent (v1: need_manual_followup only) when under_review and assigned to actor."""
+    """Y37.4/Y37.5: set operator workflow intent when under_review and assigned to actor."""
     if x_admin_actor_telegram_id is None or not str(x_admin_actor_telegram_id).strip().isdigit():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1346,12 +1346,16 @@ def post_admin_custom_request_operator_decision(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No User record for the given X-Admin-Actor-Telegram-Id.",
         )
+    _decision_map: dict[str, OperatorWorkflowIntent] = {
+        "need_manual_followup": OperatorWorkflowIntent.NEED_MANUAL_FOLLOWUP,
+        "need_supplier_offer": OperatorWorkflowIntent.NEED_SUPPLIER_OFFER,
+    }
     try:
         row = CustomMarketplaceRequestService().set_operator_decision(
             db,
             request_id=request_id,
             actor_user_id=user.id,
-            decision=OperatorWorkflowIntent.NEED_MANUAL_FOLLOWUP,
+            decision=_decision_map[payload.decision],
         )
     except CustomMarketplaceRequestNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found.") from None

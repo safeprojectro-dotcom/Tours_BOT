@@ -495,6 +495,42 @@ class AdminRouteTests(FoundationDBTestCase):
         )
         self.assertEqual(d3.status_code, 409, d3.text)
 
+        d_switch = self.client.post(
+            f"/admin/custom-requests/{rid}/operator-decision",
+            headers=headers,
+            json={"decision": "need_supplier_offer"},
+        )
+        self.assertEqual(d_switch.status_code, 400, d_switch.text)
+        self.assertIn("already has", d_switch.json()["detail"].lower())
+
+        c2 = self.client.post(
+            "/mini-app/custom-requests",
+            json={
+                "telegram_user_id": 352_500,
+                "request_type": "group_trip",
+                "travel_date_start": "2026-12-01",
+                "route_notes": "Y37.5 supplier intent",
+                "group_size": 1,
+            },
+        )
+        self.assertEqual(c2.status_code, 201, c2.text)
+        rid2 = c2.json()["id"]
+        self.client.post(f"/admin/custom-requests/{rid2}/assign-to-me", headers=headers)
+        self.client.post(f"/admin/custom-requests/{rid2}/mark-under-review", headers=headers)
+        d_sup = self.client.post(
+            f"/admin/custom-requests/{rid2}/operator-decision",
+            headers=headers,
+            json={"decision": "need_supplier_offer"},
+        )
+        self.assertEqual(d_sup.status_code, 200, d_sup.text)
+        self.assertEqual(d_sup.json()["operator_workflow_intent"], "need_supplier_offer")
+        d_sup2 = self.client.post(
+            f"/admin/custom-requests/{rid2}/operator-decision",
+            headers=headers,
+            json={"decision": "need_supplier_offer"},
+        )
+        self.assertEqual(d_sup2.status_code, 200, d_sup2.text)
+
         list_m = self.client.get("/mini-app/custom-requests", params={"telegram_user_id": 352_500})
         self.assertEqual(list_m.status_code, 200, list_m.text)
         item = next(x for x in list_m.json()["items"] if x["id"] == rid)

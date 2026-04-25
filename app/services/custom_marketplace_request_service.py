@@ -524,9 +524,12 @@ class CustomMarketplaceRequestService:
         actor_user_id: int,
         decision: OperatorWorkflowIntent,
     ) -> CustomMarketplaceRequestRead:
-        """Y37.4: persist operator workflow intent when under_review and assigned to actor; idempotent if same intent+actor."""
-        if decision != OperatorWorkflowIntent.NEED_MANUAL_FOLLOWUP:
-            raise CustomMarketplaceValidationError("Only need_manual_followup is supported in this version.")
+        """Y37.4/Y37.5: persist operator workflow intent when under_review and assigned to actor; idempotent if same intent+actor."""
+        if decision not in (
+            OperatorWorkflowIntent.NEED_MANUAL_FOLLOWUP,
+            OperatorWorkflowIntent.NEED_SUPPLIER_OFFER,
+        ):
+            raise CustomMarketplaceValidationError("Unsupported decision value in this version.")
         row = self._requests.get_for_operator_assignment(session, request_id=request_id)
         if row is None:
             raise CustomMarketplaceRequestNotFoundError
@@ -540,9 +543,15 @@ class CustomMarketplaceRequestService:
             raise CustomMarketplaceRequestOperatorDecisionNotAllowedError(
                 "Operator decision is only allowed when status is under_review.",
             )
-        if row.operator_workflow_intent == OperatorWorkflowIntent.NEED_MANUAL_FOLLOWUP:
-            if row.operator_workflow_intent_set_by_user_id in (None, actor_user_id):
+        if row.operator_workflow_intent is not None:
+            if row.operator_workflow_intent == decision and row.operator_workflow_intent_set_by_user_id in (
+                None,
+                actor_user_id,
+            ):
                 return self._read_with_operational_list_hints(row, session)
+            raise CustomMarketplaceRequestOperatorDecisionNotAllowedError(
+                "Request already has an operator decision.",
+            )
         now = datetime.now(UTC)
         row.operator_workflow_intent = decision
         row.operator_workflow_intent_set_at = now
