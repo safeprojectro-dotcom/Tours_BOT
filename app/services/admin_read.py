@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.enums import TourStatus
+from app.models.enums import BookingStatus, TourStatus
 from app.models.handoff import Handoff
 from app.models.order import Order
 from app.models.tour import Tour
@@ -225,6 +225,7 @@ class AdminReadService:
         return AdminOrderDetailRead(
             id=order.id,
             user_id=order.user_id,
+            customer_telegram_user_id=order.user.telegram_user_id if order.user is not None else None,
             lifecycle_kind=kind,
             lifecycle_summary=summary,
             persistence_snapshot=AdminOrderPersistenceSnapshot(
@@ -411,6 +412,7 @@ class AdminReadService:
         offset: int,
         lifecycle_kind: AdminOrderLifecycleKind | None = None,
         tour_id: int | None = None,
+        booking_status: BookingStatus | None = None,
     ) -> AdminOrderListRead:
         lifecycle_where = (
             sql_predicate_for_lifecycle_kind(lifecycle_kind) if lifecycle_kind is not None else None
@@ -420,22 +422,32 @@ class AdminReadService:
             limit=limit,
             offset=offset,
             tour_id=tour_id,
+            booking_status=booking_status,
             lifecycle_where=lifecycle_where,
         )
         items: list[AdminOrderListItem] = []
         for o in rows:
             kind, summary = describe_order_admin_lifecycle(o)
             tour_code = o.tour.code if o.tour is not None else ""
+            tour_title = o.tour.title_default if o.tour is not None else ""
+            tour_departure = o.tour.departure_datetime if o.tour is not None else o.created_at
             items.append(
                 AdminOrderListItem(
                     id=o.id,
                     user_id=o.user_id,
+                    customer_telegram_user_id=o.user.telegram_user_id if o.user is not None else None,
                     tour_id=o.tour_id,
                     tour_code=tour_code,
+                    tour_title_default=tour_title,
+                    tour_departure_datetime=tour_departure,
                     seats_count=o.seats_count,
+                    booking_status=o.booking_status,
+                    payment_status=o.payment_status,
+                    cancellation_status=o.cancellation_status,
                     total_amount=o.total_amount,
                     currency=o.currency,
                     created_at=o.created_at,
+                    reservation_expires_at=o.reservation_expires_at,
                     lifecycle_kind=kind,
                     lifecycle_summary=summary,
                 )

@@ -222,6 +222,10 @@ class CustomMarketplaceRequestRead(BaseModel):
 
     id: int
     user_id: int
+    customer_telegram_user_id: int | None = Field(
+        default=None,
+        description="Admin/ops read-side customer Telegram id; None outside admin-populated surfaces.",
+    )
     request_type: CustomMarketplaceRequestType
     travel_date_start: date
     travel_date_end: date | None

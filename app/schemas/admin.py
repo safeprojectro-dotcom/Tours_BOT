@@ -249,12 +249,19 @@ class AdminTranslationSummaryItem(BaseModel):
 class AdminOrderListItem(BaseModel):
     id: int
     user_id: int
+    customer_telegram_user_id: int | None = None
     tour_id: int
     tour_code: str
+    tour_title_default: str
+    tour_departure_datetime: datetime
     seats_count: int
+    booking_status: BookingStatus
+    payment_status: PaymentStatus
+    cancellation_status: CancellationStatus
     total_amount: Decimal
     currency: str
     created_at: datetime
+    reservation_expires_at: datetime | None = None
     lifecycle_kind: AdminOrderLifecycleKind
     lifecycle_summary: str
 
@@ -502,6 +509,7 @@ class AdminOrderMovePlacementSnapshot(BaseModel):
 class AdminOrderDetailRead(BaseModel):
     id: int
     user_id: int
+    customer_telegram_user_id: int | None = None
     lifecycle_kind: AdminOrderLifecycleKind
     lifecycle_summary: str = Field(
         description="Primary admin-facing interpretation of order state (see OPEN_QUESTIONS_AND_TECH_DEBT).",

@@ -30,6 +30,7 @@ class OrderRepository(SQLAlchemyRepository[Order]):
             select(Order)
             .where(Order.id == order_id)
             .options(
+                selectinload(Order.user),
                 selectinload(Order.tour),
                 selectinload(Order.boarding_point),
                 selectinload(Order.handoffs),
@@ -58,15 +59,22 @@ class OrderRepository(SQLAlchemyRepository[Order]):
         limit: int = 100,
         offset: int = 0,
         tour_id: int | None = None,
+        booking_status: BookingStatus | None = None,
         lifecycle_where: Any | None = None,
     ) -> list[Order]:
         """Recent orders for admin read-only lists (newest first); loads tour for display code."""
-        stmt = select(Order).options(selectinload(Order.tour)).order_by(
-            Order.created_at.desc(),
-            Order.id.desc(),
+        stmt = (
+            select(Order)
+            .options(selectinload(Order.user), selectinload(Order.tour))
+            .order_by(
+                Order.created_at.desc(),
+                Order.id.desc(),
+            )
         )
         if tour_id is not None:
             stmt = stmt.where(Order.tour_id == tour_id)
+        if booking_status is not None:
+            stmt = stmt.where(Order.booking_status == booking_status)
         if lifecycle_where is not None:
             stmt = stmt.where(lifecycle_where)
         stmt = stmt.offset(offset).limit(limit)

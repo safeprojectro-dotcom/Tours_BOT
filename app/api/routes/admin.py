@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.admin_auth import require_admin_api_token
 from app.db.session import get_db
-from app.models.enums import CustomMarketplaceRequestStatus, SupplierOfferLifecycle, TourStatus
+from app.models.enums import BookingStatus, CustomMarketplaceRequestStatus, SupplierOfferLifecycle, TourStatus
 from app.models.supplier import Supplier
 from app.schemas.admin import (
     AdminBoardingPointCreate,
@@ -418,6 +418,7 @@ def list_admin_orders(
     offset: int = Query(default=0, ge=0, le=100_000),
     lifecycle_kind: AdminOrderLifecycleKind | None = Query(default=None),
     tour_id: int | None = Query(default=None, ge=1),
+    booking_status: BookingStatus | None = Query(default=None),
 ) -> AdminOrderListRead:
     return AdminReadService().list_orders(
         db,
@@ -425,6 +426,7 @@ def list_admin_orders(
         offset=offset,
         lifecycle_kind=lifecycle_kind,
         tour_id=tour_id,
+        booking_status=booking_status,
     )
 
 

@@ -315,7 +315,14 @@ class CustomMarketplaceRequestService:
                 selected_supplier_response_id=r.selected_supplier_response_id,
             )
             base = CustomMarketplaceRequestRead.model_validate(r, from_attributes=True)
-            out.append(base.model_copy(update={"operational_hints": hints}))
+            out.append(
+                base.model_copy(
+                    update={
+                        "customer_telegram_user_id": r.user.telegram_user_id if r.user is not None else None,
+                        "operational_hints": hints,
+                    },
+                )
+            )
         return out
 
     def get_admin_detail(self, session: Session, *, request_id: int) -> CustomMarketplaceRequestDetailRead:
@@ -358,7 +365,9 @@ class CustomMarketplaceRequestService:
             language_code=preferred_lang,
         )
         return CustomMarketplaceRequestDetailRead(
-            request=CustomMarketplaceRequestRead.model_validate(row, from_attributes=True),
+            request=CustomMarketplaceRequestRead.model_validate(row, from_attributes=True).model_copy(
+                update={"customer_telegram_user_id": tg},
+            ),
             responses=responses,
             customer_telegram_user_id=tg,
             booking_bridge=bridge,

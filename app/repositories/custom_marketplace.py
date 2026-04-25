@@ -47,9 +47,13 @@ class CustomMarketplaceRequestRepository:
         limit: int = 100,
         offset: int = 0,
     ) -> list[CustomMarketplaceRequest]:
-        stmt = select(CustomMarketplaceRequest).order_by(
-            CustomMarketplaceRequest.created_at.desc(),
-            CustomMarketplaceRequest.id.desc(),
+        stmt = (
+            select(CustomMarketplaceRequest)
+            .options(selectinload(CustomMarketplaceRequest.user))
+            .order_by(
+                CustomMarketplaceRequest.created_at.desc(),
+                CustomMarketplaceRequest.id.desc(),
+            )
         )
         if status is not None:
             stmt = stmt.where(CustomMarketplaceRequest.status == status)

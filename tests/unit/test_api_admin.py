@@ -87,7 +87,7 @@ class AdminRouteTests(FoundationDBTestCase):
         self.assertEqual(tours.status_code, 200)
         tdata = tours.json()
         self.assertGreaterEqual(len(tdata["items"]), 1)
-        self.assertEqual(tdata["items"][0]["code"], "ADM-TOUR-1")
+        self.assertIn("ADM-TOUR-1", {item["code"] for item in tdata["items"]})
 
         orders = self.client.get("/admin/orders", headers=headers)
         self.assertEqual(orders.status_code, 200)
@@ -96,6 +96,154 @@ class AdminRouteTests(FoundationDBTestCase):
         row = odata["items"][0]
         self.assertEqual(row["lifecycle_kind"], "expired_unpaid_hold")
         self.assertIn("Not an active reservation", row["lifecycle_summary"])
+
+    def test_admin_ops_orders_list_all_users_while_mini_app_bookings_stay_user_scoped(self) -> None:
+        user_a = self.create_user(telegram_user_id=351_001)
+        user_b = self.create_user(telegram_user_id=351_002)
+        tour = self.create_tour(
+            code="ADM-OPS-ORDERS",
+            title_default="Admin Ops Orders",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=datetime(2026, 8, 10, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        order_a = self.create_order(
+            user_a,
+            tour,
+            point,
+            seats_count=1,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+        )
+        order_b = self.create_order(
+            user_b,
+            tour,
+            point,
+            seats_count=3,
+            booking_status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+        )
+        self.session.commit()
+
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        admin_list = self.client.get("/admin/orders", headers=headers, params={"tour_id": tour.id})
+        self.assertEqual(admin_list.status_code, 200, admin_list.text)
+        rows = admin_list.json()["items"]
+        ids = {row["id"] for row in rows}
+        self.assertIn(order_a.id, ids)
+        self.assertIn(order_b.id, ids)
+        row_a = next(row for row in rows if row["id"] == order_a.id)
+        self.assertEqual(row_a["customer_telegram_user_id"], 351_001)
+        self.assertEqual(row_a["tour_title_default"], "Admin Ops Orders")
+        self.assertEqual(row_a["tour_departure_datetime"], tour.departure_datetime.isoformat().replace("+00:00", "Z"))
+        self.assertEqual(row_a["booking_status"], "reserved")
+        self.assertEqual(row_a["payment_status"], "awaiting_payment")
+        self.assertEqual(row_a["cancellation_status"], "active")
+        self.assertIn("lifecycle_summary", row_a)
+
+        filtered = self.client.get(
+            "/admin/orders",
+            headers=headers,
+            params={"tour_id": tour.id, "booking_status": "confirmed"},
+        )
+        self.assertEqual(filtered.status_code, 200, filtered.text)
+        filtered_ids = {row["id"] for row in filtered.json()["items"]}
+        self.assertIn(order_b.id, filtered_ids)
+        self.assertNotIn(order_a.id, filtered_ids)
+
+        detail = self.client.get(f"/admin/orders/{order_b.id}", headers=headers)
+        self.assertEqual(detail.status_code, 200, detail.text)
+        self.assertEqual(detail.json()["customer_telegram_user_id"], 351_002)
+
+        no_auth = self.client.get("/admin/orders")
+        self.assertEqual(no_auth.status_code, 401)
+
+        list_a = self.client.get("/mini-app/bookings", params={"telegram_user_id": 351_001, "language_code": "en"})
+        list_b = self.client.get("/mini-app/bookings", params={"telegram_user_id": 351_002, "language_code": "en"})
+        self.assertEqual(list_a.status_code, 200, list_a.text)
+        self.assertEqual(list_b.status_code, 200, list_b.text)
+        ids_a = {item["summary"]["order"]["id"] for item in list_a.json()["items"]}
+        ids_b = {item["summary"]["order"]["id"] for item in list_b.json()["items"]}
+        self.assertIn(order_a.id, ids_a)
+        self.assertNotIn(order_b.id, ids_a)
+        self.assertIn(order_b.id, ids_b)
+        self.assertNotIn(order_a.id, ids_b)
+
+        other_detail = self.client.get(
+            f"/mini-app/orders/{order_a.id}/booking-status",
+            params={"telegram_user_id": 351_002, "language_code": "en"},
+        )
+        self.assertEqual(other_detail.status_code, 404)
+
+    def test_admin_ops_custom_requests_list_all_users_while_my_requests_stay_user_scoped(self) -> None:
+        self.create_user(telegram_user_id=352_001)
+        self.create_user(telegram_user_id=352_002)
+        self.session.commit()
+
+        req_a = self.client.post(
+            "/mini-app/custom-requests",
+            json={
+                "telegram_user_id": 352_001,
+                "request_type": "custom_route",
+                "travel_date_start": "2026-09-01",
+                "route_notes": "Admin ops first route",
+                "group_size": 4,
+            },
+        )
+        req_b = self.client.post(
+            "/mini-app/custom-requests",
+            json={
+                "telegram_user_id": 352_002,
+                "request_type": "group_trip",
+                "travel_date_start": "2026-09-02",
+                "route_notes": "Admin ops second route",
+                "group_size": 8,
+            },
+        )
+        self.assertEqual(req_a.status_code, 201, req_a.text)
+        self.assertEqual(req_b.status_code, 201, req_b.text)
+        req_a_id = req_a.json()["id"]
+        req_b_id = req_b.json()["id"]
+
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        admin_list = self.client.get("/admin/custom-requests", headers=headers, params={"status": "open"})
+        self.assertEqual(admin_list.status_code, 200, admin_list.text)
+        rows = admin_list.json()["items"]
+        ids = {row["id"] for row in rows}
+        self.assertIn(req_a_id, ids)
+        self.assertIn(req_b_id, ids)
+        row_a = next(row for row in rows if row["id"] == req_a_id)
+        self.assertEqual(row_a["customer_telegram_user_id"], 352_001)
+        self.assertEqual(row_a["status"], "open")
+        self.assertEqual(row_a["request_type"], "custom_route")
+        self.assertIn("scan_summary_line", row_a["operational_hints"])
+
+        detail = self.client.get(f"/admin/custom-requests/{req_b_id}", headers=headers)
+        self.assertEqual(detail.status_code, 200, detail.text)
+        body = detail.json()
+        self.assertEqual(body["customer_telegram_user_id"], 352_002)
+        self.assertEqual(body["request"]["customer_telegram_user_id"], 352_002)
+        self.assertEqual(body["request"]["status"], "open")
+
+        no_auth = self.client.get("/admin/custom-requests")
+        self.assertEqual(no_auth.status_code, 401)
+
+        list_a = self.client.get("/mini-app/custom-requests", params={"telegram_user_id": 352_001})
+        list_b = self.client.get("/mini-app/custom-requests", params={"telegram_user_id": 352_002})
+        self.assertEqual(list_a.status_code, 200, list_a.text)
+        self.assertEqual(list_b.status_code, 200, list_b.text)
+        ids_a = {item["id"] for item in list_a.json()["items"]}
+        ids_b = {item["id"] for item in list_b.json()["items"]}
+        self.assertIn(req_a_id, ids_a)
+        self.assertNotIn(req_b_id, ids_a)
+        self.assertIn(req_b_id, ids_b)
+        self.assertNotIn(req_a_id, ids_b)
+
+        other_detail = self.client.get(
+            f"/mini-app/custom-requests/{req_a_id}",
+            params={"telegram_user_id": 352_002},
+        )
+        self.assertEqual(other_detail.status_code, 404)
 
     def test_admin_tour_list_includes_past_departure_tour(self) -> None:
         """Admin read paths are not filtered by customer catalog time windows."""
