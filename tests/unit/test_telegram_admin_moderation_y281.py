@@ -435,7 +435,8 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             return self._all_answer_texts(message), state.last_state, state.data
 
         text, last_state, data = asyncio.run(body())
-        self.assertIn("send tour code or part of code/title", text)
+        self.assertIn("send tour code or title", text)
+        self.assertIn("yyyy-mm-dd", text)
         self.assertEqual(last_state, admin_moderation.AdminModerationState.awaiting_execution_link_tour_code_search)
         self.assertEqual(data["pending_link_offer_id"], offer_id)
         self.assertEqual(data["pending_link_mode"], "create")
@@ -602,6 +603,181 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         self.assertNotIn(f"el:pick:{offer_id}:create:{mismatch_id}", callbacks)
         self.assertTrue(all(len(callback.encode("utf-8")) <= 64 for callback in callbacks))
 
+    def test_admin_link_search_date_only_returns_compatible_tours_on_date(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        target_departure = datetime.now(UTC).replace(second=0, microsecond=0) + timedelta(days=45)
+        other_departure = target_departure + timedelta(days=1)
+        target = self.create_tour(
+            code="TG-DATE-ONLY-OK",
+            title_default="Date Only Match",
+            sales_mode=TourSalesMode.PER_SEAT,
+            departure_datetime=target_departure,
+        )
+        other = self.create_tour(
+            code="TG-DATE-ONLY-OTHER",
+            title_default="Date Only Other",
+            sales_mode=TourSalesMode.PER_SEAT,
+            departure_datetime=other_departure,
+        )
+        target_id = target.id
+        other_id = other.id
+        date_text = target_departure.date().isoformat()
+        self.session.commit()
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            search_cb = _callback(
+                telegram_user_id=990001,
+                data=f"el:search:{offer_id}:create",
+                message=message,
+            )
+            input_message = _private_message(telegram_user_id=990001)
+            input_message.text = date_text
+            await state.update_data(pending_link_offer_id=offer_id, pending_link_mode="create")
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(search_cb, state)
+                await admin_moderation.admin_offer_execution_link_tour_code_search_input(input_message, state)
+            return self._all_answer_texts(input_message), self._inline_callback_data(input_message)
+
+        text, callbacks = asyncio.run(body())
+        self.assertIn(date_text, text)
+        self.assertIn("tg-date-only-ok", text)
+        self.assertNotIn("tg-date-only-other", text)
+        self.assertIn(f"el:pick:{offer_id}:create:{target_id}", callbacks)
+        self.assertNotIn(f"el:pick:{offer_id}:create:{other_id}", callbacks)
+        self.assertTrue(all(len(callback.encode("utf-8")) <= 64 for callback in callbacks))
+
+    def test_admin_link_search_code_and_date_apply_both_filters(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        target_departure = datetime.now(UTC).replace(second=0, microsecond=0) + timedelta(days=50)
+        other_departure = target_departure + timedelta(days=1)
+        target = self.create_tour(
+            code="TG-SMOKE-DATE",
+            sales_mode=TourSalesMode.PER_SEAT,
+            departure_datetime=target_departure,
+        )
+        same_code_wrong_date = self.create_tour(
+            code="TG-SMOKE-DATE-OTHER",
+            sales_mode=TourSalesMode.PER_SEAT,
+            departure_datetime=other_departure,
+        )
+        wrong_mode = self.create_tour(
+            code="TG-SMOKE-DATE-BUS",
+            sales_mode=TourSalesMode.FULL_BUS,
+            departure_datetime=target_departure,
+        )
+        target_id = target.id
+        wrong_date_id = same_code_wrong_date.id
+        wrong_mode_id = wrong_mode.id
+        date_text = target_departure.date().isoformat()
+        self.session.commit()
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            search_cb = _callback(
+                telegram_user_id=990001,
+                data=f"el:search:{offer_id}:create",
+                message=message,
+            )
+            input_message = _private_message(telegram_user_id=990001)
+            input_message.text = f"SMOKE {date_text}"
+            await state.update_data(pending_link_offer_id=offer_id, pending_link_mode="create")
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(search_cb, state)
+                await admin_moderation.admin_offer_execution_link_tour_code_search_input(input_message, state)
+            return self._all_answer_texts(input_message), self._inline_callback_data(input_message)
+
+        text, callbacks = asyncio.run(body())
+        self.assertIn(f"smoke {date_text}", text)
+        self.assertIn("tg-smoke-date", text)
+        self.assertNotIn("tg-smoke-date-other", text)
+        self.assertNotIn("tg-smoke-date-bus", text)
+        self.assertIn(f"el:pick:{offer_id}:create:{target_id}", callbacks)
+        self.assertNotIn(f"el:pick:{offer_id}:create:{wrong_date_id}", callbacks)
+        self.assertNotIn(f"el:pick:{offer_id}:create:{wrong_mode_id}", callbacks)
+        self.assertTrue(all(len(callback.encode("utf-8")) <= 64 for callback in callbacks))
+
+    def test_admin_link_search_title_and_date_apply_both_filters(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        target_departure = datetime.now(UTC).replace(second=0, microsecond=0) + timedelta(days=55)
+        other_departure = target_departure + timedelta(days=1)
+        target = self.create_tour(
+            code="TG-TITLE-DATE-OK",
+            title_default="Full Bus Riverside",
+            sales_mode=TourSalesMode.PER_SEAT,
+            departure_datetime=target_departure,
+        )
+        wrong_date = self.create_tour(
+            code="TG-TITLE-DATE-WRONG",
+            title_default="Full Bus Riverside",
+            sales_mode=TourSalesMode.PER_SEAT,
+            departure_datetime=other_departure,
+        )
+        target_id = target.id
+        wrong_date_id = wrong_date.id
+        date_text = target_departure.date().isoformat()
+        self.session.commit()
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            search_cb = _callback(
+                telegram_user_id=990001,
+                data=f"el:search:{offer_id}:create",
+                message=message,
+            )
+            input_message = _private_message(telegram_user_id=990001)
+            input_message.text = f"full bus {date_text}"
+            await state.update_data(pending_link_offer_id=offer_id, pending_link_mode="create")
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(search_cb, state)
+                await admin_moderation.admin_offer_execution_link_tour_code_search_input(input_message, state)
+            return self._all_answer_texts(input_message), self._inline_callback_data(input_message)
+
+        text, callbacks = asyncio.run(body())
+        self.assertIn(f"full bus {date_text}", text)
+        self.assertIn("tg-title-date-ok", text)
+        self.assertNotIn("tg-title-date-wrong", text)
+        self.assertIn(f"el:pick:{offer_id}:create:{target_id}", callbacks)
+        self.assertNotIn(f"el:pick:{offer_id}:create:{wrong_date_id}", callbacks)
+        self.assertTrue(all(len(callback.encode("utf-8")) <= 64 for callback in callbacks))
+
+    def test_admin_link_search_invalid_date_is_ignored(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        target_departure = datetime.now(UTC).replace(second=0, microsecond=0) + timedelta(days=60)
+        target = self.create_tour(
+            code="TG-INVALID-DATE",
+            title_default="Invalid Date Smoke",
+            sales_mode=TourSalesMode.PER_SEAT,
+            departure_datetime=target_departure,
+        )
+        target_id = target.id
+        self.session.commit()
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            search_cb = _callback(
+                telegram_user_id=990001,
+                data=f"el:search:{offer_id}:create",
+                message=message,
+            )
+            input_message = _private_message(telegram_user_id=990001)
+            input_message.text = "INVALID-DATE 2026-99-99"
+            await state.update_data(pending_link_offer_id=offer_id, pending_link_mode="create")
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(search_cb, state)
+                await admin_moderation.admin_offer_execution_link_tour_code_search_input(input_message, state)
+            return self._all_answer_texts(input_message), self._inline_callback_data(input_message)
+
+        text, callbacks = asyncio.run(body())
+        self.assertIn("invalid-date", text)
+        self.assertNotIn("2026-99-99", text)
+        self.assertIn(f"el:pick:{offer_id}:create:{target_id}", callbacks)
+        self.assertTrue(all(len(callback.encode("utf-8")) <= 64 for callback in callbacks))
+
     def test_admin_link_code_search_no_results_keeps_no_state_change(self) -> None:
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
         self.create_tour(code="TG-SEARCH-NOMATCH", sales_mode=TourSalesMode.PER_SEAT)
@@ -705,6 +881,51 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             )
             input_message = _private_message(telegram_user_id=990001)
             input_message.text = "SEARCH-CONFIRM"
+            select_cb = _callback(
+                telegram_user_id=990001,
+                data=f"el:pick:{offer_id}:create:{tour_id}",
+                message=message,
+            )
+            await state.update_data(pending_link_offer_id=offer_id, pending_link_mode="create")
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_offer_action(search_cb, state)
+                await admin_moderation.admin_offer_execution_link_tour_code_search_input(input_message, state)
+                await admin_moderation.admin_offer_action(select_cb, state)
+            return (
+                "\n".join([self._all_answer_texts(message), self._all_answer_texts(input_message)]),
+                self._inline_callback_data(message) + self._inline_callback_data(input_message),
+            )
+
+        text, callbacks = asyncio.run(body())
+        self.assertIn("compatible tour search results", text)
+        self.assertIn("confirm execution link target", text)
+        self.assertIn("mini app cta appears only", text)
+        self.assertIn(f"el:pick:{offer_id}:create:{tour_id}", callbacks)
+        self.assertTrue(all(len(callback.encode("utf-8")) <= 64 for callback in callbacks))
+
+    def test_admin_selects_date_search_result_and_opens_confirmation(self) -> None:
+        offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        target_departure = datetime.now(UTC).replace(second=0, microsecond=0) + timedelta(days=65)
+        tour = self.create_tour(
+            code="TG-DATE-CONFIRM",
+            title_default="Date Confirmation Trip",
+            sales_mode=TourSalesMode.PER_SEAT,
+            departure_datetime=target_departure,
+        )
+        tour_id = tour.id
+        date_text = target_departure.date().isoformat()
+        self.session.commit()
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            search_cb = _callback(
+                telegram_user_id=990001,
+                data=f"el:search:{offer_id}:create",
+                message=message,
+            )
+            input_message = _private_message(telegram_user_id=990001)
+            input_message.text = date_text
             select_cb = _callback(
                 telegram_user_id=990001,
                 data=f"el:pick:{offer_id}:create:{tour_id}",

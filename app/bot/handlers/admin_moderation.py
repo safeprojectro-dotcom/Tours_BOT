@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import re
+from datetime import UTC, date, datetime, time, timedelta
 
 from aiogram import F, Router
 from aiogram.filters import Command
@@ -18,6 +19,7 @@ from app.bot.constants import (
     ADMIN_OFFERS_ACTION_CONFIRM_CREATE_LINK,
     ADMIN_OFFERS_ACTION_CONFIRM_REPLACE_LINK,
     ADMIN_OFFERS_ACTION_CREATE_LINK,
+    ADMIN_OFFERS_EXEC_LINK_CONFIRM_PREFIX,
     ADMIN_OFFERS_EXEC_LINK_LIST_PREFIX,
     ADMIN_OFFERS_EXEC_LINK_MANUAL_PREFIX,
     ADMIN_OFFERS_EXEC_LINK_PICK_PREFIX,
@@ -69,6 +71,7 @@ _QUEUE_MODE_MODERATION = "moderation"
 _QUEUE_MODE_APPROVED = "approved"
 _QUEUE_MODE_PUBLISHED = "published"
 _LINK_TOUR_PAGE_SIZE = 5
+_LINK_TOUR_SEARCH_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 _LINK_SELECTION_ACTIONS = (
     ADMIN_OFFERS_ACTION_APPROVE,
     ADMIN_OFFERS_ACTION_REJECT,
@@ -270,6 +273,27 @@ def _find_tour_for_link_input(session, text: str) -> Tour | None:
     return session.query(Tour).filter(Tour.code == normalized).one_or_none()
 
 
+def _parse_link_tour_search_input(text: str) -> tuple[str, date | None]:
+    normalized = " ".join(text.strip().split())
+    match = _LINK_TOUR_SEARCH_DATE_RE.search(normalized)
+    if match is None:
+        return normalized, None
+
+    raw_date = match.group(0)
+    query = " ".join(f"{normalized[: match.start()]} {normalized[match.end() :]}".split())
+    try:
+        return query, date.fromisoformat(raw_date)
+    except ValueError:
+        return query, None
+
+
+def _link_tour_search_display(search_query: str, search_date: date | None) -> str:
+    parts = [search_query.strip()]
+    if search_date is not None:
+        parts.append(search_date.isoformat())
+    return " ".join(part for part in parts if part).strip()
+
+
 def _has_active_execution_link(session, *, offer_id: int) -> bool:
     links = SupplierOfferExecutionLinkService().list_links_for_offer(session, offer_id=offer_id)
     return any(link.link_status == "active" for link in links)
@@ -307,7 +331,7 @@ def _link_confirm_keyboard(language_code: str | None, *, mode: str, offer_id: in
     label_key = "admin_offer_link_confirm_create" if mode == "create" else "admin_offer_link_confirm_replace"
     kb.button(
         text=translate(language_code, label_key),
-        callback_data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{action}:{offer_id}",
+        callback_data=_link_action_callback(action, offer_id, mode),
     )
     kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=ADMIN_OFFERS_NAV_BACK)
     kb.button(text=translate(language_code, "admin_offer_nav_home"), callback_data=ADMIN_OFFERS_NAV_HOME)
@@ -331,6 +355,9 @@ def _link_action_callback(action: str, offer_id: int, *parts: object) -> str:
     if action == ADMIN_OFFERS_ACTION_SEARCH_LINK_TOUR:
         (mode,) = parts
         return f"{ADMIN_OFFERS_EXEC_LINK_SEARCH_PREFIX}{offer_id}:{mode}"
+    if action in (ADMIN_OFFERS_ACTION_CONFIRM_CREATE_LINK, ADMIN_OFFERS_ACTION_CONFIRM_REPLACE_LINK):
+        (mode,) = parts
+        return f"{ADMIN_OFFERS_EXEC_LINK_CONFIRM_PREFIX}{offer_id}:{mode}"
     suffix = ":".join([action, str(offer_id), *(str(part) for part in parts)])
     return f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{suffix}"
 
@@ -341,6 +368,7 @@ def _compatible_tours_for_offer(
     offer_id: int,
     page: int,
     code_query: str | None = None,
+    search_date: date | None = None,
 ) -> tuple[list[Tour], bool]:
     offer = SupplierOfferModerationService()._offers.get_any(session, offer_id=offer_id)
     if offer is None:
@@ -360,6 +388,10 @@ def _compatible_tours_for_offer(
                 Tour.title_default.ilike(f"%{normalized_code_query}%"),
             )
         )
+    if search_date is not None:
+        start = datetime.combine(search_date, time.min, tzinfo=UTC)
+        end = start + timedelta(days=1)
+        query = query.filter(Tour.departure_datetime >= start).filter(Tour.departure_datetime < end)
     candidates = (
         query.order_by(Tour.departure_datetime.asc(), Tour.id.asc()).offset(offset).limit(_LINK_TOUR_PAGE_SIZE + 1).all()
     )
@@ -407,7 +439,7 @@ def _link_tour_search_results_text(
     offer_id: int,
     mode: str,
     page: int,
-    code_query: str,
+    search_display: str,
     tours: list[Tour],
 ) -> str:
     lines = [
@@ -416,7 +448,7 @@ def _link_tour_search_results_text(
             "admin_offer_link_search_results_title",
             offer_id=str(offer_id),
             mode=mode,
-            query=code_query,
+            query=search_display,
             page=str(page + 1),
         )
     ]
@@ -534,6 +566,8 @@ async def _show_link_tour_candidates(
         pending_link_tour_id=None,
         pending_link_page=page,
         pending_link_code_query=None,
+        pending_link_search_query=None,
+        pending_link_search_date=None,
     )
     if not tours:
         kb = InlineKeyboardBuilder()
@@ -576,16 +610,37 @@ async def _show_link_tour_code_search_results(
     *,
     offer_id: int,
     mode: str,
-    code_query: str,
+    search_query: str,
+    search_date: date | None = None,
     page: int = 0,
 ) -> None:
     page = max(page, 0)
-    normalized_code_query = code_query.strip()
+    normalized_search_query = search_query.strip()
+    search_display = _link_tour_search_display(normalized_search_query, search_date)
+    if not search_display:
+        kb = InlineKeyboardBuilder()
+        kb.button(
+            text=translate(language_code, "admin_offer_link_back_to_candidates"),
+            callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE, offer_id, mode, 0),
+        )
+        kb.button(
+            text=translate(language_code, "admin_offer_link_manual_input"),
+            callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR, offer_id, mode),
+        )
+        kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=ADMIN_OFFERS_NAV_BACK)
+        kb.button(text=translate(language_code, "admin_offer_nav_home"), callback_data=ADMIN_OFFERS_NAV_HOME)
+        kb.adjust(1)
+        await message.answer(
+            translate(language_code, "admin_offer_link_search_empty", query=search_display),
+            reply_markup=kb.as_markup(),
+        )
+        return
     tours, has_next = _compatible_tours_for_offer(
         session,
         offer_id=offer_id,
         page=page,
-        code_query=normalized_code_query,
+        code_query=normalized_search_query,
+        search_date=search_date,
     )
     await state.set_state(AdminModerationState.awaiting_execution_link_tour)
     await state.update_data(
@@ -594,7 +649,9 @@ async def _show_link_tour_code_search_results(
         pending_link_offer_id=offer_id,
         pending_link_tour_id=None,
         pending_link_page=page,
-        pending_link_code_query=normalized_code_query,
+        pending_link_code_query=search_display,
+        pending_link_search_query=normalized_search_query,
+        pending_link_search_date=search_date.isoformat() if search_date is not None else None,
     )
     if not tours:
         kb = InlineKeyboardBuilder()
@@ -610,7 +667,7 @@ async def _show_link_tour_code_search_results(
         kb.button(text=translate(language_code, "admin_offer_nav_home"), callback_data=ADMIN_OFFERS_NAV_HOME)
         kb.adjust(1)
         await message.answer(
-            translate(language_code, "admin_offer_link_search_empty", query=normalized_code_query),
+            translate(language_code, "admin_offer_link_search_empty", query=search_display),
             reply_markup=kb.as_markup(),
         )
         return
@@ -620,7 +677,7 @@ async def _show_link_tour_code_search_results(
             offer_id=offer_id,
             mode=mode,
             page=page,
-            code_query=normalized_code_query,
+            search_display=search_display,
             tours=tours,
         ),
         reply_markup=_link_tour_search_results_keyboard(
@@ -832,6 +889,22 @@ async def admin_queue_navigation(query: CallbackQuery, state: FSMContext) -> Non
 
 
 def _parse_action(data: str) -> tuple[str, int, tuple[str, ...]] | None:
+    if data.startswith(ADMIN_OFFERS_EXEC_LINK_CONFIRM_PREFIX):
+        parts = data.removeprefix(ADMIN_OFFERS_EXEC_LINK_CONFIRM_PREFIX).split(":")
+        if len(parts) != 2:
+            return None
+        mode = parts[1]
+        if mode == "create":
+            action_name = ADMIN_OFFERS_ACTION_CONFIRM_CREATE_LINK
+        elif mode == "replace":
+            action_name = ADMIN_OFFERS_ACTION_CONFIRM_REPLACE_LINK
+        else:
+            return None
+        try:
+            return action_name, int(parts[0]), ()
+        except ValueError:
+            return None
+
     compact_prefixes = {
         ADMIN_OFFERS_EXEC_LINK_LIST_PREFIX: ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE,
         ADMIN_OFFERS_EXEC_LINK_SEARCH_LIST_PREFIX: ADMIN_OFFERS_ACTION_LINK_TOUR_SEARCH_PAGE,
@@ -883,6 +956,7 @@ def _refresh_queue(current_offer_id: int, *, session, mode: str) -> tuple[list[i
     | F.data.startswith(ADMIN_OFFERS_EXEC_LINK_PICK_PREFIX)
     | F.data.startswith(ADMIN_OFFERS_EXEC_LINK_MANUAL_PREFIX)
     | F.data.startswith(ADMIN_OFFERS_EXEC_LINK_SEARCH_PREFIX)
+    | F.data.startswith(ADMIN_OFFERS_EXEC_LINK_CONFIRM_PREFIX)
 )
 async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
     if query.from_user is None or query.data is None or query.message is None:
@@ -989,6 +1063,12 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                     await query.answer()
                     return
                 code_query = str(data.get("pending_link_code_query") or "").strip()
+                search_query = str(data.get("pending_link_search_query") or code_query).strip()
+                raw_search_date = data.get("pending_link_search_date")
+                try:
+                    search_date = date.fromisoformat(raw_search_date) if isinstance(raw_search_date, str) else None
+                except ValueError:
+                    search_date = None
                 if not code_query:
                     await query.message.answer(translate(lg, "admin_offer_link_confirm_missing"))
                     await query.answer()
@@ -1000,7 +1080,8 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                     lg,
                     offer_id=offer_id,
                     mode=mode,
-                    code_query=code_query,
+                    search_query=search_query,
+                    search_date=search_date,
                     page=page,
                 )
                 await query.answer()
@@ -1018,6 +1099,8 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                     pending_link_offer_id=offer_id,
                     pending_link_tour_id=None,
                     pending_link_code_query=None,
+                    pending_link_search_query=None,
+                    pending_link_search_date=None,
                 )
                 await query.message.answer(translate(lg, "admin_offer_link_search_prompt", offer_id=str(offer_id)))
                 await query.answer()
@@ -1034,6 +1117,8 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                     pending_link_mode=mode,
                     pending_link_offer_id=offer_id,
                     pending_link_code_query=None,
+                    pending_link_search_query=None,
+                    pending_link_search_date=None,
                 )
                 await query.message.answer(translate(lg, "admin_offer_link_target_prompt", offer_id=str(offer_id)))
                 await query.answer()
@@ -1112,6 +1197,8 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                     pending_link_offer_id=None,
                     pending_link_tour_id=None,
                     pending_link_code_query=None,
+                    pending_link_search_query=None,
+                    pending_link_search_date=None,
                 )
                 await query.message.answer(
                     translate(lg, done_key, offer_id=str(offer_id), tour_id=str(pending_tour_id))
@@ -1242,6 +1329,8 @@ async def admin_offer_execution_link_tour_input(message: Message, state: FSMCont
             pending_link_offer_id=None,
             pending_link_tour_id=None,
             pending_link_code_query=None,
+            pending_link_search_query=None,
+            pending_link_search_date=None,
         )
         with SessionLocal() as session:
             status_text, has_active = _link_history_text(session, lg, offer_id=offer_id)
@@ -1313,6 +1402,7 @@ async def admin_offer_execution_link_tour_code_search_input(message: Message, st
     if not text:
         await message.answer(translate(lg, "admin_offer_link_search_empty", query=text))
         return
+    search_query, search_date = _parse_link_tour_search_input(text)
     try:
         with SessionLocal() as session:
             await _show_link_tour_code_search_results(
@@ -1322,7 +1412,8 @@ async def admin_offer_execution_link_tour_code_search_input(message: Message, st
                 lg,
                 offer_id=offer_id,
                 mode=mode,
-                code_query=text,
+                search_query=search_query,
+                search_date=search_date,
                 page=0,
             )
     except SupplierOfferExecutionLinkNotFoundError:
