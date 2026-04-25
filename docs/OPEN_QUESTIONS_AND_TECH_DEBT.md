@@ -34,6 +34,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Y40 (design, canonical):** **`docs/SUPPLIER_EXECUTION_FLOW.md`** — after a Y39 start, **stages** (entry → validate → **audit** record → attempt → result → optional review); **operator intent = decision**; **entry = start**; **flow =** controlled pipeline; invariants: idempotency, audit, **retry** safety, no hidden triggers, **fail-closed**, explicit permissions. **No** `app/` in Y40; no messaging/RFQ/booking/Mini App/execution links/identity/notifications. **Cites** Y38 + Y39.
 - **Y41 (design, canonical):** **`docs/SUPPLIER_EXECUTION_DATA_CONTRACT.md`** — **logical** **execution request** + **attempt** + **result/audit** field lists; **status** set for requests; `operator_workflow_intent` **snapshot** on request, **not** live trigger, **not** primary execution state. **No** migrations/models in Y41. Forbids coupling to **orders**/**payments**/**bookings**, **Mini App**, **execution links**, **identity bridge**, **customer** notifications. **Cites** Y38–Y40.
 - **Y42 (design, canonical):** **`docs/SUPPLIER_EXECUTION_PERMISSION_AUDIT_GATE.md`** — who may **initiate** execution; **intent record** **≠** **execution** permission; **audit** and **fail-closed** rules; **no** **hidden** **DB** triggers. **No** `app/`. **Cites** Y38–Y41.
+- **Y43 (runtime, persistence-only):** migration **`20260502_21`**, `supplier_execution_requests` + `supplier_execution_attempts`, ORM + `app/repositories/supplier_execution.py` validation. **No** **API**/**workers**/**messaging**; `operator_workflow_intent` **snapshot** only. **Cites** Y38–Y42.
 
 ---
 
@@ -102,8 +103,8 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Separation:** no mutation of **orders** / **payments** / **bookings**; no **Mini App** dependency; no **execution link** or **identity bridge** mutation; no **customer** notifications from this line by default. **No** RFQ schema added by Y41.
 
 ### Next safe step
-- **Permission & audit (Y42):** **`docs/SUPPLIER_EXECUTION_PERMISSION_AUDIT_GATE.md`** before **RBAC** and **audit** wiring in `app/`.
-- Implement a **persistence** slice: migration + models that **map** to Y41, **permission**/**audit** to Y42, ticket cites **Y38–Y42**; out-of-schema behavior unchanged until then.
+- **Y43 delivered:** see **Checkpoint Sync — Y43** and `CHAT_HANDOFF` (migration **`20260502_21`**, ORM, repository). **RBAC** at **entry** is still a **future** slice; snapshot column does **not** add triggers.
+- **Permission & audit (Y42)** remains the design for when **entry** and **read** **APIs** ship.
 
 ---
 
@@ -120,7 +121,21 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - This checkpoint: **no** **messaging**, **no** new **RFQ**, **no** **booking/order/payment** mutation, **no** **Mini App**, **no** **execution links**, **no** **identity bridge**, **no** **customer** notifications.
 
 ### Next safe step
-- First `app/` slice: cite **Y38–Y42**; implement **persistence** (Y41) with **RBAC/audit** (Y42); **no** conflation of `operator-decision` with **execute**.
+- **Y43 (persistence) implemented** — see Y43 checkpoint. **Next:** **entry** **handler** / **read** **API** (if any) with **Y42** **checks**, **or** keep tables **dormant**.
+
+---
+
+## Checkpoint Sync — Y43 supplier execution persistence (persistence-only, accepted)
+
+**Schema + ORM + repository;** **no** public **HTTP**/**Telegram** **execution** **routes** in this slice, **no** **workers**, **no** **messaging**. **`operator_workflow_intent`**: **column** = **snapshot** on request row only; **no** **DB** **triggers** on `custom_marketplace_requests` **intent**.
+
+### Accepted state
+- **Migration `20260502_21`:** `supplier_execution_requests`, `supplier_execution_attempts` + new **enums**; **UNIQUE** `idempotency_key`; **CHECK**s for **idempotency** and `source_entity_id`. **`operator_workflow_intent`**: reuse PG **type** for **snapshot** only.
+- **Code:** `app/models/supplier_execution.py`, `app/models/enums.py` (Y43 **StrEnum**s), `app/repositories/supplier_execution.py`, `app/models/__init__.py` exports.
+- **Tests:** `tests/unit/test_supplier_execution_persistence.py`. **`POST .../operator-decision`**, **Mini** **App**, **Layer** **A** **tables** unchanged. **no** **customer** **notifications** from this slice.
+
+### Next safe step
+- Optional: **gated** **read** or **start** of execution with **Y42**; **or** no **runtime** until product asks.
 
 ---
 

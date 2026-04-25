@@ -117,6 +117,52 @@ class OperatorWorkflowIntent(StrEnum):
     NEED_SUPPLIER_OFFER = "need_supplier_offer"
 
 
+class SupplierExecutionSourceEntryPoint(StrEnum):
+    """Y39/Y41: how a supplier execution run was started (documentation enum; not Layer C)."""
+
+    ADMIN_EXPLICIT = "admin_explicit"
+    SCHEDULED_JOB = "scheduled_job"
+    EXTERNAL_WEBHOOK = "external_webhook"
+    OPERATOR_DO_ACTION = "operator_do_action"
+
+
+class SupplierExecutionSourceEntityType(StrEnum):
+    """Primary entity the execution run concerns (Y41) — keep minimal; extend in future tickets."""
+
+    CUSTOM_MARKETPLACE_REQUEST = "custom_marketplace_request"
+
+
+class SupplierExecutionRequestStatus(StrEnum):
+    """Y41: lifecycle of a supplier_execution_requests row — not `CustomMarketplaceRequest.status` or live intent."""
+
+    PENDING = "pending"
+    VALIDATED = "validated"
+    BLOCKED = "blocked"
+    ATTEMPTED = "attempted"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class SupplierExecutionAttemptChannel(StrEnum):
+    """Y41: channel for an attempt (placeholder until messaging exists)."""
+
+    TELEGRAM = "telegram"
+    EMAIL = "email"
+    PARTNER_API = "partner_api"
+    INTERNAL = "internal"
+    NONE = "none"
+
+
+class SupplierExecutionAttemptStatus(StrEnum):
+    """Y41: per-attempt outcome."""
+
+    PENDING = "pending"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
 class CustomMarketplaceRequestStatus(StrEnum):
     """Custom request lifecycle — separate from order/booking states (Track 4–5a)."""
 
