@@ -41,6 +41,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Y30.3 implementation:** direct execution activation contract shipped for supplier-offer landing: direct execution CTA is exposed only when actionability is `bookable` **and** an authoritative linked execution target exists; CTA routes into existing Layer A path via linked tour detail/current booking flow.
 - **Y32.1 implementation:** Supplier Offer -> Conversion Bridge read-side actionability hardened: landing exposes additive `has_execution_link`, `linked_tour_id`, `execution_cta_enabled`, and `fallback_cta`; direct booking CTA remains enabled only when an active authoritative execution link resolves to a currently `bookable` tour. Full-bus linked tours now use Phase 7.1 catalog actionability (`bookable` / `assisted_only` / `view_only` / blocked -> `unavailable`) without changing Layer A booking/payment, RFQ semantics, or identity bridge.
 - **Y32.2 design gate:** operator/admin execution-link workflow gate created in **`docs/OPERATOR_EXECUTION_LINK_WORKFLOW_GATE.md`** (docs-only): defines create, replace, close, and history workflow for authoritative `supplier_offer_execution_links`, plus validations, fail-safe behavior, admin/security boundaries, audit/history requirements, postponed items, and first safe implementation slice. No runtime code, migrations, Layer A, RFQ, identity, coupon, incident, or admin-workflow semantics changed in this gate.
+- **Y32.3 manual smoke:** Admin API execution-link workflow was manually smoke-tested. Active link was created for `supplier_offer_id=5 -> tour_id=3`; supplier offer view changed from no live booking aggregates to linked execution metrics. Because the linked tour is `full_bus` sold out / `0` seats left, direct booking CTA correctly stayed unavailable. Sales-mode mismatch guard was confirmed (`full_bus` offer cannot link to `per_seat` tour). Supplier isolation was confirmed: supplier-admin sees only own supplier offers, while central admin sees all via `/admin`. No Layer A, payment, or identity changes were made.
 
 ### Supplier continuity truth (Y2/Y2.3/Y2.1a/Y24/Y25/Y27/Y28 accepted)
 - Supplier v1 model is **supplier entity + one primary Telegram-bound operator**.
@@ -121,6 +122,13 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
   - create/replace must target an existing valid Layer A tour and preserve the one-active-link invariant;
   - close removes direct execution authority but does not mutate Layer A, RFQ, payment, or supplier-offer publication text;
   - first future implementation slice should polish/expose the existing admin/operator primitives and history view, not create tours or broaden booking/payment semantics.
+- Y32.3 operator execution-link workflow smoke truth (accepted):
+  - Admin API execution-link workflow was manually smoke-tested with active link `supplier_offer_id=5 -> tour_id=3`;
+  - linked supplier offer moved from no live booking aggregates to linked execution metrics;
+  - linked tour was `full_bus` sold out / `0` seats left, so direct booking CTA stayed unavailable as required;
+  - sales-mode mismatch guard was confirmed (`full_bus` offer cannot link to `per_seat` tour);
+  - supplier isolation was confirmed: supplier-admin sees only own offers; central admin sees all through `/admin`;
+  - no Layer A, payment, identity, runtime schema, or migration changes were made for this smoke sync.
 - Multi-operator organization / RBAC is explicitly postponed beyond Y2.1.
 - Supplier legal/compliance identity is now required for pending onboarding approvals:
   - **`legal_entity_type`**
@@ -216,6 +224,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 ### Next safe step (after this sync)
 - Supplier -> Conversion Bridge **read-side actionability runtime slice (Y32.1) is implemented and accepted**; continue only with explicitly scoped operational slices.
 - Operator/admin workflow gate is now documented in **`docs/OPERATOR_EXECUTION_LINK_WORKFLOW_GATE.md`**; implementation must follow that gate.
+- Operator/admin execution-link workflow has manual-smoke evidence for link creation, aggregate visibility, full-bus sold-out CTA blocking, sales-mode mismatch guard, and supplier isolation.
 - **Next safe order:**
   1. Operator/admin workflow for creating/replacing/closing execution links.
   2. Admin operational visibility for bookings/requests.
