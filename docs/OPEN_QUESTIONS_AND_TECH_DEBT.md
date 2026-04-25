@@ -30,6 +30,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 ### Next safe step pointer
 - **Y38 — Supplier interaction gate (design, canonical):** **`docs/SUPPLIER_INTERACTION_GATE.md`**. It defines: operator workflow **decision-only**; **`operator_workflow_intent`** does **not** execute supplier logic; supplier interaction is a **separate future layer**; no automatic supplier messages, RFQ, bridge, booking, payment, Mini App, execution links, identity bridge, or customer notifications from intent; future supplier logic may **consume intent as input only** and must **not** be triggered **directly** by intent setting; Y36 / Y37.2 / Y37.4 / Y37.5 behavior **unchanged** by the gate file itself. (Legacy path **`docs/Y38_SUPPLIER_INTENT_INTERACTION_DESIGN_GATE.md`** redirects to the canonical file.)
 - Before supplier/RFQ/bridge **implementation**, **accept** the Y38 gate and schedule **separate** minimal slices; **do not** auto-contact or notify suppliers from intent set alone. **Canonical “what’s next” after Y38:** `docs/SUPPLIER_INTERACTION_GATE.md` — section *Post–Y38: explicit next step* (Layer C is complete as implemented; in-code supplier automation is not next until a new gate + ticket).
+- **Y39 (design, canonical):** **`docs/SUPPLIER_ENTRY_POINTS.md`** — **explicit** future entry types only; **`operator_workflow_intent`** and **`operator-decision`** are **not** triggers; first in-app supplier slice must **name** one **family** + **surface** (see that doc). **No** runtime in Y39; preserves Y38.
 
 ---
 
@@ -48,7 +49,22 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Interim (ops):** manual / existing off-product processes remain OK; do not bypass the gate in **new** code.
 
 ### Still open
-- The **concrete** first supplier-interaction feature (if any) is **TBD**; not defined by this checkpoint.
+- The **concrete** first supplier-interaction feature (if any) is **TBD**; not defined by this checkpoint. **Entry-point rules** for any future implementation: **`docs/SUPPLIER_ENTRY_POINTS.md`** (Y39).
+
+---
+
+## Checkpoint Sync — Y39 supplier entry points (design-only, accepted)
+
+**Docs-only.** No code, migration, or test changes. Complements and **does not replace** Y38.
+
+### Accepted state
+- **[`docs/SUPPLIER_ENTRY_POINTS.md`](SUPPLIER_ENTRY_POINTS.md)** (Y39): **Supplier interaction** (when any `app/` work exists) may **start** only at **explicit** entry types — e.g. admin/central **explicit** action, **scheduled/background** job, **external** trigger (webhook/integration), or **separate** operator “do” action; **not** from recording intent alone. Entry **surface** categories: **explicit API**, **background worker**, **admin/Telegram admin action** (design **types** only until implemented).
+- **`operator_workflow_intent`** and **`POST /admin/custom-requests/{id}/operator-decision`** are **not** **triggers** for supplier-impacting execution; they remain **Layer C** persistence (Y38 boundaries **preserved**).
+- Future **implementation** tickets for supplier automation must **name one** Y39 **entry family** and one **surface**; must satisfy invariants: **idempotency**, **auditability**, **explicit invocation**, **no hidden triggers** (per `SUPPLIER_ENTRY_POINTS.md` §5–7).
+- This checkpoint: **no** supplier messaging, **no** new RFQ implementation, **no** booking/order/payment, **no** Mini App, **no** execution links, **no** identity bridge, **no** notifications.
+
+### Next safe step
+- When a first **in-app** supplier-interaction slice is **scoped:** open a ticket that cites **Y38** + **Y39** and names the chosen **entry family** + **surface**; add API/job spec and security; **still** do not wire `operator-decision` as executor.
 
 ---
 
