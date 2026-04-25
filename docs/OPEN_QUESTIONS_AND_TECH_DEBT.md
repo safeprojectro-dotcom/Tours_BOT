@@ -35,6 +35,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Y41 (design, canonical):** **`docs/SUPPLIER_EXECUTION_DATA_CONTRACT.md`** — **logical** **execution request** + **attempt** + **result/audit** field lists; **status** set for requests; `operator_workflow_intent` **snapshot** on request, **not** live trigger, **not** primary execution state. **No** migrations/models in Y41. Forbids coupling to **orders**/**payments**/**bookings**, **Mini App**, **execution links**, **identity bridge**, **customer** notifications. **Cites** Y38–Y40.
 - **Y42 (design, canonical):** **`docs/SUPPLIER_EXECUTION_PERMISSION_AUDIT_GATE.md`** — who may **initiate** execution; **intent record** **≠** **execution** permission; **audit** and **fail-closed** rules; **no** **hidden** **DB** triggers. **No** `app/`. **Cites** Y38–Y41.
 - **Y43 (runtime, persistence-only):** migration **`20260502_21`**, `supplier_execution_requests` + `supplier_execution_attempts`, ORM + `app/repositories/supplier_execution.py` validation. **No** **API**/**workers**/**messaging**; `operator_workflow_intent` **snapshot** only. **Cites** Y38–Y42.
+- **Y45 (design, accepted):** **`docs/SUPPLIER_EXECUTION_TRIGGER_DESIGN.md`** — **first** **trigger** = **admin** **explicit** **only**; **creates**/**validates** **`supplier_execution_request`** **only**; **does** **not** **contact** suppliers; **does** **not** **create** **`supplier_execution_attempt`** rows in this design slice; **preserves** **Y38**–**Y42**. **Next** **safe** **step:** implement **safe** **admin** **trigger** **endpoint** with **no** **supplier** **messaging**.
 
 ---
 
@@ -135,7 +136,21 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Tests:** `tests/unit/test_supplier_execution_persistence.py`. **`POST .../operator-decision`**, **Mini** **App**, **Layer** **A** **tables** unchanged. **no** **customer** **notifications** from this slice.
 
 ### Next safe step
-- Optional: **gated** **read** or **start** of execution with **Y42**; **or** no **runtime** until product asks.
+- **Y45** **trigger** **design** is **accepted** — see **Checkpoint Sync — Y45** below. **Implementation** of the **safe** **admin** **trigger** (per **`docs/SUPPLIER_EXECUTION_TRIGGER_DESIGN.md`**) is the **next** **coherent** **in-app** step, still **without** supplier **messaging** or **attempt**-level **runtime**.
+
+---
+
+## Checkpoint Sync — Y45 controlled execution trigger (design-only, accepted)
+
+**Docs-only** acceptance of the **first** **trigger** specification. Source: [`docs/SUPPLIER_EXECUTION_TRIGGER_DESIGN.md`](SUPPLIER_EXECUTION_TRIGGER_DESIGN.md). **Does** **not** **by** **itself** add or change **`app/`** code; **complements** Y38–Y42.
+
+### Accepted state
+- **First** **allowed** **trigger** (in this slice): **admin** **explicit** **action** **only** — mapped to **`source_entry_point`** **`admin_explicit`**; **not** **`POST /admin/custom-requests/{id}/operator-decision`**, **not** Layer C **intent** **write** as **start** signal (Y38, Y39).
+- **What** the **trigger** **does** **when** **implemented**: **create** / **validate** a **`supplier_execution_request`** row per Y41 (and Y42 checks at the **entry**); **does** **not** **contact** suppliers; **does** **not** **create** **`supplier_execution_attempt`** rows in this **design** **slice**; **no** execution **runtime**, **no** **messaging**, **no** new **RFQ** **implementation**, **no** booking/order/payment, **no** Mini App, **no** execution **links**, **no** identity **bridge**, **no** **notifications**.
+- **Y38**–**Y42** **boundaries** **preserved**: intent **≠** **execution**; **explicit** **entry** only; Y40 **flow** **integrity** for **stages** **1–3** on **trigger**; Y41 **contract**; Y42 **permission** + **audit** + **fail-closed**.
+
+### Next safe step
+- **Implement** the **safe** **admin** **trigger** **endpoint** (or an **equivalent** **explicit** **admin** **surface** with the **same** **rules**): **ADMIN_API_TOKEN**, **source** **entity** **exists**, **idempotency**, **actor** **audit** — **no** **supplier** **messaging** and **no** **attempt**/outbound **execution** until **separately** **scoped**.
 
 ---
 
