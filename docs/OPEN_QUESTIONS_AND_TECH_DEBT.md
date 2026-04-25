@@ -33,6 +33,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Y39 (design, canonical):** **`docs/SUPPLIER_ENTRY_POINTS.md`** — **explicit** future entry types only; **`operator_workflow_intent`** and **`operator-decision`** are **not** triggers; first in-app supplier slice must **name** one **family** + **surface** (see that doc). **No** runtime in Y39; preserves Y38.
 - **Y40 (design, canonical):** **`docs/SUPPLIER_EXECUTION_FLOW.md`** — after a Y39 start, **stages** (entry → validate → **audit** record → attempt → result → optional review); **operator intent = decision**; **entry = start**; **flow =** controlled pipeline; invariants: idempotency, audit, **retry** safety, no hidden triggers, **fail-closed**, explicit permissions. **No** `app/` in Y40; no messaging/RFQ/booking/Mini App/execution links/identity/notifications. **Cites** Y38 + Y39.
 - **Y41 (design, canonical):** **`docs/SUPPLIER_EXECUTION_DATA_CONTRACT.md`** — **logical** **execution request** + **attempt** + **result/audit** field lists; **status** set for requests; `operator_workflow_intent` **snapshot** on request, **not** live trigger, **not** primary execution state. **No** migrations/models in Y41. Forbids coupling to **orders**/**payments**/**bookings**, **Mini App**, **execution links**, **identity bridge**, **customer** notifications. **Cites** Y38–Y40.
+- **Y42 (design, canonical):** **`docs/SUPPLIER_EXECUTION_PERMISSION_AUDIT_GATE.md`** — who may **initiate** execution; **intent record** **≠** **execution** permission; **audit** and **fail-closed** rules; **no** **hidden** **DB** triggers. **No** `app/`. **Cites** Y38–Y41.
 
 ---
 
@@ -67,7 +68,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ### Next safe step
 - **Pipeline design (Y40):** see **`docs/SUPPLIER_EXECUTION_FLOW.md`** for **stages** and **invariants**; implementation must align when code ships. **Data contract (Y41):** **`docs/SUPPLIER_EXECUTION_DATA_CONTRACT.md`** before persisting execution rows.
-- When a first **in-app** supplier-interaction slice is **scoped:** open a ticket that cites **Y38** + **Y39** + **Y40** + **Y41**; **name** **entry family** + **surface**; map to **Y40** **stages** and **Y41** **records**; add idempotency/audit; **do not** wire `operator-decision` as executor.
+- When a first **in-app** supplier-interaction slice is **scoped:** open a ticket that cites **Y38** + **Y39** + **Y40** + **Y41** + **Y42**; **name** **entry family** + **surface**; map to **Y40** **stages** and **Y41** **records**; **Y42** **permission/audit** and **fail-closed** rules; add idempotency/audit; **do not** wire `operator-decision` as executor.
 
 ---
 
@@ -84,7 +85,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ### Next safe step
 - **Data contract (Y41):** see **`docs/SUPPLIER_EXECUTION_DATA_CONTRACT.md`** before the first **migration** implementing execution persistence.
-- First **in-app** supplier slice: ticket cites **Y38 + Y39 + Y40 + Y41**; **name** one Y39 family + surface; **map** to Y40 **stages** and Y41 **records**; still **uncouple** from `POST .../operator-decision` as **executor**. **Migrations** = separate ticket after this design is accepted for implementation.
+- First **in-app** supplier slice: ticket cites **Y38 + Y39 + Y40 + Y41 + Y42**; **name** one Y39 family + surface; **map** to Y40 **stages** and Y41 **records** and Y42 **RBAC/audit**; still **uncouple** from `POST .../operator-decision` as **executor**. **Migrations** = separate ticket after this design is accepted for implementation.
 
 ---
 
@@ -101,7 +102,25 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Separation:** no mutation of **orders** / **payments** / **bookings**; no **Mini App** dependency; no **execution link** or **identity bridge** mutation; no **customer** notifications from this line by default. **No** RFQ schema added by Y41.
 
 ### Next safe step
-- Implement a **persistence** slice: migration + models that **map** to this contract, ticket cites **Y38–Y41**; out-of-schema behavior unchanged until then.
+- **Permission & audit (Y42):** **`docs/SUPPLIER_EXECUTION_PERMISSION_AUDIT_GATE.md`** before **RBAC** and **audit** wiring in `app/`.
+- Implement a **persistence** slice: migration + models that **map** to Y41, **permission**/**audit** to Y42, ticket cites **Y38–Y42**; out-of-schema behavior unchanged until then.
+
+---
+
+## Checkpoint Sync — Y42 supplier execution permission & audit (design-only, accepted)
+
+**Docs-only.** **No** Alembic, **no** models, **no** `app/` or `tests/`. Complements Y38–Y41.
+
+### Accepted state
+- **Initiation (future):** allowed classes — **central admin** explicit, **authorized operator** explicit (if policy), **authorized system job**, **authenticated external** integration; **not** from intent **alone** or from **unauthenticated** callers by default.
+- **Permission rules:** **assigned** operator may **record** `operator_workflow_intent` (Layer C); that is **not** **supplier-execution** permission; execution requires **separate** check and **explicit** entry (Y39); `operator-decision` is **not** an execution **endpoint**.
+- **Audit (must be capturable per run):** **who** initiated; **entry** point; **source** entity; **intent** **snapshot** if used; **idempotency** key; **validation** result; **attempt/result** state; **error** on **block/fail** (Y41 field alignment).
+- **Fail-closed:** missing **permission**, **source** entity, **idempotency** (when required), or **ambiguous** source → **block**; **stale/invalid** **intent** **snapshot** must **not** **auto-refresh** into **execution** or revive terminal runs without a **new** **explicit** start.
+- **Separation:** `operator_workflow_intent` = **context** only; **no** hidden **triggers** from **DB** **events/ORM** on intent.
+- This checkpoint: **no** **messaging**, **no** new **RFQ**, **no** **booking/order/payment** mutation, **no** **Mini App**, **no** **execution links**, **no** **identity bridge**, **no** **customer** notifications.
+
+### Next safe step
+- First `app/` slice: cite **Y38–Y42**; implement **persistence** (Y41) with **RBAC/audit** (Y42); **no** conflation of `operator-decision` with **execute**.
 
 ---
 
