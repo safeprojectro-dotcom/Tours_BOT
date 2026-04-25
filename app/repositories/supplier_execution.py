@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.enums import (
@@ -103,3 +104,13 @@ def add_execution_attempt(session: Session, attempt: SupplierExecutionAttempt) -
     session.flush()
     session.refresh(attempt)
     return attempt
+
+
+def next_attempt_number_for_request(session: Session, *, execution_request_id: int) -> int:
+    """Next 1-based attempt_number for this execution request (Y48). Fails if request has no row yet; caller validates."""
+    m = session.scalar(
+        select(func.coalesce(func.max(SupplierExecutionAttempt.attempt_number), 0)).where(
+            SupplierExecutionAttempt.execution_request_id == int(execution_request_id),
+        ),
+    )
+    return int(m or 0) + 1

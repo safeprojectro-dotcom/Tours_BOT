@@ -339,3 +339,104 @@ class AdminSupplierExecutionReadRouteTests(FoundationDBTestCase):
         self.session.refresh(cmr)
         self.assertEqual(cmr.route_notes, before_notes)
         self.assertEqual(cmr.status, before_status)
+
+    def _add_execution_request(
+        self,
+        *,
+        idem: str,
+        user_id: int,
+        ent_id: int = 1,
+        status: SupplierExecutionRequestStatus = SupplierExecutionRequestStatus.VALIDATED,
+    ) -> SupplierExecutionRequest:
+        return se_repo.add_execution_request(
+            self.session,
+            se_repo.build_execution_request(
+                source_entry_point=SupplierExecutionSourceEntryPoint.ADMIN_EXPLICIT,
+                source_entity_type=SupplierExecutionSourceEntityType.CUSTOM_MARKETPLACE_REQUEST,
+                source_entity_id=ent_id,
+                idempotency_key=idem,
+                status=status,
+                requested_by_user_id=user_id,
+            ),
+        )
+
+    def test_y48_post_attempt_404_unknown_request(self) -> None:
+        u = self.create_user(telegram_user_id=557_001)
+        r = self.client.post(
+            "/admin/supplier-execution-requests/9999999/attempts",
+            headers=_actor_headers(557_001),
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_y48_post_attempt_400_when_request_blocked(self) -> None:
+        u = self.create_user(telegram_user_id=557_101)
+        er = self._add_execution_request(
+            idem="y48-blocked",
+            user_id=u.id,
+            ent_id=1,
+            status=SupplierExecutionRequestStatus.BLOCKED,
+        )
+        r = self.client.post(
+            f"/admin/supplier-execution-requests/{er.id}/attempts",
+            headers=_actor_headers(557_101),
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("blocked", r.json()["detail"].lower())
+
+    def test_y48_post_attempt_201_increments_attempt_number(self) -> None:
+        u = self.create_user(telegram_user_id=557_201)
+        er = self._add_execution_request(idem="y48-multi", user_id=u.id, ent_id=1)
+        a0 = self._count_attempts()
+        r1 = self.client.post(
+            f"/admin/supplier-execution-requests/{er.id}/attempts",
+            headers=_actor_headers(557_201),
+        )
+        self.assertEqual(r1.status_code, 201)
+        b1 = r1.json()
+        self.assertEqual(b1["attempt_number"], 1)
+        self.assertEqual(b1["status"], "pending")
+        self.assertEqual(b1["channel_type"], "none")
+        self.assertEqual(b1["execution_request_id"], er.id)
+        self.assertEqual(self._count_attempts(), a0 + 1)
+        r2 = self.client.post(
+            f"/admin/supplier-execution-requests/{er.id}/attempts",
+            headers=_actor_headers(557_201),
+        )
+        self.assertEqual(r2.status_code, 201)
+        self.assertEqual(r2.json()["attempt_number"], 2)
+        self.assertEqual(self._count_attempts(), a0 + 2)
+
+    def test_y48_post_attempt_does_not_change_request_status(self) -> None:
+        u = self.create_user(telegram_user_id=557_301)
+        er = self._add_execution_request(
+            idem="y48-status-unch",
+            user_id=u.id,
+            ent_id=1,
+            status=SupplierExecutionRequestStatus.VALIDATED,
+        )
+        st_before = er.status
+        r = self.client.post(
+            f"/admin/supplier-execution-requests/{er.id}/attempts",
+            headers=_actor_headers(557_301),
+        )
+        self.assertEqual(r.status_code, 201)
+        self.session.refresh(er)
+        self.assertEqual(er.status, st_before)
+        self.assertEqual(er.status, SupplierExecutionRequestStatus.VALIDATED)
+
+    def test_y48_post_attempt_401_without_admin(self) -> None:
+        u = self.create_user(telegram_user_id=557_401)
+        er = self._add_execution_request(idem="y48-auth", user_id=u.id, ent_id=1)
+        r = self.client.post(f"/admin/supplier-execution-requests/{er.id}/attempts")
+        self.assertEqual(r.status_code, 401)
+
+    def test_y48_post_attempt_503_admin_disabled(self) -> None:
+        u = self.create_user(telegram_user_id=557_501)
+        er = self._add_execution_request(idem="y48-503", user_id=u.id, ent_id=1)
+        get_settings().admin_api_token = None
+        r = self.client.post(
+            f"/admin/supplier-execution-requests/{er.id}/attempts",
+            headers=_actor_headers(557_501),
+        )
+        self.assertEqual(r.status_code, 503)
+        get_settings().admin_api_token = "test-admin-secret"

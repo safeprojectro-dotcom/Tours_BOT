@@ -1,4 +1,4 @@
-"""Y44: admin read DTOs; Y46: trigger body/response for supplier execution requests (Y43)."""
+"""Y44: admin read DTOs; Y46: trigger; Y48: attempt create response uses `AdminSupplierExecutionAttemptRead` (Y43)."""
 
 from __future__ import annotations
 

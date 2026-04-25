@@ -1,4 +1,4 @@
-"""Y44: admin read API; Y46: POST trigger creates supplier_execution_request only (no supplier contact)."""
+"""Y44: admin read; Y46: POST create request; Y48: POST create attempt row only (no supplier contact)."""
 
 from __future__ import annotations
 
@@ -10,10 +10,16 @@ from app.db.session import get_db
 from app.models.enums import SupplierExecutionRequestStatus, SupplierExecutionSourceEntityType
 from app.repositories.user import UserRepository
 from app.schemas.admin_supplier_execution import (
+    AdminSupplierExecutionAttemptRead,
     AdminSupplierExecutionRequestDetailRead,
     AdminSupplierExecutionRequestListRead,
     AdminSupplierExecutionTriggerBody,
     AdminSupplierExecutionTriggerResponse,
+)
+from app.services.admin_supplier_execution_attempt_create import (
+    AdminAttemptExecutionRequestNotFoundError,
+    AdminAttemptRequestStatusNotAllowedError,
+    create_admin_supplier_execution_attempt,
 )
 from app.services.admin_supplier_execution_read import AdminSupplierExecutionReadService
 from app.services.admin_supplier_execution_trigger import (
@@ -107,3 +113,42 @@ def post_supplier_execution_request(
     response.status_code = status.HTTP_200_OK if idempotent_replay else status.HTTP_201_CREATED
     db.commit()
     return AdminSupplierExecutionTriggerResponse(request=detail, idempotent_replay=idempotent_replay)
+
+
+@router.post(
+    "/supplier-execution-requests/{request_id}/attempts",
+    response_model=AdminSupplierExecutionAttemptRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def post_supplier_execution_request_attempt(
+    request_id: int,
+    db: Session = Depends(get_db),
+    x_admin_actor_telegram_id: str | None = Header(default=None, alias="X-Admin-Actor-Telegram-Id"),
+) -> AdminSupplierExecutionAttemptRead:
+    """Y48: add one `pending` attempt row (channel `none` only). No supplier messaging, no request status change."""
+    if x_admin_actor_telegram_id is None or not str(x_admin_actor_telegram_id).strip().isdigit():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-Admin-Actor-Telegram-Id header is required (Telegram user id of the actor).",
+        )
+    actor_tg = int(str(x_admin_actor_telegram_id).strip())
+    user = UserRepository().get_by_telegram_user_id(db, telegram_user_id=actor_tg)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No User record for the given X-Admin-Actor-Telegram-Id.",
+        )
+    try:
+        attempt = create_admin_supplier_execution_attempt(db, execution_request_id=request_id)
+    except AdminAttemptExecutionRequestNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier execution request not found.",
+        ) from None
+    except AdminAttemptRequestStatusNotAllowedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from None
+    db.commit()
+    return attempt
