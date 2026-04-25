@@ -40,6 +40,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Y30.2 implementation:** supplier-offer landing actionability resolver shipped (`bookable` / `sold_out` / `assisted_only` / `view_only`) from current authoritative truth without changing Layer A or RFQ semantics.
 - **Y30.3 implementation:** direct execution activation contract shipped for supplier-offer landing: direct execution CTA is exposed only when actionability is `bookable` **and** an authoritative linked execution target exists; CTA routes into existing Layer A path via linked tour detail/current booking flow.
 - **Y32.1 implementation:** Supplier Offer -> Conversion Bridge read-side actionability hardened: landing exposes additive `has_execution_link`, `linked_tour_id`, `execution_cta_enabled`, and `fallback_cta`; direct booking CTA remains enabled only when an active authoritative execution link resolves to a currently `bookable` tour. Full-bus linked tours now use Phase 7.1 catalog actionability (`bookable` / `assisted_only` / `view_only` / blocked -> `unavailable`) without changing Layer A booking/payment, RFQ semantics, or identity bridge.
+- **Y32.2 design gate:** operator/admin execution-link workflow gate created in **`docs/OPERATOR_EXECUTION_LINK_WORKFLOW_GATE.md`** (docs-only): defines create, replace, close, and history workflow for authoritative `supplier_offer_execution_links`, plus validations, fail-safe behavior, admin/security boundaries, audit/history requirements, postponed items, and first safe implementation slice. No runtime code, migrations, Layer A, RFQ, identity, coupon, incident, or admin-workflow semantics changed in this gate.
 
 ### Supplier continuity truth (Y2/Y2.3/Y2.1a/Y24/Y25/Y27/Y28 accepted)
 - Supplier v1 model is **supplier entity + one primary Telegram-bound operator**.
@@ -113,6 +114,13 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
   - linked `full_bus` partial inventory => `assisted_only`, no execution CTA;
   - sold out or invalid linked tour => no false booking CTA;
   - guardrails preserved: no auto-create tour, `supplier_offer != tour`, no Layer A booking/payment changes, no RFQ changes, no identity bridge changes, no coupons/incidents/admin workflows.
+- Y32.2 operator execution-link workflow design gate (accepted, docs-only):
+  - design source: **`docs/OPERATOR_EXECUTION_LINK_WORKFLOW_GATE.md`**;
+  - required operator actions are explicit: create link, replace link, close link, view link history;
+  - workflow remains admin/operator-only; suppliers and customer Mini App screens cannot mutate links;
+  - create/replace must target an existing valid Layer A tour and preserve the one-active-link invariant;
+  - close removes direct execution authority but does not mutate Layer A, RFQ, payment, or supplier-offer publication text;
+  - first future implementation slice should polish/expose the existing admin/operator primitives and history view, not create tours or broaden booking/payment semantics.
 - Multi-operator organization / RBAC is explicitly postponed beyond Y2.1.
 - Supplier legal/compliance identity is now required for pending onboarding approvals:
   - **`legal_entity_type`**
@@ -207,6 +215,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 
 ### Next safe step (after this sync)
 - Supplier -> Conversion Bridge **read-side actionability runtime slice (Y32.1) is implemented and accepted**; continue only with explicitly scoped operational slices.
+- Operator/admin workflow gate is now documented in **`docs/OPERATOR_EXECUTION_LINK_WORKFLOW_GATE.md`**; implementation must follow that gate.
 - **Next safe order:**
   1. Operator/admin workflow for creating/replacing/closing execution links.
   2. Admin operational visibility for bookings/requests.
@@ -1374,7 +1383,7 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 - **`tour.sales_mode` (Phase 7.1):** tour-level **commercial source of truth**; **`TourSalesModePolicyService`** is the **single service-layer interpretation** — **Mini App** and **private bot** (Steps **3–4**) **consume** that policy on read-side/CTA paths; **do not** duplicate commercial rules in UI-only layers
 
 ### Not Implemented Yet
-- **Next (forward, active supplier-offer bridge sub-track):** operator/admin workflow for creating, replacing, and closing authoritative execution links. Y32.1 already hardened read-side landing actionability; the next operational slice should manage linkage availability explicitly while preserving Layer A and RFQ boundaries.
+- **Next (forward, active supplier-offer bridge sub-track):** implement the operator/admin workflow for creating, replacing, and closing authoritative execution links, following **`docs/OPERATOR_EXECUTION_LINK_WORKFLOW_GATE.md`**. Y32.1 already hardened read-side landing actionability; the next operational slice should manage linkage availability explicitly while preserving Layer A and RFQ boundaries.
 - **Parallel separate thread (unchanged):** **Phase 7.1 / Sales Mode / Step 6+** — product/design for **scope beyond** the **closed** catalog virgin Mode 2 Mini App path (**`docs/TRACK_5G4_MODE2_ACCEPTANCE_SUMMARY.md`**): charter **pricing**, **supplier-defined** policy, **private-bot** charter UX, **E2E** coverage, **full** i18n — **not** a default reopening of **5g.4**; **separate** from Phase **7** handoff/operator chain expansion. Optional **later** slices: group **rate limits** — product-scoped.
 - **Phase 7.1 — explicitly postponed (beyond closed 5g.4):** **`full_bus_price`**; **`bus_capacity`**; **pricing expansion**; non-catalog or **non-virgin** whole-bus **execution** rules beyond current **`TourSalesModePolicyService`**; **`TemporaryReservationService` / reservation engine refactor**; **broad operator workflow rewrite**; any **“many seats ⇒ whole bus”** heuristic; **old Phase 7** **`grp_followup_*`** chain expansion; broader **payment** / **availability** / **seat-semantics** changes driven by **`sales_mode`** without an explicit slice — **unless** product approves a scoped implementation.
 - **Group / handoff (Phase 7 — closed):** Steps **1–17** + **final consolidation** + **`docs/PHASE_7_REVIEW.md`** = **rules + helpers + group gating + escalation wording + deep links + private `/start`** + **narrow** **`handoffs`** write on **`/start grp_followup`** (**Step 7**) + **focused tests** (**Step 8**) + **admin read visibility** (**Step 9**) + **narrow `assign-operator`** (**Step 10**) + **read-side work-state labels** (**Step 11**) + **narrow `mark-in-work`** (**Step 12**) + **narrow `resolve-group-followup`** + **`group_followup_resolution_label`** (**Steps 13–14**) + **`group_followup_queue_state`** + **`group_followup_queue`** list filter (**Step 15**) + **private resolved confirmation** on **`grp_followup`** (**Step 16**) + **private readiness/history** (**Step 17**) + **aligned private/admin wording** (**consolidation**); **group** chat path (Steps **3–4**) still **no** DB handoff rows — **`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`** §**19**.
@@ -1399,7 +1408,7 @@ Checkpoint for the **Phase 7.1** sub-track through **read-side adaptation** (pro
 ## Next Safe Step
 
 ### Next safe step
-**Y32.1 post-sync default:** operator/admin workflow for creating, replacing, and closing authoritative supplier-offer execution links.  
+**Y32.2 post-gate default:** implement the operator/admin workflow for creating, replacing, and closing authoritative supplier-offer execution links according to **`docs/OPERATOR_EXECUTION_LINK_WORKFLOW_GATE.md`**.  
 **Secondary safe tracks (separate):** admin operational visibility for bookings/requests; incident/disruption design gate. **Do not** reopen **5g.4** unless fixing a regression.
 
 **Goal:**
