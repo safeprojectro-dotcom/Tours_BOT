@@ -83,6 +83,12 @@ class CustomMarketplaceRequestNotAssignableError(Exception):
         super().__init__(message)
 
 
+class CustomMarketplaceRequestMarkUnderReviewNotAllowedError(Exception):
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__(message)
+
+
 _CUSTOM_REQUEST_NOT_ASSIGNABLE_STATUSES = frozenset(
     {
         CustomMarketplaceRequestStatus.CANCELLED,
@@ -460,6 +466,38 @@ class CustomMarketplaceRequestService:
         row.assigned_operator_id = actor_user_id
         row.assigned_by_user_id = actor_user_id
         row.assigned_at = now
+        session.add(row)
+        session.flush()
+        session.refresh(row)
+        row = self._requests.get_for_operator_assignment(session, request_id=request_id)
+        if row is None:
+            raise CustomMarketplaceRequestNotFoundError
+        return self._read_with_operational_list_hints(row, session)
+
+    def mark_under_review(
+        self,
+        session: Session,
+        *,
+        request_id: int,
+        actor_user_id: int,
+    ) -> CustomMarketplaceRequestRead:
+        """Y37.2: set status to under_review when assigned to actor; idempotent if already under_review."""
+        row = self._requests.get_for_operator_assignment(session, request_id=request_id)
+        if row is None:
+            raise CustomMarketplaceRequestNotFoundError
+        if row.assigned_operator_id is None:
+            raise CustomMarketplaceRequestMarkUnderReviewNotAllowedError(
+                "Request is not assigned to an operator.",
+            )
+        if row.assigned_operator_id != actor_user_id:
+            raise CustomMarketplaceRequestAssignConflictError()
+        if row.status == CustomMarketplaceRequestStatus.UNDER_REVIEW:
+            return self._read_with_operational_list_hints(row, session)
+        if row.status != CustomMarketplaceRequestStatus.OPEN:
+            raise CustomMarketplaceRequestMarkUnderReviewNotAllowedError(
+                f"Cannot mark as under review from status {row.status.value}.",
+            )
+        row.status = CustomMarketplaceRequestStatus.UNDER_REVIEW
         session.add(row)
         session.flush()
         session.refresh(row)

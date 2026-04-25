@@ -235,6 +235,7 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "admin_ops_request_row": "#{request_id} · {status} · Owner: {owner} · {customer} · {summary}",
         "admin_ops_request_view": "View request #{request_id}",
         "admin_ops_request_assign_to_me": "Assign to me",
+        "admin_ops_request_mark_under_review": "Mark under review",
         "admin_ops_owner_unassigned": "Unassigned",
         "admin_ops_owner_dash": "—",
         "admin_ops_owner_list_you": "you",

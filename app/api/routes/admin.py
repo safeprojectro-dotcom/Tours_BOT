@@ -78,6 +78,7 @@ from app.services.supplier_offer_service import SupplierOfferService
 from app.repositories.user import UserRepository
 from app.services.custom_marketplace_request_service import (
     CustomMarketplaceRequestAssignConflictError,
+    CustomMarketplaceRequestMarkUnderReviewNotAllowedError,
     CustomMarketplaceRequestNotAssignableError,
     CustomMarketplaceRequestNotFoundError,
     CustomMarketplaceRequestService,
@@ -1275,6 +1276,41 @@ def post_admin_custom_request_assign_to_me(
     except CustomMarketplaceRequestNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found.") from None
     except CustomMarketplaceRequestNotAssignableError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    except CustomMarketplaceRequestAssignConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from None
+    db.commit()
+    return row
+
+
+@router.post("/custom-requests/{request_id}/mark-under-review", response_model=CustomMarketplaceRequestRead)
+def post_admin_custom_request_mark_under_review(
+    request_id: int,
+    db: Session = Depends(get_db),
+    x_admin_actor_telegram_id: str | None = Header(default=None, alias="X-Admin-Actor-Telegram-Id"),
+) -> CustomMarketplaceRequestRead:
+    """Y37.2: set RFQ to under_review when assigned to the operator matching the actor header; idempotent if already under_review."""
+    if x_admin_actor_telegram_id is None or not str(x_admin_actor_telegram_id).strip().isdigit():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-Admin-Actor-Telegram-Id header is required (Telegram user id of the operator).",
+        )
+    actor_tg = int(str(x_admin_actor_telegram_id).strip())
+    user = UserRepository().get_by_telegram_user_id(db, telegram_user_id=actor_tg)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No User record for the given X-Admin-Actor-Telegram-Id.",
+        )
+    try:
+        row = CustomMarketplaceRequestService().mark_under_review(
+            db,
+            request_id=request_id,
+            actor_user_id=user.id,
+        )
+    except CustomMarketplaceRequestNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found.") from None
+    except CustomMarketplaceRequestMarkUnderReviewNotAllowedError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     except CustomMarketplaceRequestAssignConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from None

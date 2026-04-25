@@ -43,6 +43,7 @@ from app.bot.constants import (
     ADMIN_OPS_ORDERS_PAGE_PREFIX,
     ADMIN_OPS_REQUEST_ASSIGN_ME_PREFIX,
     ADMIN_OPS_REQUEST_DETAIL_PREFIX,
+    ADMIN_OPS_REQUEST_MARK_UNDER_REVIEW_PREFIX,
     ADMIN_OPS_REQUESTS_PAGE_PREFIX,
 )
 from app.bot.messages import translate
@@ -50,7 +51,7 @@ from app.bot.services import TelegramUserContextService
 from app.bot.state import AdminModerationState
 from app.core.config import get_settings
 from app.db.session import SessionLocal
-from app.models.enums import SupplierOfferLifecycle, TourStatus
+from app.models.enums import CustomMarketplaceRequestStatus, SupplierOfferLifecycle, TourStatus
 from app.repositories.user import UserRepository
 from app.models.supplier import Supplier
 from app.models.tour import Tour
@@ -58,6 +59,7 @@ from app.schemas.supplier_admin import SupplierOfferRead
 from app.services.admin_read import AdminReadService
 from app.services.custom_marketplace_request_service import (
     CustomMarketplaceRequestAssignConflictError,
+    CustomMarketplaceRequestMarkUnderReviewNotAllowedError,
     CustomMarketplaceRequestNotAssignableError,
     CustomMarketplaceRequestNotFoundError,
     CustomMarketplaceRequestService,
@@ -163,6 +165,19 @@ def _short_dt(value: datetime | None) -> str:
     if value is None:
         return "-"
     return value.isoformat(timespec="minutes").replace("T", " ")
+
+
+def _format_admin_request_travel_dates(start: date | None, end: date | None) -> str:
+    """Read-only display for admin Telegram custom request detail. No data mutation (Y36.6)."""
+    if start is None:
+        return "-"
+    s = start.isoformat()
+    if end is None:
+        return s
+    e = end.isoformat()
+    if s == e:
+        return s
+    return f"{s} \u2192 {e}"
 
 
 def _truncate_line(value: str | None, *, max_len: int = 72) -> str:
@@ -349,7 +364,9 @@ def _admin_ops_request_detail_text(
 ) -> str:
     request = detail.request
     bridge = detail.booking_bridge.bridge_status.value if detail.booking_bridge is not None else "-"
-    travel_end = f" - {request.travel_date_end.isoformat()}" if request.travel_date_end is not None else ""
+    travel_start = request.travel_date_start
+    travel_end_date = request.travel_date_end
+    travel_str = _format_admin_request_travel_dates(travel_start, travel_end_date)
     ctid = detail.customer_telegram_user_id or request.customer_telegram_user_id
     csum = _admin_ops_customer_display(
         customer_summary=getattr(request, "customer_summary", None),
@@ -370,7 +387,7 @@ def _admin_ops_request_detail_text(
         owner=owner,
         status=_enum_value(request.status),
         request_type=_enum_value(request.request_type),
-        travel_date=f"{request.travel_date_start.isoformat()}{travel_end}",
+        travel_date=travel_str,
         group_size=str(request.group_size or "-"),
         route=_truncate_line(request.route_notes, max_len=300),
         selected_response=str(request.selected_supplier_response_id or "-"),
@@ -390,6 +407,7 @@ def _admin_ops_request_detail_keyboard(
     viewer_telegram_user_id: int,
 ) -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
+    st = request.status
     if getattr(request, "assigned_operator_id", None) is None:
         kb.button(
             text=translate(language_code, "admin_ops_request_assign_to_me"),
@@ -397,9 +415,12 @@ def _admin_ops_request_detail_keyboard(
         )
     else:
         otg = getattr(request, "assigned_operator_telegram_user_id", None)
-        if otg is not None and otg != viewer_telegram_user_id:
-            # Assigned to someone else: no action in this slice
-            pass
+        is_me = otg is not None and otg == viewer_telegram_user_id
+        if is_me and st == CustomMarketplaceRequestStatus.OPEN:
+            kb.button(
+                text=translate(language_code, "admin_ops_request_mark_under_review"),
+                callback_data=f"{ADMIN_OPS_REQUEST_MARK_UNDER_REVIEW_PREFIX}{request_id}:{page}",
+            )
     kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=list_callback)
     kb.adjust(1)
     return kb
@@ -1310,6 +1331,69 @@ async def admin_ops_request_assign_to_me_handler(query: CallbackQuery, state: FS
             await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
             return
         except CustomMarketplaceRequestNotAssignableError as exc:
+            await query.answer(exc.message, show_alert=True)
+            return
+        except CustomMarketplaceRequestAssignConflictError as exc:
+            await query.answer(exc.message, show_alert=True)
+            return
+        session.commit()
+        try:
+            detail = CustomMarketplaceRequestService().get_admin_detail(session, request_id=request_id)
+        except CustomMarketplaceRequestNotFoundError:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+    await query.message.answer(
+        _admin_ops_request_detail_text(
+            lg,
+            detail,
+            viewer_telegram_user_id=query.from_user.id,
+        ),
+        reply_markup=_admin_ops_request_detail_keyboard(
+            lg,
+            list_callback=f"{ADMIN_OPS_REQUESTS_PAGE_PREFIX}{page}",
+            request_id=request_id,
+            page=page,
+            request=detail.request,
+            viewer_telegram_user_id=query.from_user.id,
+        ).as_markup(),
+    )
+    await query.answer()
+
+
+@router.callback_query(F.data.startswith(ADMIN_OPS_REQUEST_MARK_UNDER_REVIEW_PREFIX))
+async def admin_ops_request_mark_under_review_handler(query: CallbackQuery, state: FSMContext) -> None:
+    if query.from_user is None or query.data is None or query.message is None:
+        return
+    with SessionLocal() as session:
+        lg = _user_service().resolve_language(
+            session,
+            telegram_user_id=query.from_user.id,
+            telegram_language_code=query.from_user.language_code,
+        )
+    if await _deny_if_not_allowed(query, language_code=lg):
+        await state.clear()
+        return
+    raw = query.data.removeprefix(ADMIN_OPS_REQUEST_MARK_UNDER_REVIEW_PREFIX).split(":")
+    request_id = int(raw[0]) if raw and raw[0].isdigit() else 0
+    page = int(raw[1]) if len(raw) > 1 and raw[1].isdigit() else 0
+    with SessionLocal() as session:
+        actor = UserRepository().get_by_telegram_user_id(
+            session,
+            telegram_user_id=query.from_user.id,
+        )
+        if actor is None:
+            await query.answer("No user profile for this Telegram account.", show_alert=True)
+            return
+        try:
+            CustomMarketplaceRequestService().mark_under_review(
+                session,
+                request_id=request_id,
+                actor_user_id=actor.id,
+            )
+        except CustomMarketplaceRequestNotFoundError:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        except CustomMarketplaceRequestMarkUnderReviewNotAllowedError as exc:
             await query.answer(exc.message, show_alert=True)
             return
         except CustomMarketplaceRequestAssignConflictError as exc:

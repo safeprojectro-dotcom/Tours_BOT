@@ -11,7 +11,15 @@ from sqlalchemy import event
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
-from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourSalesMode, TourStatus
+from app.models.enums import (
+    BookingStatus,
+    CancellationStatus,
+    CustomMarketplaceRequestStatus,
+    PaymentStatus,
+    TourSalesMode,
+    TourStatus,
+)
+from app.models.custom_marketplace_request import CustomMarketplaceRequest
 from app.models.handoff import Handoff
 from app.services.handoff_entry import HandoffEntryService
 from tests.unit.base import FoundationDBTestCase
@@ -312,6 +320,112 @@ class AdminRouteTests(FoundationDBTestCase):
         row_m = next(x for x in list_a.json()["items"] if x["id"] == rid)
         self.assertNotIn("assigned_operator_id", row_m)
         self.assertIn("customer_visible_summary", row_m)
+
+    def test_admin_custom_request_mark_under_review(self) -> None:
+        self.create_user(telegram_user_id=352_300)  # customer
+        op = self.create_user(telegram_user_id=352_400)
+        other = self.create_user(telegram_user_id=352_401)
+        self.session.commit()
+
+        create = self.client.post(
+            "/mini-app/custom-requests",
+            json={
+                "telegram_user_id": 352_300,
+                "request_type": "custom_route",
+                "travel_date_start": "2026-10-10",
+                "route_notes": "Mark UR test",
+                "group_size": 2,
+            },
+        )
+        self.assertEqual(create.status_code, 201, create.text)
+        rid = create.json()["id"]
+        headers = {
+            "Authorization": "Bearer test-admin-secret",
+            "X-Admin-Actor-Telegram-Id": "352400",
+        }
+        m0 = self.client.post(f"/admin/custom-requests/{rid}/mark-under-review", headers=headers)
+        self.assertEqual(m0.status_code, 400, m0.text)
+        self.assertIn("not assigned", m0.json()["detail"].lower())
+
+        r_assign = self.client.post(f"/admin/custom-requests/{rid}/assign-to-me", headers=headers)
+        self.assertEqual(r_assign.status_code, 200, r_assign.text)
+
+        headers_other = {
+            "Authorization": "Bearer test-admin-secret",
+            "X-Admin-Actor-Telegram-Id": "352401",
+        }
+        m_conflict = self.client.post(f"/admin/custom-requests/{rid}/mark-under-review", headers=headers_other)
+        self.assertEqual(m_conflict.status_code, 409, m_conflict.text)
+
+        m1 = self.client.post(f"/admin/custom-requests/{rid}/mark-under-review", headers=headers)
+        self.assertEqual(m1.status_code, 200, m1.text)
+        self.assertEqual(m1.json()["status"], "under_review")
+
+        m2 = self.client.post(f"/admin/custom-requests/{rid}/mark-under-review", headers=headers)
+        self.assertEqual(m2.status_code, 200, m2.text)
+        self.assertEqual(m2.json()["status"], "under_review")
+
+        row = self.session.get(CustomMarketplaceRequest, rid)
+        self.assertIsNotNone(row)
+        assert row is not None
+        row.status = CustomMarketplaceRequestStatus.CLOSED_ASSISTED
+        self.session.add(row)
+        self.session.commit()
+
+        m_blocked = self.client.post(f"/admin/custom-requests/{rid}/mark-under-review", headers=headers)
+        self.assertEqual(m_blocked.status_code, 400, m_blocked.text)
+
+        c2 = self.client.post(
+            "/mini-app/custom-requests",
+            json={
+                "telegram_user_id": 352_300,
+                "request_type": "group_trip",
+                "travel_date_start": "2026-10-20",
+                "route_notes": "Second for terminal from open",
+                "group_size": 3,
+            },
+        )
+        self.assertEqual(c2.status_code, 201, c2.text)
+        rid2 = c2.json()["id"]
+        a2 = self.client.post(
+            f"/admin/custom-requests/{rid2}/assign-to-me",
+            headers=headers,
+        )
+        self.assertEqual(a2.status_code, 200, a2.text)
+        r2 = self.session.get(CustomMarketplaceRequest, rid2)
+        self.assertIsNotNone(r2)
+        assert r2 is not None
+        r2.status = CustomMarketplaceRequestStatus.SUPPLIER_SELECTED
+        self.session.add(r2)
+        self.session.commit()
+        m3 = self.client.post(
+            f"/admin/custom-requests/{rid2}/mark-under-review",
+            headers=headers,
+        )
+        self.assertEqual(m3.status_code, 400, m3.text)
+
+        c3 = self.client.post(
+            "/mini-app/custom-requests",
+            json={
+                "telegram_user_id": 352_300,
+                "request_type": "other",
+                "travel_date_start": "2026-10-21",
+                "route_notes": "Unassigned no mark",
+                "group_size": 1,
+            },
+        )
+        self.assertEqual(c3.status_code, 201, c3.text)
+        rid3 = c3.json()["id"]
+        m4 = self.client.post(
+            f"/admin/custom-requests/{rid3}/mark-under-review",
+            headers=headers,
+        )
+        self.assertEqual(m4.status_code, 400, m4.text)
+
+        list_a = self.client.get("/mini-app/custom-requests", params={"telegram_user_id": 352_300})
+        self.assertEqual(list_a.status_code, 200, list_a.text)
+        ids = {x["id"] for x in list_a.json()["items"]}
+        self.assertIn(rid, ids)
 
     def test_admin_tour_list_includes_past_departure_tour(self) -> None:
         """Admin read paths are not filtered by customer catalog time windows."""

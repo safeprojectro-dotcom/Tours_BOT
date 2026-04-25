@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.bot.constants import (
+    ADMIN_OPS_REQUEST_MARK_UNDER_REVIEW_PREFIX,
     ADMIN_OFFERS_ACTION_APPROVE,
     ADMIN_OFFERS_ACTION_CALLBACK_PREFIX,
     ADMIN_OFFERS_ACTION_CLOSE_LINK,
@@ -469,6 +470,71 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         self.assertIn("owner: you", text)
         self.assertIn("assigned to you", text)
         self.assertNotIn("assign to me", detail_buttons)
+        self.assertIn("mark under review", detail_buttons)
+
+    def test_admin_ops_assigned_to_me_open_mark_under_review_callback_refreshes_detail(self) -> None:
+        viewer = self.create_user(telegram_user_id=990_001, first_name="V", last_name="iewer")
+        cust = self.create_user(telegram_user_id=353_510)
+        row = CustomMarketplaceRequest(
+            user_id=cust.id,
+            request_type=CustomMarketplaceRequestType.CUSTOM_ROUTE,
+            travel_date_start=date(2026, 10, 20),
+            route_notes="Y37 mark UR",
+            group_size=1,
+            source_channel=CustomMarketplaceRequestSource.MINI_APP,
+            status=CustomMarketplaceRequestStatus.OPEN,
+            assigned_operator_id=viewer.id,
+        )
+        self.session.add(row)
+        self.session.commit()
+        rid = row.id
+
+        async def body() -> tuple[str, list[str]]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990_001)
+            mark_cb = _callback(
+                telegram_user_id=990_001,
+                data=f"{ADMIN_OPS_REQUEST_MARK_UNDER_REVIEW_PREFIX}{rid}:0",
+                message=message,
+            )
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.admin_ops_request_mark_under_review_handler(mark_cb, state)
+            t = self._all_answer_texts(message)
+            c = self._inline_callback_data(message)
+            return t, c
+
+        text, callbacks = asyncio.run(body())
+        self.assertIn("status: under_review", text.lower())
+        self.assertNotIn(f"{ADMIN_OPS_REQUEST_MARK_UNDER_REVIEW_PREFIX}", " ".join(callbacks))
+
+    def test_admin_ops_assigned_to_me_under_review_hides_mark_button(self) -> None:
+        viewer = self.create_user(telegram_user_id=990_001, first_name="V2", last_name="iewer")
+        cust = self.create_user(telegram_user_id=353_511)
+        row = CustomMarketplaceRequest(
+            user_id=cust.id,
+            request_type=CustomMarketplaceRequestType.CUSTOM_ROUTE,
+            travel_date_start=date(2026, 10, 21),
+            route_notes="Y37 no dup",
+            group_size=1,
+            source_channel=CustomMarketplaceRequestSource.MINI_APP,
+            status=CustomMarketplaceRequestStatus.UNDER_REVIEW,
+            assigned_operator_id=viewer.id,
+        )
+        self.session.add(row)
+        self.session.commit()
+        rid = row.id
+
+        async def body() -> list[str]:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990_001)
+            detail_cb = _callback(telegram_user_id=990_001, data=f"ao:rd:{rid}:0", message=message)
+            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+                await admin_moderation.cmd_admin_requests(message, state)
+                await admin_moderation.admin_ops_read_navigation(detail_cb, state)
+            return self._last_reply_button_texts_lower(message)
+
+        detail_buttons = asyncio.run(body())
+        self.assertNotIn("mark under review", detail_buttons)
 
     def test_admin_ops_assigned_to_other_hides_assign_shows_operator_in_list(self) -> None:
         self.create_user(telegram_user_id=990001)
