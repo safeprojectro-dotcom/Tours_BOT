@@ -628,7 +628,6 @@ async def _show_link_tour_code_search_results(
             callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR, offer_id, mode),
         )
         kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=ADMIN_OFFERS_NAV_BACK)
-        kb.button(text=translate(language_code, "admin_offer_nav_home"), callback_data=ADMIN_OFFERS_NAV_HOME)
         kb.adjust(1)
         await message.answer(
             translate(language_code, "admin_offer_link_search_empty", query=search_display),
@@ -664,7 +663,6 @@ async def _show_link_tour_code_search_results(
             callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR, offer_id, mode),
         )
         kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=ADMIN_OFFERS_NAV_BACK)
-        kb.button(text=translate(language_code, "admin_offer_nav_home"), callback_data=ADMIN_OFFERS_NAV_HOME)
         kb.adjust(1)
         await message.answer(
             translate(language_code, "admin_offer_link_search_empty", query=search_display),

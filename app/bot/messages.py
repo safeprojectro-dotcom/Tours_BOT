@@ -197,7 +197,7 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "admin_offer_link_search": "Search compatible tours",
         "admin_offer_link_search_prompt": "Send tour code or title. Optionally add date YYYY-MM-DD for offer #{offer_id}. Search stays limited to compatible tours.",
         "admin_offer_link_search_results_title": "Compatible tour search results for offer #{offer_id} ({mode}) — \"{query}\" — page {page}:",
-        "admin_offer_link_search_empty": "No compatible tours found for \"{query}\". No link was changed.",
+        "admin_offer_link_search_empty": "No compatible tours found.\nSearch: \"{query}\"\nNo link was changed.\nTry removing the date, using a shorter query, or using manual tour_id/code input.",
         "admin_offer_link_back_to_candidates": "Back to compatible list",
         "admin_offer_link_manual_input": "Manual tour_id/code input",
         "admin_offer_link_target_prompt": "Send existing tour_id or exact tour code for offer #{offer_id}. No tour will be created.",
