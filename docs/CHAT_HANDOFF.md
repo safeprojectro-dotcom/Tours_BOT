@@ -55,6 +55,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Y33 final accepted search:** consolidated Y33 operator execution-link tour search acceptance is recorded in **`docs/HANDOFF_Y33_OPERATOR_LINK_SEARCH_ACCEPTED.md`**. Accepted inputs are code, title, `YYYY-MM-DD`, and code/title + date; compatible filters, no-results UX, explicit confirmation, manual fallback, FSM/query-date safety, and compact callbacks are preserved. Postponed: fuzzy search, ranking/scoring, advanced filters, richer i18n polish.
 - **Y34 accepted UX polish:** Telegram admin execution-link tour search UX polish is accepted via **`docs/HANDOFF_Y34_OPERATOR_LINK_SEARCH_UX_POLISH_ACCEPTED.md`**. Y34.1 clarified prompt/result text and added tour codes to select buttons; Y34.2 added `New search` to search results/no-results navigation and kept `Back to compatible list`, `Manual tour_id/code input`, and `Back`. Manual smoke after deploy confirmed the search/navigation flow works correctly. Safety preserved: no search logic, FSM semantic, callback payload, Mini App, Layer A booking/payment, identity bridge, migration, or execution-link semantic changes.
 - **Y35 design gate:** Admin/Ops visibility gate created in **`docs/ADMIN_OPS_VISIBILITY_GATE.md`** (docs-only): defines separate admin/operator read-side visibility for all bookings/orders and all custom requests/RFQ, while preserving customer `My bookings` / `My requests` as current-user-only Mini App surfaces. It covers privacy boundary, admin roles/permissions, required booking/request visibility, filters, detail screens, future-only close/resolve/reassign actions, fail-safe/security behavior, and first safe read-only runtime slice. No runtime code, migrations, Mini App, Layer A booking/payment, identity bridge, or execution-link semantics changed in this gate.
+- **Y35.4 design gate:** Admin/Ops **customer summary** layer documented in **`docs/ADMIN_OPS_CUSTOMER_SUMMARY_GATE.md`** (docs-only): defines safe operator-facing customer labels (display name, optional `@username`, `tg:{id}` fallback, optional stored phone only under explicit policy) sourced only from existing `User` fields on admin/ops read surfaces; fail-closed when profile fields are missing; no Mini App, identity bridge, execution-link, booking/payment, or migration changes in this gate.
 
 ### Supplier continuity truth (Y2/Y2.3/Y2.1a/Y24/Y25/Y27/Y28 accepted)
 - Supplier v1 model is **supplier entity + one primary Telegram-bound operator**.
@@ -251,6 +252,12 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
   - first safe runtime slice should be read-only admin/ops booking/order list + detail and custom request/RFQ list + detail, with pagination and narrow filters;
   - future close/resolve/reassign/notes/escalation actions require a separate explicit design/runtime gate;
   - no booking/payment semantics, RFQ semantics, Mini App identity/privacy model, migrations, or execution-link semantics changed in this docs-only gate.
+- Y35.2/Y35.3 accepted (read-only admin/ops visibility): Admin API lists/detail for orders and custom requests; Telegram admin `/admin_orders` and `/admin_requests` with compact `ao:*` callbacks; customer Mini App scoping unchanged.
+- Y35.4 Admin/Ops customer summary design gate (docs-only):
+  - design source: **`docs/ADMIN_OPS_CUSTOMER_SUMMARY_GATE.md`**;
+  - moves operator UX beyond raw `customer_telegram_user_id` using only existing `User` fields (`first_name`, `last_name`, `username`, optional `phone` under explicit policy);
+  - recommended display: primary `display_name` when derivable, secondary `@username` when present, fallback `tg:{telegram_user_id}`;
+  - fail closed when name parts are absent; no Telegram `getChat` enrichment, no new PII sources, no identity bridge or Mini App changes in this gate.
 - Multi-operator organization / RBAC is explicitly postponed beyond Y2.1.
 - Supplier legal/compliance identity is now required for pending onboarding approvals:
   - **`legal_entity_type`**
@@ -358,11 +365,12 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - Telegram admin execution-link tour search no-results UX and FSM routing fix are accepted in **`docs/HANDOFF_Y33_6_SEARCH_NO_RESULTS_AND_FSM_FIX_ACCEPTED.md`**; future search refinements must preserve compatible-tour filtering, explicit confirmation, compact callbacks, and no-link-change behavior for empty results.
 - Y33 operator execution-link tour search is complete and accepted in **`docs/HANDOFF_Y33_OPERATOR_LINK_SEARCH_ACCEPTED.md`**; next safe work should be operational polish only unless a new design gate approves broader search semantics.
 - Y34 Telegram admin execution-link tour search UX polish is accepted in **`docs/HANDOFF_Y34_OPERATOR_LINK_SEARCH_UX_POLISH_ACCEPTED.md`**; future work must preserve the accepted bounded search semantics, compact callbacks, explicit confirmation, and no-link-change behavior.
-- Y35 Admin/Ops visibility gate is documented in **`docs/ADMIN_OPS_VISIBILITY_GATE.md`**; next runtime work should start with read-only admin/ops booking/order and custom request/RFQ list/detail surfaces, not customer Mini App all-user visibility or mutation actions.
+- Y35 Admin/Ops visibility gate is documented in **`docs/ADMIN_OPS_VISIBILITY_GATE.md`**; read-only admin/ops booking/order and custom request/RFQ list/detail surfaces are implemented in Y35.2 (API) and Y35.3 (Telegram).
+- Y35.4 Admin/Ops **customer summary** gate is documented in **`docs/ADMIN_OPS_CUSTOMER_SUMMARY_GATE.md`**; next narrow runtime slice after acceptance should add derived `display_name` / `@username` / `tg:{id}` (and optional stored phone only if policy-explicit) to admin API responses and Telegram admin orders/requests copy—without migrations, identity bridge, Mini App, execution-link, or booking/payment changes.
 - **Next safe order:**
-  1. Operator/admin workflow for creating/replacing/closing execution links.
-  2. Admin operational visibility for bookings/requests.
-  3. Incident/disruption design gate.
+  1. Y35.4 runtime slice: shared `User`-backed customer summary on admin read models + Telegram list/detail text (read-only, fail-closed).
+  2. Operator/admin workflow for creating/replacing/closing execution links (ongoing where applicable).
+  3. Broader admin operational features or incident/disruption design gate as separately scoped.
 - Implementation gate document: **`docs/SUPPLIER_CONVERSION_BRIDGE_IMPLEMENTATION_GATE.md`**.
 - Architecture continuity anchor before next tracks: **`docs/DESIGN_1_SUPPLIER_MARKETPLACE_ARCHITECTURE_CHECKPOINT.md`** (accepted intermediate checkpoint for Design 1 boundaries/order/non-goals).
 - Phase 7.1 continuation must pass design/review gate before runtime changes: **`docs/PHASE_7_1_SALES_MODE_FULL_BUS_REVIEW_GATE.md`**.
