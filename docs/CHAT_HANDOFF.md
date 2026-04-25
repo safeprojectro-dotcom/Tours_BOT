@@ -49,6 +49,8 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Y32.8 design gate:** Telegram admin compatible tour-selection UI gate created in **`docs/OPERATOR_LINK_TOUR_SELECTION_UI_GATE.md`** (docs-only): defines why manual ID/code is insufficient, required filters, tour list card format, pagination/search rules, create/replace flows with selection, fail-safe behavior, tests required, and first safe runtime-slice recommendation. It keeps existing-tour-only selection, same-`sales_mode` filtering, no auto-tour creation, no Mini App changes, and direct booking CTA controlled only by active authoritative link plus linked-tour bookability.
 - **Y32.9 accepted runtime:** Telegram admin compatible tour-selection UI is accepted via **`docs/HANDOFF_Y32_9_OPERATOR_LINK_TOUR_SELECTION_ACCEPTED.md`**. `/admin_published` -> offer detail -> `Execution link` -> create/replace now shows same-`sales_mode` compatible tour candidates with id/code/title/status/`sales_mode`/departure/seats/CTA warning; selecting a candidate opens confirmation; confirm replace closes the previous active link as `replaced`, leaves exactly one active link, and refreshes status/history. `BUTTON_DATA_INVALID` was fixed with compact callback data (`el:list:{offer_id}:{mode}:{page}`, `el:pick:{offer_id}:{mode}:{tour_id}`, `el:manual:{offer_id}:{mode}`). No auto-tour creation, Mini App, Layer A booking/payment, identity bridge, runtime schema, or migration changes were made.
 - **Y33.1 accepted design gate:** Telegram admin bounded tour-search/refinement gate is accepted via **`docs/HANDOFF_Y33_1_OPERATOR_TOUR_SEARCH_GATE_ACCEPTED.md`** and sourced by **`docs/OPERATOR_LINK_TOUR_SEARCH_GATE.md`** (docs-only): defines search input UX, supported exact/partial code search, title text search, optional date hint/filter, compatibility filters, result card format, pagination/search-state rules, fail-safe behavior, tests required, and first safe runtime-slice recommendation. Search remains refinement only: same-`sales_mode` filter always applies, search never auto-links, selected results still go through confirmation, manual fallback remains, and direct booking CTA remains controlled only by active authoritative link plus linked-tour bookability.
+- **Y33.2 accepted runtime:** Telegram admin compatible tour code search works from `/admin_published` -> offer detail -> `Execution link` -> create/replace -> `Search compatible tours`: exact and partial code matches return same-`sales_mode` compatible tours, wrong-`sales_mode` tours are excluded, search result selection reuses the existing confirmation flow, manual fallback remains, and compact callback constraints are preserved. No auto-linking, auto-tour creation, Mini App, Layer A booking/payment, identity bridge, migrations, or direct booking CTA semantics changed.
+- **Y33.3 design gate:** Telegram admin title/date search expansion gate created in **`docs/OPERATOR_LINK_TOUR_TITLE_DATE_SEARCH_GATE.md`** (docs-only): designs title substring search and optional `YYYY-MM-DD` date hint/filter while keeping Y33.2 code search unchanged. It preserves same-`sales_mode` compatibility, existing-tour-only/future/not-cancelled/not-completed filters, no auto-linking, mandatory confirmation, manual fallback, compact callback/state safety, and direct booking CTA controlled only by active authoritative link plus linked-tour bookability.
 
 ### Supplier continuity truth (Y2/Y2.3/Y2.1a/Y24/Y25/Y27/Y28 accepted)
 - Supplier v1 model is **supplier entity + one primary Telegram-bound operator**.
@@ -201,6 +203,19 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
   - pagination/search state must preserve offer id, create/replace mode, query/date context, and page without exceeding Telegram callback-data limits;
   - postponed: advanced filtering, multi-field search combinations, and ranking/scoring logic;
   - first safe runtime slice should implement exact/partial tour-code search before title/date refinements.
+- Y33.2 Telegram admin compatible tour code search runtime truth (accepted):
+  - exact and partial code search works;
+  - search results remain filtered by same `sales_mode` and existing compatible-tour constraints;
+  - selected search results reuse the existing confirmation flow before create/replace;
+  - manual `tour_id` / exact tour-code fallback remains available;
+  - no auto-linking, auto-tour creation, Mini App, Layer A booking/payment, identity bridge, migrations, or direct booking CTA semantics changed.
+- Y33.3 Telegram admin title/date search expansion gate (docs-only):
+  - design source: **`docs/OPERATOR_LINK_TOUR_TITLE_DATE_SEARCH_GATE.md`**;
+  - goal is to extend compatible search from code-only to title substring and optional `YYYY-MM-DD` date hint/filter;
+  - code search behavior must remain unchanged;
+  - title/date search remains refinement only and must always preserve same-`sales_mode`, existing-tour-only, future, and not-cancelled/not-completed compatibility rules;
+  - result selection still goes through confirmation and never auto-links;
+  - first safe runtime slice should implement title substring search only, then date hint/filter after acceptance.
 - Multi-operator organization / RBAC is explicitly postponed beyond Y2.1.
 - Supplier legal/compliance identity is now required for pending onboarding approvals:
   - **`legal_entity_type`**
@@ -304,6 +319,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - Telegram admin compatible tour-selection UI gate is now documented in **`docs/OPERATOR_LINK_TOUR_SELECTION_UI_GATE.md`**; next runtime work should add a same-`sales_mode` paginated candidate list before broader search.
 - Telegram admin compatible tour-selection UI is accepted in **`docs/HANDOFF_Y32_9_OPERATOR_LINK_TOUR_SELECTION_ACCEPTED.md`**; next safe iteration is Y33 bounded search/refinement by tour code/title/date.
 - Telegram admin bounded tour-search/refinement gate is accepted in **`docs/HANDOFF_Y33_1_OPERATOR_TOUR_SEARCH_GATE_ACCEPTED.md`** and documented in **`docs/OPERATOR_LINK_TOUR_SEARCH_GATE.md`**; next runtime work should start with exact/partial tour-code search while preserving confirmation and compact callback constraints.
+- Telegram admin compatible tour code search is accepted as Y33.2 runtime; next design/runtime work may expand to title/date only through **`docs/OPERATOR_LINK_TOUR_TITLE_DATE_SEARCH_GATE.md`**, starting with title substring search first.
 - **Next safe order:**
   1. Operator/admin workflow for creating/replacing/closing execution links.
   2. Admin operational visibility for bookings/requests.
