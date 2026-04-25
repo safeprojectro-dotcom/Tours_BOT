@@ -35,7 +35,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Y41 (design, canonical):** **`docs/SUPPLIER_EXECUTION_DATA_CONTRACT.md`** — **logical** **execution request** + **attempt** + **result/audit** field lists; **status** set for requests; `operator_workflow_intent` **snapshot** on request, **not** live trigger, **not** primary execution state. **No** migrations/models in Y41. Forbids coupling to **orders**/**payments**/**bookings**, **Mini App**, **execution links**, **identity bridge**, **customer** notifications. **Cites** Y38–Y40.
 - **Y42 (design, canonical):** **`docs/SUPPLIER_EXECUTION_PERMISSION_AUDIT_GATE.md`** — who may **initiate** execution; **intent record** **≠** **execution** permission; **audit** and **fail-closed** rules; **no** **hidden** **DB** triggers. **No** `app/`. **Cites** Y38–Y41.
 - **Y43 (runtime, persistence-only):** migration **`20260502_21`**, `supplier_execution_requests` + `supplier_execution_attempts`, ORM + `app/repositories/supplier_execution.py` validation. **No** **API**/**workers**/**messaging**; `operator_workflow_intent` **snapshot** only. **Cites** Y38–Y42.
-- **Y45 (design, accepted):** **`docs/SUPPLIER_EXECUTION_TRIGGER_DESIGN.md`** — **first** **trigger** = **admin** **explicit** **only**; **creates**/**validates** **`supplier_execution_request`** **only**; **does** **not** **contact** suppliers; **does** **not** **create** **`supplier_execution_attempt`** rows in this design slice; **preserves** **Y38**–**Y42**. **Next** **safe** **step:** implement **safe** **admin** **trigger** **endpoint** with **no** **supplier** **messaging**.
+- **Y45 (design, accepted):** **`docs/SUPPLIER_EXECUTION_TRIGGER_DESIGN.md`** — **first** **trigger** = **admin** **explicit** **only**; **creates**/**validates** **`supplier_execution_request`** **only**; **does** **not** **contact** suppliers; **does** **not** **create** **`supplier_execution_attempt`** rows in this design slice; **preserves** **Y38**–**Y42**. **Y46** (runtime): **safe** **admin** **trigger** implemented — **`POST /admin/supplier-execution-requests`**. **Y47 (design, accepted):** **`docs/SUPPLIER_EXECUTION_ATTEMPT_DESIGN.md`** — **request** **≠** **attempt**; **attempts** **not** **created** **by** **Y46** **trigger**; **not** **automatic**; **separate** **explicit** **step**; **no** **messaging**/**API**/**workers**/RFQ/booking/**Mini** **App**/**links**/**bridge**/**notifications** in this **design**. **Next** **safe** **step:** **Y48** — **safe** **attempt** **row** **creation** (still **no** **outbound** **messaging**).
 
 ---
 
@@ -136,7 +136,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Tests:** `tests/unit/test_supplier_execution_persistence.py`. **`POST .../operator-decision`**, **Mini** **App**, **Layer** **A** **tables** unchanged. **no** **customer** **notifications** from this slice.
 
 ### Next safe step
-- **Y45** **trigger** **design** is **accepted** — see **Checkpoint Sync — Y45** below. **Implementation** of the **safe** **admin** **trigger** (per **`docs/SUPPLIER_EXECUTION_TRIGGER_DESIGN.md`**) is the **next** **coherent** **in-app** step, still **without** supplier **messaging** or **attempt**-level **runtime**.
+- **Y45**/**Y46**/**Y44** and **Y47** — see **Checkpoint Sync — Y45** and **Y47** and **`CHAT_HANDOFF`**. **Y48** = **next** (safe **attempt** **creation**).
 
 ---
 
@@ -150,7 +150,21 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Y38**–**Y42** **boundaries** **preserved**: intent **≠** **execution**; **explicit** **entry** only; Y40 **flow** **integrity** for **stages** **1–3** on **trigger**; Y41 **contract**; Y42 **permission** + **audit** + **fail-closed**.
 
 ### Next safe step
-- **Implement** the **safe** **admin** **trigger** **endpoint** (or an **equivalent** **explicit** **admin** **surface** with the **same** **rules**): **ADMIN_API_TOKEN**, **source** **entity** **exists**, **idempotency**, **actor** **audit** — **no** **supplier** **messaging** and **no** **attempt**/outbound **execution** until **separately** **scoped**.
+- **Y46** **ships** the **safe** **admin** **trigger** — **`POST /admin/supplier-execution-requests`** (see **`tests/unit/test_api_admin_supplier_execution.py`** and **`CHAT_HANDOFF`**). **Y47** **attempt** **layer** **design** is **accepted** — see **Checkpoint Sync — Y47** below. **Next:** **Y48** **safe** **`supplier_execution_attempt`** **creation** (still **no** **outbound** **messaging**).
+
+---
+
+## Checkpoint Sync — Y47 supplier execution attempt (design-only, accepted)
+
+**Docs-only** acceptance. Source: [`docs/SUPPLIER_EXECUTION_ATTEMPT_DESIGN.md`](SUPPLIER_EXECUTION_ATTEMPT_DESIGN.md). **Complements** Y38–Y45 / **Y46**; **no** new **`app/`** in this checkpoint.
+
+### Accepted state
+- **Distinction:** **`supplier_execution_request`** = **intention** / **run** **anchor** (Y45/**Y46** **admin** **trigger**); **`supplier_execution_attempt`** = **one** **try** (Y40 **stage** **4** **unit**), **not** the **same** as **request**.
+- **Attempts** are **not** **inserted** **by** the **Y46** **trigger**; **not** **automatic** from **intent** or **unrelated** **rows**; **not** from **hidden** **triggers** — only a **separate** **explicit** **entry** in a **future** **implementation** **ticket** (Y48+).
+- This **design** **does** **not** add: supplier **messaging** **implementation**, **supplier** **HTTP**/**API** **clients**, **workers**, new **RFQ** **automation**, **booking**/**order**/**payment** **mutations**, **Mini** **App** **changes**, **execution** **link** **mutation**, **identity** **bridge** **changes**, **customer**/**supplier** **notifications** **pipelines**. **`operator-decision`** **unchanged** by this **doc** **alone**.
+
+### Next safe step
+- **Y48** — **safe** **`supplier_execution_attempt`** **creation** in **code** (e.g. **admin**-**gated** **HTTP** or **equivalent**), **still** **without** **outbound** **supplier** **messaging**; **cites** Y38–Y47 and **Y42** **permission**/**audit**.
 
 ---
 
