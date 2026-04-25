@@ -52,6 +52,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **Y33.2 accepted runtime:** Telegram admin compatible tour code search works from `/admin_published` -> offer detail -> `Execution link` -> create/replace -> `Search compatible tours`: exact and partial code matches return same-`sales_mode` compatible tours, wrong-`sales_mode` tours are excluded, search result selection reuses the existing confirmation flow, manual fallback remains, and compact callback constraints are preserved. No auto-linking, auto-tour creation, Mini App, Layer A booking/payment, identity bridge, migrations, or direct booking CTA semantics changed.
 - **Y33.3 design gate:** Telegram admin title/date search expansion gate created in **`docs/OPERATOR_LINK_TOUR_TITLE_DATE_SEARCH_GATE.md`** (docs-only): designs title substring search and optional `YYYY-MM-DD` date hint/filter while keeping Y33.2 code search unchanged. It preserves same-`sales_mode` compatibility, existing-tour-only/future/not-cancelled/not-completed filters, no auto-linking, mandatory confirmation, manual fallback, compact callback/state safety, and direct booking CTA controlled only by active authoritative link plus linked-tour bookability.
 - **Y33.6/Y33.6A accepted runtime:** Telegram admin execution-link tour search no-results UX and FSM routing fix are accepted via **`docs/HANDOFF_Y33_6_SEARCH_NO_RESULTS_AND_FSM_FIX_ACCEPTED.md`**. Empty search results show a clear no-results message with searched value, confirm no link changed, suggest removing date / shorter query / manual input, and show `Back to compatible list`, `Manual tour_id/code input`, and `Back`. Manual smoke confirmed `zzzz 2026-06-16` returns no-results UX, `2026-06-16` returns compatible tour `#3`, and search remains limited to compatible tours. Safety preserved: no filter/search semantics changes beyond routing/state fix, no Mini App, Layer A booking/payment, identity bridge, migrations, or execution-link semantics changes; callback payloads remain compact.
+- **Y33 final accepted search:** consolidated Y33 operator execution-link tour search acceptance is recorded in **`docs/HANDOFF_Y33_OPERATOR_LINK_SEARCH_ACCEPTED.md`**. Accepted inputs are code, title, `YYYY-MM-DD`, and code/title + date; compatible filters, no-results UX, explicit confirmation, manual fallback, FSM/query-date safety, and compact callbacks are preserved. Postponed: fuzzy search, ranking/scoring, advanced filters, richer i18n polish.
 
 ### Supplier continuity truth (Y2/Y2.3/Y2.1a/Y24/Y25/Y27/Y28 accepted)
 - Supplier v1 model is **supplier entity + one primary Telegram-bound operator**.
@@ -224,6 +225,14 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
   - manual smoke confirmed search input is handled by FSM after prompt, `zzzz 2026-06-16` returns no-results UX, and date-only `2026-06-16` returns compatible tour `#3`;
   - search remains limited to compatible tours and callback payloads remain compact;
   - no search filter changes, execution-link semantic changes, Mini App changes, Layer A booking/payment changes, identity bridge changes, or migrations were made.
+- Y33 final operator execution-link tour search acceptance:
+  - consolidated handoff: **`docs/HANDOFF_Y33_OPERATOR_LINK_SEARCH_ACCEPTED.md`**;
+  - supported inputs: code, title substring, `YYYY-MM-DD`, and code/title + date;
+  - compatibility filters remain same `sales_mode`, existing Layer A tour only, future departure, not cancelled, and not completed;
+  - search result selection still uses explicit confirmation before create/replace;
+  - search remains refinement only: no auto-linking, no auto-selection, no auto-tour creation;
+  - query/date context remains in FSM state, not callback data;
+  - postponed: fuzzy search, ranking/scoring, advanced filters, multi-field search beyond accepted bounded query/date form, and richer i18n polish.
 - Multi-operator organization / RBAC is explicitly postponed beyond Y2.1.
 - Supplier legal/compliance identity is now required for pending onboarding approvals:
   - **`legal_entity_type`**
@@ -329,6 +338,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - Telegram admin bounded tour-search/refinement gate is accepted in **`docs/HANDOFF_Y33_1_OPERATOR_TOUR_SEARCH_GATE_ACCEPTED.md`** and documented in **`docs/OPERATOR_LINK_TOUR_SEARCH_GATE.md`**; next runtime work should start with exact/partial tour-code search while preserving confirmation and compact callback constraints.
 - Telegram admin compatible tour code search is accepted as Y33.2 runtime; next design/runtime work may expand to title/date only through **`docs/OPERATOR_LINK_TOUR_TITLE_DATE_SEARCH_GATE.md`**, starting with title substring search first.
 - Telegram admin execution-link tour search no-results UX and FSM routing fix are accepted in **`docs/HANDOFF_Y33_6_SEARCH_NO_RESULTS_AND_FSM_FIX_ACCEPTED.md`**; future search refinements must preserve compatible-tour filtering, explicit confirmation, compact callbacks, and no-link-change behavior for empty results.
+- Y33 operator execution-link tour search is complete and accepted in **`docs/HANDOFF_Y33_OPERATOR_LINK_SEARCH_ACCEPTED.md`**; next safe work should be operational polish only unless a new design gate approves broader search semantics.
 - **Next safe order:**
   1. Operator/admin workflow for creating/replacing/closing execution links.
   2. Admin operational visibility for bookings/requests.
