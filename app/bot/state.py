@@ -57,6 +57,7 @@ class AdminModerationState(StatesGroup):
 
     browsing_offer_queue = State()
     awaiting_reject_reason = State()
+    awaiting_execution_link_tour = State()
 
 
 class AdminSupplierModerationState(StatesGroup):
