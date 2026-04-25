@@ -17,6 +17,9 @@ from app.bot.constants import (
     ADMIN_OFFERS_ACTION_CONFIRM_CREATE_LINK,
     ADMIN_OFFERS_ACTION_CONFIRM_REPLACE_LINK,
     ADMIN_OFFERS_ACTION_CREATE_LINK,
+    ADMIN_OFFERS_EXEC_LINK_LIST_PREFIX,
+    ADMIN_OFFERS_EXEC_LINK_MANUAL_PREFIX,
+    ADMIN_OFFERS_EXEC_LINK_PICK_PREFIX,
     ADMIN_OFFERS_ACTION_LINK_STATUS,
     ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE,
     ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR,
@@ -306,6 +309,15 @@ def _link_confirm_keyboard(language_code: str | None, *, mode: str, offer_id: in
 
 
 def _link_action_callback(action: str, offer_id: int, *parts: object) -> str:
+    if action == ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE:
+        mode, page = parts
+        return f"{ADMIN_OFFERS_EXEC_LINK_LIST_PREFIX}{offer_id}:{mode}:{page}"
+    if action == ADMIN_OFFERS_ACTION_SELECT_LINK_TOUR:
+        mode, tour_id = parts
+        return f"{ADMIN_OFFERS_EXEC_LINK_PICK_PREFIX}{offer_id}:{mode}:{tour_id}"
+    if action == ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR:
+        (mode,) = parts
+        return f"{ADMIN_OFFERS_EXEC_LINK_MANUAL_PREFIX}{offer_id}:{mode}"
     suffix = ":".join([action, str(offer_id), *(str(part) for part in parts)])
     return f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{suffix}"
 
@@ -374,23 +386,27 @@ def _link_tour_candidates_keyboard(
 ) -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     for tour in tours:
+        callback_data = _link_action_callback(ADMIN_OFFERS_ACTION_SELECT_LINK_TOUR, offer_id, mode, tour.id)
         kb.button(
             text=translate(language_code, "admin_offer_link_select_tour", tour_id=str(tour.id)),
-            callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_SELECT_LINK_TOUR, offer_id, mode, tour.id),
+            callback_data=callback_data,
         )
     if page > 0:
+        callback_data = _link_action_callback(ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE, offer_id, mode, page - 1)
         kb.button(
             text=translate(language_code, "admin_offer_nav_prev"),
-            callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE, offer_id, mode, page - 1),
+            callback_data=callback_data,
         )
     if has_next:
+        callback_data = _link_action_callback(ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE, offer_id, mode, page + 1)
         kb.button(
             text=translate(language_code, "admin_offer_nav_next"),
-            callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE, offer_id, mode, page + 1),
+            callback_data=callback_data,
         )
+    callback_data = _link_action_callback(ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR, offer_id, mode)
     kb.button(
         text=translate(language_code, "admin_offer_link_manual_input"),
-        callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR, offer_id, mode),
+        callback_data=callback_data,
     )
     kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=ADMIN_OFFERS_NAV_BACK)
     kb.button(text=translate(language_code, "admin_offer_nav_home"), callback_data=ADMIN_OFFERS_NAV_HOME)
@@ -420,9 +436,10 @@ async def _show_link_tour_candidates(
     )
     if not tours:
         kb = InlineKeyboardBuilder()
+        manual_callback_data = _link_action_callback(ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR, offer_id, mode)
         kb.button(
             text=translate(language_code, "admin_offer_link_manual_input"),
-            callback_data=_link_action_callback(ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR, offer_id, mode),
+            callback_data=manual_callback_data,
         )
         kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=ADMIN_OFFERS_NAV_BACK)
         kb.button(text=translate(language_code, "admin_offer_nav_home"), callback_data=ADMIN_OFFERS_NAV_HOME)
@@ -643,6 +660,22 @@ async def admin_queue_navigation(query: CallbackQuery, state: FSMContext) -> Non
 
 
 def _parse_action(data: str) -> tuple[str, int, tuple[str, ...]] | None:
+    compact_prefixes = {
+        ADMIN_OFFERS_EXEC_LINK_LIST_PREFIX: ADMIN_OFFERS_ACTION_LINK_TOUR_PAGE,
+        ADMIN_OFFERS_EXEC_LINK_PICK_PREFIX: ADMIN_OFFERS_ACTION_SELECT_LINK_TOUR,
+        ADMIN_OFFERS_EXEC_LINK_MANUAL_PREFIX: ADMIN_OFFERS_ACTION_MANUAL_LINK_TOUR,
+    }
+    for prefix, action_name in compact_prefixes.items():
+        if not data.startswith(prefix):
+            continue
+        parts = data.removeprefix(prefix).split(":")
+        if not parts:
+            return None
+        try:
+            return action_name, int(parts[0]), tuple(parts[1:])
+        except ValueError:
+            return None
+
     raw = data.removeprefix(ADMIN_OFFERS_ACTION_CALLBACK_PREFIX)
     for action_name in sorted(_LINK_SELECTION_ACTIONS, key=len, reverse=True):
         prefix = f"{action_name}:"
@@ -669,7 +702,12 @@ def _refresh_queue(current_offer_id: int, *, session, mode: str) -> tuple[list[i
     return [], 0, current_offer_id
 
 
-@router.callback_query(F.data.startswith(ADMIN_OFFERS_ACTION_CALLBACK_PREFIX))
+@router.callback_query(
+    F.data.startswith(ADMIN_OFFERS_ACTION_CALLBACK_PREFIX)
+    | F.data.startswith(ADMIN_OFFERS_EXEC_LINK_LIST_PREFIX)
+    | F.data.startswith(ADMIN_OFFERS_EXEC_LINK_PICK_PREFIX)
+    | F.data.startswith(ADMIN_OFFERS_EXEC_LINK_MANUAL_PREFIX)
+)
 async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
     if query.from_user is None or query.data is None or query.message is None:
         return
