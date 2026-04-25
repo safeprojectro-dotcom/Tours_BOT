@@ -83,8 +83,8 @@ class CustomMarketplaceRequest(TimestampMixin, Base):
     )
     assigned_by: Mapped["User | None"] = relationship(
         "User",
+        back_populates="ops_assigned_custom_marketplace_requests_by_actor",
         foreign_keys="[CustomMarketplaceRequest.assigned_by_user_id]",
-        overlaps="assigned_operator,ops_assigned_custom_marketplace_requests",
     )
     supplier_responses: Mapped[list["SupplierCustomRequestResponse"]] = relationship(
         "SupplierCustomRequestResponse",

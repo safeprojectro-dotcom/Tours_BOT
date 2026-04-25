@@ -41,4 +41,15 @@ class User(TimestampMixin, Base):
     approved_content_items: Mapped[list["ContentItem"]] = relationship(back_populates="approver")
     custom_marketplace_requests: Mapped[list["CustomMarketplaceRequest"]] = relationship(
         back_populates="user",
+        foreign_keys="CustomMarketplaceRequest.user_id",
+    )
+    ops_assigned_custom_marketplace_requests: Mapped[list["CustomMarketplaceRequest"]] = relationship(
+        "CustomMarketplaceRequest",
+        back_populates="assigned_operator",
+        foreign_keys="CustomMarketplaceRequest.assigned_operator_id",
+    )
+    ops_assigned_custom_marketplace_requests_by_actor: Mapped[list["CustomMarketplaceRequest"]] = relationship(
+        "CustomMarketplaceRequest",
+        back_populates="assigned_by",
+        foreign_keys="CustomMarketplaceRequest.assigned_by_user_id",
     )
