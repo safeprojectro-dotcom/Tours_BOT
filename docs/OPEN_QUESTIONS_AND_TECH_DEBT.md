@@ -35,7 +35,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Y41 (design, canonical):** **`docs/SUPPLIER_EXECUTION_DATA_CONTRACT.md`** — **logical** **execution request** + **attempt** + **result/audit** field lists; **status** set for requests; `operator_workflow_intent` **snapshot** on request, **not** live trigger, **not** primary execution state. **No** migrations/models in Y41. Forbids coupling to **orders**/**payments**/**bookings**, **Mini App**, **execution links**, **identity bridge**, **customer** notifications. **Cites** Y38–Y40.
 - **Y42 (design, canonical):** **`docs/SUPPLIER_EXECUTION_PERMISSION_AUDIT_GATE.md`** — who may **initiate** execution; **intent record** **≠** **execution** permission; **audit** and **fail-closed** rules; **no** **hidden** **DB** triggers. **No** `app/`. **Cites** Y38–Y41.
 - **Y43 (runtime, persistence-only):** migration **`20260502_21`**, `supplier_execution_requests` + `supplier_execution_attempts`, ORM + `app/repositories/supplier_execution.py` validation. **No** **API**/**workers**/**messaging**; `operator_workflow_intent` **snapshot** only. **Cites** Y38–Y42.
-- **Y45 (design, accepted):** **`docs/SUPPLIER_EXECUTION_TRIGGER_DESIGN.md`** — **first** **trigger** = **admin** **explicit** **only**; **creates**/**validates** **`supplier_execution_request`** **only**; **does** **not** **contact** suppliers; **does** **not** **create** **`supplier_execution_attempt`** rows in this design slice; **preserves** **Y38**–**Y42**. **Y46** (runtime): **safe** **admin** **trigger** implemented — **`POST /admin/supplier-execution-requests`**. **Y47 (design, accepted):** **`docs/SUPPLIER_EXECUTION_ATTEMPT_DESIGN.md`** — **request** **≠** **attempt**; **attempts** **not** **created** **by** **Y46** **trigger**; **not** **automatic**; **separate** **explicit** **step**; **no** **messaging**/**API**/**workers**/RFQ/booking/**Mini** **App**/**links**/**bridge**/**notifications** in this **design**. **Y48 (runtime):** **`POST` …/supplier-execution-requests/{id}/attempts`**, **no** **outbound** **messaging** in that **handler** **(pending** + **channel** **none**)**. **Y49 (design, accepted):** **`docs/SUPPLIER_OUTBOUND_MESSAGING_DESIGN.md`** — **outbound** = **first** **external** **side** **effect**; **only** **in** **execution-attempt**-**tied** **send**; **permission** + **idempotency** + **audit**; **not** on **intent** / **request** **create** / **attempt** **row** **create** **alone**; **preserves** **Y38**–**Y48**; design **for** **Y50**. **Y50 (runtime, completed):** **Telegram**-**only** **outbound** **`POST` …/supplier-execution-attempts/{attempt_id}/send-telegram** — **`ADMIN_API_TOKEN`**, **explicit** **admin** **action** (**`X-Admin-Actor-Telegram-Id`**), **pending** **attempt** **only**, **required** **idempotency**; **migration `20260425_22`**: **`supplier_execution_attempt_telegram_idempotency`**, **`UNIQUE` (`supplier_execution_attempt_id`, `idempotency_key`)**; **no** **auto** / **Y46** / **Y48** / **intent** **sends**; **Y38**–**Y49** **guarantees** **preserved**. **Next** **safe** **step:** **Y51** — **audit** **hardening** / **result** **visibility** / **retry** **design** (not **auto**-**retry** **until** **explicit**).
+- **Y45 (design, accepted):** **`docs/SUPPLIER_EXECUTION_TRIGGER_DESIGN.md`** — **first** **trigger** = **admin** **explicit** **only**; **creates**/**validates** **`supplier_execution_request`** **only**; **does** **not** **contact** suppliers; **does** **not** **create** **`supplier_execution_attempt`** rows in this design slice; **preserves** **Y38**–**Y42**. **Y46** (runtime): **safe** **admin** **trigger** implemented — **`POST /admin/supplier-execution-requests`**. **Y47 (design, accepted):** **`docs/SUPPLIER_EXECUTION_ATTEMPT_DESIGN.md`** — **request** **≠** **attempt**; **attempts** **not** **created** **by** **Y46** **trigger**; **not** **automatic**; **separate** **explicit** **step**; **no** **messaging**/**API**/**workers**/RFQ/booking/**Mini** **App**/**links**/**bridge**/**notifications** in this **design**. **Y48 (runtime):** **`POST` …/supplier-execution-requests/{id}/attempts`**, **no** **outbound** **messaging** in that **handler** **(pending** + **channel** **none**)**. **Y49 (design, accepted):** **`docs/SUPPLIER_OUTBOUND_MESSAGING_DESIGN.md`** — **outbound** = **first** **external** **side** **effect**; **only** **in** **execution-attempt**-**tied** **send**; **permission** + **idempotency** + **audit**; **not** on **intent** / **request** **create** / **attempt** **row** **create** **alone**; **preserves** **Y38**–**Y48**; design **for** **Y50**. **Y50 (runtime, completed):** **Telegram**-**only** **outbound** **`POST` …/supplier-execution-attempts/{attempt_id}/send-telegram** — **`ADMIN_API_TOKEN`**, **explicit** **admin** **action** (**`X-Admin-Actor-Telegram-Id`**), **pending** **attempt** **only**, **required** **idempotency**; **migration `20260425_22`**: **`supplier_execution_attempt_telegram_idempotency`**, **`UNIQUE` (`supplier_execution_attempt_id`, `idempotency_key`)**; **no** **auto** / **Y46** / **Y48** / **intent** **sends**; **Y38**–**Y49** **guarantees** **preserved**. **Y51 (design, accepted):** **`docs/SUPPLIER_MESSAGING_AUDIT_RETRY_DESIGN.md`** — **admin/operator** **visibility**; **audit** **hardening**; **retry** **principles**; **no** **automatic** **retries**; **no** **hidden** **retry** **on** **read**; **retry** (or re-send) **only** **after** **a** **future** **explicit** **gate**; **Y51** is **design**-**only** in **that** **file**. **Y38**–**Y50** **unchanged** in **meaning** as **documented** **in** this **line** and **Y51** **file**. **Next** **safe** **step:** **Y52** — **read** /**audit** **visibility** **implementation** **only** ( **no** **retry** **execution** ).
 
 ---
 
@@ -136,7 +136,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Tests:** `tests/unit/test_supplier_execution_persistence.py`. **`POST .../operator-decision`**, **Mini** **App**, **Layer** **A** **tables** unchanged. **no** **customer** **notifications** from this slice.
 
 ### Next safe step
-- **Y45**–**Y50** and **`CHAT_HANDOFF`**. **Y50** (Telegram **send** + **idempotency** **table**) **shipped** — see **Checkpoint Sync — Y50**.
+- **Y45**–**Y51** and **`CHAT_HANDOFF`**. **Y50**+**Y51** — see **Checkpoint Sync — Y50** and **— Y51**.
 
 ---
 
@@ -164,7 +164,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - This **design** **does** **not** add: supplier **messaging** **implementation**, **supplier** **HTTP**/**API** **clients**, **workers**, new **RFQ** **automation**, **booking**/**order**/**payment** **mutations**, **Mini** **App** **changes**, **execution** **link** **mutation**, **identity** **bridge** **changes**, **customer**/**supplier** **notifications** **pipelines**. **`operator-decision`** **unchanged** by this **doc** **alone**.
 
 ### Next safe step
-- **Y48** **shipped** — **`CHAT_HANDOFF`**, **HANDOFF_Y48** **if** **used**. **Y49** — **design**; **Y50** — **messaging** **runtime** **done** (see **Checkpoint Sync — Y50**). **Y51** — **next** (audit / visibility / retry **design**).
+- **Y48** **shipped** — **`CHAT_HANDOFF`**. **Y50**+**Y51** in **`OPEN_QUESTIONS`**. **Y52** **next** (read/audit only — **Checkpoint Sync — Y51** **below**).
 
 ---
 
@@ -180,7 +180,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Y38**–**Y48** **design**+**shipped** **slices** **preserved**; this **file** does **not** add **RFQ**/**order**/**Mini** **App**/**execution** **links**/**identity**/**default** **customer** **notifications** (see **Y49** **§7**).
 
 ### Next safe step
-- **Y50** **implemented** — see **Checkpoint Sync — Y50** (below). **Y51** — **audit** / **outcome** **visibility** / **retry** **design** ( **explicit**; **not** **automatic** **retry** ).
+- **Y50** **shipped** — **Checkpoint Sync — Y50**. **Y51** **design** **accepted** — **Checkpoint Sync — Y51**. **Y52** **read** /**audit** **only**.
 
 ---
 
@@ -194,7 +194,21 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Constraints** **(Y38**–**Y49** **unchanged** **in** **meaning**)** — **no** **automatic** **messaging**; **no** **sends** **from** **Y46** **request** **creation** **or** **Y48** **attempt** **row** **creation**; **no** **intent**-**triggered** **or** **`operator-decision`** **sends**; **no** **RFQ**/**booking**/**order**/**payment** **mutation**; **no** **Mini** **App**; **no** **execution** **link**; **no** **identity** **bridge**; **no** **customer** **notifications**; **no** **fan**-**out**; **no** **worker** **retry** **pipeline** in **this** **slice**.
 
 ### Next safe step
-- **Y51** — **messaging** **result** **visibility** / **audit** **hardening** / **retry** **semantics** as a **design** (or **doc**+**scope** **ticket**); **explicit** **only**; **not** **implicit** **background** **auto**-**retry** without a **separate** **gate**.
+- **Y51** **design** **accepted** — see **Checkpoint Sync — Y51** (below). **Y52** — **read** + **audit** **visibility** **implementation**; **no** **retry** **execution** in **that** **slice** **by** **default**.
+
+---
+
+## Checkpoint Sync — Y51 supplier messaging visibility / audit / retry (design-only, accepted)
+
+**Docs-only** acceptance. Source: [`docs/SUPPLIER_MESSAGING_AUDIT_RETRY_DESIGN.md`](SUPPLIER_MESSAGING_AUDIT_RETRY_DESIGN.md). **Complements** Y49 + Y50; **adds** **no** new **send** **endpoint** in **this** **checkpoint**.
+
+### Accepted state
+- **What** it **covers** — **admin/operator** **visibility** **requirements** for **messaging** **outcomes**; **audit** **hardening** ( **who** / **when** / **endpoint** / **target** / **result** / **failure** **reason** ); **retry** **principles** as **pattern**+**safety** only.
+- **Retry** **stance** — **no** **automatic** **retries**; **no** **hidden** **retry** **on** **read** (e.g. **GET** must **not** **re**-**invoke** **send**); **manual** or **actionable** **retry** / **re-send** **only** **after** a **future** **explicit** **product**+**code** **gate** (separate from **Y51**); **Y38** / **Y45** / **Y47** / **Y48** / **Y50** **trigger** **rules** **unchanged** **in** **meaning**.
+- **Y50** **remains** the **sole** **Telegram** **send** path **(until** a **separate** **gate** **adds** **channels** / **ops**); **Y51** does **not** add **RFQ** / **booking** / **Mini** **App** / **execution** **links** / **identity** **bridge** / **customer** **notifications**.
+
+### Next safe step
+- **Y52** — **implement** **read** + **audit** **visibility** **only** ( **DTOs** / **persistence** **gaps** **per** **Y51** **§5** as **scoped** ) — **not** a **new** **retry** **or** **re-send** **execution** path **in** the **same** **unscoped** **slice**.
 
 ---
 
