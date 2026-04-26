@@ -35,7 +35,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Y41 (design, canonical):** **`docs/SUPPLIER_EXECUTION_DATA_CONTRACT.md`** — **logical** **execution request** + **attempt** + **result/audit** field lists; **status** set for requests; `operator_workflow_intent` **snapshot** on request, **not** live trigger, **not** primary execution state. **No** migrations/models in Y41. Forbids coupling to **orders**/**payments**/**bookings**, **Mini App**, **execution links**, **identity bridge**, **customer** notifications. **Cites** Y38–Y40.
 - **Y42 (design, canonical):** **`docs/SUPPLIER_EXECUTION_PERMISSION_AUDIT_GATE.md`** — who may **initiate** execution; **intent record** **≠** **execution** permission; **audit** and **fail-closed** rules; **no** **hidden** **DB** triggers. **No** `app/`. **Cites** Y38–Y41.
 - **Y43 (runtime, persistence-only):** migration **`20260502_21`**, `supplier_execution_requests` + `supplier_execution_attempts`, ORM + `app/repositories/supplier_execution.py` validation. **No** **API**/**workers**/**messaging**; `operator_workflow_intent` **snapshot** only. **Cites** Y38–Y42.
-- **Y45 (design, accepted):** **`docs/SUPPLIER_EXECUTION_TRIGGER_DESIGN.md`** — **first** **trigger** = **admin** **explicit** **only**; **creates**/**validates** **`supplier_execution_request`** **only**; **does** **not** **contact** suppliers; **does** **not** **create** **`supplier_execution_attempt`** rows in this design slice; **preserves** **Y38**–**Y42**. **Y46** (runtime): **safe** **admin** **trigger** implemented — **`POST /admin/supplier-execution-requests`**. **Y47 (design, accepted):** **`docs/SUPPLIER_EXECUTION_ATTEMPT_DESIGN.md`** — **request** **≠** **attempt**; **attempts** **not** **created** **by** **Y46** **trigger**; **not** **automatic**; **separate** **explicit** **step**; **no** **messaging**/**API**/**workers**/RFQ/booking/**Mini** **App**/**links**/**bridge**/**notifications** in this **design**. **Next** **safe** **step:** **Y48** — **safe** **attempt** **row** **creation** (still **no** **outbound** **messaging**).
+- **Y45 (design, accepted):** **`docs/SUPPLIER_EXECUTION_TRIGGER_DESIGN.md`** — **first** **trigger** = **admin** **explicit** **only**; **creates**/**validates** **`supplier_execution_request`** **only**; **does** **not** **contact** suppliers; **does** **not** **create** **`supplier_execution_attempt`** rows in this design slice; **preserves** **Y38**–**Y42**. **Y46** (runtime): **safe** **admin** **trigger** implemented — **`POST /admin/supplier-execution-requests`**. **Y47 (design, accepted):** **`docs/SUPPLIER_EXECUTION_ATTEMPT_DESIGN.md`** — **request** **≠** **attempt**; **attempts** **not** **created** **by** **Y46** **trigger**; **not** **automatic**; **separate** **explicit** **step**; **no** **messaging**/**API**/**workers**/RFQ/booking/**Mini** **App**/**links**/**bridge**/**notifications** in this **design**. **Y48 (runtime):** **`POST` …/supplier-execution-requests/{id}/attempts`**, **no** **outbound** **messaging** in that **handler** **(pending** + **channel** **none**)**. **Y49 (design, accepted):** **`docs/SUPPLIER_OUTBOUND_MESSAGING_DESIGN.md`** — **outbound** = **first** **external** **side** **effect**; **only** **in** **execution-attempt**-**tied** **send**; **permission** + **idempotency** + **audit**; **not** on **intent** / **request** **create** / **attempt** **row** **create** **alone**; **preserves** **Y38**–**Y48**; **no** **implementation** in the **doc** **itself**. **Next** **safe** **step:** **Y50** — **single**-**channel**, **idempotent** **messaging** **implementation** ( **controlled** ).
 
 ---
 
@@ -136,7 +136,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Tests:** `tests/unit/test_supplier_execution_persistence.py`. **`POST .../operator-decision`**, **Mini** **App**, **Layer** **A** **tables** unchanged. **no** **customer** **notifications** from this slice.
 
 ### Next safe step
-- **Y45**/**Y46**/**Y44** and **Y47** — see **Checkpoint Sync — Y45** and **Y47** and **`CHAT_HANDOFF`**. **Y48** = **next** (safe **attempt** **creation**).
+- **Y45**–**Y48** and **`CHAT_HANDOFF`**. **Y48** (attempt **create**) **shipped**; **Y49** (outbound **messaging** **design**) **see** **Checkpoint Sync — Y49**.
 
 ---
 
@@ -164,7 +164,23 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - This **design** **does** **not** add: supplier **messaging** **implementation**, **supplier** **HTTP**/**API** **clients**, **workers**, new **RFQ** **automation**, **booking**/**order**/**payment** **mutations**, **Mini** **App** **changes**, **execution** **link** **mutation**, **identity** **bridge** **changes**, **customer**/**supplier** **notifications** **pipelines**. **`operator-decision`** **unchanged** by this **doc** **alone**.
 
 ### Next safe step
-- **Y48** — **safe** **`supplier_execution_attempt`** **creation** in **code** (e.g. **admin**-**gated** **HTTP** or **equivalent**), **still** **without** **outbound** **supplier** **messaging**; **cites** Y38–Y47 and **Y42** **permission**/**audit**.
+- **Y48** **shipped** — see **`CHAT_HANDOFF`**, **Checkpoint Sync — Y48** in **`OPEN_QUESTIONS`** (if **present**), **`docs/HANDOFF_Y48_SAFE_SUPPLIER_EXECUTION_ATTEMPT_CREATION.md`**. **Y49** **outbound** **messaging** **gate** — see **Checkpoint Sync — Y49** below. **Y50** = **messaging** **runtime** ( **single** **channel** ).
+
+---
+
+## Checkpoint Sync — Y49 supplier outbound messaging (design-only, accepted)
+
+**Docs-only** acceptance. Source: [`docs/SUPPLIER_OUTBOUND_MESSAGING_DESIGN.md`](SUPPLIER_OUTBOUND_MESSAGING_DESIGN.md). **No** **`app/`** **sends** in this checkpoint.
+
+### Accepted state
+- **What** it **is** — **outbound** **supplier** **messaging** is the **first** **genuine** **external** **irreversible** **side** **effect** in the **Y38**–**Y48** **line** ( **real** **contact** to **suppliers** / **partner** **channels** ), **not** **DB**-**only** **rows** **alone**.
+- **Where** **allowed** **(design)** — **only** **in** **execution-attempt**-**tied** **outbound** **logic**; **never** **in** **Y45**/**Y46** **trigger**; **never** **in** **request** **creation** **alone**; **never** **in** **Y48** **attempt** **row** **insert** **as** **a** **send** **without** a **further** **explicit** **Y50**+ **entry** **citing** this **doc**.
+- **Required** for **sends** — **explicit** **permission** (Y42), **idempotency** ( **per**-**send** **scope** ), **audit** **trail** ( **correlation** / **outcome** on **`supplier_execution_attempt`** or **policy**-**linked** **storage**).
+- **Must** **not** **fire** from — **`operator_workflow_intent`** ( **vs.** **Y38**), **`operator-decision`**, **request** **create**, **or** **attempt** **create** **alone**; **not** **automatic** / **hidden** **triggers** (Y39, Y47).
+- **Y38**–**Y48** **design**+**shipped** **slices** **preserved**; this **file** does **not** add **RFQ**/**order**/**Mini** **App**/**execution** **links**/**identity**/**default** **customer** **notifications** (see **Y49** **§7**).
+
+### Next safe step
+- **Y50** — **single**-**channel**, **idempotent** **safe** **messaging** **implementation** ( **admin**+ or **service**-**gated** **as** in **Y42** ), **cites** Y38–Y49; **no** **broad** **fan**-**out** **without** **policy**; **separate** **test**+**rollout** **checklist** **recommended**.
 
 ---
 
