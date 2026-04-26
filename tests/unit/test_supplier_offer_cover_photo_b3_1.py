@@ -109,7 +109,7 @@ class B31CoverPhotoIntakeTests(unittest.TestCase):
 
         self._run(body())
 
-    def test_rejects_document_not_photo(self) -> None:
+    def test_rejects_document_not_photo_choosing(self) -> None:
         m = MagicMock()
         m.from_user = MagicMock()
         m.from_user.id = 9_201_103
@@ -122,9 +122,65 @@ class B31CoverPhotoIntakeTests(unittest.TestCase):
         st.last_state = SupplierOfferIntakeState.choosing_cover_media
 
         async def body() -> None:
-            await supplier_offer_intake.intake_cover_reject_unsupported_type(m, st)  # type: ignore[arg-type]
+            await supplier_offer_intake.intake_cover_reject_unsupported_choosing(m, st)  # type: ignore[arg-type]
             self.assertIn("photo", m.answer.call_args[0][0].lower())
             st.last_state = SupplierOfferIntakeState.choosing_cover_media
+
+        self._run(body())
+
+    def test_rejects_document_in_entering_url_state(self) -> None:
+        m = MagicMock()
+        m.from_user = MagicMock()
+        m.from_user.id = 9_201_104
+        m.from_user.language_code = "en"
+        m.text = None
+        m.document = MagicMock()
+        m.photo = None
+        m.answer = AsyncMock()
+        st = _DictFSM()
+        st.last_state = SupplierOfferIntakeState.entering_cover_url
+        st.data = {"cover_intake_path": "url"}
+
+        async def body() -> None:
+            await supplier_offer_intake.intake_cover_reject_unsupported_url_state(m, st)  # type: ignore[arg-type]
+            self.assertIn("photo", m.answer.call_args[0][0].lower())
+            self.assertEqual(st.last_state, SupplierOfferIntakeState.entering_cover_url)
+
+        self._run(body())
+
+    def test_accepts_photo_from_entering_cover_url_state(self) -> None:
+        p = _ps("from_url", w=1000, h=800, fsize=20_000)
+        m = _msg_photo(9_201_105, [p])
+        st = _DictFSM()
+        st.last_state = SupplierOfferIntakeState.entering_cover_url
+        st.data = {"cover_intake_path": "url", "cover_step": "url"}
+
+        async def body() -> None:
+            await supplier_offer_intake.intake_cover_photo_url_state(m, st)  # type: ignore[arg-type]
+            self.assertEqual(st.data.get("cover_step"), "telegram")
+            self.assertTrue(str(st.data.get("cover_media_reference", "")).startswith(SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX + "from_url"))
+            self.assertEqual(st.last_state, SupplierOfferIntakeState.entering_vehicle_or_notes)
+            m.answer.assert_awaited()
+
+        self._run(body())
+
+    def test_paste_https_url_in_entering_cover_url_still_works(self) -> None:
+        m = MagicMock()
+        m.from_user = MagicMock()
+        m.from_user.id = 9_201_106
+        m.from_user.language_code = "en"
+        m.text = "https://example.com/cover.jpg"
+        m.answer = AsyncMock()
+        st = _DictFSM()
+        st.last_state = SupplierOfferIntakeState.entering_cover_url
+        st.data = {"cover_intake_path": "url"}
+
+        async def body() -> None:
+            await supplier_offer_intake.intake_cover_url(m, st)  # type: ignore[arg-type]
+            self.assertEqual(st.data.get("cover_media_reference"), "https://example.com/cover.jpg")
+            self.assertEqual(st.data.get("cover_step"), "url")
+            self.assertEqual(st.data.get("cover_intake_path"), "url")
+            self.assertEqual(st.last_state, SupplierOfferIntakeState.entering_vehicle_or_notes)
 
         self._run(body())
 
@@ -140,7 +196,7 @@ class B31CoverPhotoIntakeTests(unittest.TestCase):
 
     def test_build_create_payload_telegram_media_references(self) -> None:
         from app.models.supplier import Supplier
-        from app.models.enums import SupplierOnboardingStatus, SupplierServiceComposition
+        from app.models.enums import SupplierServiceComposition
 
         sup = MagicMock(spec=Supplier)
         sup.onboarding_service_composition = SupplierServiceComposition.TRANSPORT_ONLY
