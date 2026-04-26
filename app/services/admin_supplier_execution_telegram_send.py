@@ -13,6 +13,7 @@ from app.models.supplier_execution import (
     SupplierExecutionRequest,
 )
 from app.schemas.admin_supplier_execution import AdminSupplierExecutionAttemptRead
+from app.services.admin_supplier_execution_read import build_supplier_execution_attempt_read_bare
 from app.services.telegram_showcase_client import TelegramShowcaseSendError, send_private_text_message
 
 
@@ -90,7 +91,7 @@ def send_supplier_telegram_for_attempt(
     )
     if done is not None:
         session.refresh(att)
-        return AdminSupplierExecutionAttemptRead.model_validate(att), True
+        return build_supplier_execution_attempt_read_bare(session, att), True
 
     if att.status != SupplierExecutionAttemptStatus.PENDING:
         raise AdminTelegramSendAttemptStateError(
@@ -124,7 +125,7 @@ def send_supplier_telegram_for_attempt(
         att.error_message = (desc)[:2000] if desc else "telegram_send_failed"
         att.provider_reference = None
         session.flush()
-        return AdminSupplierExecutionAttemptRead.model_validate(att), False
+        return build_supplier_execution_attempt_read_bare(session, att), False
 
     att.channel_type = SupplierExecutionAttemptChannel.TELEGRAM
     att.target_supplier_ref = str(int(target_telegram_user_id))
@@ -139,4 +140,4 @@ def send_supplier_telegram_for_attempt(
         ),
     )
     session.flush()
-    return AdminSupplierExecutionAttemptRead.model_validate(att), False
+    return build_supplier_execution_attempt_read_bare(session, att), False

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.schemas.admin_supplier_execution import AdminSupplierExecutionAttemptRead
+
 from app.models.enums import (
     SupplierExecutionAttemptChannel,
     SupplierExecutionAttemptStatus,
@@ -11,7 +13,7 @@ from app.models.enums import (
 )
 from app.models.supplier_execution import SupplierExecutionRequest
 from app.repositories import supplier_execution as se_repo
-from app.schemas.admin_supplier_execution import AdminSupplierExecutionAttemptRead
+from app.services.admin_supplier_execution_read import build_supplier_execution_attempt_read_bare
 
 
 _REQUEST_STATUSES_ALLOW_NEW_ATTEMPT: frozenset[SupplierExecutionRequestStatus] = frozenset(
@@ -61,4 +63,4 @@ def create_admin_supplier_execution_attempt(
         status=SupplierExecutionAttemptStatus.PENDING,
     )
     se_repo.add_execution_attempt(session, att)
-    return AdminSupplierExecutionAttemptRead.model_validate(att)
+    return build_supplier_execution_attempt_read_bare(session, att)
