@@ -7,6 +7,21 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ---
 
+## Checkpoint Sync — BUSINESS line: supplier offer → tour (B1–B13 design baseline, 2026-04-25)
+
+**Docs-only** acceptance: forward **product** sequence for **supplier offer** intake, **AI** packaging, **admin** moderation, and **bridge** to **Layer A** **Tour** in the Mini App catalog. **V2** track numbering in `docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md` is **historical** delivery context; **B1**–**B13** in the BUSINESS plan is the **authoritative** ordered baseline for this domain.
+
+**Closure note:** **BUSINESS** baseline **+** **B1** are **completed** and **accepted**. Short record: [`docs/HANDOFF_B0_B1_SUPPLIER_OFFER_BUSINESS_BASE_AND_INTAKE_DESIGN.md`](HANDOFF_B0_B1_SUPPLIER_OFFER_BUSINESS_BASE_AND_INTAKE_DESIGN.md).
+
+### Accepted state
+- **Roadmap (B1–B13):** [`docs/SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md) — includes **B1** intake + AI + moderation through **B13** smoke/production validation. **Core rule (accepted):** a **published** supplier offer **becomes** or **attaches** to a **Tour** visible in the Mini App **catalog** **only** via an **explicit** **bridge** (not silent ORM, not AI, not side-effect publication). **Supplier** provides **raw** **facts**; **AI** **draft** **packaging** **only**; **admin** **reviews**/**edits**/**approves**; **only** an **approved** **package** **may** **be** **published**. **AI** **draft-only** invariants: **no** invented **dates**/**prices**/**seats**; **no** **publishing**; **no** **booking**/**order**/**payment**; **no** **silent** **`Tour`** **creation**; **Layer** **A** **unchanged**.
+- **B1 design (accepted):** [`docs/SUPPLIER_OFFER_INTAKE_AI_PACKAGING_MODERATION_DESIGN.md`](SUPPLIER_OFFER_INTAKE_AI_PACKAGING_MODERATION_DESIGN.md) — see above; extended **status** model and **tour** link implementation deferred to **B2**+ / **B9**/**B10**.
+
+### Next safe step (BUSINESS)
+- **B2 — Supplier offer content/data upgrade:** schema, validation, and persistence alignment so **B1** fields and lifecycle states can be implemented without inventing `Tour` or breaking Layer A. See the **B2** row in `SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md` and the “Next steps (implementation order)” in `SUPPLIER_OFFER_INTAKE_AI_PACKAGING_MODERATION_DESIGN.md`.
+
+---
+
 ## Checkpoint Sync — Y37.5 operator decision expansion (2026-04-25)
 
 **Docs-only acceptance** after **Y37.5** (second operator intent), closing the **Y37.4** + **Y37.5** operator **decision** intent chain. **No code, migration, or test changes** in this checkpoint.
