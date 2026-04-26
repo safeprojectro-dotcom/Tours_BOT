@@ -10,11 +10,12 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State
-from aiogram.types import CallbackQuery, KeyboardButton, Message, ReplyKeyboardMarkup
+from aiogram.types import CallbackQuery, KeyboardButton, Message, PhotoSize, ReplyKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.bot.constants import (
     SUPPLIER_OFFER_COVER_NONE,
+    SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX,
     SUPPLIER_OFFER_COVER_URL,
     SUPPLIER_OFFER_NAV_BACK_CALLBACK,
     SUPPLIER_OFFER_NAV_CALLBACK_PREFIX,
@@ -52,6 +53,9 @@ _STRICT_DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?([+
 _CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
 _URL_START_RE = re.compile(r"^https?://", re.IGNORECASE)
 _SKIP = frozenset({"-", "—", "skip", "n/a", "na"})
+# B3.1: minimum cover dimensions (Telegram photo metadata only; we do not download pixels).
+_COVER_MIN_WIDTH = 800
+_COVER_MIN_HEIGHT = 500
 
 
 def _reply_nav_keyboard(language_code: str | None) -> ReplyKeyboardMarkup:
@@ -305,10 +309,21 @@ def _schedule_note(data: dict) -> str:
     return "—"
 
 
-def _cover_display(data: dict) -> str:
+def _cover_display(data: dict, language_code: str | None) -> str:
     if data.get("cover_step") == "none":
-        return "no photo yet (declared)"
-    return str(data.get("cover_media_reference") or "—")
+        return translate(language_code, "supplier_offer_cover_display_none")
+    ref = (data.get("cover_media_reference") or "").strip()
+    if not ref or ref == "—":
+        return "—"
+    if ref.lower().startswith(SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX.lower()):
+        return translate(language_code, "supplier_offer_cover_display_uploaded")
+    if _URL_START_RE.search(ref):
+        return translate(language_code, "supplier_offer_cover_display_url")
+    return ref if len(ref) <= 80 else f"{ref[:77]}…"
+
+
+def _largest_photo_size(photos: list[PhotoSize]) -> PhotoSize:
+    return max(photos, key=lambda p: (p.file_size or 0, (p.width or 0) * (p.height or 0)))
 
 
 def _build_create_payload(supplier: Supplier, data: dict) -> SupplierOfferCreate:
@@ -317,7 +332,19 @@ def _build_create_payload(supplier: Supplier, data: dict) -> SupplierOfferCreate
     cover = (data.get("cover_media_reference") or "").strip() or None
     no_photo = data.get("cover_step") == "none"
     media_refs: list[dict] | None = None
-    if cover:
+    if cover and cover.lower().startswith(SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX.lower()):
+        extra = data.get("cover_media_meta")
+        entry: dict[str, object] = {
+            "role": "cover",
+            "ref": cover,
+            "source": "telegram_photo",
+        }
+        if isinstance(extra, dict):
+            for k, v in extra.items():
+                if v is not None and k not in entry:
+                    entry[k] = v
+        media_refs = [entry]
+    elif cover:
         media_refs = [{"role": "cover", "ref": cover}]
 
     rtype: str | None = None
@@ -902,24 +929,91 @@ async def intake_cover_choice_cb(query: CallbackQuery, state: FSMContext) -> Non
     if await _handle_nav_callback(query, state, lg):
         return
     if query.data == SUPPLIER_OFFER_COVER_URL:
-        await state.update_data(cover_step="url")
+        await state.update_data(cover_step="url", cover_media_reference="", cover_media_meta=None)
         await state.set_state(SupplierOfferIntakeState.entering_cover_url)
         await _prompt_for_state(query.message, state, language_code=lg, state_name="entering_cover_url")
     else:
-        await state.update_data(cover_step="none", cover_media_reference="")
+        await state.update_data(cover_step="none", cover_media_reference="", cover_media_meta=None)
         await state.set_state(SupplierOfferIntakeState.entering_vehicle_or_notes)
         await _prompt_for_state(query.message, state, language_code=lg, state_name="entering_vehicle_or_notes")
     await query.answer()
 
 
-@router.message(SupplierOfferIntakeState.choosing_cover_media)
-async def intake_cover_text_fallback(message: Message, state: FSMContext) -> None:
+@router.message(SupplierOfferIntakeState.choosing_cover_media, F.photo)
+async def intake_cover_photo_choosing(message: Message, state: FSMContext) -> None:
+    """B3.1: one Telegram photo; store file_id in cover_media_reference (no download)."""
+    if message.from_user is None or not message.photo:
+        return
+    lg = await _resolve_language(message.from_user.id, message.from_user.language_code)
+    if await _handle_nav_text(message, state, lg):
+        return
+    if message.media_group_id is not None:
+        await message.answer(translate(lg, "supplier_offer_invalid_cover_album"), reply_markup=_cover_choice_keyboard(lg).as_markup())
+        return
+    largest = _largest_photo_size(message.photo)
+    w, h = largest.width, largest.height
+    if w < _COVER_MIN_WIDTH or h < _COVER_MIN_HEIGHT:
+        await message.answer(
+            translate(
+                lg,
+                "supplier_offer_invalid_cover_too_small",
+                min_w=str(_COVER_MIN_WIDTH),
+                min_h=str(_COVER_MIN_HEIGHT),
+            ),
+            reply_markup=_cover_choice_keyboard(lg).as_markup(),
+        )
+        return
+    ref = f"{SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX}{largest.file_id}"
+    meta: dict[str, object] = {
+        "source": "telegram_photo",
+        "file_id": largest.file_id,
+        "file_unique_id": largest.file_unique_id,
+        "width": w,
+        "height": h,
+    }
+    if largest.file_size is not None:
+        meta["file_size"] = largest.file_size
+    await state.update_data(
+        cover_step="telegram",
+        cover_media_reference=ref,
+        cover_media_meta=meta,
+    )
+    await state.set_state(SupplierOfferIntakeState.entering_vehicle_or_notes)
+    await _prompt_for_state(message, state, language_code=lg, state_name="entering_vehicle_or_notes")
+
+
+@router.message(
+    SupplierOfferIntakeState.choosing_cover_media,
+    F.document | F.video | F.animation | F.audio | F.voice | F.sticker | F.video_note,
+)
+async def intake_cover_reject_unsupported_type(message: Message, state: FSMContext) -> None:
     if message.from_user is None:
         return
     lg = await _resolve_language(message.from_user.id, message.from_user.language_code)
     if await _handle_nav_text(message, state, lg):
         return
+    await message.answer(translate(lg, "supplier_offer_invalid_cover_wrong_type"), reply_markup=_cover_choice_keyboard(lg).as_markup())
+
+
+@router.message(SupplierOfferIntakeState.choosing_cover_media, F.text)
+async def intake_cover_text_choosing(message: Message, state: FSMContext) -> None:
+    if message.from_user is None or not message.text:
+        return
+    lg = await _resolve_language(message.from_user.id, message.from_user.language_code)
+    if await _handle_nav_text(message, state, lg):
+        return
     await message.answer(translate(lg, "supplier_offer_use_buttons_cover"), reply_markup=_cover_choice_keyboard(lg).as_markup())
+
+
+@router.message(SupplierOfferIntakeState.choosing_cover_media)
+async def intake_cover_choose_catchall(message: Message, state: FSMContext) -> None:
+    """Location, contact, or other content types: not a cover photo in this step."""
+    if message.from_user is None or message.text or message.photo:
+        return
+    lg = await _resolve_language(message.from_user.id, message.from_user.language_code)
+    if await _handle_nav_text(message, state, lg):
+        return
+    await message.answer(translate(lg, "supplier_offer_invalid_cover_wrong_type"), reply_markup=_cover_choice_keyboard(lg).as_markup())
 
 
 @router.message(SupplierOfferIntakeState.entering_cover_url)
@@ -933,7 +1027,7 @@ async def intake_cover_url(message: Message, state: FSMContext) -> None:
     if not _URL_START_RE.search(url) or len(url) < 8:
         await message.answer(translate(lg, "supplier_offer_invalid_cover_url"), reply_markup=_reply_nav_keyboard(lg))
         return
-    await state.update_data(cover_media_reference=url, cover_step="url")
+    await state.update_data(cover_media_reference=url, cover_step="url", cover_media_meta=None)
     await state.set_state(SupplierOfferIntakeState.entering_vehicle_or_notes)
     await _prompt_for_state(message, state, language_code=lg, state_name="entering_vehicle_or_notes")
 
@@ -1001,7 +1095,7 @@ async def intake_vehicle_or_notes(message: Message, state: FSMContext) -> None:
     await state.update_data(draft_offer_id=saved.id)
     data2 = {**data, "vehicle_label": vehicle_or_notes, "draft_offer_id": saved.id}
     data2["schedule_note"] = _schedule_note(data2)
-    data2["cover_media_display"] = _cover_display({**data2, "cover_step": data2.get("cover_step")})
+    data2["cover_media_display"] = _cover_display({**data2, "cover_step": data2.get("cover_step")}, lg)
     await state.set_state(SupplierOfferIntakeState.optional_short_hook)
     await message.answer(translate(lg, "supplier_offer_draft_saved", offer_id=str(saved.id)))
     await _prompt_for_state(message, state, language_code=lg, state_name="optional_short_hook")
@@ -1113,7 +1207,7 @@ async def intake_optional_discount_line(message: Message, state: FSMContext) -> 
         session.commit()
     sdata = await state.get_data()
     sdata["schedule_note"] = _schedule_note(sdata)
-    sdata["cover_media_display"] = _cover_display(sdata)
+    sdata["cover_media_display"] = _cover_display(sdata, lg)
     sdata["optional_short_hook"] = sdata.get("optional_short_hook") or "—"
     sdata["optional_marketing"] = sdata.get("optional_marketing") or "—"
     sdata["discount_line"] = message.text.strip() if not _is_skip_text(message.text) and message.text.strip() != "-" else "—"
