@@ -15,8 +15,8 @@ from app.services.packaging_formatting import (
     build_grounding_debug_json,
     build_telegram_post_draft,
     format_date_range_pretty,
+    format_marketing_price_line_ro,
     format_price_for_display,
-    format_route_pretty,
     format_sales_and_payment_pretty,
     format_seats_count,
     parse_snapshot_datetimes,
@@ -41,11 +41,17 @@ class PackagingFactSnapshot:
     departure_iso: str
     return_iso: str
     boarding_places_text: str | None
+    transport_notes: str | None
+    vehicle_label: str | None
     base_price: str | None
     currency: str | None
     seats_total: int
     sales_mode: str
     payment_mode: str
+    discount_code: str | None
+    discount_percent: str | None
+    discount_amount: str | None
+    discount_valid_until_iso: str | None
     cover_media_reference: str | None
     recurrence_type: str | None
     recurrence_rule: str | None
@@ -83,11 +89,19 @@ def _as_snapshot(row: SupplierOffer) -> PackagingFactSnapshot:
         departure_iso=row.departure_datetime.isoformat(),
         return_iso=row.return_datetime.isoformat(),
         boarding_places_text=row.boarding_places_text,
+        transport_notes=row.transport_notes,
+        vehicle_label=row.vehicle_label,
         base_price=str(row.base_price) if row.base_price is not None else None,
         currency=row.currency,
         seats_total=row.seats_total,
         sales_mode=row.sales_mode.value,
         payment_mode=row.payment_mode.value,
+        discount_code=row.discount_code,
+        discount_percent=str(row.discount_percent) if row.discount_percent is not None else None,
+        discount_amount=str(row.discount_amount) if row.discount_amount is not None else None,
+        discount_valid_until_iso=row.discount_valid_until.isoformat()
+        if row.discount_valid_until is not None
+        else None,
         cover_media_reference=row.cover_media_reference,
         recurrence_type=row.recurrence_type,
         recurrence_rule=row.recurrence_rule,
@@ -110,11 +124,17 @@ def build_packaging_user_json_blob(snapshot: PackagingFactSnapshot, existing_mis
                 "departure": snapshot.departure_iso,
                 "return": snapshot.return_iso,
                 "boarding": snapshot.boarding_places_text,
+                "transport_notes": snapshot.transport_notes,
+                "vehicle_label": snapshot.vehicle_label,
                 "base_price": snapshot.base_price,
                 "currency": snapshot.currency,
                 "seats_total": snapshot.seats_total,
                 "sales_mode": snapshot.sales_mode,
                 "payment_mode": snapshot.payment_mode,
+                "discount_code": snapshot.discount_code,
+                "discount_percent": snapshot.discount_percent,
+                "discount_amount": snapshot.discount_amount,
+                "discount_valid_until": snapshot.discount_valid_until_iso,
                 "cover": snapshot.cover_media_reference,
                 "recurrence": snapshot.recurrence_rule,
                 "recurrence_type": snapshot.recurrence_type,
@@ -187,62 +207,62 @@ def build_deterministic_draft(
     if not program_norm:
         program_norm = "[Program details pending — require supplier program_text.]"
 
-    short_hook = _clip(
-        f"{snap.title} — {seats_count} seats" if snap.seats_total > 0 else f"{snap.title} — {seats_count}",
-        500,
+    sm_low = (snap.sales_mode or "").strip().lower()
+    if sm_low == "full_bus":
+        short_hook = _clip(f"{snap.title} — autobuz complet", 500)
+    elif sm_low == "per_seat":
+        short_hook = _clip(f"{snap.title} — tarif per loc", 500)
+    else:
+        short_hook = _clip(f"{snap.title}", 500)
+    m_price = format_marketing_price_line_ro(
+        snap.sales_mode, snap.base_price, snap.currency, missing_placeholder=_MISSING_PRICE
     )
     marketing = _clip(
         f"{snap.title}\n\n{strip_iso_timestamps_for_display(snap.description)}\n\n"
         f"🗓 {date_range}\n"
-        f"💶 {price_line}\n"
-        f"👥 {seats_count} seats (capacity from intake)\n"
+        f"{m_price}\n"
         f"🛂 {format_sales_and_payment_pretty(snap.sales_mode, snap.payment_mode)}\n"
         f"(All facts from supplier snapshot — verify before publish.)",
         10000,
     )
-    route = format_route_pretty(snap.boarding_places_text)
+    common_tg_kwargs: dict[str, Any] = {
+        "title": snap.title,
+        "description": snap.description,
+        "program_text": snap.program_text,
+        "transport_notes": snap.transport_notes,
+        "base_price": snap.base_price,
+        "currency": snap.currency,
+        "sales_mode": snap.sales_mode,
+        "payment_mode": snap.payment_mode,
+        "vehicle_label": snap.vehicle_label,
+        "seats_total": snap.seats_total,
+        "discount_code": snap.discount_code,
+        "discount_percent": snap.discount_percent,
+        "discount_amount": snap.discount_amount,
+        "discount_valid_until_iso": snap.discount_valid_until_iso,
+        "included": snap.included_text,
+        "excluded": snap.excluded_text,
+        "missing_price_placeholder": _MISSING_PRICE,
+    }
     if dts is not None:
         t_post = build_telegram_post_draft(
-            title=snap.title,
-            description=snap.description,
             dep=dep_dt,
             ret=ret_dt,
-            price_line=price_line,
-            seats_line=seats_count,
-            sales_mode=snap.sales_mode,
-            payment_mode=snap.payment_mode,
-            route=route,
-            included=snap.included_text,
-            excluded=snap.excluded_text,
+            **common_tg_kwargs,  # type: ignore[misc]
         )
     else:
-        r_line = f"🚍 Route: {route}\n" if route else ""
-        inc = (snap.included_text or "").strip()
-        exc = (snap.excluded_text or "").strip()
-        extra = ""
-        if inc:
-            extra += f"\n\n✅ Includes: {inc}"
-        if exc:
-            extra += f"\n\n❌ Not included: {exc}"
-        t_post = (
-            f"**{snap.title}**\n\n"
-            f"⚠️ {date_range}\n\n"
-            f"💶 Price: {price_line}\n"
-            f"👥 Seats: {seats_count}\n"
-            f"{r_line}"
-            f"🛂 {format_sales_and_payment_pretty(snap.sales_mode, snap.payment_mode)}\n"
-            f"{_clip(strip_iso_timestamps_for_display(snap.description), 1500)}"
-            f"{extra}"
-        )
+        t_post = build_telegram_post_draft(dep=None, ret=None, **common_tg_kwargs)  # type: ignore[misc]
     brief_p = _clip(program_norm, 1500)
-    mini_line = f"{seats_count} seats" if snap.seats_total > 0 else seats_count
+    mini_line = f"{seats_count} locuri" if snap.seats_total > 0 and sm_low == "full_bus" else "per loc"
     mini_short = _clip(
         f"{snap.title} — {price_line}. {mini_line}. {date_range}.",
         500,
     )
     mini_full = _clip(marketing, 20000)
-    cta1 = "Open details in Mini App (after publication)"
-    cta2 = "Contact operator (no automatic booking in packaging step)"
+    if sm_low == "full_bus":
+        cta1, cta2 = "👉 Rezerva pentru grupul tau", "👉 Cere oferta personalizata"
+    else:
+        cta1, cta2 = "👉 Rezerva locul tau", "👉 Cere oferta personalizata"
     inc = (snap.included_text or "").strip() or None
     exc = (snap.excluded_text or "").strip() or None
     extras: dict[str, Any] = {
@@ -253,14 +273,17 @@ def build_deterministic_draft(
         "cta_variants": [cta1, cta2],
         "image_card_prompt": f"Layout hint: hero for “{snap.title}”. Reuse supplier cover only; B7 may render card.",
         "layout_hint": {
-            "style": "facts_only",
+            "style": "b4_2_marketing_template",
             "price_line_grounded": bool(snap.base_price and snap.currency),
-            "grounding_debug": build_grounding_debug_json(
-                departure_iso=snap.departure_iso,
-                return_iso=snap.return_iso,
-                sales_mode=snap.sales_mode,
-                payment_mode=snap.payment_mode,
-            ),
+            "grounding_debug": {
+                **build_grounding_debug_json(
+                    departure_iso=snap.departure_iso,
+                    return_iso=snap.return_iso,
+                    sales_mode=snap.sales_mode,
+                    payment_mode=snap.payment_mode,
+                ),
+                "boarding_places_text": snap.boarding_places_text,
+            },
         },
         "source": "deterministic",
     }
