@@ -18,6 +18,7 @@ from app.schemas.admin_supplier_execution import (
     AdminSupplierExecutionAttemptRead,
     AdminSupplierExecutionRequestDetailRead,
     AdminSupplierExecutionRequestListRead,
+    AdminSupplierExecutionRetryBody,
     AdminSupplierExecutionSendTelegramBody,
     AdminSupplierExecutionSendTelegramResponse,
     AdminSupplierExecutionTriggerBody,
@@ -29,6 +30,11 @@ from app.services.admin_supplier_execution_attempt_create import (
     create_admin_supplier_execution_attempt,
 )
 from app.services.admin_supplier_execution_read import AdminSupplierExecutionReadService
+from app.services.admin_supplier_execution_retry import (
+    AdminRetryAttemptNotEligibleError,
+    AdminRetryAttemptNotFoundError,
+    create_admin_supplier_execution_retry,
+)
 from app.services.admin_supplier_execution_telegram_send import (
     AdminTelegramSendAttemptNotFoundError,
     AdminTelegramSendAttemptStateError,
@@ -166,6 +172,53 @@ def post_supplier_execution_request_attempt(
         ) from None
     db.commit()
     return attempt
+
+
+@router.post(
+    "/supplier-execution-attempts/{attempt_id}/retry",
+    response_model=AdminSupplierExecutionAttemptRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def post_supplier_execution_attempt_retry(
+    attempt_id: int,
+    db: Session = Depends(get_db),
+    body: AdminSupplierExecutionRetryBody = Body(...),
+    x_admin_actor_telegram_id: str | None = Header(default=None, alias="X-Admin-Actor-Telegram-Id"),
+) -> AdminSupplierExecutionAttemptRead:
+    """Y54: create a new pending attempt linked to a failed prior attempt. Does not send Telegram."""
+    if x_admin_actor_telegram_id is None or not str(x_admin_actor_telegram_id).strip().isdigit():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-Admin-Actor-Telegram-Id header is required (Telegram user id of the actor).",
+        )
+    actor_tg = int(str(x_admin_actor_telegram_id).strip())
+    user = UserRepository().get_by_telegram_user_id(db, telegram_user_id=actor_tg)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No User record for the given X-Admin-Actor-Telegram-Id.",
+        )
+    try:
+        new_attempt = create_admin_supplier_execution_retry(
+            db,
+            original_attempt_id=attempt_id,
+            retry_reason=body.retry_reason,
+            requested_by_user_id=user.id,
+        )
+    except AdminRetryAttemptNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier execution attempt not found.",
+        ) from None
+    except AdminRetryAttemptNotEligibleError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    except AdminAttemptRequestStatusNotAllowedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from None
+    db.commit()
+    return new_attempt
 
 
 def _resolve_send_idempotency_key(

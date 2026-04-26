@@ -79,6 +79,9 @@ def build_execution_attempt(
     error_code: str | None = None,
     error_message: str | None = None,
     created_at: datetime | None = None,
+    retry_from_supplier_execution_attempt_id: int | None = None,
+    retry_reason: str | None = None,
+    retry_requested_by_user_id: int | None = None,
 ) -> SupplierExecutionAttempt:
     if execution_request_id is None or int(execution_request_id) < 1:
         raise ValueError("execution_request_id must be a positive integer")
@@ -96,6 +99,9 @@ def build_execution_attempt(
         error_code=error_code,
         error_message=error_message,
         created_at=created_at,
+        retry_from_supplier_execution_attempt_id=retry_from_supplier_execution_attempt_id,
+        retry_reason=retry_reason,
+        retry_requested_by_user_id=retry_requested_by_user_id,
     )
 
 

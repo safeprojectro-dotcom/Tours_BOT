@@ -69,6 +69,16 @@ class AdminSupplierExecutionAttemptRead(BaseModel):
         default=None,
         description="Which admin send path applied, when Y50 can be inferred (idempotency, telegram channel, or telegram_send_failed).",
     )
+    # Y54: set when this row was created by manual retry (POST .../retry); idempotency keys appear only after Y50 send on this attempt.
+    retry_from_attempt_id: int | None = Field(
+        default=None,
+        description="If present, this attempt was created as a manual retry of the given prior attempt id.",
+    )
+    retry_reason: str | None = Field(default=None, description="Y54: ops reason when retry_from_attempt_id is set.")
+    retry_requested_by_user_id: int | None = Field(
+        default=None,
+        description="Y54: internal users.id of the admin who requested the retry.",
+    )
 
 
 class AdminSupplierExecutionRequestDetailRead(BaseModel):
@@ -147,3 +157,17 @@ class AdminSupplierExecutionSendTelegramBody(BaseModel):
 class AdminSupplierExecutionSendTelegramResponse(BaseModel):
     attempt: AdminSupplierExecutionAttemptRead
     idempotent_replay: bool = False
+
+
+class AdminSupplierExecutionRetryBody(BaseModel):
+    """Y54: payload for `POST /admin/supplier-execution-attempts/{attempt_id}/retry`. No Telegram send in this call."""
+
+    retry_reason: str = Field(..., min_length=1, max_length=4096)
+
+    @field_validator("retry_reason")
+    @classmethod
+    def retry_reason_strip(cls, v: str) -> str:
+        s = v.strip()
+        if not s:
+            raise ValueError("retry_reason must be non-blank")
+        return s

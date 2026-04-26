@@ -115,6 +115,18 @@ class SupplierExecutionAttempt(Base):
     provider_reference: Mapped[str | None] = mapped_column(String(256), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Y54: set only on rows created via POST .../retry (audit link to prior attempt)
+    retry_from_supplier_execution_attempt_id: Mapped[int | None] = mapped_column(
+        ForeignKey("supplier_execution_attempts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    retry_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    retry_requested_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

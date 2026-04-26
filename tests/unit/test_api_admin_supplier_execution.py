@@ -699,3 +699,149 @@ class AdminSupplierExecutionReadRouteTests(FoundationDBTestCase):
         r = self._y50_post_send(attempt_id=a.id, actor_tg=560_106, idempotency="x")
         self.assertEqual(r.status_code, 503)
         get_settings().telegram_bot_token = "y50-test-telegram-token"
+
+    def _y54_post_retry(self, attempt_id: int, *, actor_tg: int, reason: str = "retry after rate limit"):
+        return self.client.post(
+            f"/admin/supplier-execution-attempts/{attempt_id}/retry",
+            headers=_actor_headers(actor_tg),
+            json={"retry_reason": reason},
+        )
+
+    @patch("app.services.admin_supplier_execution_telegram_send.send_private_text_message", return_value=0)
+    def test_y54_retry_401_without_admin(self, mock_send) -> None:
+        r = self.client.post("/admin/supplier-execution-attempts/1/retry", json={"retry_reason": "x"})
+        self.assertEqual(r.status_code, 401)
+        mock_send.assert_not_called()
+
+    @patch("app.services.admin_supplier_execution_telegram_send.send_private_text_message", return_value=0)
+    def test_y54_retry_400_missing_actor(self, mock_send) -> None:
+        u = self.create_user(telegram_user_id=570_001)
+        er = self._add_execution_request(idem="y54-miss-act", user_id=u.id, ent_id=1)
+        att = se_repo.add_execution_attempt(
+            self.session,
+            se_repo.build_execution_attempt(
+                execution_request_id=er.id,
+                attempt_number=1,
+                channel_type=SupplierExecutionAttemptChannel.TELEGRAM,
+                status=SupplierExecutionAttemptStatus.FAILED,
+                error_code="e",
+            ),
+        )
+        self.session.flush()
+        r = self.client.post(
+            f"/admin/supplier-execution-attempts/{att.id}/retry",
+            headers=_ADMIN_HEADERS,
+            json={"retry_reason": "x"},
+        )
+        self.assertEqual(r.status_code, 400)
+        mock_send.assert_not_called()
+
+    @patch("app.services.admin_supplier_execution_telegram_send.send_private_text_message", return_value=0)
+    def test_y54_retry_404_unknown_attempt(self, mock_send) -> None:
+        u = self.create_user(telegram_user_id=570_002)
+        self._add_execution_request(idem="y54-404a", user_id=u.id, ent_id=1)
+        r = self._y54_post_retry(99_999_999, actor_tg=570_002)
+        self.assertEqual(r.status_code, 404)
+        mock_send.assert_not_called()
+
+    @patch("app.services.admin_supplier_execution_telegram_send.send_private_text_message", return_value=0)
+    def test_y54_retry_400_succeeded_not_eligible(self, mock_send) -> None:
+        u = self.create_user(telegram_user_id=570_003)
+        er = self._add_execution_request(idem="y54-succ", user_id=u.id, ent_id=1)
+        att = se_repo.add_execution_attempt(
+            self.session,
+            se_repo.build_execution_attempt(
+                execution_request_id=er.id,
+                attempt_number=1,
+                channel_type=SupplierExecutionAttemptChannel.TELEGRAM,
+                status=SupplierExecutionAttemptStatus.SUCCEEDED,
+                provider_reference="1",
+            ),
+        )
+        self.session.flush()
+        r = self._y54_post_retry(att.id, actor_tg=570_003)
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("failed", r.json()["detail"].lower())
+        mock_send.assert_not_called()
+
+    @patch("app.services.admin_supplier_execution_telegram_send.send_private_text_message", return_value=0)
+    def test_y54_retry_400_pending_not_eligible(self, mock_send) -> None:
+        u = self.create_user(telegram_user_id=570_004)
+        er = self._add_execution_request(idem="y54-pend", user_id=u.id, ent_id=1)
+        att = se_repo.add_execution_attempt(
+            self.session,
+            se_repo.build_execution_attempt(
+                execution_request_id=er.id,
+                attempt_number=1,
+                channel_type=SupplierExecutionAttemptChannel.NONE,
+                status=SupplierExecutionAttemptStatus.PENDING,
+            ),
+        )
+        self.session.flush()
+        r = self._y54_post_retry(att.id, actor_tg=570_004)
+        self.assertEqual(r.status_code, 400)
+        mock_send.assert_not_called()
+
+    @patch("app.services.admin_supplier_execution_telegram_send.send_private_text_message", return_value=0)
+    def test_y54_retry_201_creates_new_pending_with_audit_and_does_not_send(self, mock_send) -> None:
+        u = self.create_user(telegram_user_id=570_005)
+        er = self._add_execution_request(idem="y54-ok", user_id=u.id, ent_id=1)
+        att = se_repo.add_execution_attempt(
+            self.session,
+            se_repo.build_execution_attempt(
+                execution_request_id=er.id,
+                attempt_number=1,
+                channel_type=SupplierExecutionAttemptChannel.TELEGRAM,
+                status=SupplierExecutionAttemptStatus.FAILED,
+                error_code="telegram_send_failed",
+            ),
+        )
+        self.session.flush()
+        orig_err = att.error_code
+        n_before = self._count_attempts()
+        r = self._y54_post_retry(att.id, actor_tg=570_005, reason="Telegram rate limit")
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(self._count_attempts(), n_before + 1)
+        mock_send.assert_not_called()
+        body = r.json()
+        self.assertEqual(body["status"], "pending")
+        self.assertEqual(body["channel_type"], "none")
+        self.assertEqual(body["attempt_number"], 2)
+        self.assertEqual(body["execution_request_id"], er.id)
+        self.assertEqual(body["retry_from_attempt_id"], att.id)
+        self.assertEqual(body["retry_reason"], "Telegram rate limit")
+        self.assertEqual(body["retry_requested_by_user_id"], u.id)
+        self.assertEqual(body.get("telegram_idempotency", []), [])
+        self.session.refresh(att)
+        self.assertEqual(att.status, SupplierExecutionAttemptStatus.FAILED)
+        self.assertEqual(att.error_code, orig_err)
+        new_id = body["id"]
+        new = self.session.get(SupplierExecutionAttempt, new_id)
+        self.assertIsNotNone(new)
+        self.assertEqual(new.retry_from_supplier_execution_attempt_id, att.id)
+        self.assertEqual(new.retry_reason, "Telegram rate limit")
+        self.assertEqual(new.retry_requested_by_user_id, u.id)
+
+    @patch("app.services.admin_supplier_execution_telegram_send.send_private_text_message", return_value=0)
+    def test_y54_retry_400_when_parent_request_blocked(self, mock_send) -> None:
+        u = self.create_user(telegram_user_id=570_006)
+        er = self._add_execution_request(
+            idem="y54-blocked-retry",
+            user_id=u.id,
+            ent_id=1,
+            status=SupplierExecutionRequestStatus.BLOCKED,
+        )
+        att = se_repo.add_execution_attempt(
+            self.session,
+            se_repo.build_execution_attempt(
+                execution_request_id=er.id,
+                attempt_number=1,
+                channel_type=SupplierExecutionAttemptChannel.TELEGRAM,
+                status=SupplierExecutionAttemptStatus.FAILED,
+            ),
+        )
+        self.session.flush()
+        r = self._y54_post_retry(att.id, actor_tg=570_006)
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("blocked", r.json()["detail"].lower())
+        mock_send.assert_not_called()

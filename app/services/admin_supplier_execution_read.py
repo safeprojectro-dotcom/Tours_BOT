@@ -66,6 +66,9 @@ def build_supplier_execution_attempt_read(
         telegram_idempotency=krs,
         has_telegram_send_idempotency=len(krs) > 0,
         outbound_telegram_operation=_outbound_telegram_operation(att, idem),
+        retry_from_attempt_id=att.retry_from_supplier_execution_attempt_id,
+        retry_reason=att.retry_reason,
+        retry_requested_by_user_id=att.retry_requested_by_user_id,
     )
 
 
