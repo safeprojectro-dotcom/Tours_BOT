@@ -74,6 +74,11 @@ class AdminSupplierOfferRead(SupplierOfferRead):
     quality_warnings_json: list[Any] | dict[str, Any] | None = None
     # B4: extended draft (Telegram post, CTA, Mini App long text, image hints). Not exposed on supplier-admin API.
     packaging_draft_json: list[Any] | dict[str, Any] | None = None
+    # B5: last packaging review (orthogonal to offer lifecycle; approve != publish)
+    packaging_reviewed_at: datetime | None = None
+    packaging_reviewed_by: str | None = None
+    packaging_rejection_reason: str | None = None
+    clarification_reason: str | None = None
 
 
 class SupplierOfferListRead(BaseModel):
@@ -325,3 +330,52 @@ class SupplierOfferUpdate(BaseModel):
         if vf is not None and vu is not None and vu < vf:
             raise ValueError("valid_until must not be before valid_from")
         return self
+
+
+class AdminPackagingApproveBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    accept_warnings: bool = False
+    reviewed_by: str | None = Field(default=None, max_length=256)
+
+    @field_validator("reviewed_by")
+    @classmethod
+    def strip_reviewer(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s or None
+
+
+class AdminPackagingReasonBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=4000)
+    reviewed_by: str | None = Field(default=None, max_length=256)
+
+    @field_validator("reason")
+    @classmethod
+    def strip_reason(cls, v: str) -> str:
+        s = v.strip()
+        if not s:
+            raise ValueError("reason must not be empty")
+        return s
+
+    @field_validator("reviewed_by")
+    @classmethod
+    def strip_reviewer2(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s or None
+
+
+class AdminPackagingTelegramDraftPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    telegram_post_draft: str = Field(min_length=1, max_length=20000)
+
+    @field_validator("telegram_post_draft")
+    @classmethod
+    def strip_tg(cls, v: str) -> str:
+        return v.rstrip() if v else v

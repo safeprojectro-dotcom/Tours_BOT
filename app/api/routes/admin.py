@@ -85,6 +85,11 @@ from app.services.supplier_offer_packaging_service import (
     SupplierOfferPackagingNotFoundError,
     SupplierOfferPackagingService,
 )
+from app.services.supplier_offer_packaging_review_service import (
+    SupplierOfferPackagingReviewNotFoundError,
+    SupplierOfferPackagingReviewService,
+    SupplierOfferPackagingReviewStateError,
+)
 from app.repositories.user import UserRepository
 from app.services.custom_marketplace_request_service import (
     CustomMarketplaceRequestAssignConflictError,
@@ -115,6 +120,9 @@ from app.schemas.custom_marketplace import (
     CustomRequestBookingBridgeRead,
 )
 from app.schemas.supplier_admin import (
+    AdminPackagingApproveBody,
+    AdminPackagingReasonBody,
+    AdminPackagingTelegramDraftPatch,
     AdminSupplierOfferExecutionLinkBody,
     AdminSupplierOfferExecutionLinkCloseBody,
     AdminSupplierOfferListRead,
@@ -1031,6 +1039,93 @@ def post_supplier_offer_packaging_generate(offer_id: int, db: Session = Depends(
         return SupplierOfferPackagingService().generate_and_persist(db, offer_id=offer_id)
     except SupplierOfferPackagingNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+
+
+@router.get("/supplier-offers/{offer_id}/packaging/review", response_model=AdminSupplierOfferRead)
+def get_supplier_offer_packaging_review(offer_id: int, db: Session = Depends(get_db)) -> AdminSupplierOfferRead:
+    """B5: review detail (raw offer + packaging fields). Does not publish or notify Telegram."""
+    try:
+        return SupplierOfferPackagingReviewService().get_review(db, offer_id=offer_id)
+    except SupplierOfferPackagingReviewNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+
+
+@router.post("/supplier-offers/{offer_id}/packaging/approve", response_model=AdminSupplierOfferRead)
+def post_supplier_offer_packaging_approve(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    body: AdminPackagingApproveBody = Body(...),
+) -> AdminSupplierOfferRead:
+    """B5: approve packaging draft (not channel publish, not Tour)."""
+    try:
+        out = SupplierOfferPackagingReviewService().approve(
+            db,
+            offer_id=offer_id,
+            accept_warnings=body.accept_warnings,
+            reviewed_by=body.reviewed_by,
+        )
+        db.commit()
+        return out
+    except SupplierOfferPackagingReviewNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    except SupplierOfferPackagingReviewStateError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+
+
+@router.post("/supplier-offers/{offer_id}/packaging/reject", response_model=AdminSupplierOfferRead)
+def post_supplier_offer_packaging_reject(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    body: AdminPackagingReasonBody = Body(...),
+) -> AdminSupplierOfferRead:
+    try:
+        out = SupplierOfferPackagingReviewService().reject(
+            db, offer_id=offer_id, reason=body.reason, reviewed_by=body.reviewed_by
+        )
+        db.commit()
+        return out
+    except SupplierOfferPackagingReviewNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+
+
+@router.post("/supplier-offers/{offer_id}/packaging/request-clarification", response_model=AdminSupplierOfferRead)
+def post_supplier_offer_packaging_request_clarification(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    body: AdminPackagingReasonBody = Body(...),
+) -> AdminSupplierOfferRead:
+    try:
+        out = SupplierOfferPackagingReviewService().request_clarification(
+            db, offer_id=offer_id, reason=body.reason, reviewed_by=body.reviewed_by
+        )
+        db.commit()
+        return out
+    except SupplierOfferPackagingReviewNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+
+
+@router.patch("/supplier-offers/{offer_id}/packaging/draft", response_model=AdminSupplierOfferRead)
+def patch_supplier_offer_packaging_draft(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    body: AdminPackagingTelegramDraftPatch = Body(...),
+) -> AdminSupplierOfferRead:
+    try:
+        out = SupplierOfferPackagingReviewService().patch_telegram_draft(
+            db, offer_id=offer_id, telegram_post_draft=body.telegram_post_draft
+        )
+        db.commit()
+        return out
+    except SupplierOfferPackagingReviewNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    except SupplierOfferPackagingReviewStateError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
 
 
 @router.post("/supplier-offers/{offer_id}/moderation/approve", response_model=AdminSupplierOfferRead)

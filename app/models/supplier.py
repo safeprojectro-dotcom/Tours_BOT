@@ -173,6 +173,11 @@ class SupplierOffer(TimestampMixin, Base):
     quality_warnings_json: Mapped[list | dict | None] = mapped_column(JSONB, nullable=True)
     # B4: AI/deterministic packaging extras (Telegram post draft, CTA list, Mini App bodies, layout hints). Admin read only.
     packaging_draft_json: Mapped[dict | list | None] = mapped_column(JSONB, nullable=True)
+    # B5: packaging review audit (not lifecycle / not publish)
+    packaging_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    packaging_reviewed_by: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    packaging_rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    clarification_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     supplier: Mapped["Supplier"] = relationship(back_populates="offers")
     execution_links: Mapped[list["SupplierOfferExecutionLink"]] = relationship(

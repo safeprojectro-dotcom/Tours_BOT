@@ -85,13 +85,15 @@ class SupplierOfferLifecycle(StrEnum):
 
 
 class SupplierOfferPackagingStatus(StrEnum):
-    """B2: AI / admin packaging sub-state (orthogonal to :class:`SupplierOfferLifecycle`). Stored for future B4/B5."""
+    """B2: AI / admin packaging sub-state (orthogonal to :class:`SupplierOfferLifecycle`). B5 adds review terminal states."""
 
     NONE = "none"
     PACKAGING_PENDING = "packaging_pending"
     PACKAGING_GENERATED = "packaging_generated"
     NEEDS_ADMIN_REVIEW = "needs_admin_review"
     APPROVED_FOR_PUBLISH = "approved_for_publish"
+    PACKAGING_REJECTED = "packaging_rejected"
+    CLARIFICATION_REQUESTED = "clarification_requested"
 
 
 class SupplierLegalEntityType(StrEnum):
