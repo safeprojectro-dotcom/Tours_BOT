@@ -125,3 +125,33 @@ class SupplierExecutionAttempt(Base):
         "SupplierExecutionRequest",
         back_populates="attempts",
     )
+
+
+class SupplierExecutionAttemptTelegramIdempotency(Base):
+    """Y50: one row per successful (attempt_id, idempotency_key) to block duplicate Telegram sends on replay."""
+
+    __tablename__ = "supplier_execution_attempt_telegram_idempotency"
+    __table_args__ = (
+        UniqueConstraint(
+            "supplier_execution_attempt_id",
+            "idempotency_key",
+            name="uq_ser_tg_idem_attempt_key",
+        ),
+        CheckConstraint(
+            "char_length(btrim(idempotency_key::text)) > 0",
+            name="ck_ser_tg_idem_key_nonempty",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    supplier_execution_attempt_id: Mapped[int] = mapped_column(
+        ForeignKey("supplier_execution_attempts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )

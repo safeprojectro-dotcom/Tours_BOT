@@ -12,7 +12,11 @@ from app.models.payment import Payment
 from app.models.tour import BoardingPoint, BoardingPointTranslation, Tour, TourTranslation
 from app.models.user import User
 from app.models.supplier import Supplier, SupplierApiCredential, SupplierOffer, SupplierOfferExecutionLink
-from app.models.supplier_execution import SupplierExecutionAttempt, SupplierExecutionRequest
+from app.models.supplier_execution import (
+    SupplierExecutionAttempt,
+    SupplierExecutionAttemptTelegramIdempotency,
+    SupplierExecutionRequest,
+)
 from app.models.waitlist import WaitlistEntry
 
 __all__ = [
@@ -31,6 +35,7 @@ __all__ = [
     "SupplierApiCredential",
     "SupplierCustomRequestResponse",
     "SupplierExecutionAttempt",
+    "SupplierExecutionAttemptTelegramIdempotency",
     "SupplierExecutionRequest",
     "SupplierOffer",
     "SupplierOfferExecutionLink",

@@ -1,8 +1,9 @@
-"""Y44 admin read; Y46 safe admin trigger POST (no supplier contact, no attempt rows from trigger)."""
+"""Y44 admin read; Y46 safe admin trigger POST (no supplier contact, no attempt rows from trigger). Y50 send-telegram."""
 
 from __future__ import annotations
 
 from datetime import date
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy import event, func, select
@@ -25,6 +26,7 @@ from app.models.enums import (
     SupplierExecutionSourceEntryPoint,
 )
 from app.repositories import supplier_execution as se_repo
+from app.services.telegram_showcase_client import TelegramShowcaseSendError
 from tests.unit.base import FoundationDBTestCase
 
 _ADMIN_HEADERS = {"Authorization": "Bearer test-admin-secret"}
@@ -51,7 +53,9 @@ class AdminSupplierExecutionReadRouteTests(FoundationDBTestCase):
         self._restart_savepoint = restart_savepoint
         self.app = create_app()
         self._original_admin = get_settings().admin_api_token
+        self._original_bot_token = get_settings().telegram_bot_token
         get_settings().admin_api_token = "test-admin-secret"
+        get_settings().telegram_bot_token = "y50-test-telegram-token"
 
         def override_get_db():
             yield self.session
@@ -63,6 +67,7 @@ class AdminSupplierExecutionReadRouteTests(FoundationDBTestCase):
         self.client.close()
         self.app.dependency_overrides.clear()
         get_settings().admin_api_token = self._original_admin
+        get_settings().telegram_bot_token = self._original_bot_token
         event.remove(self.session, "after_transaction_end", self._restart_savepoint)
         super().tearDown()
 
@@ -440,3 +445,196 @@ class AdminSupplierExecutionReadRouteTests(FoundationDBTestCase):
         )
         self.assertEqual(r.status_code, 503)
         get_settings().admin_api_token = "test-admin-secret"
+
+    def _y50_post_send(
+        self,
+        *,
+        attempt_id: int,
+        actor_tg: int,
+        idempotency: str = "y50-k",
+        text: str = "Hello supplier",
+        target: int = 88_001,
+    ):
+        return self.client.post(
+            f"/admin/supplier-execution-attempts/{attempt_id}/send-telegram",
+            headers=_actor_headers(actor_tg),
+            json={
+                "idempotency_key": idempotency,
+                "message_text": text,
+                "target_telegram_user_id": target,
+            },
+        )
+
+    @patch("app.services.admin_supplier_execution_telegram_send.send_private_text_message", return_value=42_001)
+    def test_y50_send_401_without_admin(self, _mock) -> None:
+        r = self.client.post(
+            "/admin/supplier-execution-attempts/1/send-telegram",
+            json={"idempotency_key": "a", "message_text": "m", "target_telegram_user_id": 1},
+        )
+        self.assertEqual(r.status_code, 401)
+
+    def test_y50_send_400_missing_idempotency(self) -> None:
+        u = self.create_user(telegram_user_id=560_100)
+        er = self._add_execution_request(idem="y50-mi", user_id=u.id, ent_id=1)
+        att = se_repo.add_execution_attempt(
+            self.session,
+            se_repo.build_execution_attempt(
+                execution_request_id=er.id,
+                attempt_number=1,
+                channel_type=SupplierExecutionAttemptChannel.NONE,
+                status=SupplierExecutionAttemptStatus.PENDING,
+            ),
+        )
+        self.session.flush()
+        r = self.client.post(
+            f"/admin/supplier-execution-attempts/{att.id}/send-telegram",
+            headers=_actor_headers(560_100),
+            json={"message_text": "x", "target_telegram_user_id": 1},
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("idempotency", r.json()["detail"].lower())
+
+    @patch("app.services.admin_supplier_execution_telegram_send.send_private_text_message", return_value=1)
+    def test_y50_send_404_unknown_attempt(self, _mock) -> None:
+        u = self.create_user(telegram_user_id=560_101)
+        self._add_execution_request(idem="y50-404r", user_id=u.id, ent_id=1)
+        r = self._y50_post_send(attempt_id=99_999_999, actor_tg=560_101)
+        self.assertEqual(r.status_code, 404)
+
+    @patch("app.services.admin_supplier_execution_telegram_send.send_private_text_message", return_value=1)
+    def test_y50_send_400_non_pending_attempt(self, _mock) -> None:
+        u = self.create_user(telegram_user_id=560_102)
+        er = self._add_execution_request(idem="y50-skip", user_id=u.id, ent_id=1)
+        att = se_repo.add_execution_attempt(
+            self.session,
+            se_repo.build_execution_attempt(
+                execution_request_id=er.id,
+                attempt_number=1,
+                channel_type=SupplierExecutionAttemptChannel.NONE,
+                status=SupplierExecutionAttemptStatus.SKIPPED,
+            ),
+        )
+        self.session.flush()
+        r = self._y50_post_send(attempt_id=att.id, actor_tg=560_102)
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("pending", r.json()["detail"].lower())
+        _mock.assert_not_called()  # type: ignore[attr-defined]
+
+    @patch("app.services.admin_supplier_execution_telegram_send.send_private_text_message", return_value=42_001)
+    def test_y50_send_201_success_and_stores_provider_ref(self, mock_send) -> None:
+        u = self.create_user(telegram_user_id=560_103)
+        er = self._add_execution_request(idem="y50-ok", user_id=u.id, ent_id=1)
+        a = se_repo.add_execution_attempt(
+            self.session,
+            se_repo.build_execution_attempt(
+                execution_request_id=er.id,
+                attempt_number=1,
+                channel_type=SupplierExecutionAttemptChannel.NONE,
+                status=SupplierExecutionAttemptStatus.PENDING,
+            ),
+        )
+        self.session.flush()
+        r = self._y50_post_send(attempt_id=a.id, actor_tg=560_103, idempotency="y50-idem-1", target=77_123)
+        self.assertEqual(r.status_code, 201)
+        body = r.json()
+        self.assertFalse(body.get("idempotent_replay", True))
+        at = body["attempt"]
+        self.assertEqual(at["status"], "succeeded")
+        self.assertEqual(at["channel_type"], "telegram")
+        self.assertEqual(at["provider_reference"], "42001")
+        self.assertEqual(at["target_supplier_ref"], "77123")
+        mock_send.assert_called_once()
+        self.session.refresh(a)
+        self.assertEqual(a.status, SupplierExecutionAttemptStatus.SUCCEEDED)
+        self.assertEqual(a.provider_reference, "42001")
+
+    @patch(
+        "app.services.admin_supplier_execution_telegram_send.send_private_text_message",
+        side_effect=TelegramShowcaseSendError("telegram failed", telegram_description="bot blocked"),
+    )
+    def test_y50_send_failure_marks_failed_and_stores_error(self, mock_send) -> None:
+        u = self.create_user(telegram_user_id=560_104)
+        er = self._add_execution_request(idem="y50-fail", user_id=u.id, ent_id=1)
+        a = se_repo.add_execution_attempt(
+            self.session,
+            se_repo.build_execution_attempt(
+                execution_request_id=er.id,
+                attempt_number=1,
+                channel_type=SupplierExecutionAttemptChannel.NONE,
+                status=SupplierExecutionAttemptStatus.PENDING,
+            ),
+        )
+        self.session.flush()
+        r = self._y50_post_send(attempt_id=a.id, actor_tg=560_104, idempotency="y50-fail-1")
+        self.assertEqual(r.status_code, 200)
+        at = r.json()["attempt"]
+        self.assertEqual(at["status"], "failed")
+        self.assertEqual(at["error_code"], "telegram_send_failed")
+        self.assertIn("blocked", (at.get("error_message") or ""))
+        mock_send.assert_called_once()
+        self.session.refresh(a)
+        self.assertEqual(a.status, SupplierExecutionAttemptStatus.FAILED)
+
+    @patch("app.services.admin_supplier_execution_telegram_send.send_private_text_message", return_value=99)
+    def test_y50_idempotent_replay_no_second_send(self, mock_send) -> None:
+        u = self.create_user(telegram_user_id=560_105)
+        er = self._add_execution_request(idem="y50-id2", user_id=u.id, ent_id=1)
+        a = se_repo.add_execution_attempt(
+            self.session,
+            se_repo.build_execution_attempt(
+                execution_request_id=er.id,
+                attempt_number=1,
+                channel_type=SupplierExecutionAttemptChannel.NONE,
+                status=SupplierExecutionAttemptStatus.PENDING,
+            ),
+        )
+        self.session.flush()
+        r1 = self._y50_post_send(attempt_id=a.id, actor_tg=560_105, idempotency="idem-same", target=55_001)
+        self.assertEqual(r1.status_code, 201)
+        self.assertEqual(mock_send.call_count, 1)
+        r2 = self._y50_post_send(attempt_id=a.id, actor_tg=560_105, idempotency="idem-same", target=55_001)
+        self.assertEqual(r2.status_code, 200)
+        self.assertTrue(r2.json().get("idempotent_replay", False))
+        self.assertEqual(mock_send.call_count, 1)
+        self.assertEqual(r1.json()["attempt"]["id"], r2.json()["attempt"]["id"])
+        self.assertEqual(r1.json()["attempt"]["provider_reference"], r2.json()["attempt"]["provider_reference"])
+
+    @patch("app.services.admin_supplier_execution_telegram_send.send_private_text_message", return_value=0)
+    def test_y50_request_and_attempt_creation_do_not_call_telegram(self, mock_send) -> None:
+        cmr = self._make_cmr(user_tg=560_201, intent=OperatorWorkflowIntent.NEED_MANUAL_FOLLOWUP)
+        r1 = self.client.post(
+            "/admin/supplier-execution-requests",
+            headers=_actor_headers(560_201),
+            json={
+                "idempotency_key": "y50-nosend-r",
+                "source_entity_type": "custom_marketplace_request",
+                "source_entity_id": cmr.id,
+            },
+        )
+        self.assertEqual(r1.status_code, 201)
+        er_id = r1.json()["request"]["id"]
+        r2 = self.client.post(
+            f"/admin/supplier-execution-requests/{er_id}/attempts",
+            headers=_actor_headers(560_201),
+        )
+        self.assertEqual(r2.status_code, 201)
+        mock_send.assert_not_called()
+
+    @patch("app.services.admin_supplier_execution_telegram_send.send_private_text_message", return_value=0)
+    def test_y50_503_no_bot_token(self, _mock) -> None:
+        u = self.create_user(telegram_user_id=560_106)
+        er = self._add_execution_request(idem="y50-503b", user_id=u.id, ent_id=1)
+        a = se_repo.add_execution_attempt(
+            self.session,
+            se_repo.build_execution_attempt(
+                execution_request_id=er.id,
+                attempt_number=1,
+                channel_type=SupplierExecutionAttemptChannel.NONE,
+                status=SupplierExecutionAttemptStatus.PENDING,
+            ),
+        )
+        self.session.flush()
+        get_settings().telegram_bot_token = None
+        r = self._y50_post_send(attempt_id=a.id, actor_tg=560_106, idempotency="x")
+        self.assertEqual(r.status_code, 503)
+        get_settings().telegram_bot_token = "y50-test-telegram-token"

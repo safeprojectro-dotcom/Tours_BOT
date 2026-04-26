@@ -87,3 +87,39 @@ class AdminSupplierExecutionTriggerBody(BaseModel):
 class AdminSupplierExecutionTriggerResponse(BaseModel):
     request: AdminSupplierExecutionRequestDetailRead
     idempotent_replay: bool = False
+
+
+class AdminSupplierExecutionSendTelegramBody(BaseModel):
+    """Y50: payload for `POST /admin/supplier-execution-attempts/{id}/send-telegram`. Idempotency from header or body."""
+
+    idempotency_key: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=128,
+        description="If `Idempotency-Key` / `X-Idempotency-Key` is absent, this field is required.",
+    )
+    message_text: str = Field(..., min_length=1, max_length=4096)
+    target_telegram_user_id: int = Field(..., ge=1)
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def idempotency_strip(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        if not s:
+            return None
+        return s
+
+    @field_validator("message_text")
+    @classmethod
+    def text_strip(cls, v: str) -> str:
+        s = v.strip()
+        if not s:
+            raise ValueError("message_text must be non-blank")
+        return s
+
+
+class AdminSupplierExecutionSendTelegramResponse(BaseModel):
+    attempt: AdminSupplierExecutionAttemptRead
+    idempotent_replay: bool = False
