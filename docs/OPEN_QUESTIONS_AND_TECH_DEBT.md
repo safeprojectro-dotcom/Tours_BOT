@@ -19,7 +19,25 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **B2 (implementation, completed):** same **BUSINESS** **rule** **set**; **see** **closure** **note** and [`HANDOFF_B2_SUPPLIER_OFFER_CONTENT_DATA_UPGRADE.md`](HANDOFF_B2_SUPPLIER_OFFER_CONTENT_DATA_UPGRADE.md).
 
 ### Next safe step (BUSINESS)
-- **B3 — Supplier dialog upgrade:** Telegram **/supplier_offer** (and related) **intake** **FSM/UX** **—** **step**-**by**-**step**, **one** **question** **at** **a** **time**, **validation** **and** **`ready_for_moderation`** **criteria** per **B1** **§3**, **wiring** **to** **B2** **fields** **where** **product** **chooses** **(no** **Layer** **A,** **no** **publish** **logic** **change,** **no** **AI** **)**. **Source:** **B1** design **§3**; **BUSINESS** plan **B3** **row** in [`SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md).
+- **B3 — Supplier dialog upgrade** *(historical baseline; if that slice is already implemented in your branch, use the B7 line below for media/card).*: Telegram **/supplier_offer** (and related) **intake** **FSM/UX** **—** **step**-**by**-**step**, **one** **question** **at** **a** **time**, **validation** **and** **`ready_for_moderation`** **criteria** per **B1** **§3**, **wiring** **to** **B2** **fields** **where** **product** **chooses** **(no** **Layer** **A,** **no** **publish** **logic** **change,** **no** **AI** **)**. **Source:** **B1** design **§3**; **BUSINESS** plan **B3** **row** in [`SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md).
+- **B7.1 (photo & card, post-B6):** **media** **review** **metadata** **+** **admin** **visual** **decision** **API** **—** **after** **B7** **design** **acceptance;** see [`docs/SUPPLIER_OFFER_PHOTO_MODERATION_CARD_GENERATION_DESIGN.md`](SUPPLIER_OFFER_PHOTO_MODERATION_CARD_GENERATION_DESIGN.md) **§8.**
+
+---
+
+## Checkpoint Sync — B7 photo moderation & card generation (design only, 2026-04-25)
+
+**Docs-only** checkpoint: **no** `app/`, **no** **migrations**, **no** **Telegram** **`getFile`**, **no** **image** **download**/**generation**/**channel** **publish** in this gate.
+
+### Accepted state
+- **B7** **design** **doc** **(canonical):** [`docs/SUPPLIER_OFFER_PHOTO_MODERATION_CARD_GENERATION_DESIGN.md`](SUPPLIER_OFFER_PHOTO_MODERATION_CARD_GENERATION_DESIGN.md) — **photo** **state** **machine,** **media** **source** **rules,** **quality** **bar,** **card** **layout** **model,** **admin** **flows,** **JSON** **vs** **table** **tradeoffs,** **safety** **invariants,** **B7.1**–**B7.3** **slices.**
+- **Depends** **on** **B6** **(branded** **`branded_telegram_preview`**, **cover** **refs,** **warnings).** B7 **does** **not** **change** **B5/B6** **“approve** **≠** **publish”** **semantics.**
+
+### Next safe implementation
+- **B7.1** — **Persist** **media** **review** **metadata;** **admin** **API** **to** **approve/reject/request** **replacement/choose** **fallback** per **the** **design** **doc** (may **start** **without** **byte**-**level** **download** if **product** **chooses**).
+
+### Still open (by design in B7)
+- **Minimum** **resolution** **threshold** (px) — **TBD** **in** **B7.1+** **implementation.**
+- **Optional** **`supplier_offer_media`** **table** — **recommended** **when** **multi-asset** **or** **strong** **audit** **is** **required;** see **design** **§6.**
 
 ---
 
