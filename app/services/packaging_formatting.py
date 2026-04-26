@@ -150,28 +150,6 @@ def format_sales_and_payment_pretty(sales_mode: str, payment_mode: str) -> str:
     return f"{LB_SALES}: {label_tour_sales_mode(sales_mode)} · {LB_PAYMENT}: {label_supplier_payment_mode(payment_mode)}"
 
 
-def _label_sales_ro(sales_mode: str) -> str:
-    v = (sales_mode or "").strip().lower()
-    if v == "per_seat":
-        return "per loc (locuri pe scaun)"
-    if v == "full_bus":
-        return "autobuz complet"
-    return sales_mode or "—"
-
-
-def _label_payment_ro(payment_mode: str) -> str:
-    v = (payment_mode or "").strip().lower()
-    if v == "platform_checkout":
-        return "plata prin platforma"
-    if v == "assisted_closure":
-        return "rezervare / plata la imbarcare"
-    return payment_mode or "—"
-
-
-def format_sales_and_payment_telegram_ro(sales_mode: str, payment_mode: str) -> str:
-    return f"🛂 Vanzare: {_label_sales_ro(sales_mode)} · Plata: {_label_payment_ro(payment_mode)}"
-
-
 def format_route_pretty(text: str | None) -> str | None:
     if not (text or "").strip():
         return None
@@ -280,8 +258,14 @@ def format_discount_block_lines(
     discount_valid_until_iso: str | None,
     *, currency: str | None
 ) -> list[str]:
+    """
+    B4.2.1: Show code only with a real percent or amount; code alone is not customer-facing
+    in the Telegram post (stays in grounding/audit only).
+    """
     out: list[str] = []
     d_pct = _parse_decimal_maybe(discount_percent)
+    d_amt = _parse_decimal_maybe(discount_amount)
+    has_real_discount = (d_pct is not None and d_pct > 0) or (d_amt is not None and d_amt > 0)
     if d_pct is not None and d_pct > 0:
         until = ""
         dtp = parse_snapshot_datetimes(discount_valid_until_iso, discount_valid_until_iso)
@@ -294,14 +278,13 @@ def format_discount_block_lines(
         pct = _decimal_trim(d_pct)
         u = until or "—"
         out.append(f"🔥 -{pct}% pana la {u}")
-    d_amt = _parse_decimal_maybe(discount_amount)
     if d_amt is not None and d_amt > 0:
         cur = (currency or "").strip() or "—"
         out.append(
             f"🔥 -{_decimal_trim(d_amt)} {cur} reducere"
         )
     code = (discount_code or "").strip()
-    if code:
+    if code and has_real_discount:
         out.append(f"🏷 Cod: {code}")
     return out
 
@@ -347,6 +330,55 @@ def _clip(s: str, n: int) -> str:
     if len(t) <= n:
         return t
     return t[: n - 1] + "…"
+
+
+# --- B4.2.1 program polish (no supplier narrative removal beyond duplicate meta-lines) ---
+
+_RE_STRIP_LEADING_PROGRAM_LABEL = re.compile(
+    r"^\s*Program:\s*",
+    re.IGNORECASE | re.DOTALL,
+)
+_RE_INCLUS_LINE = re.compile(
+    r"^\s*(?:[•\u2022\u2023]\s*|[✅\u2705]\s*)?(?:Inclus|Include|Included)\s*:",
+    re.IGNORECASE,
+)
+
+
+def polish_program_text_for_telegram_block(program_block: str) -> str:
+    """
+    Remove leading "Program:" label; drop single lines that duplicate Include/Inclus/Included
+    (admin/include block is the only place for inclusions in the post).
+    """
+    if not (program_block or "").strip():
+        return ""
+    s = str(program_block)
+    s = _RE_STRIP_LEADING_PROGRAM_LABEL.sub("", s, count=1)
+    out_lines: list[str] = []
+    for line in s.splitlines():
+        if _RE_INCLUS_LINE.match(line):
+            continue
+        out_lines.append(line)
+    return "\n".join(out_lines).strip()
+
+
+def _normalize_telegram_post_spacing(s: str) -> str:
+    """
+    At most one blank line between content (collapse 3+ newlines to 2).
+    Strip stray spaces before key system emojis.
+    """
+    t = s.replace("\r\n", "\n")
+    while "\n\n\n" in t:
+        t = t.replace("\n\n\n", "\n\n")
+    lines: list[str] = []
+    for line in t.splitlines():
+        s = line
+        if s[:1] in " \t" and s.lstrip().startswith("🔒"):
+            s = s.lstrip()
+        lines.append(s.rstrip())
+    t = "\n".join(lines)
+    while "\n\n\n" in t:
+        t = t.replace("\n\n\n", "\n\n")
+    return t.rstrip() + "\n" if t.strip() else t
 
 
 # --- B4.2 Telegram post (Romanian CTA, rule-based) ---
@@ -432,7 +464,7 @@ def build_telegram_post_draft(
     if route:
         body.extend(["", f"🧭 Traseu: {route}"])
 
-    body.extend(["", format_sales_and_payment_telegram_ro(sales_mode, payment_mode)])
+    # B4.2.1: no "Vanzare / Plata" in customer-facing post (stays in layout_hint.grounding_debug)
     if sm == "full_bus":
         body.append("")
         body.extend(_full_bus_exclusivity_block())
@@ -442,13 +474,14 @@ def build_telegram_post_draft(
     if cta1 != cta2:
         body.append(cta2)
 
-    prog = (program_text or "").strip()
-    if not prog:
-        prog = (description or "").strip()[:2000] or "—"
-    body.extend(["", "✨ Ce vezi:", _clip(strip_iso_timestamps_for_display(prog), 2000), ""])
+    raw_prog = (program_text or "").strip() or (description or "").strip()[:2000] or "—"
+    prog = polish_program_text_for_telegram_block(raw_prog) or (raw_prog if raw_prog != "—" else "—")
+    if not (prog and prog.strip()):
+        prog = "—"
+    body.extend(["", "✨ Ce vezi:", _clip(strip_iso_timestamps_for_display(prog), 2000)])
     body.append(_clip(strip_iso_timestamps_for_display(description), 1500))
     if (included or "").strip():
         body.extend(["", f"✅ Include: {included.strip()}"])
     if (excluded or "").strip():
         body.extend(["", f"❌ Nu include: {excluded.strip()}"])
-    return "\n".join(body)
+    return _normalize_telegram_post_spacing("\n".join(body))

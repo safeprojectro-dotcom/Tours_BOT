@@ -20,6 +20,7 @@ from app.services.packaging_formatting import (
     format_sales_and_payment_pretty,
     format_seats_count,
     parse_snapshot_datetimes,
+    polish_program_text_for_telegram_block,
     strip_iso_timestamps_for_display,
 )
 
@@ -206,6 +207,12 @@ def build_deterministic_draft(
         program_norm = (snap.description or "").strip()[:2000]
     if not program_norm:
         program_norm = "[Program details pending — require supplier program_text.]"
+    elif program_norm != "[Program details pending — require supplier program_text.]":
+        p2 = polish_program_text_for_telegram_block(program_norm)
+        if p2 and p2.strip():
+            program_norm = p2
+        else:
+            program_norm = "[Program details pending — require supplier program_text.]"
 
     sm_low = (snap.sales_mode or "").strip().lower()
     if sm_low == "full_bus":

@@ -16,6 +16,7 @@ from app.services.packaging_formatting import (
     format_time_hhmm,
     format_marketing_price_line_ro,
     format_discount_block_lines,
+    polish_program_text_for_telegram_block,
     label_supplier_payment_mode,
     label_tour_sales_mode,
 )
@@ -98,8 +99,20 @@ class PackagingFormattingUnitTests(TestCase):
         self.assertIn("EARLY", text)
         self.assertNotIn("full_bus", text)
         self.assertNotIn("assisted_closure", text)
-        self.assertIn("plata", text.lower())
-        self.assertIn("Vanzare", text)
+        self.assertNotIn("Vanzare", text)
+        self.assertNotIn("🛂", text)
+
+    def test_b4_2_1_discount_code_alone_omitted(self) -> None:
+        lines = format_discount_block_lines(
+            None, None, "SOLO", None, currency="EUR"
+        )
+        self.assertEqual(lines, [])
+
+    def test_b4_2_1_program_strips_inclus_and_program_label(self) -> None:
+        raw = "Program:\n\nZiua 1: plecare\nInclus: mic dejun (see Include block)\n"
+        c = polish_program_text_for_telegram_block(raw)
+        self.assertNotIn("Inclus:", c)
+        self.assertIn("Ziua 1", c)
 
     def test_marketing_price_line_per_seat(self) -> None:
         s = format_marketing_price_line_ro("per_seat", "100", "EUR", missing_placeholder=_PH)
@@ -149,7 +162,8 @@ class DeterministicDraftFormattingIntegrationTests(FoundationDBTestCase):
         self.assertIsNone(_ISO_INSTANT.search(t), t)
         self.assertIn("1–3 July 2026", t)
         self.assertIn("199 EUR / persoana", t)
-        self.assertIn("Vanzare", t)
+        self.assertNotIn("Vanzare", t)
+        self.assertNotIn("🛂", t)
         self.assertIn("→", t)
         self.assertIn("Timisoara", t)
         self.assertNotIn("WRONG", t)
@@ -182,6 +196,10 @@ class DeterministicDraftFormattingIntegrationTests(FoundationDBTestCase):
         self.assertIn("tot autobuzul", t)
         self.assertIn("Rezervare exclusiva", t)
         self.assertNotIn("Locurile se confirma la rezervare", t)
+        self.assertIsNone(
+            re.search(r"^[ \t]+🔒", t, re.M),
+            "no leading space before full-bus disclaimer",
+        )
 
 
 if __name__ == "__main__":
