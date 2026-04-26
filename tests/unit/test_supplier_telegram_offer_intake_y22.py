@@ -153,11 +153,11 @@ class SupplierTelegramOfferIntakeY22Tests(FoundationDBTestCase):
     def test_back_navigation_works_safely(self) -> None:
         async def body() -> None:
             state = _DictFSMState()
-            await state.set_state(SupplierOfferIntakeState.entering_description)
+            await state.set_state(SupplierOfferIntakeState.entering_route_facts)
             message = _private_message(telegram_user_id=912_010)
             message.text = "inapoi"
             with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
-                await supplier_offer_intake.intake_description(message, state)
+                await supplier_offer_intake.intake_route_facts(message, state)
             self.assertEqual(state.last_state, SupplierOfferIntakeState.entering_title)
 
         self._run(body())
@@ -170,7 +170,7 @@ class SupplierTelegramOfferIntakeY22Tests(FoundationDBTestCase):
             message.text = "Valid title"
             with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
                 await supplier_offer_intake.intake_title(message, state)
-            self.assertEqual(state.last_state, SupplierOfferIntakeState.entering_description)
+            self.assertEqual(state.last_state, SupplierOfferIntakeState.entering_route_facts)
             self.assertEqual(state.data.get("title"), "Valid title")
             self.assertTrue(message.answer.await_count >= 1)
 
@@ -209,12 +209,12 @@ class SupplierTelegramOfferIntakeY22Tests(FoundationDBTestCase):
     def test_description_valid_text_transitions_to_departure_point(self) -> None:
         async def body() -> None:
             state = _DictFSMState()
-            await state.set_state(SupplierOfferIntakeState.entering_description)
+            await state.set_state(SupplierOfferIntakeState.entering_route_facts)
             message = _private_message(telegram_user_id=912_020)
             message.text = "Short route text"
             with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
-                await supplier_offer_intake.intake_description(message, state)
-            self.assertEqual(state.last_state, SupplierOfferIntakeState.entering_departure_point)
+                await supplier_offer_intake.intake_route_facts(message, state)
+            self.assertEqual(state.last_state, SupplierOfferIntakeState.choosing_schedule_kind)
             self.assertEqual(state.data.get("description"), "Short route text")
             self.assertTrue(message.answer.await_count >= 1)
 
@@ -223,12 +223,12 @@ class SupplierTelegramOfferIntakeY22Tests(FoundationDBTestCase):
     def test_description_invalid_input_shows_explicit_feedback_and_stays(self) -> None:
         async def body() -> None:
             state = _DictFSMState()
-            await state.set_state(SupplierOfferIntakeState.entering_description)
+            await state.set_state(SupplierOfferIntakeState.entering_route_facts)
             message = _private_message(telegram_user_id=912_021)
             message.text = " "
             with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
-                await supplier_offer_intake.intake_description(message, state)
-            self.assertEqual(state.last_state, SupplierOfferIntakeState.entering_description)
+                await supplier_offer_intake.intake_route_facts(message, state)
+            self.assertEqual(state.last_state, SupplierOfferIntakeState.entering_route_facts)
             self.assertIn("short", message.answer.call_args[0][0].lower())
 
         self._run(body())
@@ -236,14 +236,14 @@ class SupplierTelegramOfferIntakeY22Tests(FoundationDBTestCase):
     def test_description_repeated_invalid_messages_never_silent(self) -> None:
         async def body() -> None:
             state = _DictFSMState()
-            await state.set_state(SupplierOfferIntakeState.entering_description)
+            await state.set_state(SupplierOfferIntakeState.entering_route_facts)
             message = _private_message(telegram_user_id=912_022)
             with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
                 message.text = "x"
-                await supplier_offer_intake.intake_description(message, state)
+                await supplier_offer_intake.intake_route_facts(message, state)
                 message.text = ""
-                await supplier_offer_intake.intake_description(message, state)
-            self.assertEqual(state.last_state, SupplierOfferIntakeState.entering_description)
+                await supplier_offer_intake.intake_route_facts(message, state)
+            self.assertEqual(state.last_state, SupplierOfferIntakeState.entering_route_facts)
             self.assertEqual(message.answer.await_count, 2)
             texts = [c.args[0].lower() for c in message.answer.call_args_list]
             self.assertTrue(all(("short" in t) or ("could not process" in t) for t in texts))
@@ -267,12 +267,12 @@ class SupplierTelegramOfferIntakeY22Tests(FoundationDBTestCase):
     def test_home_navigation_works_on_description_step(self) -> None:
         async def body() -> None:
             state = _DictFSMState()
-            await state.set_state(SupplierOfferIntakeState.entering_description)
+            await state.set_state(SupplierOfferIntakeState.entering_route_facts)
             await state.update_data(title="Draft title")
             message = _private_message(telegram_user_id=912_023)
             message.text = "Acasă"
             with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
-                await supplier_offer_intake.intake_description(message, state)
+                await supplier_offer_intake.intake_route_facts(message, state)
             self.assertIsNone(state.last_state)
             self.assertEqual(state.data, {})
 
@@ -356,9 +356,11 @@ class SupplierTelegramOfferIntakeY22Tests(FoundationDBTestCase):
 
         async def body() -> None:
             state = _DictFSMState()
+            await state.set_state(SupplierOfferIntakeState.entering_vehicle_or_notes)
             await state.update_data(
                 title="Telegram Offer",
                 description="Short route description",
+                schedule_kind="one_trip",
                 departure_point="Chisinau",
                 departure_datetime="2026-10-01T08:00:00+00:00",
                 return_datetime="2026-10-02T18:00:00+00:00",
@@ -368,11 +370,21 @@ class SupplierTelegramOfferIntakeY22Tests(FoundationDBTestCase):
                 base_price="120.00",
                 currency="EUR",
                 program_text="Program details",
+                included_text="Lunch on day 1",
+                excluded_text="Personal insurance",
+                cover_step="none",
+                cover_media_reference="",
             )
             message = _private_message(telegram_user_id=912_004)
             message.text = "Coach 50"
             with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
                 await supplier_offer_intake.intake_vehicle_or_notes(message, state)
+                message.text = "-"
+                await supplier_offer_intake.intake_optional_short_hook(message, state)
+                message.text = "-"
+                await supplier_offer_intake.intake_optional_marketing(message, state)
+                message.text = "-"
+                await supplier_offer_intake.intake_optional_discount_line(message, state)
             offers = SupplierOfferService().list_offers(self.session, supplier_id=supplier_id, limit=20, offset=0)
             self.assertEqual(len(offers), 1)
             self.assertEqual(offers[0].lifecycle_status, SupplierOfferLifecycle.DRAFT)
@@ -405,9 +417,11 @@ class SupplierTelegramOfferIntakeY22Tests(FoundationDBTestCase):
 
         async def persist_one(title: str) -> None:
             state = _DictFSMState()
+            await state.set_state(SupplierOfferIntakeState.entering_vehicle_or_notes)
             await state.update_data(
                 title=title,
                 description="Desc",
+                schedule_kind="one_trip",
                 departure_point="Iasi",
                 departure_datetime="2026-11-01T09:00:00+00:00",
                 return_datetime="2026-11-02T20:00:00+00:00",
@@ -417,11 +431,21 @@ class SupplierTelegramOfferIntakeY22Tests(FoundationDBTestCase):
                 base_price="99.00",
                 currency="EUR",
                 program_text="Program",
+                included_text="Guide",
+                excluded_text="Meals",
+                cover_step="none",
+                cover_media_reference="",
             )
             message = _private_message(telegram_user_id=912_005)
             message.text = "Vehicle Label"
             with patch.object(supplier_offer_intake, "SessionLocal", _SessionLocalBinder(self.session)):
                 await supplier_offer_intake.intake_vehicle_or_notes(message, state)
+                message.text = "-"
+                await supplier_offer_intake.intake_optional_short_hook(message, state)
+                message.text = "-"
+                await supplier_offer_intake.intake_optional_marketing(message, state)
+                message.text = "-"
+                await supplier_offer_intake.intake_optional_discount_line(message, state)
 
         self._run(persist_one("Draft one"))
         self._run(persist_one("Draft updated"))

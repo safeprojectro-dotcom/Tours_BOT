@@ -89,6 +89,26 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "supplier_offer_cancelled_home": "Offer intake cancelled. Use /supplier_offer when you want to start again.",
         "supplier_offer_prompt_title": "Send offer title.",
         "supplier_offer_prompt_description": "Send short route/offer description.",
+        "supplier_offer_prompt_route_facts": "Send route as plain facts: major stops, direction, and duration (not marketing text).",
+        "supplier_offer_prompt_schedule_kind": "Is this a one-time trip or a recurring schedule? Tap a button below.",
+        "supplier_offer_prompt_recurrence": "Describe the recurrence in plain text (e.g. every Saturday, first weekend of the month, Mon–Fri).",
+        "supplier_offer_schedule_one_trip": "One-time trip (specific dates below)",
+        "supplier_offer_schedule_recurring": "Recurring (rule below)",
+        "supplier_offer_use_buttons_schedule": "Use the schedule buttons (one-time or recurring) or the navigation row.",
+        "supplier_offer_recurrence_too_short": "Add a bit more detail on the recurrence (at least 4 characters).",
+        "supplier_offer_prompt_included": "List what is included (one fact per line or short bullets, not sales copy).",
+        "supplier_offer_prompt_excluded": "List what is not included (one fact per line or short bullets).",
+        "supplier_offer_prompt_cover": "Cover / photo: send a public image URL, or choose “no photo yet”.",
+        "supplier_offer_prompt_cover_url": "Paste a direct HTTPS URL to a cover or gallery image.",
+        "supplier_offer_cover_send_url": "Send image URL",
+        "supplier_offer_cover_no_photo": "No photo yet",
+        "supplier_offer_use_buttons_cover": "Use the cover buttons (URL or no photo) or the navigation row.",
+        "supplier_offer_invalid_cover_url": "Send a direct HTTPS link to an image, or go back and choose “no photo yet”.",
+        "supplier_offer_prompt_program_facts": "Send the basic program: main stops or daily outline (facts, not slogans).",
+        "supplier_offer_prompt_optional_short_hook": "Optional: one short line for listing hooks (or send “-” to skip).",
+        "supplier_offer_prompt_optional_marketing": "Optional: short marketing blurb (or send “-” to skip).",
+        "supplier_offer_prompt_optional_discount": "Optional discount: code|percent|amount|valid_until. Example: EARLY10|10|||2026-12-31. Send “-” to skip.\n"
+        "Parts: code; percent 0–100; fixed amount; valid-until (YYYY-MM-DD or full ISO). Use empty fields between | when not needed.",
         "supplier_offer_prompt_departure_point": "Send departure point / city.",
         "supplier_offer_prompt_departure": "Send departure date/time (YYYY-MM-DD HH:MM).",
         "supplier_offer_prompt_return": "Send return date/time (YYYY-MM-DD HH:MM).",
@@ -117,13 +137,23 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "supplier_offer_draft_saved": "Supplier offer draft saved: #{offer_id}. Review and submit when ready.",
         "supplier_offer_review_summary": "Draft review:\n"
         "• Title: {title}\n"
+        "• Route facts: {description}\n"
         "• Departure point: {departure_point}\n"
         "• Departure: {departure_datetime}\n"
         "• Return: {return_datetime}\n"
+        "• Schedule / recurrence note: {schedule_note}\n"
         "• Sales mode: {sales_mode}\n"
         "• Payment mode: {payment_mode}\n"
         "• Price: {base_price} {currency}\n"
-        "• Route: {description}",
+        "• Seats: {seats_total}\n"
+        "• Program: {program_text}\n"
+        "• Included: {included_text}\n"
+        "• Excluded: {excluded_text}\n"
+        "• Cover / media: {cover}\n"
+        "• Vehicle / notes: {vehicle_label}\n"
+        "• Optional hook: {short_hook_line}\n"
+        "• Optional marketing: {marketing_line}\n"
+        "• Discount line (if any): {discount_line}",
         "supplier_offer_submit_ready": "Submit this draft to moderation?",
         "supplier_offer_submit_now": "Submit to moderation",
         "supplier_offer_restart": "Restart draft input",
@@ -432,6 +462,26 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "supplier_offer_cancelled_home": "Fluxul de ofertă a fost anulat. Folosește /supplier_offer când vrei să începi din nou.",
         "supplier_offer_prompt_title": "Trimite titlul ofertei.",
         "supplier_offer_prompt_description": "Trimite descriere scurtă rută/ofertă.",
+        "supplier_offer_prompt_route_facts": "Trimite ruta ca fapte simple: opriri principale, direcție, durată (nu text de marketing).",
+        "supplier_offer_prompt_schedule_kind": "Este o călătorie punctuală sau un program recurent? Alege un buton mai jos.",
+        "supplier_offer_prompt_recurrence": "Descrie recurența în text simplu (ex. în fiecare sâmbătă, primul weekend din lună, Lu–Vi).",
+        "supplier_offer_schedule_one_trip": "Călătorie punctuală (date specifice mai jos)",
+        "supplier_offer_schedule_recurring": "Recurent (regulă mai jos)",
+        "supplier_offer_use_buttons_schedule": "Folosește butoanele de program (punctual sau recurent) sau rândul de navigare.",
+        "supplier_offer_recurrence_too_short": "Adaugă mai multe detalii despre recurență (minimum 4 caractere).",
+        "supplier_offer_prompt_included": "Ce este inclus (câte un fapt pe linie sau puncte scurte, nu reclamă).",
+        "supplier_offer_prompt_excluded": "Ce nu este inclus (câte un fapt pe linie sau puncte scurte).",
+        "supplier_offer_prompt_cover": "Copertă / fotografie: trimite un URL public la imagine sau alege „fără fotografie încă”.",
+        "supplier_offer_prompt_cover_url": "Lipește un URL HTTPS direct către o imagine de copertă sau galerie.",
+        "supplier_offer_cover_send_url": "Trimite URL imagine",
+        "supplier_offer_cover_no_photo": "Fără fotografie încă",
+        "supplier_offer_use_buttons_cover": "Folosește butoanele pentru copertă (URL sau fără fotografie) sau rândul de navigare.",
+        "supplier_offer_invalid_cover_url": "Trimite un link HTTPS direct la o imagine sau revino și alege „fără fotografie încă”.",
+        "supplier_offer_prompt_program_facts": "Trimite programul de bază: opriri principale sau schiță pe zile (fapte, nu sloganuri).",
+        "supplier_offer_prompt_optional_short_hook": "Opțional: o singură linie scurtă pentru listări (sau „-” pentru a sări).",
+        "supplier_offer_prompt_optional_marketing": "Opțional: scurt text de marketing (sau „-” pentru a sări).",
+        "supplier_offer_prompt_optional_discount": "Reducere opțională: cod|procent|sumă|valid_până_la. Ex.: EARLY10|10|||2026-12-31. „-” pentru a sări.\n"
+        "Părți: cod; procent 0–100; sumă fixă; valabil până (AAAA-LL-ZZ sau ISO complet). Lasă gol între | când nu se aplică.",
         "supplier_offer_prompt_departure_point": "Trimite punctul / orașul de plecare.",
         "supplier_offer_prompt_departure": "Trimite data/ora plecării (AAAA-LL-ZZ HH:MM).",
         "supplier_offer_prompt_return": "Trimite data/ora întoarcerii (AAAA-LL-ZZ HH:MM).",
@@ -460,13 +510,23 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "supplier_offer_draft_saved": "Draft ofertă furnizor salvat: #{offer_id}. Revizuiește și trimite când ești gata.",
         "supplier_offer_review_summary": "Rezumat draft:\n"
         "• Titlu: {title}\n"
+        "• Rută (fapte): {description}\n"
         "• Punct plecare: {departure_point}\n"
         "• Plecare: {departure_datetime}\n"
         "• Întoarcere: {return_datetime}\n"
+        "• Program / recurență: {schedule_note}\n"
         "• Mod vânzare: {sales_mode}\n"
         "• Mod plată: {payment_mode}\n"
         "• Preț: {base_price} {currency}\n"
-        "• Rută: {description}",
+        "• Locuri: {seats_total}\n"
+        "• Program: {program_text}\n"
+        "• Inclus: {included_text}\n"
+        "• Neinclus: {excluded_text}\n"
+        "• Copertă / media: {cover}\n"
+        "• Vehicul / note: {vehicle_label}\n"
+        "• Hook opțional: {short_hook_line}\n"
+        "• Marketing opțional: {marketing_line}\n"
+        "• Linie discount (dacă există): {discount_line}",
         "supplier_offer_submit_ready": "Trimiți acest draft la moderare?",
         "supplier_offer_submit_now": "Trimite la moderare",
         "supplier_offer_restart": "Repornește introducerea draftului",
