@@ -92,6 +92,7 @@ from app.services.supplier_offer_packaging_review_service import (
     SupplierOfferPackagingReviewStateError,
 )
 from app.services.branded_telegram_preview import BrandedTelegramPreviewNotFoundError, persist_branded_preview_to_db
+from app.services.supplier_offer_card_render_preview import CardRenderPreviewNotFoundError, persist_card_render_preview
 from app.services.supplier_offer_media_review_service import (
     SupplierOfferMediaReviewNotFoundError,
     SupplierOfferMediaReviewService,
@@ -1239,6 +1240,21 @@ def post_supplier_offer_media_use_fallback_card(
         db.commit()
         return out
     except SupplierOfferMediaReviewNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+
+
+@router.post(
+    "/supplier-offers/{offer_id}/media/card-preview/generate",
+    response_model=AdminSupplierOfferRead,
+)
+def post_supplier_offer_media_card_preview_generate(offer_id: int, db: Session = Depends(get_db)) -> AdminSupplierOfferRead:
+    """B7.2: persist `card_render_preview` JSON plan (no image bytes, no Telegram, no publish)."""
+    try:
+        out = persist_card_render_preview(db, offer_id=offer_id)
+        db.commit()
+        return out
+    except CardRenderPreviewNotFoundError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
 
