@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.enums import SupplierOfferPackagingStatus
 from app.repositories.supplier import SupplierOfferRepository
 from app.schemas.supplier_admin import AdminSupplierOfferRead
+from app.services.branded_telegram_preview import read_with_branded_preview
 
 
 class SupplierOfferPackagingReviewNotFoundError(Exception):
@@ -29,7 +30,7 @@ class SupplierOfferPackagingReviewService:
         row = self._repo.get_any(session, offer_id=offer_id)
         if row is None:
             raise SupplierOfferPackagingReviewNotFoundError
-        return AdminSupplierOfferRead.model_validate(row, from_attributes=True)
+        return read_with_branded_preview(row)
 
     def approve(
         self,

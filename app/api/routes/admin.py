@@ -90,6 +90,7 @@ from app.services.supplier_offer_packaging_review_service import (
     SupplierOfferPackagingReviewService,
     SupplierOfferPackagingReviewStateError,
 )
+from app.services.branded_telegram_preview import BrandedTelegramPreviewNotFoundError, persist_branded_preview_to_db
 from app.repositories.user import UserRepository
 from app.services.custom_marketplace_request_service import (
     CustomMarketplaceRequestAssignConflictError,
@@ -1043,10 +1044,25 @@ def post_supplier_offer_packaging_generate(offer_id: int, db: Session = Depends(
 
 @router.get("/supplier-offers/{offer_id}/packaging/review", response_model=AdminSupplierOfferRead)
 def get_supplier_offer_packaging_review(offer_id: int, db: Session = Depends(get_db)) -> AdminSupplierOfferRead:
-    """B5: review detail (raw offer + packaging fields). Does not publish or notify Telegram."""
+    """B5/B6: review detail (raw offer + packaging + branded channel preview in packaging_draft_json). Read-only, no publish."""
     try:
         return SupplierOfferPackagingReviewService().get_review(db, offer_id=offer_id)
     except SupplierOfferPackagingReviewNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+
+
+@router.post(
+    "/supplier-offers/{offer_id}/packaging/branded-preview/generate",
+    response_model=AdminSupplierOfferRead,
+)
+def post_supplier_offer_packaging_branded_preview_generate(offer_id: int, db: Session = Depends(get_db)) -> AdminSupplierOfferRead:
+    """B6: persist `branded_telegram_preview` into packaging_draft_json. No approval, no publish, no Tour."""
+    try:
+        out = persist_branded_preview_to_db(db, offer_id=offer_id)
+        db.commit()
+        return out
+    except BrandedTelegramPreviewNotFoundError:
+        db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
 
 
