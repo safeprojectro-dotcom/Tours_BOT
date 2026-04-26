@@ -4,7 +4,9 @@
 
 **Parent roadmap:** [`SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md) (BUSINESS **B1–B13**).
 
-**Aligns with:** `docs/AI_ASSISTANT_SPEC.md` (no inventing commercial facts; draft-only in admin contexts), `docs/AI_DIALOG_FLOWS.md` (stepwise patterns), `docs/MINI_APP_UX.md` (catalog/tour are customer truth surfaces), `docs/TECH_SPEC_TOURS_BOT.md` / `v1.1` (product layering). Current codebase uses `SupplierOfferLifecycle` (`draft`, `ready_for_moderation`, `approved`, `rejected`, `published`)—this design introduces **additional logical states** for **packaging** and **tour link**; **B2** is expected to map them to storage/enums.
+**Aligns with:** `docs/AI_ASSISTANT_SPEC.md` (no inventing commercial facts; draft-only in admin contexts), `docs/AI_DIALOG_FLOWS.md` (stepwise patterns), `docs/MINI_APP_UX.md` (catalog/tour are customer truth surfaces), `docs/TECH_SPEC_TOURS_BOT.md` / `v1.1` (product layering), `docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md` (V2 supplier marketplace history—**B** line in [`SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md) is forward **BUSINESS** sequencing for this domain). Current codebase uses `SupplierOfferLifecycle` (`draft`, `ready_for_moderation`, `approved`, `rejected`, `published`)—this design introduces **additional logical states** for **packaging** and **tour link**; **B2** is expected to map them to storage/enums.
+
+**B1 scope (this document):** (1) business principle · (2) supplier intake data · (3) supplier dialog · (4) AI packaging output contract · (5) admin moderation flow · (6) status model · (7) guardrails · (8) next steps.
 
 ---
 
@@ -113,7 +115,23 @@ The offer may transition to **`ready_for_moderation`** (see current `SupplierOff
 
 ## 4. AI packaging output (draft contract)
 
-All outputs are **proposals** until **admin** approves. Suggested DTO shape (logical):
+All outputs are **proposals** until **admin** approves. They form the **AI output contract** between **grounding** (supplier snapshot) and **moderation** (**§5**).
+
+**Contract fields (logical; implement in B4, persist in B2 as needed):**
+
+- **Telegram post draft** — full channel message (markdown/HTML per policy), placeholders for **links**.
+- **Short hook** — 1–2 lines for feed/card glance.
+- **Brief program** — condensed for Telegram length limits.
+- **Mini App `short_description`** — list/card scannable text.
+- **Mini App `full_description`** — long-form detail page body.
+- **Normalized `program_text`** — cleaned, sectioned program aligned to template.
+- **`included_text` / `excluded_text`** — polished from supplier facts; contradictions → **quality warnings**.
+- **CTA variants** — 2+ candidates (e.g. book / ask / call) for admin selection.
+- **Image/card prompt or layout data** — prompt or structured layout JSON for **B7** (binary image optional per product).
+- **Quality warnings** — structured list (e.g. ambiguous dates, missing hero, weak inclusions, language inconsistency, price format risk, overstated legal/medical claims).
+- **Missing fields** — explicit gaps in optional or weakly filled fields for admin/supplier follow-up.
+
+**Table (same contract, expanded):**
 
 | Output | Description |
 |--------|-------------|
@@ -191,11 +209,13 @@ B1 needs finer granularity than the current `SupplierOfferLifecycle` enum. Treat
 
 | Next | Description |
 |------|-------------|
-| **B2** | **Supplier offer content / data upgrade** — persist **B1** fields, **packaging** **versions**, **state** **machine** mapping. **← Next safe implementation-design step.** |
-| **B3** | Supplier **dialog** upgrade in Telegram (step order, i18n, error UX). |
-| **B4** | **AI packaging** **service** contract + safety filters + idempotent generation. |
-| **B5** | **Admin** **UI** for moderation (may split **API** / **Telegram** **admin** **surfaces**). |
-| **B9** | **Offer** → **tour** **bridge** design (publication to **catalog** **truth**). |
+| **B2 — Supplier offer content / data upgrade** | Persist **B1** intake fields, **packaging** **versions**, **state** **machine** mapping (logical **§6** → storage/enums). **← Next safe step** for implementation-oriented work. |
+| **B3 — Supplier dialog upgrade** | Telegram FSM/UX: step order, **one question at a time**, i18n, validation UX aligned with **§3**. |
+| **B4 — AI packaging layer** | Service contract + safety filters + idempotent **generation** (consumes **§4**, enforces **§7**). |
+| **B5 — Admin moderation UI** | Surfaces for **§5** (raw vs draft, previews, approve/edit/regenerate/clarify/reject)—may split HTTP admin vs Telegram admin. |
+| **B9 — Offer-to-tour bridge** | **Design** for **published** offer → **Layer A** **`Tour`** / catalog (**B10** = implementation). See [`SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md) **§1**. |
+
+**Order:** **B2** is the default **first** build slice after B1; **B3**–**B5** may overlap per team capacity; **B9** is **design-before-code** and pairs with **B10** (bridge implementation) in the BUSINESS plan.
 
 ---
 
@@ -203,10 +223,11 @@ B1 needs finer granularity than the current `SupplierOfferLifecycle` enum. Treat
 
 | Area | B1 design stance |
 |------|------------------|
-| **Principle** | Raw **facts** → **AI** **draft** **packaging** → **admin** **approval** → **publish**; **tour** **link** **explicit** **later**. |
+| **Principle** | Raw **facts** → **AI** **draft** **packaging** → **admin** **approval** → **publish**; **tour** **link** **explicit** **later** (**B9**/**B10**). |
 | **Data** | **§2** field catalog for **B2** schema work. |
-| **Dialog** | **One**-question-**at**-**a**-**time** + **ready_for_moderation** **criteria** **§3**. |
-| **AI** | **Output** **contract** **§4**; **grounded**, **no** **invention** **§7**. |
-| **Moderation** | **End-to-end** **flow** **§5**. |
+| **Dialog** | **One**-question-**at**-**a**-**time** + **ready_for_moderation** **criteria** (**§3**). |
+| **AI output contract** | **§4** (Telegram, Mini App, program, inclusions, CTAs, image/layout hints, **quality warnings**, **missing fields**). |
+| **Guardrails** | **§7** — draft-only, **no** invented commercial facts, **no** publish/booking/**Tour** by AI; **Layer A** unchanged. |
+| **Moderation** | **§5**; **B5** implements UI/surfaces. |
 | **Status** | **Logical** **states** **§6**; **B2** **maps** to **persistence**. |
-| **Next** | **B2** **—** **content/data** **upgrade**. |
+| **Next** | **B2** **→** **B3** **→** **B4** **→** **B5**; **B9** **bridge** **design** when **ready** (see **§8**). |
