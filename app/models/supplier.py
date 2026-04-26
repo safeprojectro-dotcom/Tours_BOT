@@ -171,6 +171,8 @@ class SupplierOffer(TimestampMixin, Base):
     )
     missing_fields_json: Mapped[list | dict | None] = mapped_column(JSONB, nullable=True)
     quality_warnings_json: Mapped[list | dict | None] = mapped_column(JSONB, nullable=True)
+    # B4: AI/deterministic packaging extras (Telegram post draft, CTA list, Mini App bodies, layout hints). Admin read only.
+    packaging_draft_json: Mapped[dict | list | None] = mapped_column(JSONB, nullable=True)
 
     supplier: Mapped["Supplier"] = relationship(back_populates="offers")
     execution_links: Mapped[list["SupplierOfferExecutionLink"]] = relationship(

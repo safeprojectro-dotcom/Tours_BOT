@@ -81,6 +81,10 @@ from app.services.supplier_offer_execution_link_service import (
     SupplierOfferExecutionLinkValidationError,
 )
 from app.services.supplier_offer_service import SupplierOfferService
+from app.services.supplier_offer_packaging_service import (
+    SupplierOfferPackagingNotFoundError,
+    SupplierOfferPackagingService,
+)
 from app.repositories.user import UserRepository
 from app.services.custom_marketplace_request_service import (
     CustomMarketplaceRequestAssignConflictError,
@@ -1018,6 +1022,15 @@ def get_admin_supplier_offer_by_id(offer_id: int, db: Session = Depends(get_db))
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.")
     return AdminSupplierOfferRead.model_validate(row, from_attributes=True)
+
+
+@router.post("/supplier-offers/{offer_id}/packaging/generate", response_model=AdminSupplierOfferRead)
+def post_supplier_offer_packaging_generate(offer_id: int, db: Session = Depends(get_db)) -> AdminSupplierOfferRead:
+    """B4: generate draft packaging (deterministic or pluggable AI). Does not publish or change supplier lifecycle to published."""
+    try:
+        return SupplierOfferPackagingService().generate_and_persist(db, offer_id=offer_id)
+    except SupplierOfferPackagingNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
 
 
 @router.post("/supplier-offers/{offer_id}/moderation/approve", response_model=AdminSupplierOfferRead)

@@ -35,10 +35,12 @@ class SupplierOnboardingState(StatesGroup):
 
 
 class SupplierOfferIntakeState(StatesGroup):
-    """Y2.2: supplier Telegram offer intake (draft + explicit moderation submit)."""
+    """Y2.2: supplier Telegram offer intake (draft + explicit moderation submit). B3: structured B2 fields."""
 
     entering_title = State()
-    entering_description = State()
+    entering_route_facts = State()
+    choosing_schedule_kind = State()
+    entering_recurrence_summary = State()
     entering_departure_point = State()
     entering_departure_datetime = State()
     entering_return_datetime = State()
@@ -48,7 +50,14 @@ class SupplierOfferIntakeState(StatesGroup):
     entering_base_price = State()
     entering_currency = State()
     entering_program_text = State()
+    entering_included_text = State()
+    entering_excluded_text = State()
+    choosing_cover_media = State()
+    entering_cover_url = State()
     entering_vehicle_or_notes = State()
+    optional_short_hook = State()
+    optional_marketing_summary = State()
+    optional_discount_line = State()
     awaiting_submit_action = State()
 
 

@@ -72,6 +72,8 @@ class AdminSupplierOfferRead(SupplierOfferRead):
     packaging_status: SupplierOfferPackagingStatus
     missing_fields_json: list[Any] | dict[str, Any] | None = None
     quality_warnings_json: list[Any] | dict[str, Any] | None = None
+    # B4: extended draft (Telegram post, CTA, Mini App long text, image hints). Not exposed on supplier-admin API.
+    packaging_draft_json: list[Any] | dict[str, Any] | None = None
 
 
 class SupplierOfferListRead(BaseModel):
