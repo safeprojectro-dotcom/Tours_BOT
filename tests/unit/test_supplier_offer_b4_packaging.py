@@ -87,8 +87,11 @@ class B4PackagingAPITests(FoundationDBTestCase):
         d = j["packaging_draft_json"]
         self.assertIn("telegram_post_draft", d)
         self.assertIn("mini_app_full_description", d)
-        self.assertIn("199.00", j["marketing_summary"] or "")
+        self.assertIn("199", j["marketing_summary"] or "")
+        self.assertIn("EUR", j["marketing_summary"] or "")
         self.assertIn("2026", j["marketing_summary"] or "")
+        tg = (d.get("telegram_post_draft") or "")
+        self.assertNotRegex(tg, r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
         # no Tour / order churn
         self.assertEqual(self.session.scalar(select(func.count()).select_from(Tour)), n_tour)
         self.assertEqual(self.session.scalar(select(func.count()).select_from(Order)), n_order)

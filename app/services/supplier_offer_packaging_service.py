@@ -11,6 +11,17 @@ from app.models.enums import SupplierOfferPackagingStatus
 from app.models.supplier import SupplierOffer
 from app.repositories.supplier import SupplierOfferRepository
 from app.schemas.supplier_admin import AdminSupplierOfferRead
+from app.services.packaging_formatting import (
+    build_grounding_debug_json,
+    build_telegram_post_draft,
+    format_date_range_pretty,
+    format_price_for_display,
+    format_route_pretty,
+    format_sales_and_payment_pretty,
+    format_seats_count,
+    parse_snapshot_datetimes,
+    strip_iso_timestamps_for_display,
+)
 
 
 class SupplierOfferPackagingNotFoundError(Exception):
@@ -147,12 +158,10 @@ def _clip(s: str, n: int) -> str:
     return t[: n - 1] + "…"
 
 
-def _fmt_price(snap: PackagingFactSnapshot) -> str:
-    if snap.base_price and snap.currency:
-        return f"{snap.base_price} {snap.currency}"
-    if snap.base_price:
-        return str(snap.base_price)
-    return "[PRICE — not on file: confirm with supplier. Do not invent an amount.]"
+_MISSING_PRICE = (
+    "[PRICE — not on file: confirm with supplier. Do not invent an amount.]"
+)
+_SEATS_UNCONF = "[SEAT COUNT — not confirmed]"
 
 
 def build_deterministic_draft(
@@ -161,8 +170,17 @@ def build_deterministic_draft(
     missing: list[str],
     warnings: list[dict[str, str]],
 ) -> dict[str, Any]:
-    price_line = _fmt_price(snap)
-    seats_line = str(snap.seats_total) if snap.seats_total > 0 else "[SEAT COUNT — not confirmed]"
+    price_line = format_price_for_display(
+        snap.base_price, snap.currency, missing_placeholder=_MISSING_PRICE
+    )
+    seats_count = format_seats_count(snap.seats_total, not_confirmed=_SEATS_UNCONF)
+    dts = parse_snapshot_datetimes(snap.departure_iso, snap.return_iso)
+    if dts is not None:
+        dep_dt, ret_dt = dts
+        date_range = format_date_range_pretty(dep_dt, ret_dt)
+    else:
+        dep_dt = ret_dt = None
+        date_range = "[Trip dates — see supplier record; could not format snapshot]"
     program_norm = (snap.program_text or "").strip()
     if not program_norm:
         program_norm = (snap.description or "").strip()[:2000]
@@ -170,26 +188,56 @@ def build_deterministic_draft(
         program_norm = "[Program details pending — require supplier program_text.]"
 
     short_hook = _clip(
-        f"{snap.title} · {seats_line} seats" if snap.seats_total > 0 else f"{snap.title} · {seats_line}",
+        f"{snap.title} — {seats_count} seats" if snap.seats_total > 0 else f"{snap.title} — {seats_count}",
         500,
     )
     marketing = _clip(
-        f"{snap.title}\n\n{snap.description}\n\nDeparture: {snap.departure_iso}\nReturn: {snap.return_iso}\n"
-        f"Price: {price_line}\nSeats: {seats_line}\n(All facts copied from supplier intake — verify before publish.)",
+        f"{snap.title}\n\n{strip_iso_timestamps_for_display(snap.description)}\n\n"
+        f"🗓 {date_range}\n"
+        f"💶 {price_line}\n"
+        f"👥 {seats_count} seats (capacity from intake)\n"
+        f"🛂 {format_sales_and_payment_pretty(snap.sales_mode, snap.payment_mode)}\n"
+        f"(All facts from supplier snapshot — verify before publish.)",
         10000,
     )
-    t_post = (
-        f"**{snap.title}**\n\n"
-        f"🗓 Departure: {snap.departure_iso}\n"
-        f"🔙 Return: {snap.return_iso}\n"
-        f"💶 Price: {price_line}\n"
-        f"👥 Capacity: {seats_line}\n"
-        f"🛂 Sales/payment: {snap.sales_mode} / {snap.payment_mode}\n\n"
-        f"{_clip(snap.description, 1500)}"
-    )
+    route = format_route_pretty(snap.boarding_places_text)
+    if dts is not None:
+        t_post = build_telegram_post_draft(
+            title=snap.title,
+            description=snap.description,
+            dep=dep_dt,
+            ret=ret_dt,
+            price_line=price_line,
+            seats_line=seats_count,
+            sales_mode=snap.sales_mode,
+            payment_mode=snap.payment_mode,
+            route=route,
+            included=snap.included_text,
+            excluded=snap.excluded_text,
+        )
+    else:
+        r_line = f"🚍 Route: {route}\n" if route else ""
+        inc = (snap.included_text or "").strip()
+        exc = (snap.excluded_text or "").strip()
+        extra = ""
+        if inc:
+            extra += f"\n\n✅ Includes: {inc}"
+        if exc:
+            extra += f"\n\n❌ Not included: {exc}"
+        t_post = (
+            f"**{snap.title}**\n\n"
+            f"⚠️ {date_range}\n\n"
+            f"💶 Price: {price_line}\n"
+            f"👥 Seats: {seats_count}\n"
+            f"{r_line}"
+            f"🛂 {format_sales_and_payment_pretty(snap.sales_mode, snap.payment_mode)}\n"
+            f"{_clip(strip_iso_timestamps_for_display(snap.description), 1500)}"
+            f"{extra}"
+        )
     brief_p = _clip(program_norm, 1500)
+    mini_line = f"{seats_count} seats" if snap.seats_total > 0 else seats_count
     mini_short = _clip(
-        f"{snap.title} — {price_line}. {seats_line} seats. {snap.departure_iso[:10]} → {snap.return_iso[:10]}",
+        f"{snap.title} — {price_line}. {mini_line}. {date_range}.",
         500,
     )
     mini_full = _clip(marketing, 20000)
@@ -204,7 +252,16 @@ def build_deterministic_draft(
         "mini_app_full_description": mini_full,
         "cta_variants": [cta1, cta2],
         "image_card_prompt": f"Layout hint: hero for “{snap.title}”. Reuse supplier cover only; B7 may render card.",
-        "layout_hint": {"style": "facts_only", "price_line_grounded": bool(snap.base_price and snap.currency)},
+        "layout_hint": {
+            "style": "facts_only",
+            "price_line_grounded": bool(snap.base_price and snap.currency),
+            "grounding_debug": build_grounding_debug_json(
+                departure_iso=snap.departure_iso,
+                return_iso=snap.return_iso,
+                sales_mode=snap.sales_mode,
+                payment_mode=snap.payment_mode,
+            ),
+        },
         "source": "deterministic",
     }
     return {
