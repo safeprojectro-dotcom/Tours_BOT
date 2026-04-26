@@ -14,6 +14,7 @@ from app.models.enums import (
     BookingStatus,
     PaymentStatus,
     SupplierOfferLifecycle,
+    SupplierOfferPackagingStatus,
     SupplierOfferPaymentMode,
     SupplierServiceComposition,
     TourSalesMode,
@@ -185,6 +186,7 @@ class FoundationDBTestCase(unittest.TestCase):
             sales_mode=overrides.pop("sales_mode", TourSalesMode.PER_SEAT),
             payment_mode=overrides.pop("payment_mode", SupplierOfferPaymentMode.PLATFORM_CHECKOUT),
             lifecycle_status=overrides.pop("lifecycle_status", SupplierOfferLifecycle.DRAFT),
+            packaging_status=overrides.pop("packaging_status", SupplierOfferPackagingStatus.NONE),
             **overrides,
         )
         self.session.add(offer)

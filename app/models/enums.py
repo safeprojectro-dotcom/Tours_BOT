@@ -84,6 +84,16 @@ class SupplierOfferLifecycle(StrEnum):
     PUBLISHED = "published"
 
 
+class SupplierOfferPackagingStatus(StrEnum):
+    """B2: AI / admin packaging sub-state (orthogonal to :class:`SupplierOfferLifecycle`). Stored for future B4/B5."""
+
+    NONE = "none"
+    PACKAGING_PENDING = "packaging_pending"
+    PACKAGING_GENERATED = "packaging_generated"
+    NEEDS_ADMIN_REVIEW = "needs_admin_review"
+    APPROVED_FOR_PUBLISH = "approved_for_publish"
+
+
 class SupplierLegalEntityType(StrEnum):
     """Y2.1a: minimal legal identity categories for supplier onboarding approval."""
 

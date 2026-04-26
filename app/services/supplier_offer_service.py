@@ -2,10 +2,15 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.models.enums import SupplierOfferLifecycle
+from app.models.enums import SupplierOfferLifecycle, SupplierOfferPackagingStatus
 from app.models.supplier import SupplierOffer
 from app.repositories.supplier import SupplierOfferRepository
-from app.schemas.supplier_admin import SupplierOfferCreate, SupplierOfferRead, SupplierOfferUpdate
+from app.schemas.supplier_admin import (
+    AdminSupplierOfferRead,
+    SupplierOfferCreate,
+    SupplierOfferRead,
+    SupplierOfferUpdate,
+)
 
 
 class SupplierOfferNotFoundError(Exception):
@@ -37,6 +42,9 @@ class SupplierOfferService:
     def _to_read(self, row: SupplierOffer) -> SupplierOfferRead:
         return SupplierOfferRead.model_validate(row, from_attributes=True)
 
+    def _to_admin_read(self, row: SupplierOffer) -> AdminSupplierOfferRead:
+        return AdminSupplierOfferRead.model_validate(row, from_attributes=True)
+
     def _readiness_violation(self, offer: SupplierOffer) -> str | None:
         if not offer.title.strip():
             return "Title is required for publish-readiness."
@@ -67,6 +75,17 @@ class SupplierOfferService:
         rows = self._offers.list_for_supplier(session, supplier_id=supplier_id, limit=limit, offset=offset)
         return [self._to_read(r) for r in rows]
 
+    def list_offers_admin(
+        self,
+        session: Session,
+        *,
+        supplier_id: int,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[AdminSupplierOfferRead]:
+        rows = self._offers.list_for_supplier(session, supplier_id=supplier_id, limit=limit, offset=offset)
+        return [self._to_admin_read(r) for r in rows]
+
     def get_offer(self, session: Session, *, supplier_id: int, offer_id: int) -> SupplierOfferRead:
         row = self._offers.get_for_supplier(session, supplier_id=supplier_id, offer_id=offer_id)
         if row is None:
@@ -95,6 +114,22 @@ class SupplierOfferService:
             sales_mode=payload.sales_mode,
             payment_mode=payload.payment_mode,
             lifecycle_status=SupplierOfferLifecycle.DRAFT,
+            packaging_status=SupplierOfferPackagingStatus.NONE,
+            cover_media_reference=payload.cover_media_reference,
+            media_references=payload.media_references,
+            included_text=payload.included_text,
+            excluded_text=payload.excluded_text,
+            short_hook=payload.short_hook,
+            marketing_summary=payload.marketing_summary,
+            discount_code=payload.discount_code,
+            discount_percent=payload.discount_percent,
+            discount_amount=payload.discount_amount,
+            discount_valid_until=payload.discount_valid_until,
+            recurrence_type=payload.recurrence_type,
+            recurrence_rule=payload.recurrence_rule,
+            valid_from=payload.valid_from,
+            valid_until=payload.valid_until,
+            supplier_admin_notes=payload.supplier_admin_notes,
         )
         session.add(row)
         session.flush()

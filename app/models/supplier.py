@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -11,6 +12,7 @@ from app.models.enums import (
     SupplierLegalEntityType,
     SupplierOnboardingStatus,
     SupplierOfferLifecycle,
+    SupplierOfferPackagingStatus,
     SupplierOfferPaymentMode,
     SupplierServiceComposition,
     TourSalesMode,
@@ -95,6 +97,11 @@ class SupplierOffer(TimestampMixin, Base):
     __table_args__ = (
         CheckConstraint("seats_total >= 0", name="ck_supplier_offers_seats_total_non_negative"),
         CheckConstraint("base_price IS NULL OR base_price >= 0", name="ck_supplier_offers_base_price_non_negative"),
+        CheckConstraint("discount_amount IS NULL OR discount_amount >= 0", name="ck_supplier_offers_discount_amount_non_negative"),
+        CheckConstraint(
+            "discount_percent IS NULL OR (discount_percent >= 0 AND discount_percent <= 100)",
+            name="ck_supplier_offers_discount_percent_range",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -140,6 +147,30 @@ class SupplierOffer(TimestampMixin, Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     showcase_chat_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     showcase_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # B2 — extended intake / packaging storage (no AI, no Tour, no publish logic changes)
+    cover_media_reference: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    media_references: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    included_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    excluded_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    short_hook: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    marketing_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    discount_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    discount_percent: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    discount_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    discount_valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    recurrence_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    recurrence_rule: Mapped[str | None] = mapped_column(Text, nullable=True)
+    valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    supplier_admin_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    admin_internal_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    packaging_status: Mapped[SupplierOfferPackagingStatus] = mapped_column(
+        sqlalchemy_enum(SupplierOfferPackagingStatus, name="supplier_offer_packaging_status"),
+        nullable=False,
+        default=SupplierOfferPackagingStatus.NONE,
+    )
+    missing_fields_json: Mapped[list | dict | None] = mapped_column(JSONB, nullable=True)
+    quality_warnings_json: Mapped[list | dict | None] = mapped_column(JSONB, nullable=True)
 
     supplier: Mapped["Supplier"] = relationship(back_populates="offers")
     execution_links: Mapped[list["SupplierOfferExecutionLink"]] = relationship(

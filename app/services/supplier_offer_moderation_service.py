@@ -10,7 +10,7 @@ from app.core.config import Settings, get_settings
 from app.models.enums import SupplierOfferLifecycle
 from app.models.supplier import SupplierOffer
 from app.repositories.supplier import SupplierOfferRepository
-from app.schemas.supplier_admin import SupplierOfferRead
+from app.schemas.supplier_admin import AdminSupplierOfferRead
 from app.services.supplier_offer_showcase_message import build_showcase_publication
 from app.services.telegram_showcase_client import TelegramShowcaseSendError, delete_channel_message, send_showcase_publication
 
@@ -41,10 +41,10 @@ class SupplierOfferModerationService:
             raise SupplierOfferModerationNotFoundError
         return row
 
-    def _to_read(self, row: SupplierOffer) -> SupplierOfferRead:
-        return SupplierOfferRead.model_validate(row, from_attributes=True)
+    def _to_read(self, row: SupplierOffer) -> AdminSupplierOfferRead:
+        return AdminSupplierOfferRead.model_validate(row, from_attributes=True)
 
-    def approve(self, session: Session, *, offer_id: int) -> SupplierOfferRead:
+    def approve(self, session: Session, *, offer_id: int) -> AdminSupplierOfferRead:
         row = self._row(session, offer_id)
         if row.lifecycle_status != SupplierOfferLifecycle.READY_FOR_MODERATION:
             raise SupplierOfferModerationStateError(
@@ -57,7 +57,7 @@ class SupplierOfferModerationService:
         session.refresh(row)
         return self._to_read(row)
 
-    def reject(self, session: Session, *, offer_id: int, reason: str) -> SupplierOfferRead:
+    def reject(self, session: Session, *, offer_id: int, reason: str) -> AdminSupplierOfferRead:
         row = self._row(session, offer_id)
         if row.lifecycle_status != SupplierOfferLifecycle.READY_FOR_MODERATION:
             raise SupplierOfferModerationStateError(
@@ -76,7 +76,7 @@ class SupplierOfferModerationService:
         *,
         offer_id: int,
         settings: Settings | None = None,
-    ) -> tuple[SupplierOfferRead, int]:
+    ) -> tuple[AdminSupplierOfferRead, int]:
         cfg = settings or get_settings()
         row = self._row(session, offer_id)
         if row.lifecycle_status == SupplierOfferLifecycle.PUBLISHED:
@@ -117,7 +117,7 @@ class SupplierOfferModerationService:
         *,
         offer_id: int,
         settings: Settings | None = None,
-    ) -> SupplierOfferRead:
+    ) -> AdminSupplierOfferRead:
         cfg = settings or get_settings()
         row = self._row(session, offer_id)
         if row.lifecycle_status != SupplierOfferLifecycle.PUBLISHED:
@@ -150,7 +150,7 @@ class SupplierOfferModerationService:
         lifecycle_status: SupplierOfferLifecycle | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> list[SupplierOfferRead]:
+    ) -> list[AdminSupplierOfferRead]:
         rows = self._offers.list_for_admin(
             session,
             lifecycle_status=lifecycle_status,

@@ -62,7 +62,7 @@ from app.models.enums import (
 from app.repositories.user import UserRepository
 from app.models.supplier import Supplier
 from app.models.tour import Tour
-from app.schemas.supplier_admin import SupplierOfferRead
+from app.schemas.supplier_admin import AdminSupplierOfferRead
 from app.services.admin_read import AdminReadService
 from app.services.custom_marketplace_request_service import (
     CustomMarketplaceRequestAssignConflictError,
@@ -129,7 +129,7 @@ def _status_key(status: SupplierOfferLifecycle) -> str:
     return f"supplier_offers_status_{status.value}"
 
 
-def _action_button_rows(language_code: str | None, offer: SupplierOfferRead) -> list[tuple[str, str]]:
+def _action_button_rows(language_code: str | None, offer: AdminSupplierOfferRead) -> list[tuple[str, str]]:
     rows: list[tuple[str, str]] = []
     if offer.lifecycle_status == SupplierOfferLifecycle.READY_FOR_MODERATION:
         rows.append((translate(language_code, "admin_offer_action_approve"), f"{ADMIN_OFFERS_ACTION_APPROVE}:{offer.id}"))
@@ -147,7 +147,7 @@ def _action_button_rows(language_code: str | None, offer: SupplierOfferRead) -> 
     return rows
 
 
-def _detail_keyboard(language_code: str | None, offer: SupplierOfferRead) -> InlineKeyboardBuilder:
+def _detail_keyboard(language_code: str | None, offer: AdminSupplierOfferRead) -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     for title, action_payload in _action_button_rows(language_code, offer):
         kb.button(
@@ -490,14 +490,14 @@ def _load_queue_ids(session, *, mode: str) -> list[int]:
     return [offer.id for offer in items]
 
 
-def _queue_text(language_code: str | None, *, offers: list[SupplierOfferRead], mode: str) -> str:
+def _queue_text(language_code: str | None, *, offers: list[AdminSupplierOfferRead], mode: str) -> str:
     lines = [translate(language_code, _queue_title_key(mode), count=str(len(offers)))]
     for offer in offers:
         lines.append(f"#{offer.id} · {translate(language_code, _status_key(offer.lifecycle_status))} · {offer.title}")
     return "\n".join(lines)
 
 
-def _offer_detail_text(session, language_code: str | None, *, offer: SupplierOfferRead) -> str:
+def _offer_detail_text(session, language_code: str | None, *, offer: AdminSupplierOfferRead) -> str:
     supplier = session.get(Supplier, offer.supplier_id)
     supplier_label = supplier.display_name if supplier is not None else f"#{offer.supplier_id}"
     publication_key = (

@@ -113,7 +113,9 @@ from app.schemas.custom_marketplace import (
 from app.schemas.supplier_admin import (
     AdminSupplierOfferExecutionLinkBody,
     AdminSupplierOfferExecutionLinkCloseBody,
+    AdminSupplierOfferListRead,
     AdminSupplierOfferPublishResult,
+    AdminSupplierOfferRead,
     AdminSupplierOfferRejectBody,
     SupplierOfferExecutionLinkListRead,
     SupplierOfferExecutionLinkRead,
@@ -980,46 +982,46 @@ def get_admin_supplier(supplier_id: int, db: Session = Depends(get_db)) -> Admin
     return AdminSupplierRead.model_validate(row)
 
 
-@router.get("/suppliers/{supplier_id}/offers", response_model=SupplierOfferListRead)
+@router.get("/suppliers/{supplier_id}/offers", response_model=AdminSupplierOfferListRead)
 def get_admin_supplier_offers(
     supplier_id: int,
     db: Session = Depends(get_db),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-) -> SupplierOfferListRead:
+) -> AdminSupplierOfferListRead:
     if db.get(Supplier, supplier_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found.")
     svc = SupplierOfferService()
-    items = svc.list_offers(db, supplier_id=supplier_id, limit=limit, offset=offset)
-    return SupplierOfferListRead(items=items, total_returned=len(items))
+    items = svc.list_offers_admin(db, supplier_id=supplier_id, limit=limit, offset=offset)
+    return AdminSupplierOfferListRead(items=items, total_returned=len(items))
 
 
-@router.get("/supplier-offers", response_model=SupplierOfferListRead)
+@router.get("/supplier-offers", response_model=AdminSupplierOfferListRead)
 def list_admin_supplier_offers_moderation(
     db: Session = Depends(get_db),
     lifecycle_status: SupplierOfferLifecycle | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-) -> SupplierOfferListRead:
+) -> AdminSupplierOfferListRead:
     items = SupplierOfferModerationService().list_offers(
         db,
         lifecycle_status=lifecycle_status,
         limit=limit,
         offset=offset,
     )
-    return SupplierOfferListRead(items=items, total_returned=len(items))
+    return AdminSupplierOfferListRead(items=items, total_returned=len(items))
 
 
-@router.get("/supplier-offers/{offer_id}", response_model=SupplierOfferRead)
-def get_admin_supplier_offer_by_id(offer_id: int, db: Session = Depends(get_db)) -> SupplierOfferRead:
+@router.get("/supplier-offers/{offer_id}", response_model=AdminSupplierOfferRead)
+def get_admin_supplier_offer_by_id(offer_id: int, db: Session = Depends(get_db)) -> AdminSupplierOfferRead:
     row = SupplierOfferRepository().get_any(db, offer_id=offer_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.")
-    return SupplierOfferRead.model_validate(row, from_attributes=True)
+    return AdminSupplierOfferRead.model_validate(row, from_attributes=True)
 
 
-@router.post("/supplier-offers/{offer_id}/moderation/approve", response_model=SupplierOfferRead)
-def post_admin_supplier_offer_approve(offer_id: int, db: Session = Depends(get_db)) -> SupplierOfferRead:
+@router.post("/supplier-offers/{offer_id}/moderation/approve", response_model=AdminSupplierOfferRead)
+def post_admin_supplier_offer_approve(offer_id: int, db: Session = Depends(get_db)) -> AdminSupplierOfferRead:
     try:
         row = SupplierOfferModerationService().approve(db, offer_id=offer_id)
     except SupplierOfferModerationNotFoundError:
@@ -1034,12 +1036,12 @@ def post_admin_supplier_offer_approve(offer_id: int, db: Session = Depends(get_d
     return row
 
 
-@router.post("/supplier-offers/{offer_id}/moderation/reject", response_model=SupplierOfferRead)
+@router.post("/supplier-offers/{offer_id}/moderation/reject", response_model=AdminSupplierOfferRead)
 def post_admin_supplier_offer_reject(
     offer_id: int,
     db: Session = Depends(get_db),
     payload: AdminSupplierOfferRejectBody = Body(...),
-) -> SupplierOfferRead:
+) -> AdminSupplierOfferRead:
     try:
         row = SupplierOfferModerationService().reject(db, offer_id=offer_id, reason=payload.reason)
     except SupplierOfferModerationNotFoundError:
@@ -1213,8 +1215,8 @@ def post_admin_supplier_offer_close_link(
     return row
 
 
-@router.post("/supplier-offers/{offer_id}/retract", response_model=SupplierOfferRead)
-def post_admin_supplier_offer_retract(offer_id: int, db: Session = Depends(get_db)) -> SupplierOfferRead:
+@router.post("/supplier-offers/{offer_id}/retract", response_model=AdminSupplierOfferRead)
+def post_admin_supplier_offer_retract(offer_id: int, db: Session = Depends(get_db)) -> AdminSupplierOfferRead:
     try:
         row = SupplierOfferModerationService().retract_published(db, offer_id=offer_id)
     except SupplierOfferModerationNotFoundError:
