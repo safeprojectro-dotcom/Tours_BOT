@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 # --- English month names (marketing_summary / tooltips; stable for tests) ---
@@ -150,6 +150,49 @@ def format_sales_and_payment_pretty(sales_mode: str, payment_mode: str) -> str:
     return f"{LB_SALES}: {label_tour_sales_mode(sales_mode)} · {LB_PAYMENT}: {label_supplier_payment_mode(payment_mode)}"
 
 
+def format_commercial_summary_prose(sales_mode: str, payment_mode: str) -> str:
+    """
+    B4.3: human commercial intent for admin marketing blocks — no raw enum values,
+    no 'Sales: Full bus' style labels.
+    """
+    sm = (sales_mode or "").strip().lower()
+    pm = (payment_mode or "").strip().lower()
+    if sm == "per_seat":
+        comm = "Pretul afisat este per persoana (nu inventar live in acest pas)."
+    elif sm == "full_bus":
+        comm = "Pretul afisat este pentru intregul autobuz; capacitatea nu este disponibilitate live in acest pas."
+    else:
+        comm = "Mod comercial: verificati oferta sursa."
+    if pm == "platform_checkout":
+        pl = "Plata poate fi gestionata prin platforma, conform setarilor la publicare."
+    elif pm == "assisted_closure":
+        pl = "Rezervare / plata pot fi finalizate la imbarcare sau prin echipa, conform politicii."
+    else:
+        pl = "Mod plata: verificati oferta sursa."
+    return f"{comm} {pl}"
+
+
+def narrative_for_telegram_footer(
+    description: str,
+    program_text: str | None,
+    transport_notes: str | None,
+) -> str:
+    """
+    B4.3: avoid duplicating the route or full description that already appears in Traseu / program block.
+    """
+    d = (description or "").strip()
+    if not d:
+        return ""
+    if not (program_text or "").strip():
+        return ""
+    if (transport_notes or "").strip():
+        return _clip(strip_iso_timestamps_for_display(d), 1500)
+    parts = d.split("\n", 1)
+    if len(parts) == 2:
+        return _clip(strip_iso_timestamps_for_display(parts[1].strip()), 1500)
+    return ""
+
+
 def format_route_pretty(text: str | None) -> str | None:
     if not (text or "").strip():
         return None
@@ -215,7 +258,8 @@ def format_vehicle_block_ro(
     if sm == "full_bus":
         line = f"🚍 {v}" if v else "🚍 Microbuz / autocar"
         if st and not _seats_mentioned_in_vehicle(vehicle_label, st):
-            return f"{line} ({st} locuri)"
+            # B4.3: capacity of vehicle/offer, not "live available seats"
+            return f"{line} (cap. max. {st} locuri, autobuz complet)"
         return line
     if v:
         return f"🚍 {v}"
@@ -479,7 +523,9 @@ def build_telegram_post_draft(
     if not (prog and prog.strip()):
         prog = "—"
     body.extend(["", "✨ Ce vezi:", _clip(strip_iso_timestamps_for_display(prog), 2000)])
-    body.append(_clip(strip_iso_timestamps_for_display(description), 1500))
+    footer = narrative_for_telegram_footer(description, program_text, transport_notes)
+    if footer:
+        body.append(footer)
     if (included or "").strip():
         body.extend(["", f"✅ Include: {included.strip()}"])
     if (excluded or "").strip():

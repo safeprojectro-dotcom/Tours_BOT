@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -14,10 +15,10 @@ from app.schemas.supplier_admin import AdminSupplierOfferRead
 from app.services.packaging_formatting import (
     build_grounding_debug_json,
     build_telegram_post_draft,
+    format_commercial_summary_prose,
     format_date_range_pretty,
     format_marketing_price_line_ro,
     format_price_for_display,
-    format_sales_and_payment_pretty,
     format_seats_count,
     parse_snapshot_datetimes,
     polish_program_text_for_telegram_block,
@@ -172,6 +173,43 @@ def assess_missing_and_warnings(row: SupplierOffer) -> tuple[list[str], list[dic
     return missing, warnings
 
 
+_FAKE_SCARCITY_RE = re.compile(
+    r"(?i)\b(ultim[ae]?\s+loc(uri)?|last\s+seats?|only\s+\d+\s+left|hurry|grab\s+now|"
+    r"urgent|restante?\s+loc(uri)?|putin[ae]?\s+loc(uri)?|few\s+seats|selling\s+fast)\b"
+)
+
+
+def assess_packaging_truth_warnings(row: SupplierOffer) -> list[dict[str, str]]:
+    """B4.3: discount / scarcity truth — no live inventory; formatting-only inferences."""
+    w: list[dict[str, str]] = []
+    dp, da = row.discount_percent, row.discount_amount
+    has_pct = dp is not None and dp > 0
+    has_amt = da is not None and da > 0
+    if (row.discount_code or "").strip() and not has_pct and not has_amt:
+        w.append(
+            {
+                "code": "orphan_promo_code",
+                "message": "discount_code is set without discount_percent or discount_amount — not a public promo in this draft.",
+            }
+        )
+    if row.discount_valid_until is not None and not has_pct and not has_amt:
+        w.append(
+            {
+                "code": "discount_deadline_without_value",
+                "message": "discount_valid_until is set but no percent/amount discount — deadline is not customer-facing alone.",
+            }
+        )
+    blob = f"{row.title or ''}\n{row.description or ''}"
+    if _FAKE_SCARCITY_RE.search(blob):
+        w.append(
+            {
+                "code": "scarcity_language_unsubstantiated",
+                "message": "Marketing text may imply limited seats/urgency without a live stock source in this step — review.",
+            }
+        )
+    return w
+
+
 def _clip(s: str, n: int) -> str:
     t = s.strip()
     if len(t) <= n:
@@ -228,8 +266,8 @@ def build_deterministic_draft(
         f"{snap.title}\n\n{strip_iso_timestamps_for_display(snap.description)}\n\n"
         f"🗓 {date_range}\n"
         f"{m_price}\n"
-        f"🛂 {format_sales_and_payment_pretty(snap.sales_mode, snap.payment_mode)}\n"
-        f"(All facts from supplier snapshot — verify before publish.)",
+        f"{format_commercial_summary_prose(snap.sales_mode, snap.payment_mode)}\n"
+        f"(Toate datele din oferta furnizor — verificati inainte de publicare.)",
         10000,
     )
     common_tg_kwargs: dict[str, Any] = {
@@ -260,7 +298,10 @@ def build_deterministic_draft(
     else:
         t_post = build_telegram_post_draft(dep=None, ret=None, **common_tg_kwargs)  # type: ignore[misc]
     brief_p = _clip(program_norm, 1500)
-    mini_line = f"{seats_count} locuri" if snap.seats_total > 0 and sm_low == "full_bus" else "per loc"
+    if sm_low == "full_bus" and snap.seats_total > 0:
+        mini_line = f"cap. max. {seats_count} locuri (autobuz complet, fara stoc live)"
+    else:
+        mini_line = "per loc; locurile se confirma la rezervare"
     mini_short = _clip(
         f"{snap.title} — {price_line}. {mini_line}. {date_range}.",
         500,
@@ -335,6 +376,7 @@ class SupplierOfferPackagingService:
         row.packaging_status = SupplierOfferPackagingStatus.PACKAGING_PENDING
         session.flush()
         missing, qwarn = assess_missing_and_warnings(row)
+        qwarn.extend(assess_packaging_truth_warnings(row))
         snap = _as_snapshot(row)
         draft = self._ai.generate_draft(
             snap, missing_field_codes=missing, quality_warnings=qwarn
