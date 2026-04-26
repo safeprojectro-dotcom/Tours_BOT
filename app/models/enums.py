@@ -96,6 +96,16 @@ class SupplierOfferPackagingStatus(StrEnum):
     CLARIFICATION_REQUESTED = "clarification_requested"
 
 
+class SupplierOfferMediaReviewStatus(StrEnum):
+    """B7.1: cover visual review metadata (packaging_draft_json.media_review); not lifecycle or channel publish."""
+
+    APPROVED_FOR_CARD = "approved_for_card"
+    REJECTED_BAD_QUALITY = "rejected_bad_quality"
+    REJECTED_IRRELEVANT = "rejected_irrelevant"
+    REPLACEMENT_REQUESTED = "replacement_requested"
+    FALLBACK_CARD_REQUIRED = "fallback_card_required"
+
+
 class SupplierLegalEntityType(StrEnum):
     """Y2.1a: minimal legal identity categories for supplier onboarding approval."""
 

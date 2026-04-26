@@ -13,6 +13,7 @@ from app.models.enums import (
     CustomMarketplaceRequestStatus,
     OperatorWorkflowIntent,
     SupplierOfferLifecycle,
+    SupplierOfferMediaReviewStatus,
     TourStatus,
 )
 from app.models.supplier import Supplier
@@ -91,6 +92,11 @@ from app.services.supplier_offer_packaging_review_service import (
     SupplierOfferPackagingReviewStateError,
 )
 from app.services.branded_telegram_preview import BrandedTelegramPreviewNotFoundError, persist_branded_preview_to_db
+from app.services.supplier_offer_media_review_service import (
+    SupplierOfferMediaReviewNotFoundError,
+    SupplierOfferMediaReviewService,
+    SupplierOfferMediaReviewStateError,
+)
 from app.repositories.user import UserRepository
 from app.services.custom_marketplace_request_service import (
     CustomMarketplaceRequestAssignConflictError,
@@ -121,6 +127,9 @@ from app.schemas.custom_marketplace import (
     CustomRequestBookingBridgeRead,
 )
 from app.schemas.supplier_admin import (
+    AdminMediaReviewApproveBody,
+    AdminMediaReviewFallbackBody,
+    AdminMediaReviewRejectBody,
     AdminPackagingApproveBody,
     AdminPackagingReasonBody,
     AdminPackagingTelegramDraftPatch,
@@ -1142,6 +1151,96 @@ def patch_supplier_offer_packaging_draft(
     except SupplierOfferPackagingReviewStateError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+
+
+@router.get("/supplier-offers/{offer_id}/media/review", response_model=AdminSupplierOfferRead)
+def get_supplier_offer_media_review(offer_id: int, db: Session = Depends(get_db)) -> AdminSupplierOfferRead:
+    """B7.1: read cover + media review metadata in packaging_draft_json. No getFile, no download."""
+    try:
+        return SupplierOfferMediaReviewService().get_read(db, offer_id=offer_id)
+    except SupplierOfferMediaReviewNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+
+
+@router.post("/supplier-offers/{offer_id}/media/approve-for-card", response_model=AdminSupplierOfferRead)
+def post_supplier_offer_media_approve_for_card(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    body: AdminMediaReviewApproveBody = Body(...),
+) -> AdminSupplierOfferRead:
+    """B7.1: mark cover as approved for future card (metadata only; does not generate images or publish)."""
+    try:
+        out = SupplierOfferMediaReviewService().approve_for_card(
+            db, offer_id=offer_id, reviewed_by=body.reviewed_by
+        )
+        db.commit()
+        return out
+    except SupplierOfferMediaReviewNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    except SupplierOfferMediaReviewStateError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+
+
+@router.post("/supplier-offers/{offer_id}/media/reject", response_model=AdminSupplierOfferRead)
+def post_supplier_offer_media_reject(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    body: AdminMediaReviewRejectBody = Body(...),
+) -> AdminSupplierOfferRead:
+    st = (
+        SupplierOfferMediaReviewStatus.REJECTED_BAD_QUALITY
+        if body.kind == "bad_quality"
+        else SupplierOfferMediaReviewStatus.REJECTED_IRRELEVANT
+    )
+    try:
+        out = SupplierOfferMediaReviewService().reject(
+            db,
+            offer_id=offer_id,
+            status=st,
+            reason=body.reason,
+            reviewed_by=body.reviewed_by,
+        )
+        db.commit()
+        return out
+    except SupplierOfferMediaReviewNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+
+
+@router.post("/supplier-offers/{offer_id}/media/request-replacement", response_model=AdminSupplierOfferRead)
+def post_supplier_offer_media_request_replacement(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    body: AdminPackagingReasonBody = Body(...),
+) -> AdminSupplierOfferRead:
+    try:
+        out = SupplierOfferMediaReviewService().request_replacement(
+            db, offer_id=offer_id, reason=body.reason, reviewed_by=body.reviewed_by
+        )
+        db.commit()
+        return out
+    except SupplierOfferMediaReviewNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+
+
+@router.post("/supplier-offers/{offer_id}/media/use-fallback-card", response_model=AdminSupplierOfferRead)
+def post_supplier_offer_media_use_fallback_card(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    body: AdminMediaReviewFallbackBody = Body(...),
+) -> AdminSupplierOfferRead:
+    try:
+        out = SupplierOfferMediaReviewService().use_fallback_card(
+            db, offer_id=offer_id, reason=body.reason, reviewed_by=body.reviewed_by
+        )
+        db.commit()
+        return out
+    except SupplierOfferMediaReviewNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
 
 
 @router.post("/supplier-offers/{offer_id}/moderation/approve", response_model=AdminSupplierOfferRead)

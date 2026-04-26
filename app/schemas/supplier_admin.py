@@ -379,3 +379,76 @@ class AdminPackagingTelegramDraftPatch(BaseModel):
     @classmethod
     def strip_tg(cls, v: str) -> str:
         return v.rstrip() if v else v
+
+
+class AdminMediaReviewApproveBody(BaseModel):
+    """B7.1: optional reviewer label for cover approve."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reviewed_by: str | None = Field(default=None, max_length=256)
+
+    @field_validator("reviewed_by")
+    @classmethod
+    def strip_reviewer_mra(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s or None
+
+
+class AdminMediaReviewRejectBody(BaseModel):
+    """B7.1: reject with kind → rejected_bad_quality | rejected_irrelevant."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str = Field(min_length=1, max_length=32)
+    reason: str = Field(min_length=1, max_length=4000)
+    reviewed_by: str | None = Field(default=None, max_length=256)
+
+    @field_validator("kind")
+    @classmethod
+    def kind_ok(cls, v: str) -> str:
+        s = (v or "").strip().lower()
+        if s not in ("bad_quality", "irrelevant"):
+            raise ValueError("kind must be 'bad_quality' or 'irrelevant'")
+        return s
+
+    @field_validator("reason")
+    @classmethod
+    def strip_reason_mrr(cls, v: str) -> str:
+        s = v.strip()
+        if not s:
+            raise ValueError("reason must not be empty")
+        return s
+
+    @field_validator("reviewed_by")
+    @classmethod
+    def strip_reviewer_mrr(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s or None
+
+
+class AdminMediaReviewFallbackBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = Field(default=None, max_length=4000)
+    reviewed_by: str | None = Field(default=None, max_length=256)
+
+    @field_validator("reason")
+    @classmethod
+    def strip_reason_mrf(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s or None
+
+    @field_validator("reviewed_by")
+    @classmethod
+    def strip_reviewer_mrf(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s or None
