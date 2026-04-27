@@ -8,7 +8,11 @@ from types import SimpleNamespace
 from pydantic import ValidationError
 
 from app.models.enums import TourSalesMode, TourStatus
-from app.schemas.tour_sales_mode_policy import CatalogActionabilityState, TourSalesModePolicyRead
+from app.schemas.tour_sales_mode_policy import (
+    CatalogActionabilityState,
+    CatalogConversionProfile,
+    TourSalesModePolicyRead,
+)
 from app.services.tour_sales_mode_policy import TourSalesModePolicyService
 from tests.unit.base import FoundationDBTestCase
 
@@ -24,6 +28,10 @@ class TourSalesModePolicyTests(FoundationDBTestCase):
         self.assertTrue(p.mini_app_catalog_reservation_allowed)
         self.assertIsNone(p.catalog_charter_fixed_seats_count)
         self.assertEqual(p.catalog_actionability_state, CatalogActionabilityState.BOOKABLE)
+        self.assertEqual(p.catalog_conversion_profile, CatalogConversionProfile.PER_SEAT_STANDARD)
+        self.assertEqual(p.reservation_cta_semantic_key, "mini_app_cta_reserve_seats")
+        self.assertEqual(p.seat_selection_ux, "free_numeric")
+        self.assertFalse(p.bookable_as_full_bus_package)
 
     def test_full_bus_policy_output(self) -> None:
         p = TourSalesModePolicyService.policy_for_sales_mode(TourSalesMode.FULL_BUS)
@@ -76,6 +84,12 @@ class TourSalesModePolicyTests(FoundationDBTestCase):
         self.assertTrue(p.mini_app_catalog_reservation_allowed)
         self.assertEqual(p.catalog_charter_fixed_seats_count, 30)
         self.assertEqual(p.catalog_actionability_state, CatalogActionabilityState.BOOKABLE)
+        self.assertEqual(p.catalog_conversion_profile, CatalogConversionProfile.FULL_BUS_WHOLE_VEHICLE_BOOKABLE)
+        self.assertTrue(p.bookable_as_full_bus_package)
+        self.assertEqual(p.seat_selection_ux, "fixed_charter")
+        self.assertEqual(p.reservation_cta_semantic_key, "mini_app_cta_reserve_full_bus")
+        self.assertEqual(p.price_display_semantic_key, "price_display_total_bus_package")
+        self.assertEqual(p.capacity_display_semantic_key, "capacity_display_whole_vehicle_capacity")
 
     def test_policy_for_catalog_tour_full_bus_partial_blocks_mini_app_hold(self) -> None:
         tour = self.create_tour(
@@ -137,6 +151,33 @@ class TourSalesModePolicyTests(FoundationDBTestCase):
         p = TourSalesModePolicyService.policy_for_tour(tour)
         self.assertEqual(p.effective_sales_mode, TourSalesMode.PER_SEAT)
         self.assertTrue(p.per_seat_self_service_allowed)
+
+    def test_b10_3_policy_catalog_per_seat_semantics(self) -> None:
+        tour = self.create_tour(
+            code="POL-CAT-PER-SEAT-B103",
+            status=TourStatus.OPEN_FOR_SALE,
+            sales_mode=TourSalesMode.PER_SEAT,
+        )
+        self.session.commit()
+        p = TourSalesModePolicyService.policy_for_catalog_tour(tour)
+        self.assertEqual(p.catalog_conversion_profile, CatalogConversionProfile.PER_SEAT_STANDARD)
+        self.assertEqual(p.reservation_cta_semantic_key, "mini_app_cta_reserve_seats")
+        self.assertEqual(p.seat_selection_ux, "free_numeric")
+
+    def test_b10_3_full_bus_view_only_semantics(self) -> None:
+        tour = self.create_tour(
+            code="POL-CAT-FB-VIEW-B103",
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=20,
+            seats_available=0,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.session.commit()
+        p = TourSalesModePolicyService.policy_for_catalog_tour(tour)
+        self.assertEqual(p.catalog_conversion_profile, CatalogConversionProfile.FULL_BUS_VIEW_ONLY)
+        self.assertFalse(p.bookable_as_full_bus_package)
+        self.assertEqual(p.seat_selection_ux, "none")
+        self.assertEqual(p.reservation_cta_semantic_key, "mini_app_cta_view_only")
 
     def test_policy_read_model_is_frozen(self) -> None:
         p = TourSalesModePolicyService.policy_for_sales_mode(TourSalesMode.PER_SEAT)

@@ -115,6 +115,65 @@ def _policy_is_catalog_bookable(policy: TourSalesModePolicyRead) -> bool:
     )
 
 
+def _catalog_card_price_capacity_line(
+    language_code: str | None,
+    card: CatalogTourCardRead,
+    *,
+    format_price: Callable[[Decimal], str],
+) -> str:
+    """B10.3: per_seat shows free/total seats; full_bus charter shows total price + whole-vehicle capacity."""
+    p = card.sales_mode_policy
+    if p.seat_selection_ux == "fixed_charter" and p.bookable_as_full_bus_package:
+        n = p.catalog_charter_fixed_seats_count or card.seats_total
+        return shell(
+            language_code,
+            "catalog_card_line_full_bus_package",
+            price=format_price(card.base_price),
+            currency=card.currency,
+            n=str(n),
+        )
+    return shell(
+        language_code,
+        "catalog_card_line_per_seat",
+        price=format_price(card.base_price),
+        currency=card.currency,
+        seats_free=str(card.seats_available),
+        seats_total=str(card.seats_total),
+    )
+
+
+def _catalog_card_secondary_badge_text(language_code: str | None, card: CatalogTourCardRead) -> str:
+    p = card.sales_mode_policy
+    if p.bookable_as_full_bus_package and card.is_available:
+        return shell(language_code, "badge_full_bus_charter_open")
+    if card.is_available:
+        return shell(language_code, "badge_seats_available")
+    return shell(language_code, "badge_sold_out")
+
+
+def _preparation_capacity_snapshot_line(
+    language_code: str | None,
+    preparation: MiniAppReservationPreparationRead,
+) -> str:
+    p = preparation.sales_mode_policy
+    n = str(preparation.tour.seats_available_snapshot)
+    if p.seat_selection_ux == "fixed_charter" and p.bookable_as_full_bus_package:
+        return shell(language_code, "capacity_prep_line_full_bus", n=n)
+    return shell(language_code, "capacity_prep_line_per_seat", n=n)
+
+
+def _preparation_note_for_policy(
+    language_code: str | None,
+    preparation: MiniAppReservationPreparationRead,
+    telegram_user_id: int | None,
+) -> str:
+    p = preparation.sales_mode_policy
+    dev = str(telegram_user_id or "—")
+    if p.seat_selection_ux == "fixed_charter" and p.bookable_as_full_bus_package:
+        return shell(language_code, "prep_note_full_bus", dev_id=dev)
+    return shell(language_code, "prep_note", dev_id=dev)
+
+
 def _format_request_datetime(value: datetime) -> str:
     return CatalogScreen._format_datetime(value)
 
@@ -317,7 +376,7 @@ class CatalogScreen:
             [
                 self._build_badge(self._status_label(card.status.value), ft.Colors.BLUE_50, ft.Colors.BLUE_900),
                 self._build_badge(
-                    shell(lg, "badge_seats_available") if card.is_available else shell(lg, "badge_sold_out"),
+                    _catalog_card_secondary_badge_text(lg, card),
                     ft.Colors.GREEN_50 if card.is_available else ft.Colors.RED_50,
                     ft.Colors.GREEN_900 if card.is_available else ft.Colors.RED_900,
                 ),
@@ -332,6 +391,11 @@ class CatalogScreen:
                 color=ft.Colors.TERTIARY,
                 size=13,
             )
+        price_capacity = _catalog_card_price_capacity_line(
+            lg,
+            card,
+            format_price=CatalogScreen._format_price,
+        )
         card_children: list[ft.Control] = [
             badges,
             ft.Text(card.title, size=18, weight=ft.FontWeight.BOLD),
@@ -341,7 +405,7 @@ class CatalogScreen:
                 color=ft.Colors.ON_SURFACE_VARIANT,
             ),
             ft.Text(
-                f"{self._format_price(card.base_price)} {card.currency} | {card.seats_available} / {card.seats_total} seats left",
+                price_capacity,
                 color=ft.Colors.ON_SURFACE_VARIANT,
             ),
         ]
@@ -720,10 +784,11 @@ class TourDetailScreen:
         lg = self.language_code
         if detail.is_available:
             if _policy_is_catalog_bookable(detail.sales_mode_policy):
+                cta_key = detail.sales_mode_policy.reservation_cta_semantic_key
                 return ft.Row(
                     [
                         ft.ElevatedButton(
-                            shell(lg, "prepare_reservation"),
+                            shell(lg, cta_key),
                             on_click=lambda _, code=detail.tour.code: self.on_prepare(code),
                         )
                     ],
@@ -986,11 +1051,19 @@ class ReservationPreparationScreen:
         self.nav_help.text = shell(lg, "btn_help")
         self.nav_custom_trip.text = shell(lg, "nav_custom_trip")
         self.nav_settings.text = shell(lg, "settings")
-        self.seats_dropdown.label = shell(lg, "label_seats")
         self.boarding_dropdown.label = shell(lg, "label_boarding")
         self.preview_button.text = shell(lg, "btn_preview_summary")
         self.confirm_reserve_button.text = shell(lg, "btn_confirm_reservation")
-        self.preparation_note.value = shell(lg, "prep_note", dev_id=str(self.telegram_user_id or "—"))
+        if self._last_preparation is not None:
+            self.preparation_note.value = _preparation_note_for_policy(
+                lg, self._last_preparation, self.telegram_user_id
+            )
+            lp = self._last_preparation.sales_mode_policy
+            fixed = lp.seat_selection_ux == "fixed_charter" and lp.bookable_as_full_bus_package
+            self.seats_dropdown.label = shell(lg, "prep_label_seats_full_bus" if fixed else "label_seats")
+        else:
+            self.preparation_note.value = shell(lg, "prep_note", dev_id=str(self.telegram_user_id or "—"))
+            self.seats_dropdown.label = shell(lg, "label_seats")
         if self.loading_row.controls:
             self.loading_row.controls[1].value = shell(lg, "loading_reservation_options")
 
@@ -1085,6 +1158,10 @@ class ReservationPreparationScreen:
 
         lg = self.language_code
         localized = preparation.tour.localized_content
+        p = preparation.sales_mode_policy
+        fixed_charter = p.seat_selection_ux == "fixed_charter" and p.bookable_as_full_bus_package
+        self.preparation_note.value = _preparation_note_for_policy(lg, preparation, self.telegram_user_id)
+        cap_line = _preparation_capacity_snapshot_line(lg, preparation)
         header_rows: list[ft.Control] = [
             ft.Text(localized.title, size=26, weight=ft.FontWeight.BOLD),
             ft.Text(
@@ -1092,12 +1169,20 @@ class ReservationPreparationScreen:
                 f"{CatalogScreen._format_price(preparation.tour.base_price)} {preparation.tour.currency}",
                 color=ft.Colors.ON_SURFACE_VARIANT,
             ),
-            ft.Text(
-                f"Seats available for preparation: {preparation.tour.seats_available_snapshot}",
-                color=ft.Colors.ON_SURFACE_VARIANT,
-            ),
         ]
-
+        if p.effective_sales_mode == TourSalesMode.FULL_BUS:
+            header_rows.append(
+                ft.Text(
+                    shell(lg, p.price_display_semantic_key),
+                    size=12,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                )
+            )
+        header_rows.append(ft.Text(cap_line, color=ft.Colors.ON_SURFACE_VARIANT))
+        if fixed_charter:
+            header_rows.append(
+                ft.Text(shell(lg, "prep_full_bus_charter_notice"), size=13, color=ft.Colors.ON_SURFACE_VARIANT)
+            )
         if not _policy_is_catalog_bookable(preparation.sales_mode_policy):
             self.preparation_note.visible = False
             prep_assisted_children: list[ft.Control] = [
@@ -1138,6 +1223,8 @@ class ReservationPreparationScreen:
             ft.dropdown.Option(str(option), str(option)) for option in preparation.seat_count_options
         ]
         self.seats_dropdown.value = str(preparation.seat_count_options[0]) if preparation.seat_count_options else None
+        self.seats_dropdown.disabled = bool(fixed_charter)
+        self.seats_dropdown.label = shell(lg, "prep_label_seats_full_bus" if fixed_charter else "label_seats")
         self.boarding_dropdown.options = [
             ft.dropdown.Option(str(point.id), f"{point.city} - {point.address}")
             for point in preparation.boarding_points
@@ -1163,6 +1250,11 @@ class ReservationPreparationScreen:
 
         self.confirm_reserve_button.disabled = False
         lg = self.language_code
+        prep = self._last_preparation
+        if prep is not None and prep.sales_mode_policy.bookable_as_full_bus_package:
+            seat_line = shell(lg, "prep_line_whole_bus_seats", n=str(summary.seats_count))
+        else:
+            seat_line = shell(lg, "prep_line_seats", n=str(summary.seats_count))
         self.summary_container.controls.extend(
             [
                 ft.Text(shell(lg, "prep_summary_title"), size=20, weight=ft.FontWeight.W_600),
@@ -1173,7 +1265,7 @@ class ReservationPreparationScreen:
                     content=ft.Column(
                         [
                             ft.Text(summary.tour.localized_content.title, size=18, weight=ft.FontWeight.BOLD),
-                            ft.Text(shell(lg, "prep_line_seats", n=str(summary.seats_count))),
+                            ft.Text(seat_line),
                             ft.Text(
                                 shell(
                                     lg,
@@ -1662,6 +1754,9 @@ class RfqBridgeExecutionScreen:
 
         lg = self.language_code
         localized = preparation.tour.localized_content
+        p = preparation.sales_mode_policy
+        fixed_charter = p.seat_selection_ux == "fixed_charter" and p.bookable_as_full_bus_package
+        cap_line = _preparation_capacity_snapshot_line(lg, preparation)
         header_rows: list[ft.Control] = [
             ft.Text(localized.title, size=22, weight=ft.FontWeight.BOLD),
             ft.Text(
@@ -1669,11 +1764,20 @@ class RfqBridgeExecutionScreen:
                 f"{CatalogScreen._format_price(preparation.tour.base_price)} {preparation.tour.currency}",
                 color=ft.Colors.ON_SURFACE_VARIANT,
             ),
-            ft.Text(
-                f"Seats available for preparation: {preparation.tour.seats_available_snapshot}",
-                color=ft.Colors.ON_SURFACE_VARIANT,
-            ),
         ]
+        if p.effective_sales_mode == TourSalesMode.FULL_BUS:
+            header_rows.append(
+                ft.Text(
+                    shell(lg, p.price_display_semantic_key),
+                    size=12,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                )
+            )
+        header_rows.append(ft.Text(cap_line, color=ft.Colors.ON_SURFACE_VARIANT))
+        if fixed_charter:
+            header_rows.append(
+                ft.Text(shell(lg, "prep_full_bus_charter_notice"), size=13, color=ft.Colors.ON_SURFACE_VARIANT)
+            )
 
         if not _policy_is_catalog_bookable(preparation.sales_mode_policy):
             self.flow_column.controls.extend(
@@ -1701,6 +1805,8 @@ class RfqBridgeExecutionScreen:
             ft.dropdown.Option(str(option), str(option)) for option in preparation.seat_count_options
         ]
         self.seats_dropdown.value = str(preparation.seat_count_options[0]) if preparation.seat_count_options else None
+        self.seats_dropdown.disabled = bool(fixed_charter)
+        self.seats_dropdown.label = shell(lg, "prep_label_seats_full_bus" if fixed_charter else "label_seats")
         self.boarding_dropdown.options = [
             ft.dropdown.Option(str(point.id), f"{point.city} - {point.address}")
             for point in preparation.boarding_points
