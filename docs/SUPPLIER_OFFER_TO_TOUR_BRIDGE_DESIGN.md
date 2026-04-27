@@ -143,19 +143,20 @@ Record (dedicated table **or** extended metadata on the link row — B10 choice)
 
 ---
 
-## 10. Next implementation: B10
+## 10. B10 implementation status and forward work
 
-**B10** (separate tickets) should include:
+**B10** (bridge runtime, admin API, idempotency, **draft** default, **activate-for-catalog** (B10.2), **full_bus** Mini App + Layer A path (B10.3–B10.5)) is **implemented** in-repo. **Handoff / smoke record:** [`HANDOFF_B10_SUPPLIER_OFFER_TO_TOUR_BRIDGE_IMPLEMENTATION.md`](HANDOFF_B10_SUPPLIER_OFFER_TO_TOUR_BRIDGE_IMPLEMENTATION.md), **[`B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)**. **Production smoke (accepted):** offer **#8** → Tour **#4** — reservation/payment/My bookings; package total; boarding fallback; catalog only after explicit activation (see checkpoint).
 
-1. **Migration** as needed: optional **`supplier_offer_tour_bridge`** audit table **or** columns on `supplier_offer_execution_links` / `supplier_offers` (e.g. `bridged_tour_id`) — **one** model of truth for “which tour this offer is selling.”
-2. **Admin API:** e.g. `POST /admin/supplier-offers/{id}/tour-bridge` with body `{ "mode": "create" | "link", "tour_id": ... }` and idempotency header.
-3. **Read** bridge status on admin offer detail.
-4. **Tests** + **smoke** (e.g. offer **#8** with `approved_for_publish` → Tour **draft** or **open** per policy → catalog visibility matches `Tour.status` and existing Mini App filters).
+**Original §10 plan items** (admin bridge API, create/link, read-side, tests) are **covered** by that implementation; **B9** design in §§1–9 remains the **architectural** contract.
 
-**Smoke expectation:** Tour appears in Mini App **catalog** only when **`tours.status`** and catalog query rules allow (e.g. `open_for_sale` + not cancelled), not merely because a bridge row exists.
+**Forward (separate tickets — do not conflate with B9):**
+- **B8** — recurring supplier offers (see [`SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md)).
+- **B7.3** — publish-safe media pipeline when storage/`getFile`/public URL policy is decided.
+- **B10.6** — Telegram private bot tour detail as **router/consultant** to Mini App, not duplicate catalog ([`OPEN_QUESTIONS_AND_TECH_DEBT.md`](OPEN_QUESTIONS_AND_TECH_DEBT.md)).
 
 ---
 
 ## Document history
 
 - **2026-04-26:** B9 design — initial version (no code).
+- **2026-04-27:** §10 retitled to implementation status; B10–B10.5 completed; forward pointer B8 / B7.3 / B10.6 (docs sync).

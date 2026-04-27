@@ -82,6 +82,6 @@ This rule governs **B1–B13** and prevents accidental coupling of **moderation*
 | Document | Role |
 |----------|------|
 | This file | **BUSINESS** roadmap **B1–B13** + core bridge rule. |
-| [`B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md) | **B10.x** completion, smoke, gates, tech debt, **B8** / **B7.3** next-step pointer. |
+| [`B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md) | **B10.x** completion, smoke, gates, tech debt, **B8** / **B7.3** next-step pointer. **B10.x** docs sync **2026-04-27:** bridge design **§10**, **OPEN_QUESTIONS** B7.3 wording (post-B10). |
 | [`SUPPLIER_OFFER_INTAKE_AI_PACKAGING_MODERATION_DESIGN.md`](SUPPLIER_OFFER_INTAKE_AI_PACKAGING_MODERATION_DESIGN.md) | **B1** detailed design. |
 | `docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md` | Historical **V2** track delivery; use for **context**, not as a replacement numbering for **B** lines. |

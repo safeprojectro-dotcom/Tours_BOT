@@ -49,7 +49,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **B10 (offer → Tour bridge):** **Completed** **(B10** **+** **B10.1**–**B10.5** **smoke** **path).** **Record:** **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md).** **Forward** **BUSINESS** **priority** **(recommended):** **B8** **—** **recurring** **supplier** **offers**; **alternate** **B7.3.**
 
 ### B9 design checkpoint (supplier offer → Tour bridge, 2026-04-26)
-**Docs-only** (no `app/`, no migrations in this gate). **Canonical design:** [`docs/SUPPLIER_OFFER_TO_TOUR_BRIDGE_DESIGN.md`](SUPPLIER_OFFER_TO_TOUR_BRIDGE_DESIGN.md) — **core** **principle,** **preconditions** **(packaging** **`approved_for_publish`,** **lifecycle** **gate,** **field** **completeness),** **create** **vs** **link** **to** **existing** **`Tour`,** **data** **mapping** **to** **`tours`/`tour_translations`,** **full_bus** **vs** **per_seat,** **Tour** **`draft`** **default,** **idempotency,** **audit,** **non-goals,** **B10** **next** **steps.** **Relates** **to** **Y27** **`supplier_offer_execution_links`** **without** **replacing** **that** **table’s** **meaning.**
+**Docs-only** (no `app/`, no migrations in this gate). **Canonical design:** [`docs/SUPPLIER_OFFER_TO_TOUR_BRIDGE_DESIGN.md`](SUPPLIER_OFFER_TO_TOUR_BRIDGE_DESIGN.md) — **core** **principle,** **preconditions** **(packaging** **`approved_for_publish`,** **lifecycle** **gate,** **field** **completeness),** **create** **vs** **link** **to** **existing** **`Tour`,** **data** **mapping** **to** **`tours`/`tour_translations`,** **full_bus** **vs** **per_seat,** **Tour** **`draft`** **default,** **idempotency,** **audit,** **non-goals.** **B10** **implementation** **—** **completed** **(see** **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)**).** **Relates** **to** **Y27** **`supplier_offer_execution_links`** **without** **replacing** **that** **table’s** **meaning.**
 
 ---
 
@@ -62,7 +62,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Depends** **on** **B6** **(branded** **`branded_telegram_preview`**, **cover** **refs,** **warnings).** B7 **does** **not** **change** **B5/B6** **“approve** **≠** **publish”** **semantics.**
 
 ### Next safe implementation
-- **B7.3** — **Publish-safe** **media** (download/storage policy per **B7** **design) —** **or** **defer** **if** **B10** **bridge** **is** **priority.**
+- **B7.3** — **Publish-safe** **media** (download/storage policy per **B7** **design).** **B10** **bridge** **track** **is** **complete** **(see** **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)**);** **forward** **product** **priority** **is** **B8** **unless** **marketing** **explicitly** **needs** **B7.3** **first.**
 - **B7.1** **/** **B7.2** **(completed** **in** **repo):** **see** **CHAT_HANDOFF** **BUSINESS** **line;** no **new** **B7.1/7.2** **gate** **items** **here.**
 
 ### Still open (by design in B7)

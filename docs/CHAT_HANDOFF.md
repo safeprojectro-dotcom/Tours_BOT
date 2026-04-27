@@ -7,6 +7,8 @@ Tours_BOT
 
 **B9** design and **B10** through **B10.5** (**bridge,** **draft/activate,** **full_bus** **Mini** **App** **semantics,** **package** **pricing,** **boarding** **fallback**) are **completed** with **production** **smoke** (**Offer** **#8** **→** **Tour** **#4** **→** **reservation** **/** **payment** **/** **My** **bookings**). **Mini** **App** **=** **execution** **truth.** **Postponed:** **B10.6** **(Telegram** **bot** **as** **router/consultant,** **not** **duplicate** **catalog).** **Recommended** **next:** **B8** **(recurring** **offers);** **alternate** **B7.3** **(media).** **Full** **checkpoint:** **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)** **and** **[`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`](OPEN_QUESTIONS_AND_TECH_DEBT.md)** **(B10.x** **section).**
 
+**B10.x** **docs** **sync** **(2026-04-27):** **`SUPPLIER_OFFER_TO_TOUR_BRIDGE_DESIGN.md`** **§10** **=** **implementation** **status** **+** **forward** **pointer;** **`OPEN_QUESTIONS_AND_TECH_DEBT.md`** **B7.3** **/** **B9** **checkpoint** **—** **post-B10** **wording** **(no** **architecture** **change).**
+
 ## Continuity Sync — UVXWA1 Checkpoint (2026-04-19)
 
 This section is the current continuity anchor for the post-UVXWA1 state. It is documentation synchronization only and does not change code semantics.
