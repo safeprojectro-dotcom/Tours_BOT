@@ -3,11 +3,26 @@
 ## Project
 Tours_BOT
 
+## Continuity Sync — B8 recurring supplier offers (2026) — B8.4 docs sync
+
+### Current checkpoint (B8 implemented; B8.3 done)
+
+- **B8** recurring **draft** `Tour` **generation** **implemented** and **stabilized** — **`POST` `/admin/supplier-offers/{offer_id}/recurrence/draft-tours`**, **`B8R-*`** drafts, audit **`supplier_offer_recurrence_generated_tours`**, **no** `SupplierOfferTourBridge`, **no** auto-activation, **no** Telegram, **no** orders/reservations/payments. **Re-runs** **non-idempotent** (documented); **`start_offset_days=0` may duplicate** template/B10 date (documented).
+- **B8.2** **activation** **policy** **accepted** — **B10.2** only path **`draft` → `open_for_sale`**, no hidden B8 route.
+- **B8.3** **duplicate** **active** **catalog** **activation** **guard** **implemented** — **`AdminTourWriteService.activate_tour_for_catalog`**; ref **commit** **`460ef50`** (*feat: guard recurring tour activation conflicts*). **Handoff:** [`docs/HANDOFF_B8_3_DUPLICATE_ACTIVE_TOUR_ACTIVATION_GUARD.md`](HANDOFF_B8_3_DUPLICATE_ACTIVE_TOUR_ACTIVATION_GUARD.md).
+- **Railway** **post-deploy** **smoke (accepted):** `/health` **ok**; `/healthz` **ready**; **Mini** **App** **UI** **HTTP 200** (as reported at B8.4 sync).
+
+**Architecture (unchanged invariants):** **B8** **only** **creates** **drafts**; **catalog** **activation** **explicit** **via** **B10.2**; **no** **auto**-activation; **no** **Telegram** **publish** **on** **generation**; **no** **order/reservation/payment** **in** **generation**; **B8** **does** **not** **create** **`SupplierOfferTourBridge`** **rows**. **Duplicate** **draft** `Tour`s **allowed** (tech **debt).** **Duplicate** **`open_for_sale`** **for** **same** **source** **offer** + **`departure_datetime`** **blocked** **for** **B8-audited** **activations** (sibling **B8** **or** **B10** **primary** **bridged** **tour** **—** see **`OPEN_QUESTIONS`**, B8.3). **Second** **vehicle** **same** **date/offer** = **future** **ops** **policy** (not code); **B7.3,** **B10.6,** **B11** **not** **implemented** **here** **—** **see** **`OPEN_QUESTIONS`**.
+
+**Next** **product** **step** **(not** **auto-approved):** **choose** **one** **explicitly** — **B7.3** **media** **pipeline** **if** **storage**/**policy** **ready**; **B11** **Telegram** **deep-link** **routing** **if** **product** **ready**; **B10.6** **bot** **router**/**consultant** **if** **bot** **duplication** **is** **priority**; **B12/B13** **or** **publishing**/**template** **library** **if** **business** **plan** **prioritizes**; or **other** **BUSINESS**-plan **line** per **stakeholder** decision.
+
+---
+
 ## Continuity Sync — B10.x supplier offer → Tour → Mini App (2026)
 
-### Current checkpoint (B10.5 done / B10.6 postponed / next B8)
+### Current checkpoint (B10.5 done / B10.6 postponed; B8 line done)
 
-- **Status:** **B10.5** completed and smoke-accepted; **B10.6** postponed (non-blocking). **B8** **slice 1** (`POST` …`/recurrence/draft-tours`, draft `Tour` + audit, **no** `SupplierOfferTourBridge`, **no** activation) **shipped** **—** see **[`docs/HANDOFF_B10X_TO_B8_RECURRING_SUPPLIER_OFFERS.md`](HANDOFF_B10X_TO_B8_RECURRING_SUPPLIER_OFFERS.md)** and **`OPEN_QUESTIONS`** **(B8** **tech** **debt:** re-run not idempotent, `start_offset_days=0` may duplicate bridged date). **Next:** **B8** follow-ups (links/activation policy) or **B7.3**; **B11** per product.
+- **Status:** **B10.5** completed and smoke-accepted; **B10.6** postponed (non-blocking). **B8** (slice 1 + stabilization + B8.2 + B8.3) **documented** **complete** for this handoff **—** see **section** **above** and **[`docs/HANDOFF_B10X_TO_B8_RECURRING_SUPPLIER_OFFERS.md`](HANDOFF_B10X_TO_B8_RECURRING_SUPPLIER_OFFERS.md)**. **Tech** **debt** **(B8** **re-run,** `start_offset_days=0`): **`OPEN_QUESTIONS`**. **Next** **(product** **choice** **not** **implied** **here):** **B7.3,** **B11,** **B10.6,** **or** **B12/B13** per **plan**.
 - **Roles (2026):** **Telegram channel** = marketing showcase. **Telegram private bot** = router / consultant / entry (target: **B10.6** — not duplicate Mini App catalog). **Mini App** = execution truth and conversion. **Layer A** = booking / payment authority. **Supplier offer** = source facts. **Tour** = customer-facing catalog object. **Admin** = final bridge and activation decisions. **AI** = draft packaging only, not final publisher.
 - **Principle:** **visibility ≠ bookability.** Mini App execution truth stays strict; channel/bot can be softer for showcase but must not contradict Mini App bookability and pricing truth.
 

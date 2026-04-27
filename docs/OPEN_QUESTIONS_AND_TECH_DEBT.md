@@ -47,17 +47,45 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **No** **automatic** **Telegram** **channel** **publish** **from** **recurrence** **without** **explicit** **status** **/** **ops** **policy.**
 - **Design** **first,** **then** **implementation** **—** **see** **B8** **row** **in** **BUSINESS** **plan** **and** **§5** **/** **§6** **dependencies.**
 
-#### B8 slice 1 (draft-tours API) — accepted behavior / tech debt (2026)
+#### B8 slice 1 (draft-tours API) — shipped (2026)
 
 - **Shipped:** **`POST` `/admin/supplier-offers/{id}/recurrence/draft-tours`** **—** see **[`docs/HANDOFF_B10X_TO_B8_RECURRING_SUPPLIER_OFFERS.md`](HANDOFF_B10X_TO_B8_RECURRING_SUPPLIER_OFFERS.md).**
-- **No** **`SupplierOfferTourBridge`** **mutation** **in** **B8**; **B8** **only** **reuses** **shared** **draft** **`Tour`** **insert** **mapping** **from** **`SupplierOfferTourBridgeService`** **(plus** **audit** **table** **`supplier_offer_recurrence_generated_tours`).**
-- **Re-run** **/** **duplicate** **POST:** **not** **idempotent** **—** **each** **call** **creates** **new** **draft** **`tours`**. **Future:** **`generation_batch_id`**, **or** **uniqueness** **on** **`(source_supplier_offer_id,` **`departure_datetime)`** **/** **`tour`**, **or** **admin** **confirm** **—** **revisit** **when** **recurrence** **UI** **or** **ops** **volume** **warrants** **it.**
-- **`start_offset_days=0`:** **first** **instance** **matches** **template** **`departure_datetime`**; **if** **B10** **already** **bridged** **a** **tour** **for** **that** **slot,** **B8** **can** **still** **add** **another** **draft** **for** **the** **same** **dates** **(distinct** **`tour`**, **`B8R-*`** **code).** **Mitigation:** **use** **`start_offset_days` ≥** **interval** **or** **ops** **discipline** **(duplicate** **drafts** **remain** **allowed;** **duplicate** **`open_for_sale`** **for** **the** **same** **template** **offer** **+** **same** **`departure_datetime`** **is** **blocked** **at** **B10.2** **activation** **—** **B8.3).**
+- **No** **`SupplierOfferTourBridge`** **mutation** **in** **B8**; **B8** **reuses** **shared** **draft** **`Tour`** **mapping** from **`SupplierOfferTourBridgeService`** **+** **audit** **`supplier_offer_recurrence_generated_tours`.**
+- **`start_offset_days=0`:** first instance can match the template (and B10-bridged) **departure**; still **separate** draft **`tour`**. **B8.3** **blocks** **duplicate** **`open_for_sale`** **for** **same** **source** **offer** **+** **departure** (see **below**). Handoffs: **[`docs/HANDOFF_B8_3_DUPLICATE_ACTIVE_TOUR_ACTIVATION_GUARD.md`](HANDOFF_B8_3_DUPLICATE_ACTIVE_TOUR_ACTIVATION_GUARD.md)**, B8.2: **[`docs/HANDOFF_B8_2_RECURRING_ACTIVATION_POLICY_TO_IMPLEMENTATION.md`](HANDOFF_B8_2_RECURRING_ACTIVATION_POLICY_TO_IMPLEMENTATION.md).**
+
+#### B8 recurrence generation re-run idempotency
+
+- **Current** **decision:** **Re-running** the **same** **recurrence** **input** **may** **create** **duplicate** **draft** `Tour` **rows.**
+- **Acceptance** **now** **because** **generated** `Tour`s **stay** **draft** **and** **are** **not** **catalog**-**bookable** **without** **B10.2.**
+- **Risk:** **admin** **list** **clutter;** **accidental** **duplicate** **activation** **attempts** ( **B8.3** **reduces** **the** **latter** **for** **same** **offer+departure** **).
+- **Future** **options** **(open** **/** **non-blocking** **):** **`generation_batch_key`**, **uniqueness** **on** **`source_supplier_offer_id` +** **generated** **`departure_datetime`**, **admin** **preview** **before** **commit.**
+- **Status:** **open** **/** **non**-**blocking.**
+
+#### B8 duplicate active Tour guard (B8.3)
+
+- **Current** **decision:** **Duplicate** **draft** `Tour` **rows** **are** **allowed.** **Duplicate** **`open_for_sale`** **B8**-**generated** ( **audit** **row** ) `Tour` **for** the **same** **source** **`SupplierOffer`** **+** **same** **`departure_datetime`** **are** **blocked** **at** **`activate_tour_for_catalog`**. **Conflicts** **include** a **sibling** **B8**-**active** `Tour` **and** the **B10** **primary** **bridged** **active** `Tour` ( **same** **offer+date** ).
+- **Why** **accepted** **(MVP):** **avoids** **accidental** **duplicate** **live** **Mini** **App** **catalog** **rows.**
+- **Risk:** **a** **legitimate** **second** **vehicle** **same** **route** **/** **date** **is** **blocked** **under** **one** **SupplierOffer** **without** **ops** **workaround** ( **see** **next** **subsection** ).
+- **Status:** **implemented**; **ref** **commit** **`460ef50`** **(guard** **in** **service** **+** **tests** **).**
+
+#### B8 legitimate second vehicle on same date
+
+- **Current** **decision (MVP):** **B8.3** **blocks** **activating** a **second** **B8**-**audited** `Tour` **when** **another** **`open_for_sale`** `Tour` **matches** **same** **source** **offer+departure** ( **sibling** **B8** **or** **B10** **bridge** **).
+- **Why** **accepted** **now:** **safer** **MVP;** **avoids** **confusing** **duplicate** **catalog** **cards.**
+- **Preferred** **MVP** **/** **ops** **handling (no** **override** **in** **code** **):** **(1)** **If** **same** **product,** **raise** **capacity** **on** the **existing** **active** `Tour` ( **`seats_total`** / **`seats_available`** **coherent** **);** **(2)** **or** **separate** **`SupplierOffer`** / **`Tour`** **when** **the** **second** **run** **is** **operationally** **distinct.**
+- **Future** **(not** **implemented** **):** **admin** **override** **+** **reason,** **audit,** **Mini** **App** **copy** **rules.**
+- **Revisit** **when** **ops** **requires** **multiple** **vehicles** **for** one **offer**+**date.**
+- **Status:** **open** **/** **future** **operational** **policy.** **Also** **[`docs/HANDOFF_B8_3_DUPLICATE_ACTIVE_TOUR_ACTIVATION_GUARD.md`](HANDOFF_B8_3_DUPLICATE_ACTIVE_TOUR_ACTIVATION_GUARD.md)** **(“Future** **vehicle”** **subsection** **).**
+
+#### B7.3 / B10.6 / B11 (unchanged: not B8.3)
+
+- **B7.3** **—** **publish**-**safe** **media** **pipeline** **(deferred;** **open** **until** **policy** **).**
+- **B10.6** **—** **Telegram** **private** **bot** **router** **/** **consultant** **(postponed,** **not** **implemented** **as** **this** **handoff** **).**
+- **B11** **—** **Telegram** **deep**-**link** **routing** **(not** **implemented** **here** **;** **separate** **product** **step** **).**
 
 ### Next safe step
-- **Recommended:** **B8** **—** **recurring** **supplier** **offers** **(see** **[`docs/SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md)** **B8** **row** **and** **§5** **order).**
-- **Then** **(policy-dependent):** **B7.3** **—** **publish-safe** **media** **pipeline.**
-- **Then:** **B11** **or** **next** **approved** **BUSINESS**-**plan** **step** **(see** **§5).**
+- **B8** **(slice** **1** + **B8.2** + **B8.3** **):** **documented** **complete** for **continuity** **—** this **B8.4** **sync.**
+- **Next** **(choose** **explicitly,** **not** **implied** **as** **approved** **):** **B7.3** **(media** **if** **policy** **decided** **);** **B11** **(deep** **links** **if** **product** **ready** **);** **B10.6** **(bot** **if** **priority** **);** **B12** **/** **B13** **or** **template** **/** **publishing** **if** **business** **plan** **prioritizes.**
 
 ---
 

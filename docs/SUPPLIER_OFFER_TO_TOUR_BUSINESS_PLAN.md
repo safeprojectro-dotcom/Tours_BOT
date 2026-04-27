@@ -14,7 +14,7 @@
 
 **Prerequisites on record (completed, narrow scopes):** **B0–B4.3** — intake, structured data, AI/deterministic packaging, human-readable formatting, template/marketing rules, pricing/discount/availability truth; **B5** — admin packaging review (`approved_for_publish` = package approved, **not** Telegram publish and **not** Mini App activation); **B6** — branded Telegram preview JSON; **B7.1** — media review metadata; **B7.2** — `card_render_preview` plan (**no** real download/storage yet).
 
-**B9** (bridge **design**), **B10** (bridge **implementation**), **B10.1–B10.5** (draft, activate-for-catalog, **full_bus** Mini App semantics, **Layer A** package total, boarding fallback) are **implemented** and **smoke-accepted**. **Production path:** **Supplier offer #8 → Tour #4 → `open_for_sale` → Reserve bus → preparation → reservation → payment entry / mock complete → My bookings**. **Mini App** remains **execution truth**. **B10.6** (bot as router, not duplicate catalog) is **postponed** — see [`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`](OPEN_QUESTIONS_AND_TECH_DEBT.md) and [`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md). **Canonical** **checkpoint:** [`B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md).
+**B9** (bridge **design**), **B10** (bridge **implementation**), **B10.1–B10.5** (draft, activate-for-catalog, **full_bus** Mini App semantics, **Layer A** package total, boarding fallback) are **implemented** and **smoke-accepted**. **Production path:** **Supplier offer #8 → Tour #4 → `open_for_sale` → Reserve bus → preparation → reservation → payment entry / mock complete → My bookings**. **Mini App** remains **execution truth**. **B8** (recurring draft `Tour` generation from template offer + audit; **B8.2** activation policy; **B8.3** duplicate-active guard at B10.2) is **implemented** / **stabilized** in-repo — see [`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md), [`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`](OPEN_QUESTIONS_AND_TECH_DEBT.md), [`docs/HANDOFF_B8_3_DUPLICATE_ACTIVE_TOUR_ACTIVATION_GUARD.md`](HANDOFF_B8_3_DUPLICATE_ACTIVE_TOUR_ACTIVATION_GUARD.md). **Second** **vehicle** same **date** under **one** **offer** = **ops** / **future** **policy** (not automatic product behavior). **B10.6** (bot as router, not duplicate catalog) is **postponed**. **B7.3** **and** **B11** **remain** **unimplemented** **(independent** **of** **B8** **)** **—** **see** [`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`](OPEN_QUESTIONS_AND_TECH_DEBT.md) **(B7.3,** **B10.6,** **B11** **).** **Canonical** **B10** **checkpoint:** [`B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md).
 
 ---
 
@@ -40,7 +40,7 @@ This rule governs **B1–B13** and prevents accidental coupling of **moderation*
 | **B5** | Admin moderation & review | Surfaces to compare **raw** vs **AI draft**, edit/regenerate, approve/reject, clarification loops. |
 | **B6** | Branded Telegram post template | Deterministic or templated public-channel presentation (brand, sections, CTA) once content is approved. |
 | **B7** | Photo moderation & card generation | Safe media pipeline, optional card/preview image generation, moderation gates. |
-| **B8** | Recurring supplier offers | Recurrence / series semantics for supplier routes (separate from one-off B1 intake; may require data model follow-on). |
+| **B8** | Recurring supplier offers | **In-repo:** admin **`POST` …/recurrence/draft-tours** creates **draft** `B8R-*` `Tour`s + **audit**; **activation** **explicit** **via** **B10.2** **only;** **B8.3** **blocks** **duplicate** **`open_for_sale`** for **same** **template** **offer+departure** (sibling **B8** or **B10** **bridge**). **Duplicate** **drafts** **OK**; **re-run** **idempotency** **open.** **Second** **vehicle** **/ same** **date** = **ops** **/** **future** **policy** (capacity **bump** **or** **separate** **offer**/**tour**). |
 | **B9** | Supplier offer → tour publication **bridge** (design) | Contract for **how** offer becomes/attaches to **Tour** and appears in Mini App; cites core rule §1. |
 | **B10** | Supplier offer → tour bridge **implementation** | Runtime + migrations + admin flows to realize B9 without breaking Layer A. |
 | **B11** | Telegram deep link routing | Stable `t.me/.../start` / callback routing for offer → Mini App / booking entry (aligned with product links). |
@@ -73,21 +73,22 @@ This rule governs **B1–B13** and prevents accidental coupling of **moderation*
 
 ## 5. Next safe step (BUSINESS)
 
-**Forward order of work (2026, do not skip gates):**
+**Forward order of work (2026) —** **B8** **MVP** **slice** **(draft** **generation** **+** **B8.2** **/** **B8.3** **guards** **)** **is** **implemented;** **choose** **next** **step** **explicitly** ( **not** **auto-approved** **here** **).**
 
-1. **B10.x** — documentation sync / continuity (**CHAT_HANDOFF**, **OPEN_QUESTIONS**, this file, **B10** bridge design **§10**) so the B-line state is unambiguous for the next agent. **Docs-only.**
-2. **B8** — **Recurring supplier offers** on top of the **explicit** supplier-offer → **Tour** bridge (see **B8** row in §2 and **§5.1** invariants). **Design first,** then implementation.
-3. **B7.3** — **Publish-safe media pipeline** only **after** storage / download / public-URL / moderation policy is decided (**B7** design §8; **B7.1/7.2** already done).
-4. **B11** or the **next** approved **B**-line step (e.g. **Telegram deep link routing**) per product priority — not before **B8** / **B7.3** order is consciously chosen.
+1. **B7.3** — **Publish-safe media pipeline** when storage / download / public-URL / moderation policy is ready (**B7** design §8; **B7.1/7.2** already done). **—** **not** **implemented** **as** **of** **B8.4** **sync.**
+2. **B11** — **Telegram** **deep** **link** **routing** per product readiness. **—** **not** **implemented** **as** **of** **B8.4** **sync.**
+3. **B10.6** — **bot** as **router** **/** **consultant** **(postponed;** see [`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`](OPEN_QUESTIONS_AND_TECH_DEBT.md) **).**
+4. **B12** **/** **B13** **or** **template** **/** **publishing** **library** if **stakeholder** **priority.**
 
-- **Recommended (2026) product build:** **B8** (see **§5.1**).
-- **Alternate path:** **B7.3** first if marketing **explicitly** requires stored/downloaded assets before recurrence work.
-- **Completed / historical (do not re-scope as “next” without a new ticket):** **B2** data upgrade; **B6–B7.2**; **B9** design; **B10** + **B10.1–B10.5** — **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)**.
+- **Completed** **for** **B-line** **continuity (accepted):** **B2;** **B6–B7.2;** **B9** **design;** **B10** + **B10.1–B10.5;** **B8** **slice** **1** + **B8.2** + **B8.3** **(see** **§2** **B8** **row,** **§5.1,** **CHAT_HANDOFF,** **OPEN_QUESTIONS** **).**
+- **Alternate** **path** **(still** **valid** **):** **B7.3** **first** **if** **marketing** **requires** **assets** **before** **other** **B-line** **work.**
+- **B10.x** **doc** **sync** **checkpoint:** **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)** **(historical** **B10** **scope** **).**
 
 ### 5.1 B8 dependencies and invariants (recurring supplier offers)
 
 - **Recurrence** must **use** the same **Supplier offer → Tour** **bridge** and **Layer A** rules: materialize or link **Tour** instances via **explicit** admin/service steps and **governed** policy — **not** silent **ORM/cron/AI** tour creation.
-- **Generated** **Tour** **instances** should **start** as **`draft`** (or another **documented** inactive state) **unless** a **dedicated** slice **defines** **safe,** **auditable** **activation** and **is** **explicitly** **in** **scope.**
+- **Generated** **Tour** **instances** **start** as **`draft`**. **Catalog** **visibility** **(status** `open_for_sale` **)** **is** **only** **via** **B10.2** **activate-for-catalog** **(B8.2;** **no** **B8-only** **activation** **route** **).**
+- **B8.3 (implemented):** **duplicate** **`open_for_sale`** **B8-audited** **Tours** **for** **the** **same** **source** **offer** **+** **same** **`departure_datetime`** **are** **blocked** **at** **activation** **(sibling** **B8** **or** **B10** **active** **bridge** **tour** **).** **Second** **vehicle** **/** **legitimate** **parallel** **capacity** = **not** **solved** **in** **code** **—** **ops** **/** **separate** **offer** **/** **tour** **/** **future** **override** per [`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`](OPEN_QUESTIONS_AND_TECH_DEBT.md) **(B8** **legitimate** **second** **vehicle** **).**
 - **Bridge** **≠** **catalog** **activation** **≠** **Telegram** **channel** **publish** **≠** **booking** **/** **payment** — **preserve** for **each** **generated** **instance.**
 - **No** **booking,** **order,** or **payment** **mutation** **inside** **recurrence** **generation** **handlers** **themselves.**
 - **No** **automatic** **Telegram** **showcase** **publish** without **explicit** **ops** **/** **status** **policy.**
