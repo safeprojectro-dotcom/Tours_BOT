@@ -12,6 +12,7 @@ from app.models.payment import Payment
 from app.models.tour import BoardingPoint, BoardingPointTranslation, Tour, TourTranslation
 from app.models.user import User
 from app.models.supplier import Supplier, SupplierApiCredential, SupplierOffer, SupplierOfferExecutionLink
+from app.models.supplier_offer_tour_bridge import SupplierOfferTourBridge
 from app.models.supplier_execution import (
     SupplierExecutionAttempt,
     SupplierExecutionAttemptTelegramIdempotency,
@@ -39,6 +40,7 @@ __all__ = [
     "SupplierExecutionRequest",
     "SupplierOffer",
     "SupplierOfferExecutionLink",
+    "SupplierOfferTourBridge",
     "Tour",
     "TourTranslation",
     "User",

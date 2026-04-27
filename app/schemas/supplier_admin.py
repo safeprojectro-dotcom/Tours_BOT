@@ -452,3 +452,30 @@ class AdminMediaReviewFallbackBody(BaseModel):
             return None
         s = v.strip()
         return s or None
+
+
+class AdminSupplierOfferTourBridgeCreateBody(BaseModel):
+    """B10: optional body for `POST /admin/supplier-offers/{id}/tour-bridge` (empty object allowed)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    created_by: str | None = None
+    notes: str | None = None
+    existing_tour_id: int | None = None
+
+
+class AdminSupplierOfferTourBridgeRead(BaseModel):
+    """B10: response for tour bridge create/get."""
+
+    id: int
+    supplier_offer_id: int
+    tour_id: int
+    bridge_status: str
+    bridge_kind: str
+    tour_status: str
+    created_at: datetime
+    idempotent_replay: bool
+    warnings: list[str]
+    notes: str | None
+    source_packaging_status: str
+    source_lifecycle_status: str

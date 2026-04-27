@@ -96,6 +96,21 @@ class SupplierOfferPackagingStatus(StrEnum):
     CLARIFICATION_REQUESTED = "clarification_requested"
 
 
+class SupplierOfferTourBridgeStatus(StrEnum):
+    """B10: one active bridge per offer; superseded/cancelled for audit."""
+
+    ACTIVE = "active"
+    SUPERSEDED = "superseded"
+    CANCELLED = "cancelled"
+
+
+class SupplierOfferTourBridgeKind(StrEnum):
+    """B10: whether admin created a new Tour or linked an existing one."""
+
+    CREATED_NEW_TOUR = "created_new_tour"
+    LINKED_EXISTING_TOUR = "linked_existing_tour"
+
+
 class SupplierOfferMediaReviewStatus(StrEnum):
     """B7.1: cover visual review metadata (packaging_draft_json.media_review); not lifecycle or channel publish."""
 

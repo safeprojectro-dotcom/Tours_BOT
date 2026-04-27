@@ -175,6 +175,8 @@ class FoundationDBTestCase(unittest.TestCase):
             title=overrides.pop("title", f"Offer {index}"),
             description=overrides.pop("description", "Description"),
             program_text=overrides.pop("program_text", "Program"),
+            included_text=overrides.pop("included_text", "Included: lunch"),
+            excluded_text=overrides.pop("excluded_text", "Excluded: tips"),
             departure_datetime=departure,
             return_datetime=ret,
             transport_notes=overrides.pop("transport_notes", "Bus details"),

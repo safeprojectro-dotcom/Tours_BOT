@@ -82,6 +82,15 @@ from app.services.supplier_offer_execution_link_service import (
     SupplierOfferExecutionLinkValidationError,
 )
 from app.services.supplier_offer_service import SupplierOfferService
+from app.services.supplier_offer_tour_bridge_service import (
+    SupplierOfferTourBridgeExistingTourError,
+    SupplierOfferTourBridgeNotFoundError,
+    SupplierOfferTourBridgeService,
+    SupplierOfferTourBridgeStateError,
+    SupplierOfferTourBridgeTourNotFoundError,
+    SupplierOfferTourBridgeValidationError,
+    SupplierOfferTourBridgeResult,
+)
 from app.services.supplier_offer_packaging_service import (
     SupplierOfferPackagingNotFoundError,
     SupplierOfferPackagingService,
@@ -140,6 +149,8 @@ from app.schemas.supplier_admin import (
     AdminSupplierOfferPublishResult,
     AdminSupplierOfferRead,
     AdminSupplierOfferRejectBody,
+    AdminSupplierOfferTourBridgeCreateBody,
+    AdminSupplierOfferTourBridgeRead,
     SupplierOfferExecutionLinkListRead,
     SupplierOfferExecutionLinkRead,
     SupplierOfferListRead,
@@ -1315,6 +1326,84 @@ def post_admin_supplier_offer_publish(offer_id: int, db: Session = Depends(get_d
     except Exception:
         pass
     return AdminSupplierOfferPublishResult(offer=offer_read, telegram_message_id=message_id)
+
+
+def _admin_supplier_offer_tour_bridge_read(res: SupplierOfferTourBridgeResult) -> AdminSupplierOfferTourBridgeRead:
+    return AdminSupplierOfferTourBridgeRead(
+        id=res.id,
+        supplier_offer_id=res.supplier_offer_id,
+        tour_id=res.tour_id,
+        bridge_status=res.bridge_status,
+        bridge_kind=res.bridge_kind,
+        tour_status=res.tour_status,
+        created_at=res.created_at,
+        idempotent_replay=res.idempotent_replay,
+        warnings=res.warnings,
+        notes=res.notes,
+        source_packaging_status=res.source_packaging_status,
+        source_lifecycle_status=res.source_lifecycle_status,
+    )
+
+
+@router.post(
+    "/supplier-offers/{offer_id}/tour-bridge",
+    response_model=AdminSupplierOfferTourBridgeRead,
+)
+def post_supplier_offer_tour_bridge(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminSupplierOfferTourBridgeCreateBody | None = Body(default=None),
+) -> AdminSupplierOfferTourBridgeRead:
+    """
+    B10: explicit admin bridge from packaging-approved offer → Layer A `Tour` (draft) + bridge record.
+    Idempotent: repeat POST returns the same active bridge. No Telegram, publish, or orders.
+    """
+    body = payload or AdminSupplierOfferTourBridgeCreateBody()
+    try:
+        res = SupplierOfferTourBridgeService().create_or_replay_bridge(
+            db,
+            supplier_offer_id=offer_id,
+            created_by=body.created_by,
+            notes=body.notes,
+            existing_tour_id=body.existing_tour_id,
+        )
+    except SupplierOfferTourBridgeNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    except SupplierOfferTourBridgeValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"errors": exc.missing_fields},
+        ) from None
+    except SupplierOfferTourBridgeStateError as exc:
+        if exc.code in ("packaging_not_approved", "lifecycle_rejected"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"errors": [exc.code], "message": exc.message},
+            ) from None
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    except SupplierOfferTourBridgeTourNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour not found.") from None
+    except SupplierOfferTourBridgeExistingTourError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return _admin_supplier_offer_tour_bridge_read(res)
+
+
+@router.get(
+    "/supplier-offers/{offer_id}/tour-bridge",
+    response_model=AdminSupplierOfferTourBridgeRead,
+)
+def get_supplier_offer_tour_bridge(offer_id: int, db: Session = Depends(get_db)) -> AdminSupplierOfferTourBridgeRead:
+    try:
+        res = SupplierOfferTourBridgeService().get_active_bridge(db, supplier_offer_id=offer_id)
+    except SupplierOfferTourBridgeNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    if res is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active tour bridge for this offer.",
+        ) from None
+    return _admin_supplier_offer_tour_bridge_read(res)
 
 
 @router.post("/supplier-offers/{offer_id}/execution-link", response_model=SupplierOfferExecutionLinkRead)

@@ -1,0 +1,57 @@
+You are continuing an existing production-grade project (Tours_BOT).
+
+STRICT RULES:
+
+1. Read before acting:
+- docs/CHAT_HANDOFF.md
+- docs/OPERATOR_DECISION_GATE.md
+
+2. Current layer:
+Operator workflow (Layer C)
+
+3. Current capabilities:
+- assign-to-me
+- mark under_review
+- operator decisions:
+  - need_manual_followup
+  - need_supplier_offer
+
+4. This layer MUST remain:
+- side-effect free
+- intent-only
+- no external actions
+
+5. You are NOT allowed to:
+- add supplier logic
+- create bookings/orders
+- modify Mini App
+- create RFQ or bridge
+- send messages to users/suppliers
+
+6. Every change must:
+- be minimal
+- be reversible
+- be test-covered
+
+7. Before coding:
+Explain:
+- what
+- why
+- impact
+
+8. If change touches more than 1 layer:
+STOP and ask.
+
+--------------------------------
+
+Current task direction:
+
+Prepare for next phase:
+👉 Supplier interaction design (Y38)
+
+This is a DESIGN step, not implementation.
+
+--------------------------------
+
+If unsure:
+STOP.

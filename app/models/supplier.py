@@ -184,6 +184,11 @@ class SupplierOffer(TimestampMixin, Base):
         back_populates="supplier_offer",
         cascade="all, delete-orphan",
     )
+    tour_bridges: Mapped[list["SupplierOfferTourBridge"]] = relationship(
+        "SupplierOfferTourBridge",
+        back_populates="supplier_offer",
+        cascade="all, delete-orphan",
+    )
 
 
 class SupplierOfferExecutionLink(TimestampMixin, Base):
