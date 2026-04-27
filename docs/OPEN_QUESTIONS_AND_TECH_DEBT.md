@@ -32,11 +32,14 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Revisit** **before:** **B11** **(Telegram** **deep** **link** **routing** **as** **product** **prioritizes** **it),** **or** **before** **major** **group** **/** **private** **bot** **promotion** **that** **leans** **on** **tour** **copy** **in** **the** **bot.**
 - **Explicit** **decision** **(2026):** **no** **B10.6** **bot** **refactor** **in** **the** **B10.x** **doc-only** **/** **stabilization** **window;** **track** **here** **until** **a** **scoped** **ticket.**
 
-#### B7.3 — Publish-safe media pipeline (unresolved / deferred)
+#### B7.3 — Publish-safe media policy and pipeline (B7.3A accepted; implementation not done)
 
-- **Status:** **B7.1** **/** **B7.2** **done** **(metadata** **+** **`card_render_preview`** **plan**);** **no** **real** **pixel** **download** **/** **storage** **/** **channel** **bytes** **in** **that** **slice.**
-- **B7.3** **remains** **open** **until** **storage** **/** **download** **/** **public** **URL** **/** **moderation** **policy** **is** **decided** **(see** **B7** **design** **§8).**
-- **Order:** **after** **B8** **unless** **marketing** **explicitly** **needs** **B7.3** **first** **(see** **[`docs/SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md)** **§5).**
+- **B7.1** **/** **B7.2** **shipped** **(metadata** **+** **`card_render_preview`** **plan**);** **no** **real** **download,** **storage** **bytes,** **or** **channel** **pixel** **publish** **in** **those** **slices.**
+- **B7.3A** **(docs,** **2026** **):** **Publish-safe** **media** **policy** **accepted** **—** see **[`docs/SUPPLIER_OFFER_PHOTO_MODERATION_CARD_GENERATION_DESIGN.md`](SUPPLIER_OFFER_PHOTO_MODERATION_CARD_GENERATION_DESIGN.md) **(B7.3A** **decision** **log** **),** **[`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md) **(B7.3A** **section** **).** **Current** **decision:** **keep** **Telegram** **refs** **and** **media** **review** **metadata** **only** **for** **MVP;** **raw** **media** **is** **not** **publish-safe;** **`approved_for_card`** **(B7.1) ≠** **`publish_safe`** **(durable** **asset** **when** **exists** **);** **`publish_safe` ≠ `published`** **(marketing** **/** **showcase** **=** **separate** **explicit** **admin** **action** **).** **No** **Railway** **local** **filesystem** **as** **canonical** **durable** **store;** **future** **durable** **assets** **—** **object** **storage** **/** **S3-compatible** **when** **scoped.**
+- **Risks:** **Telegram** **`file_id`** **not** a **public** **web** **URL;** **access** **can** **expire** **/** **be** **unsuitable** **for** **non-Telegram** **surfaces;** **future** **pipeline** **needs** **storage** **credentials,** **retention** **/** **deletion** **policy,** **and** **ACL** **discipline** **(wrong** **ACL** **=** **leak** **unpublished** **media** **).** **Generated** **cards** **must** **stay** **grounded** **in** **source** **facts.** **Real** **image** **moderation,** **size**/**type** **limits,** **copyright**/**quality** **—** **future** **scope.**
+- **Revisit** **before:** **`getFile`** **/** **download;** **real** **card** **rendering;** **Telegram** **photo** **publication;** **Mini** **App** **showing** **real** **approved** **media** **assets;** **object** **storage** **/** **S3** **credentials.**
+- **B7.3B** **(optional** **next** **,** **not** **automatic** **):** **metadata-only** **`publish_safe`** **stub** **in** **`packaging_draft_json`**, **no** **download.**
+- **Status:** **open** **/** **accepted** **policy;** **implementation** **postponed** **until** **metadata** **/** **storage** **slice** **explicitly** **chosen.**
 
 #### B8 — Recurring supplier offers (upcoming risks / invariants)
 
@@ -77,15 +80,16 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Revisit** **when** **ops** **requires** **multiple** **vehicles** **for** one **offer**+**date.**
 - **Status:** **open** **/** **future** **operational** **policy.** **Also** **[`docs/HANDOFF_B8_3_DUPLICATE_ACTIVE_TOUR_ACTIVATION_GUARD.md`](HANDOFF_B8_3_DUPLICATE_ACTIVE_TOUR_ACTIVATION_GUARD.md)** **(“Future** **vehicle”** **subsection** **).**
 
-#### B7.3 / B10.6 / B11 (unchanged: not B8.3)
+#### B7.3B / B10.6 / B11 (not B8.3)
 
-- **B7.3** **—** **publish**-**safe** **media** **pipeline** **(deferred;** **open** **until** **policy** **).**
+- **B7.3B** **—** **optional** **metadata** **`publish_safe`** **stub** **(no** **download** **)** **—** only **if** **ops** **needs** **;** else **B7.3** **implementation** **stays** **at** **policy** **+** **existing** **metadata** **until** **storage** **slice.**
 - **B10.6** **—** **Telegram** **private** **bot** **router** **/** **consultant** **(postponed,** **not** **implemented** **as** **this** **handoff** **).**
 - **B11** **—** **Telegram** **deep**-**link** **routing** **(not** **implemented** **here** **;** **separate** **product** **step** **).**
 
 ### Next safe step
 - **B8** **(slice** **1** + **B8.2** + **B8.3** **):** **documented** **complete** for **continuity** **—** this **B8.4** **sync.**
-- **Next** **(choose** **explicitly,** **not** **implied** **as** **approved** **):** **B7.3** **(media** **if** **policy** **decided** **);** **B11** **(deep** **links** **if** **product** **ready** **);** **B10.6** **(bot** **if** **priority** **);** **B12** **/** **B13** **or** **template** **/** **publishing** **if** **business** **plan** **prioritizes.**
+- **B7.3A** **:** **media** **policy** **accepted** **(CHAT_HANDOFF,** **OPEN_QUESTIONS,** **B7** **design** **).**
+- **Next** **(choose** **explicitly,** **not** **implied** **as** **approved** **):** **B7.3B** **stub** **/** **B7** **storage** **slice** **when** **ready** **;** **B11** **(deep** **links** **if** **product** **ready** **);** **B10.6** **(bot** **if** **priority** **);** **B12** **/** **B13** **or** **template** **/** **publishing** **if** **business** **plan** **prioritizes.**
 
 ---
 
@@ -120,8 +124,9 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Depends** **on** **B6** **(branded** **`branded_telegram_preview`**, **cover** **refs,** **warnings).** B7 **does** **not** **change** **B5/B6** **“approve** **≠** **publish”** **semantics.**
 
 ### Next safe implementation
-- **B7.3** — **Publish-safe** **media** (download/storage policy per **B7** **design).** **B10** **bridge** **track** **is** **complete** **(see** **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)**);** **forward** **product** **priority** **is** **B8** **unless** **marketing** **explicitly** **needs** **B7.3** **first.**
-- **B7.1** **/** **B7.2** **(completed** **in** **repo):** **see** **CHAT_HANDOFF** **BUSINESS** **line;** no **new** **B7.1/7.2** **gate** **items** **here.**
+- **B7.3A** **—** **policy** **accepted** **(docs** **);** **B7.3** **implementation** **(download,** **S3,** **render,** **publish** **)** **not** **started** **—** see **B7.3** **subsection** **above** **in** **this** **file** **and** **[`docs/SUPPLIER_OFFER_PHOTO_MODERATION_CARD_GENERATION_DESIGN.md`](SUPPLIER_OFFER_PHOTO_MODERATION_CARD_GENERATION_DESIGN.md) **(B7.3A** **).**
+- **B7.3B** **—** **optional** **metadata** **stub;** **then** **future** **slice** **for** **storage** **or** **Telegram** **getFile** **only** **after** **explicit** **prompt.**
+- **B7.1** **/** **B7.2** **(completed** **in** **repo):** **see** **CHAT_HANDOFF;** no **new** **B7.1/7.2** **gate** **items** **here.**
 
 ### Still open (by design in B7)
 - **Minimum** **resolution** **threshold** (px) — **TBD** **in** **B7.1+** **implementation.**

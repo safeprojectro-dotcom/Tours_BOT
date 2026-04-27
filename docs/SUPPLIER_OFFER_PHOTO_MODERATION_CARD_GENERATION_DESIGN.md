@@ -120,12 +120,29 @@ All are **human-judged** in B7.x unless/until a future automated pre-check is ex
 |--------|--------|
 | **B7.1** | Persist **media review metadata** (state, reviewer, reason, timestamps) in the chosen store; **admin API** to transition states (approve for card, reject, request replacement, set fallback) **without** `getFile` or image bytes if product chooses. |
 | **B7.2** | **Card rendering preview** (local or server): layout engine + 16:9/4:5 output; may still be staff-only; **no** public publish. |
-| **B7.3** | **Publish-safe media** — optional download, virus/size checks, object storage, stable URL or Telegram re-upload; still **no** automatic customer-facing publish. |
+| **B7.3** | **Publish-safe media (implementation)** — optional download, virus/size checks, object storage, stable URL or Telegram re-upload; still **no** automatic customer-facing publish. **Policy** for what “publish-safe” means and what is **not** implemented yet: see **B7.3A decision log** below. |
 
 (B9/B10 **offer → Tour** bridge and channel publish are **separate** tracks; B7 only prepares **assets** and **governance**.)
+
+---
+
+## B7.3A decision log (policy acceptance, docs-only)
+
+**Status:** accepted as **project policy** (no `app/` changes in B7.3A). **Next** implementation may be **B7.3B** (metadata-only `publish_safe` stub in `packaging_draft_json`) or a **future** explicit slice for storage / `getFile` / rendering.
+
+| Slice | Role |
+|--------|------|
+| **B7.1** | Media review **metadata** (`packaging_draft_json.media_review`); admin transitions; **no** bytes. |
+| **B7.2** | Card render **preview plan** (structured JSON); **no** real pixels. |
+| **B7.3A** | **Accepted policy only:** raw supplier media is **not** publish-safe; Telegram `file_id` / `telegram_photo:{file_id}` is **not** a stable public URL; **no** `getFile` / download / durable storage / real rendering / Telegram send in this step; **no** Railway local FS as canonical store; **metadata-first** MVP (`cover_media_reference`, `media_references`, `media_review`, B7.2 JSON); **approved_for_card** ≠ **publish_safe**; **publish_safe** ≠ **published**; publication remains **separate** explicit admin action; **no** auto-publish from media approval. |
+| **B7.3B** (optional) | Metadata-only `publish_safe` **stub**; still **no** download. |
+| **B7.4+** (future) | Real storage, download, rendering, publication wiring — **only** after **explicit** prompt and scope. |
+
+**Concept separation:** **raw_received** (intake) → **approved_for_card** (B7.1) → **publish_safe** (durable asset, when built) → **published** (e.g. channel/showcase; **not** automatic from prior steps).
 
 ---
 
 ## Document history
 
 - **2026-04-25:** B7 design gate — initial version (no code).
+- **2026 (B7.3A):** Policy acceptance log added; **B7.3** implementation still **not** started beyond existing B7.1/B7.2.
