@@ -76,7 +76,7 @@ class MiniAppReservationPreparationService:
         *,
         code: str,
         seats_count: int,
-        boarding_point_id: int,
+        boarding_point_id: int | None = None,
         language_code: str | None = None,
     ) -> ReservationPreparationSummaryRead | None:
         tour = self.catalog_lookup_service.get_tour_by_code(session, code=code)

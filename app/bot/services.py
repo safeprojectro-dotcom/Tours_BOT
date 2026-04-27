@@ -23,6 +23,8 @@ from app.schemas.prepared import (
     ReservationPreparationSummaryRead,
     ReservationPreparationTourRead,
 )
+from app.schemas.tour import BoardingPointRead
+from app.schemas.tour_sales_mode_policy import TourSalesModePolicyRead
 from app.schemas.user import UserRead
 from app.services.catalog import CatalogLookupService
 from app.services.catalog_preparation import CatalogPreparationService
@@ -359,13 +361,60 @@ class PrivateReservationPreparationService:
             return ()
         return tuple(range(1, available + 1))
 
+    @staticmethod
+    def select_boarding_point_for_preparation_summary(
+        detail: PreparedTourDetailRead,
+        *,
+        boarding_point_id: int | None,
+        cat_policy: TourSalesModePolicyRead,
+    ) -> BoardingPointRead | None:
+        """Resolve boarding for preparation summary. Per-seat requires a valid id; full-bus package allows omit/wrong id when a single default exists (B10.5)."""
+        if not detail.boarding_points:
+            return None
+        if cat_policy.per_seat_self_service_allowed:
+            if boarding_point_id is None:
+                return None
+            return next((p for p in detail.boarding_points if p.id == boarding_point_id), None)
+        if cat_policy.bookable_as_full_bus_package:
+            if boarding_point_id is not None:
+                found = next((p for p in detail.boarding_points if p.id == boarding_point_id), None)
+                if found is not None:
+                    return found
+                if len(detail.boarding_points) == 1:
+                    return detail.boarding_points[0]
+                return None
+            return detail.boarding_points[0]
+        if boarding_point_id is None:
+            return None
+        return next((p for p in detail.boarding_points if p.id == boarding_point_id), None)
+
+    def resolve_boarding_point_id_for_mini_app_hold(
+        self,
+        session: Session,
+        *,
+        tour_id: int,
+        language_code: str | None,
+        boarding_point_id: int | None,
+    ) -> int | None:
+        """Layer A hold: same resolution as preparation summary (B10.5). Returns None if selection is invalid."""
+        detail = self.get_preparable_tour(session, tour_id=tour_id, language_code=language_code)
+        if detail is None:
+            return None
+        cat_policy = TourSalesModePolicyService.policy_for_catalog_tour(detail.tour)
+        bp = self.select_boarding_point_for_preparation_summary(
+            detail,
+            boarding_point_id=boarding_point_id,
+            cat_policy=cat_policy,
+        )
+        return bp.id if bp is not None else None
+
     def build_preparation_summary(
         self,
         session: Session,
         *,
         tour_id: int,
         seats_count: int,
-        boarding_point_id: int,
+        boarding_point_id: int | None,
         language_code: str | None,
     ) -> ReservationPreparationSummaryRead | None:
         detail = self.get_preparable_tour(
@@ -388,9 +437,10 @@ class PrivateReservationPreparationService:
         else:
             return None
 
-        boarding_point = next(
-            (point for point in detail.boarding_points if point.id == boarding_point_id),
-            None,
+        boarding_point = self.select_boarding_point_for_preparation_summary(
+            detail,
+            boarding_point_id=boarding_point_id,
+            cat_policy=cat_policy,
         )
         if boarding_point is None:
             return None

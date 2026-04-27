@@ -176,6 +176,32 @@ class MiniAppReservationPreparationServiceTests(FoundationDBTestCase):
         self.assertEqual(summary.seats_count, 7)
         self.assertEqual(str(summary.estimated_total_amount), "10.00")
 
+    def test_build_preparation_summary_full_bus_virgin_omits_boarding_point_id_b10_5(self) -> None:
+        """B10.5: bookable full-bus with no boarding rows — None id resolves to default after get_preparable_tour."""
+        tour = self.create_tour(
+            code="FULL-BUS-NO-BP-B10-5",
+            departure_datetime=datetime(2027, 8, 1, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 8, 2, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=8,
+            seats_available=8,
+            base_price="99.00",
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+
+        summary = MiniAppReservationPreparationService().build_preparation_summary(
+            self.session,
+            code=tour.code,
+            seats_count=8,
+            boarding_point_id=None,
+            language_code="en",
+        )
+        self.assertIsNotNone(summary)
+        assert summary is not None
+        self.assertEqual(summary.seats_count, 8)
+        self.assertEqual(summary.boarding_point.city, "Departure")
+        self.assertEqual(str(summary.estimated_total_amount), "99.00")
+
     def test_preparation_returns_none_for_invalid_or_non_preparable_tour(self) -> None:
         sold_out = self.create_tour(
             code="SOLD-OUT-PREP",

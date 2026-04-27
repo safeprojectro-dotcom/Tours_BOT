@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.bot.services import TelegramUserContextService
+from app.bot.services import PrivateReservationPreparationService, TelegramUserContextService
 from app.core.config import get_settings
 from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus
 from app.schemas.prepared import OrderSummaryRead, PaymentEntryRead
@@ -46,6 +46,7 @@ class MiniAppBookingService:
         self.order_summary_service = order_summary_service or OrderSummaryService()
         self.order_read_service = order_read_service or OrderReadService()
         self.payment_entry_service = payment_entry_service or PaymentEntryService()
+        self._private_preparation_service = PrivateReservationPreparationService()
 
     def _user_sync(self) -> TelegramUserContextService:
         settings = get_settings()
@@ -58,7 +59,7 @@ class MiniAppBookingService:
         tour_code: str,
         telegram_user_id: int,
         seats_count: int,
-        boarding_point_id: int,
+        boarding_point_id: int | None,
         language_code: str | None = None,
     ) -> OrderSummaryRead | None:
         lazy_expire_due_reservations(session)
@@ -74,6 +75,15 @@ class MiniAppBookingService:
         elif policy.catalog_charter_fixed_seats_count is not None and seats_count != policy.catalog_charter_fixed_seats_count:
             raise MiniAppCharterSeatsCountMismatchError
 
+        resolved_boarding = self._private_preparation_service.resolve_boarding_point_id_for_mini_app_hold(
+            session,
+            tour_id=tour.id,
+            language_code=language_code,
+            boarding_point_id=boarding_point_id,
+        )
+        if resolved_boarding is None:
+            return None
+
         user = self._user_sync().sync_private_user(
             session,
             telegram_user_id=telegram_user_id,
@@ -87,7 +97,7 @@ class MiniAppBookingService:
             session,
             user_id=user.id,
             tour_id=tour.id,
-            boarding_point_id=boarding_point_id,
+            boarding_point_id=resolved_boarding,
             seats_count=effective_seats,
             source_channel=MINI_APP_SOURCE_CHANNEL,
         )

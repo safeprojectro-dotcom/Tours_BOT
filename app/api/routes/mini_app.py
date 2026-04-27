@@ -451,6 +451,7 @@ def get_tour_preparation(
     )
     if preparation is None:
         raise HTTPException(status_code=404, detail="tour is not available for reservation preparation")
+    session.commit()
     return preparation
 
 
@@ -461,7 +462,10 @@ def get_tour_preparation(
 def get_tour_preparation_summary(
     tour_code: str,
     seats_count: int = Query(ge=1),
-    boarding_point_id: int = Query(ge=1),
+    boarding_point_id: int | None = Query(
+        default=None,
+        description="Optional for bookable full-bus fixed charter; server resolves default boarding (B10.5).",
+    ),
     language_code: str | None = Query(default=None),
     session: Session = Depends(get_db),
 ) -> ReservationPreparationSummaryRead:
@@ -474,6 +478,7 @@ def get_tour_preparation_summary(
     )
     if summary is None:
         raise HTTPException(status_code=400, detail="invalid reservation preparation selection")
+    session.commit()
     return summary
 
 

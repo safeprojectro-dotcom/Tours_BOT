@@ -110,7 +110,10 @@ class MiniAppCreateReservationRequest(BaseModel):
 
     telegram_user_id: int = Field(gt=0)
     seats_count: int = Field(ge=1)
-    boarding_point_id: int = Field(ge=1)
+    boarding_point_id: int | None = Field(
+        default=None,
+        description="Omit for bookable full-bus fixed charter; server resolves default boarding (B10.5).",
+    )
 
 
 class MiniAppPaymentEntryRequest(BaseModel):

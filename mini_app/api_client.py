@@ -100,18 +100,19 @@ class MiniAppApiClient:
         request_id: int,
         telegram_user_id: int,
         seats_count: int,
-        boarding_point_id: int,
+        boarding_point_id: int | None = None,
         language_code: str | None = None,
     ) -> OrderSummaryRead:
         params: dict[str, object] = {}
         if language_code:
             params["language_code"] = language_code
         filtered_params = {k: v for k, v in params.items() if v not in (None, "")}
-        body = {
+        body: dict[str, object] = {
             "telegram_user_id": telegram_user_id,
             "seats_count": seats_count,
-            "boarding_point_id": boarding_point_id,
         }
+        if boarding_point_id is not None:
+            body["boarding_point_id"] = boarding_point_id
         async with httpx.AsyncClient(base_url=self.base_url, timeout=20.0) as client:
             response = await client.post(
                 f"/mini-app/custom-requests/{request_id}/booking-bridge/reservations",
@@ -292,14 +293,15 @@ class MiniAppApiClient:
         *,
         tour_code: str,
         seats_count: int,
-        boarding_point_id: int,
+        boarding_point_id: int | None = None,
         language_code: str | None = None,
     ) -> ReservationPreparationSummaryRead:
-        params = {
+        params: dict[str, object] = {
             "seats_count": seats_count,
-            "boarding_point_id": boarding_point_id,
             "language_code": language_code,
         }
+        if boarding_point_id is not None:
+            params["boarding_point_id"] = boarding_point_id
         filtered_params = {key: value for key, value in params.items() if value not in (None, "")}
 
         async with httpx.AsyncClient(base_url=self.base_url, timeout=10.0) as client:
@@ -316,16 +318,17 @@ class MiniAppApiClient:
         tour_code: str,
         telegram_user_id: int,
         seats_count: int,
-        boarding_point_id: int,
+        boarding_point_id: int | None = None,
         language_code: str | None = None,
     ) -> OrderSummaryRead:
         params = {"language_code": language_code}
         filtered_params = {key: value for key, value in params.items() if value not in (None, "")}
-        body = {
+        body: dict[str, object] = {
             "telegram_user_id": telegram_user_id,
             "seats_count": seats_count,
-            "boarding_point_id": boarding_point_id,
         }
+        if boarding_point_id is not None:
+            body["boarding_point_id"] = boarding_point_id
         async with httpx.AsyncClient(base_url=self.base_url, timeout=15.0) as client:
             response = await client.post(
                 f"/mini-app/tours/{tour_code}/reservations",

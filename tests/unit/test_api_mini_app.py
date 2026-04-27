@@ -548,6 +548,31 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(summary.status_code, 200)
         self.assertEqual(summary.json()["seats_count"], 40)
 
+    def test_full_bus_preparation_summary_omits_boarding_point_id_b10_5(self) -> None:
+        tour = self.create_tour(
+            code="FULL-BUS-PREP-API-NO-BP",
+            title_default="Charter No BP",
+            departure_datetime=datetime(2026, 8, 10, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 8, 11, 20, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=24,
+            seats_available=24,
+            base_price="300.00",
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        self.create_translation(tour, language_code="en", title="Charter No BP EN")
+        self.session.commit()
+
+        r = self.client.get(
+            f"/mini-app/tours/{tour.code}/preparation-summary",
+            params={"language_code": "en", "seats_count": 24},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["seats_count"], 24)
+        self.assertEqual(body["boarding_point"]["city"], "Departure")
+        self.assertEqual(str(body["estimated_total_amount"]), "300.00")
+
     def test_full_bus_preparation_partial_inventory_no_self_service_seats(self) -> None:
         tour = self.create_tour(
             code="FULL-BUS-PREP-PARTIAL-API",

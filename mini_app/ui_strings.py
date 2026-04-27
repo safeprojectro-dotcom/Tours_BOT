@@ -51,6 +51,7 @@ _STR: dict[str, dict[str, str]] = {
         "capacity_prep_line_full_bus": "Vehicle capacity (whole bus, fixed): {n} seats — not individual seat selection",
         "prep_label_seats_full_bus": "Whole bus (fixed)",
         "prep_full_bus_charter_notice": "This listing reserves the full vehicle for this date and route. For individual seats, another departure, or a different bus size, use “Request a custom trip”.",
+        "prep_boarding_as_published_line": "Boarding: Departure — as published in the tour / program (no separate pick list for this whole-bus offer).",
         "prep_note_full_bus": "Whole-bus hold at fixed capacity (dev user {dev_id}). Boarding only — no per-seat count. Payment entry follows on the next screen.",
         "prep_line_whole_bus_seats": "Whole bus: {n} seats (fixed package)",
         "prep_summary_title_full_bus": "Whole bus reservation",

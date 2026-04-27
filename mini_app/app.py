@@ -187,6 +187,13 @@ def _fixed_charter_effective_seats(preparation: MiniAppReservationPreparationRea
     return None
 
 
+def _is_fixed_charter_full_bus(preparation: MiniAppReservationPreparationRead | None) -> bool:
+    if preparation is None:
+        return False
+    p = preparation.sales_mode_policy
+    return p.seat_selection_ux == "fixed_charter" and p.bookable_as_full_bus_package
+
+
 def _detail_price_and_availability_line(language_code: str | None, detail: MiniAppTourDetailRead) -> str:
     policy = detail.sales_mode_policy
     price = CatalogScreen._format_price(detail.tour.base_price)
@@ -1157,13 +1164,22 @@ class ReservationPreparationScreen:
             return
         lg = self.language_code
         eff_seats = _fixed_charter_effective_seats(self._last_preparation)
-        if not self.boarding_dropdown.value:
-            self._show_error(shell(lg, "prep_error_boarding_only"))
-            return
-        if eff_seats is None and not self.seats_dropdown.value:
-            self._show_error("Choose seats and a boarding point to preview the summary.")
-            return
-        seats_count = eff_seats if eff_seats is not None else int(self.seats_dropdown.value)
+        fixed_bus = _is_fixed_charter_full_bus(self._last_preparation)
+        if fixed_bus:
+            if eff_seats is None:
+                self._show_error("Unable to build the reservation summary right now.")
+                return
+            seats_count = eff_seats
+            boarding_param: int | None = None
+        else:
+            if not self.boarding_dropdown.value:
+                self._show_error(shell(lg, "prep_error_boarding_only"))
+                return
+            if eff_seats is None and not self.seats_dropdown.value:
+                self._show_error("Choose seats and a boarding point to preview the summary.")
+                return
+            seats_count = eff_seats if eff_seats is not None else int(self.seats_dropdown.value)
+            boarding_param = int(self.boarding_dropdown.value)
 
         self._set_loading(True)
         self.error_text.visible = False
@@ -1173,7 +1189,7 @@ class ReservationPreparationScreen:
             summary = await self.api_client.get_preparation_summary(
                 tour_code=self.current_tour_code,
                 seats_count=seats_count,
-                boarding_point_id=int(self.boarding_dropdown.value),
+                boarding_point_id=boarding_param,
                 language_code=self.language_code,
             )
         except httpx.HTTPStatusError as exc:
@@ -1224,6 +1240,9 @@ class ReservationPreparationScreen:
             )
         header_rows.append(ft.Text(cap_line, color=ft.Colors.ON_SURFACE_VARIANT))
         if fixed_charter:
+            header_rows.append(
+                ft.Text(shell(lg, "prep_boarding_as_published_line"), size=13, color=ft.Colors.ON_SURFACE_VARIANT)
+            )
             header_rows.append(
                 ft.Text(shell(lg, "prep_full_bus_charter_notice"), size=13, color=ft.Colors.ON_SURFACE_VARIANT)
             )
@@ -1277,16 +1296,14 @@ class ReservationPreparationScreen:
         self.boarding_dropdown.value = (
             str(preparation.boarding_points[0].id) if preparation.boarding_points else None
         )
+        self.boarding_dropdown.visible = not fixed_charter
 
         prep_rows: list[ft.Control] = list(header_rows)
         if not fixed_charter:
             prep_rows.append(self.seats_dropdown)
-        prep_rows.extend(
-            [
-                self.boarding_dropdown,
-                ft.Row([self.preview_button], alignment=ft.MainAxisAlignment.START),
-            ]
-        )
+        if not fixed_charter:
+            prep_rows.append(self.boarding_dropdown)
+        prep_rows.append(ft.Row([self.preview_button], alignment=ft.MainAxisAlignment.START))
         self.selection_container.controls.extend(prep_rows)
         self.confirm_reserve_button.text = (
             shell(lg, "mini_app_cta_reserve_full_bus") if fixed_charter else shell(lg, "btn_confirm_reservation")
@@ -1367,13 +1384,22 @@ class ReservationPreparationScreen:
             return
         lg = self.language_code
         eff_seats = _fixed_charter_effective_seats(self._last_preparation)
-        if not self.boarding_dropdown.value:
-            self._show_error(shell(lg, "prep_error_boarding_only"))
-            return
-        if eff_seats is None and not self.seats_dropdown.value:
-            self._show_error("Choose seats and a boarding point before confirming.")
-            return
-        seats_count = eff_seats if eff_seats is not None else int(self.seats_dropdown.value)
+        fixed_bus = _is_fixed_charter_full_bus(self._last_preparation)
+        if fixed_bus:
+            if eff_seats is None:
+                self._show_error("Unable to create a temporary reservation right now.")
+                return
+            seats_count = eff_seats
+            boarding_param: int | None = None
+        else:
+            if not self.boarding_dropdown.value:
+                self._show_error(shell(lg, "prep_error_boarding_only"))
+                return
+            if eff_seats is None and not self.seats_dropdown.value:
+                self._show_error("Choose seats and a boarding point before confirming.")
+                return
+            seats_count = eff_seats if eff_seats is not None else int(self.seats_dropdown.value)
+            boarding_param = int(self.boarding_dropdown.value)
 
         self._set_loading(True)
         self.error_text.visible = False
@@ -1384,7 +1410,7 @@ class ReservationPreparationScreen:
                 tour_code=self.current_tour_code,
                 telegram_user_id=self.telegram_user_id,
                 seats_count=seats_count,
-                boarding_point_id=int(self.boarding_dropdown.value),
+                boarding_point_id=boarding_param,
                 language_code=self.language_code,
             )
         except httpx.HTTPStatusError as exc:
@@ -1849,6 +1875,9 @@ class RfqBridgeExecutionScreen:
         header_rows.append(ft.Text(cap_line, color=ft.Colors.ON_SURFACE_VARIANT))
         if fixed_charter:
             header_rows.append(
+                ft.Text(shell(lg, "prep_boarding_as_published_line"), size=13, color=ft.Colors.ON_SURFACE_VARIANT)
+            )
+            header_rows.append(
                 ft.Text(shell(lg, "prep_full_bus_charter_notice"), size=13, color=ft.Colors.ON_SURFACE_VARIANT)
             )
 
@@ -1888,6 +1917,7 @@ class RfqBridgeExecutionScreen:
         self.boarding_dropdown.value = (
             str(preparation.boarding_points[0].id) if preparation.boarding_points else None
         )
+        self.boarding_dropdown.visible = not fixed_charter
         self.confirm_reserve_button.text = (
             shell(lg, "mini_app_cta_reserve_full_bus") if fixed_charter else shell(lg, "btn_confirm_reservation")
         )
@@ -1895,9 +1925,10 @@ class RfqBridgeExecutionScreen:
         flow_rows: list[ft.Control] = list(header_rows)
         if not fixed_charter:
             flow_rows.append(self.seats_dropdown)
+        if not fixed_charter:
+            flow_rows.append(self.boarding_dropdown)
         flow_rows.extend(
             [
-                self.boarding_dropdown,
                 ft.Row([self.preview_button], alignment=ft.MainAxisAlignment.START),
                 self.summary_container,
             ]
@@ -1913,13 +1944,22 @@ class RfqBridgeExecutionScreen:
             return
         lg = self.language_code
         eff_seats = _fixed_charter_effective_seats(self._self_service_preparation)
-        if not self.boarding_dropdown.value:
-            self._show_error(shell(lg, "prep_error_boarding_only"))
-            return
-        if eff_seats is None and not self.seats_dropdown.value:
-            self._show_error("Choose seats and a boarding point to preview the summary.")
-            return
-        seats_count = eff_seats if eff_seats is not None else int(self.seats_dropdown.value)
+        fixed_bus = _is_fixed_charter_full_bus(self._self_service_preparation)
+        if fixed_bus:
+            if eff_seats is None:
+                self._show_error("Unable to build the reservation summary right now.")
+                return
+            seats_count = eff_seats
+            boarding_param: int | None = None
+        else:
+            if not self.boarding_dropdown.value:
+                self._show_error(shell(lg, "prep_error_boarding_only"))
+                return
+            if eff_seats is None and not self.seats_dropdown.value:
+                self._show_error("Choose seats and a boarding point to preview the summary.")
+                return
+            seats_count = eff_seats if eff_seats is not None else int(self.seats_dropdown.value)
+            boarding_param = int(self.boarding_dropdown.value)
         self._set_flow_loading(True)
         self.error_text.visible = False
         self.page.update()
@@ -1927,7 +1967,7 @@ class RfqBridgeExecutionScreen:
             summary = await self.api_client.get_preparation_summary(
                 tour_code=self._tour_code,
                 seats_count=seats_count,
-                boarding_point_id=int(self.boarding_dropdown.value),
+                boarding_point_id=boarding_param,
                 language_code=self.language_code,
             )
         except httpx.HTTPStatusError as exc:
@@ -2016,13 +2056,22 @@ class RfqBridgeExecutionScreen:
             return
         lg = self.language_code
         eff_seats = _fixed_charter_effective_seats(self._self_service_preparation)
-        if not self.boarding_dropdown.value:
-            self._show_error(shell(lg, "prep_error_boarding_only"))
-            return
-        if eff_seats is None and not self.seats_dropdown.value:
-            self._show_error("Choose seats and a boarding point before confirming.")
-            return
-        seats_count = eff_seats if eff_seats is not None else int(self.seats_dropdown.value)
+        fixed_bus = _is_fixed_charter_full_bus(self._self_service_preparation)
+        if fixed_bus:
+            if eff_seats is None:
+                self._show_error("Unable to create a temporary reservation right now.")
+                return
+            seats_count = eff_seats
+            boarding_param: int | None = None
+        else:
+            if not self.boarding_dropdown.value:
+                self._show_error(shell(lg, "prep_error_boarding_only"))
+                return
+            if eff_seats is None and not self.seats_dropdown.value:
+                self._show_error("Choose seats and a boarding point before confirming.")
+                return
+            seats_count = eff_seats if eff_seats is not None else int(self.seats_dropdown.value)
+            boarding_param = int(self.boarding_dropdown.value)
         self._set_flow_loading(True)
         self.error_text.visible = False
         self.page.update()
@@ -2031,7 +2080,7 @@ class RfqBridgeExecutionScreen:
                 request_id=self.request_id,
                 telegram_user_id=self.dev_telegram_user_id,
                 seats_count=seats_count,
-                boarding_point_id=int(self.boarding_dropdown.value),
+                boarding_point_id=boarding_param,
                 language_code=self.language_code,
             )
         except httpx.HTTPStatusError as exc:

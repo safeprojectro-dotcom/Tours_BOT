@@ -128,7 +128,7 @@ class CustomRequestBookingBridgeExecutionService:
         request_id: int,
         telegram_user_id: int,
         seats_count: int,
-        boarding_point_id: int,
+        boarding_point_id: int | None,
         language_code: str | None = None,
     ) -> OrderSummaryRead:
         """Re-validates bridge context, enforces sales-mode policy, then existing Mini App hold path."""
