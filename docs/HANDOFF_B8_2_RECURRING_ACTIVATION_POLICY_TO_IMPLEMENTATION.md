@@ -37,17 +37,10 @@ Accepted stabilization commit:
 - Activation does not mean Telegram publish
 - Publish does not mean booking/payment side effects
 
-## Pending decision
+## B8.2 / B8.3 (accepted)
 
-Decide how generated recurring draft Tours become catalog-active/execution-ready.
-
-Recommended safe direction to evaluate:
-
-- keep B8 generation draft-only
-- use explicit admin activation
-- avoid automatic activation
-- add duplicate-date/catalog-conflict guard before or during activation
-- use existing Tour activation path where possible instead of creating a special hidden B8 activation path
+- **B8.2 (policy):** **explicit** **admin** **activation** **only;** **no** **auto**-**activation** **on** **generation.**
+- **B8.3 (implementation):** **duplicate** **`open_for_sale`** **guard** **in** **`AdminTourWriteService.activate_tour_for_catalog`**: **tours** **listed** **in** **`supplier_offer_recurrence_generated_tours`** **cannot** **activate** **if** **another** **`open_for_sale`** **tour** **already** **exists** **for** **the** **same** **source** **supplier** **offer** **and** **same** **`departure_datetime`** **(sibling** **B8** **audit** **or** **B10** **active** **bridge** **tour).** **Idempotent** **replay** **unchanged.**
 
 ## Known risks
 

@@ -3,10 +3,12 @@ from __future__ import annotations
 from datetime import UTC, datetime, time as time_type
 from typing import Any, Mapping
 
-from sqlalchemy import or_, select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.enums import TourStatus
+from app.models.supplier_offer_recurrence_generated_tour import SupplierOfferRecurrenceGeneratedTour
+from app.models.supplier_offer_tour_bridge import SupplierOfferTourBridge
 from app.models.tour import BoardingPoint, BoardingPointTranslation, Tour, TourTranslation
 from app.repositories.base import SQLAlchemyRepository
 
@@ -109,6 +111,49 @@ class TourRepository(SQLAlchemyRepository[Tour]):
             .limit(limit)
         )
         return list(session.scalars(stmt).all())
+
+    def get_open_for_sale_conflict_for_recurrence_activation(
+        self,
+        session: Session,
+        *,
+        source_supplier_offer_id: int,
+        departure_datetime: datetime,
+        exclude_tour_id: int,
+    ) -> int | None:
+        """
+        B8.3: Another ``open_for_sale`` tour for the same template offer and same
+        ``departure_datetime`` blocks activating a second recurring-generated instance.
+
+        Includes sibling rows in ``supplier_offer_recurrence_generated_tours`` and
+        the B10 active ``supplier_offer_tour_bridges`` row for the offer (primary tour).
+        """
+        sibling_b8 = exists(
+            select(1)
+            .select_from(SupplierOfferRecurrenceGeneratedTour)
+            .where(
+                SupplierOfferRecurrenceGeneratedTour.source_supplier_offer_id
+                == source_supplier_offer_id,
+                SupplierOfferRecurrenceGeneratedTour.tour_id == Tour.id,
+            ),
+        )
+        active_bridge = exists(
+            select(1)
+            .select_from(SupplierOfferTourBridge)
+            .where(
+                SupplierOfferTourBridge.supplier_offer_id == source_supplier_offer_id,
+                SupplierOfferTourBridge.tour_id == Tour.id,
+                SupplierOfferTourBridge.status == "active",
+            ),
+        )
+        stmt = (
+            select(Tour.id)
+            .where(Tour.id != exclude_tour_id)
+            .where(Tour.status == TourStatus.OPEN_FOR_SALE)
+            .where(Tour.departure_datetime == departure_datetime)
+            .where(or_(sibling_b8, active_bridge))
+            .limit(1)
+        )
+        return session.scalar(stmt)
 
     def list_by_departure_desc(
         self,

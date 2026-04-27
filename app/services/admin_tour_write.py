@@ -12,6 +12,9 @@ from app.core.config import get_settings
 from app.models.enums import TourSalesMode, TourStatus
 from app.models.tour import BoardingPoint, Tour
 from app.repositories.order import OrderRepository
+from app.repositories.supplier_offer_recurrence_generated_tour import (
+    SupplierOfferRecurrenceGeneratedTourRepository,
+)
 from app.repositories.tour import (
     BoardingPointRepository,
     BoardingPointTranslationRepository,
@@ -140,6 +143,7 @@ class AdminTourWriteService:
         tour_translation_repository: TourTranslationRepository | None = None,
         order_repository: OrderRepository | None = None,
         read_service: AdminReadService | None = None,
+        recurrence_generated_tour_repository: SupplierOfferRecurrenceGeneratedTourRepository | None = None,
     ) -> None:
         self._tours = tour_repository or TourRepository()
         self._boarding_points = boarding_point_repository or BoardingPointRepository()
@@ -147,6 +151,7 @@ class AdminTourWriteService:
         self._translations = tour_translation_repository or TourTranslationRepository()
         self._orders = order_repository or OrderRepository()
         self._read = read_service or AdminReadService()
+        self._b8_recurrence_audit = recurrence_generated_tour_repository or SupplierOfferRecurrenceGeneratedTourRepository()
 
     def create_tour(self, session: Session, *, payload: AdminTourCreate) -> AdminTourDetailRead:
         code = payload.code
@@ -537,6 +542,9 @@ class AdminTourWriteService:
         """
         B10.2: `draft` → `open_for_sale` so :class:`MiniAppCatalogService` can list the tour.
         Idempotent if already `open_for_sale`. Does not change `seats_available` (full_bus safety).
+        B8.3: for tours in ``supplier_offer_recurrence_generated_tours``, blocks if another
+        ``open_for_sale`` tour exists for the same template offer and ``departure_datetime``
+        (sibling B8 instance or B10 active bridge tour).
         ``activated_by`` / ``notes`` are accepted for API clients; no new audit row in this slice.
         """
         _ = activated_by, notes
@@ -567,6 +575,23 @@ class AdminTourWriteService:
         missing = _collect_catalog_activation_missing(tour)
         if missing:
             raise AdminTourCatalogActivationValidationError(missing)
+
+        source_offer_id = self._b8_recurrence_audit.get_source_supplier_offer_id_for_tour(
+            session,
+            tour_id=tour_id,
+        )
+        if source_offer_id is not None:
+            conflict = self._tours.get_open_for_sale_conflict_for_recurrence_activation(
+                session,
+                source_supplier_offer_id=source_offer_id,
+                departure_datetime=tour.departure_datetime,
+                exclude_tour_id=tour_id,
+            )
+            if conflict is not None:
+                raise AdminTourCatalogActivationStateError(
+                    "Cannot activate this recurring-generated tour: another catalog-active tour already exists "
+                    "for the same supplier offer and departure.",
+                )
 
         self._tours.update_core_fields(
             session,

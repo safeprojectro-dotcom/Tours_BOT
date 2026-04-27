@@ -210,3 +210,140 @@ class B8SupplierOfferRecurrenceAPITests(FoundationDBTestCase):
             )
         )
         self.assertEqual(n_gen, 2)
+
+    def test_b8_second_activation_fails_when_sibling_b8_tour_already_open(self) -> None:
+        o = self._approved_offer()
+        self.session.commit()
+        body = {"count": 1, "interval_days": 1, "start_offset_days": 200}
+        r1 = self.client.post(
+            f"/admin/supplier-offers/{o.id}/recurrence/draft-tours",
+            headers=self._headers(),
+            json=body,
+        )
+        r2 = self.client.post(
+            f"/admin/supplier-offers/{o.id}/recurrence/draft-tours",
+            headers=self._headers(),
+            json=body,
+        )
+        self.assertEqual(r1.status_code, 200, r1.text)
+        self.assertEqual(r2.status_code, 200, r2.text)
+        t1 = r1.json()["items"][0]["tour_id"]
+        t2 = r2.json()["items"][0]["tour_id"]
+        a1 = self.client.post(
+            f"/admin/tours/{t1}/activate-for-catalog",
+            headers=self._headers(),
+            json={},
+        )
+        self.assertEqual(a1.status_code, 200, a1.text)
+        a2 = self.client.post(
+            f"/admin/tours/{t2}/activate-for-catalog",
+            headers=self._headers(),
+            json={},
+        )
+        self.assertEqual(a2.status_code, 400, a2.text)
+        self.assertIn("another catalog-active tour", a2.json()["detail"])
+        self.session.expire_all()
+        self.assertEqual(self.session.get(Tour, t1).status, TourStatus.OPEN_FOR_SALE)
+        self.assertEqual(self.session.get(Tour, t2).status, TourStatus.DRAFT)
+
+    def test_duplicate_drafts_same_departure_no_activation_failure(self) -> None:
+        o = self._approved_offer()
+        self.session.commit()
+        body = {"count": 1, "interval_days": 1, "start_offset_days": 200}
+        r1 = self.client.post(
+            f"/admin/supplier-offers/{o.id}/recurrence/draft-tours",
+            headers=self._headers(),
+            json=body,
+        )
+        r2 = self.client.post(
+            f"/admin/supplier-offers/{o.id}/recurrence/draft-tours",
+            headers=self._headers(),
+            json=body,
+        )
+        self.assertEqual(r1.status_code, 200, r1.text)
+        self.assertEqual(r2.status_code, 200, r2.text)
+        d1 = datetime.fromisoformat(r1.json()["items"][0]["departure_datetime"].replace("Z", "+00:00"))
+        d2 = datetime.fromisoformat(r2.json()["items"][0]["departure_datetime"].replace("Z", "+00:00"))
+        self.assertEqual(d1, d2)
+        t1, t2 = r1.json()["items"][0]["tour_id"], r2.json()["items"][0]["tour_id"]
+        for tid in (t1, t2):
+            tr = self.session.get(Tour, tid)
+            assert tr is not None
+            self.assertEqual(tr.status, TourStatus.DRAFT)
+
+    def test_b8_idempotent_activation_replay(self) -> None:
+        o = self._approved_offer()
+        self.session.commit()
+        r = self.client.post(
+            f"/admin/supplier-offers/{o.id}/recurrence/draft-tours",
+            headers=self._headers(),
+            json={"count": 1, "interval_days": 7, "start_offset_days": 20},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        tid = r.json()["items"][0]["tour_id"]
+        h = self._headers()
+        a1 = self.client.post(f"/admin/tours/{tid}/activate-for-catalog", headers=h, json={})
+        self.assertEqual(a1.status_code, 200, a1.text)
+        a2 = self.client.post(f"/admin/tours/{tid}/activate-for-catalog", headers=h, json={})
+        self.assertEqual(a2.status_code, 200, a2.text)
+        self.assertTrue(a2.json()["idempotent_replay"])
+        self.assertEqual(self.session.get(Tour, tid).status, TourStatus.OPEN_FOR_SALE)
+
+    def test_non_b8_draft_activates_without_recurrence_guard(self) -> None:
+        dep = datetime(2026, 8, 1, 9, 0, tzinfo=UTC)
+        ret = dep + timedelta(days=3)
+        t = self.create_tour(
+            code="NON-B8-ACT",
+            title_default="Manual draft",
+            departure_datetime=dep,
+            return_datetime=ret,
+            status=TourStatus.DRAFT,
+            sales_mode=TourSalesMode.PER_SEAT,
+            seats_total=20,
+            seats_available=20,
+        )
+        self.session.commit()
+        r = self.client.post(
+            f"/admin/tours/{t.id}/activate-for-catalog",
+            headers=self._headers(),
+            json={},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(self.session.get(Tour, t.id).status, TourStatus.OPEN_FOR_SALE)
+
+    def test_b8_activation_blocked_when_b10_bridged_tour_already_open_same_departure(self) -> None:
+        o = self._approved_offer()
+        self.session.commit()
+        br = self.client.post(
+            f"/admin/supplier-offers/{o.id}/tour-bridge",
+            headers=self._headers(),
+            json={},
+        )
+        self.assertEqual(br.status_code, 200, br.text)
+        tour_bridge_id = br.json()["tour_id"]
+        ar = self.client.post(
+            f"/admin/tours/{tour_bridge_id}/activate-for-catalog",
+            headers=self._headers(),
+            json={},
+        )
+        self.assertEqual(ar.status_code, 200, ar.text)
+        rec = self.client.post(
+            f"/admin/supplier-offers/{o.id}/recurrence/draft-tours",
+            headers=self._headers(),
+            json={"count": 1, "interval_days": 7, "start_offset_days": 0},
+        )
+        self.assertEqual(rec.status_code, 200, rec.text)
+        b8_tid = rec.json()["items"][0]["tour_id"]
+        b8_tour = self.session.get(Tour, b8_tid)
+        bridge_tour = self.session.get(Tour, tour_bridge_id)
+        assert b8_tour is not None and bridge_tour is not None
+        self.assertEqual(b8_tour.departure_datetime, bridge_tour.departure_datetime)
+        fail = self.client.post(
+            f"/admin/tours/{b8_tid}/activate-for-catalog",
+            headers=self._headers(),
+            json={},
+        )
+        self.assertEqual(fail.status_code, 400, fail.text)
+        self.assertIn("another catalog-active tour", fail.json()["detail"])
+        self.assertEqual(self.session.get(Tour, b8_tid).status, TourStatus.DRAFT)
+        self.assertEqual(self.session.get(Tour, tour_bridge_id).status, TourStatus.OPEN_FOR_SALE)
