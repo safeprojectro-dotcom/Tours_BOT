@@ -479,3 +479,30 @@ class AdminSupplierOfferTourBridgeRead(BaseModel):
     notes: str | None
     source_packaging_status: str
     source_lifecycle_status: str
+
+
+class AdminSupplierOfferRecurrenceDraftToursBody(BaseModel):
+    """B8: generate additional draft catalog tours from an approved offer template (explicit admin; no auto-activate)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    count: int = Field(ge=1, le=24, description="Number of tour instances to create.")
+    interval_days: int = Field(ge=1, le=366, description="Calendar days between consecutive departures.")
+    start_offset_days: int = Field(
+        default=0,
+        ge=0,
+        le=730,
+        description="Additional calendar days before the first instance (from template departure).",
+    )
+
+
+class AdminSupplierOfferRecurrenceDraftTourItemRead(BaseModel):
+    tour_id: int
+    sequence_index: int
+    departure_datetime: datetime
+    return_datetime: datetime
+
+
+class AdminSupplierOfferRecurrenceDraftToursRead(BaseModel):
+    source_supplier_offer_id: int
+    items: list[AdminSupplierOfferRecurrenceDraftTourItemRead]

@@ -13,6 +13,7 @@ from app.models.tour import BoardingPoint, BoardingPointTranslation, Tour, TourT
 from app.models.user import User
 from app.models.supplier import Supplier, SupplierApiCredential, SupplierOffer, SupplierOfferExecutionLink
 from app.models.supplier_offer_tour_bridge import SupplierOfferTourBridge
+from app.models.supplier_offer_recurrence_generated_tour import SupplierOfferRecurrenceGeneratedTour
 from app.models.supplier_execution import (
     SupplierExecutionAttempt,
     SupplierExecutionAttemptTelegramIdempotency,
@@ -41,6 +42,7 @@ __all__ = [
     "SupplierOffer",
     "SupplierOfferExecutionLink",
     "SupplierOfferTourBridge",
+    "SupplierOfferRecurrenceGeneratedTour",
     "Tour",
     "TourTranslation",
     "User",

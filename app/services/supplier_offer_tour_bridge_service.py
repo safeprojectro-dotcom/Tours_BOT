@@ -142,10 +142,16 @@ def _packaging_snapshot(offer: SupplierOffer) -> dict:
     }
 
 
-def _unique_tour_code(session: Session, tour_repo: TourRepository, offer_id: int) -> str:
+def _unique_tour_code(
+    session: Session,
+    tour_repo: TourRepository,
+    offer_id: int,
+    *,
+    prefix: str = "B10",
+) -> str:
     for _ in range(20):
         suffix = secrets.token_hex(3)
-        code = f"B10-SO{offer_id}-{suffix}"
+        code = f"{prefix}-SO{offer_id}-{suffix}"
         if len(code) > 64:
             code = code[:64]
         if tour_repo.get_by_code(session, code=code) is None:
@@ -169,6 +175,94 @@ class SupplierOfferTourBridgeService:
         self._bridges = bridge_repo or SupplierOfferTourBridgeRepository()
         self._tours = tour_repo or TourRepository()
         self._translations = trans_repo or TourTranslationRepository()
+
+    def _assert_eligible_for_materialization(self, offer: SupplierOffer) -> None:
+        if offer.packaging_status is not SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH:
+            raise SupplierOfferTourBridgeStateError(
+                "packaging_not_approved",
+                "Supplier offer packaging_status must be approved_for_publish.",
+            )
+        if offer.lifecycle_status is SupplierOfferLifecycle.REJECTED:
+            raise SupplierOfferTourBridgeStateError("lifecycle_rejected", "Supplier offer lifecycle_status must not be rejected.")
+        missing = _collect_missing(offer)
+        if missing:
+            raise SupplierOfferTourBridgeValidationError(missing)
+
+    def ensure_offer_eligible_for_tour_materialization(self, offer: SupplierOffer) -> None:
+        """Public alias for B8 batch generation: same rules as bridge create (packaging, lifecycle, required fields)."""
+        self._assert_eligible_for_materialization(offer)
+
+    def _insert_draft_tour_from_offer_dates(
+        self,
+        session: Session,
+        *,
+        offer: SupplierOffer,
+        departure_datetime: datetime,
+        return_datetime: datetime,
+        tour_code_prefix: str = "B10",
+    ) -> Tour:
+        title_default, short_d, full_d = _desc_pair(offer)
+        duration_days = _duration_days(departure_datetime, return_datetime)
+        seats_total = int(offer.seats_total)
+        seats_av = _tour_seats_available(offer)
+        assert offer.base_price is not None
+        code = _unique_tour_code(
+            session,
+            self._tours,
+            offer.id,
+            prefix=tour_code_prefix,
+        )
+        data = {
+            "code": code,
+            "title_default": title_default[:255],
+            "short_description_default": short_d,
+            "full_description_default": full_d,
+            "duration_days": duration_days,
+            "departure_datetime": departure_datetime,
+            "return_datetime": return_datetime,
+            "base_price": offer.base_price,
+            "currency": (offer.currency or "").strip(),
+            "seats_total": seats_total,
+            "seats_available": seats_av,
+            "sales_deadline": None,
+            "sales_mode": offer.sales_mode,
+            "status": TourStatus.DRAFT,
+            "guaranteed_flag": False,
+            "cover_media_reference": (offer.cover_media_reference or "").strip() or None,
+        }
+        tour = self._tours.create(session, data=data)
+        self._ensure_default_translation(session, tour_id=tour.id, offer=offer, title=title_default[:255])
+        return tour
+
+    def create_draft_tour_from_offer_dates(
+        self,
+        session: Session,
+        *,
+        offer: SupplierOffer,
+        departure_datetime: datetime,
+        return_datetime: datetime,
+        tour_code_prefix: str = "B8R",
+        skip_eligibility_check: bool = False,
+    ) -> Tour:
+        """
+        B8: create a Layer A `Tour` (draft) + default translation from offer snapshot and explicit dates.
+
+        Does **not** create `SupplierOfferTourBridge` or execution links — no catalog or Layer A booking without
+        separate activation (B10.2) and linking per product rules.
+
+        When ``skip_eligibility_check`` is True, caller must have already validated the offer (e.g. batch recurrence).
+        """
+        if return_datetime <= departure_datetime:
+            raise SupplierOfferTourBridgeValidationError(["return_datetime_after_departure"])
+        if not skip_eligibility_check:
+            self._assert_eligible_for_materialization(offer)
+        return self._insert_draft_tour_from_offer_dates(
+            session,
+            offer=offer,
+            departure_datetime=departure_datetime,
+            return_datetime=return_datetime,
+            tour_code_prefix=tour_code_prefix,
+        )
 
     def get_active_bridge(
         self,
@@ -231,17 +325,7 @@ class SupplierOfferTourBridgeService:
                 idempotent_replay=True,
             )
 
-        if offer.packaging_status is not SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH:
-            raise SupplierOfferTourBridgeStateError(
-                "packaging_not_approved",
-                "Supplier offer packaging_status must be approved_for_publish.",
-            )
-        if offer.lifecycle_status is SupplierOfferLifecycle.REJECTED:
-            raise SupplierOfferTourBridgeStateError("lifecycle_rejected", "Supplier offer lifecycle_status must not be rejected.")
-
-        missing = _collect_missing(offer)
-        if missing:
-            raise SupplierOfferTourBridgeValidationError(missing)
+        self._assert_eligible_for_materialization(offer)
 
         snapshot = _packaging_snapshot(offer)
         source_ps = str(offer.packaging_status)
@@ -259,34 +343,13 @@ class SupplierOfferTourBridgeService:
                 packaging_snapshot_json=snapshot,
             )
 
-        title_default, short_d, full_d = _desc_pair(offer)
-        duration_days = _duration_days(offer.departure_datetime, offer.return_datetime)
-        seats_total = int(offer.seats_total)
-        seats_av = _tour_seats_available(offer)
-        assert offer.base_price is not None
-        currency = (offer.currency or "").strip()
-        code = _unique_tour_code(session, self._tours, offer.id)
-        data = {
-            "code": code,
-            "title_default": title_default[:255],
-            "short_description_default": short_d,
-            "full_description_default": full_d,
-            "duration_days": duration_days,
-            "departure_datetime": offer.departure_datetime,
-            "return_datetime": offer.return_datetime,
-            "base_price": offer.base_price,
-            "currency": currency,
-            "seats_total": seats_total,
-            "seats_available": seats_av,
-            "sales_deadline": None,
-            "sales_mode": offer.sales_mode,
-            "status": TourStatus.DRAFT,
-            "guaranteed_flag": False,
-            "cover_media_reference": (offer.cover_media_reference or "").strip() or None,
-        }
-
-        tour = self._tours.create(session, data=data)
-        self._ensure_default_translation(session, tour_id=tour.id, offer=offer, title=title_default[:255])
+        tour = self._insert_draft_tour_from_offer_dates(
+            session,
+            offer=offer,
+            departure_datetime=offer.departure_datetime,
+            return_datetime=offer.return_datetime,
+            tour_code_prefix="B10",
+        )
         kind = SupplierOfferTourBridgeKind.CREATED_NEW_TOUR.value
         return self._insert_bridge(
             session,

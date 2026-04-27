@@ -84,6 +84,11 @@ from app.services.supplier_offer_execution_link_service import (
     SupplierOfferExecutionLinkValidationError,
 )
 from app.services.supplier_offer_service import SupplierOfferService
+from app.services.supplier_offer_recurrence_service import (
+    SupplierOfferRecurrenceGenerationResult,
+    SupplierOfferRecurrenceParameterError,
+    SupplierOfferRecurrenceService,
+)
 from app.services.supplier_offer_tour_bridge_service import (
     SupplierOfferTourBridgeExistingTourError,
     SupplierOfferTourBridgeNotFoundError,
@@ -151,6 +156,9 @@ from app.schemas.supplier_admin import (
     AdminSupplierOfferPublishResult,
     AdminSupplierOfferRead,
     AdminSupplierOfferRejectBody,
+    AdminSupplierOfferRecurrenceDraftToursBody,
+    AdminSupplierOfferRecurrenceDraftToursRead,
+    AdminSupplierOfferRecurrenceDraftTourItemRead,
     AdminSupplierOfferTourBridgeCreateBody,
     AdminSupplierOfferTourBridgeRead,
     SupplierOfferExecutionLinkListRead,
@@ -1454,6 +1462,66 @@ def get_supplier_offer_tour_bridge(offer_id: int, db: Session = Depends(get_db))
             detail="No active tour bridge for this offer.",
         ) from None
     return _admin_supplier_offer_tour_bridge_read(res)
+
+
+def _admin_recurrence_draft_tours_read(res: SupplierOfferRecurrenceGenerationResult) -> AdminSupplierOfferRecurrenceDraftToursRead:
+    return AdminSupplierOfferRecurrenceDraftToursRead(
+        source_supplier_offer_id=res.source_supplier_offer_id,
+        items=[
+            AdminSupplierOfferRecurrenceDraftTourItemRead(
+                tour_id=i.tour_id,
+                sequence_index=i.sequence_index,
+                departure_datetime=i.departure_datetime,
+                return_datetime=i.return_datetime,
+            )
+            for i in res.items
+        ],
+    )
+
+
+@router.post(
+    "/supplier-offers/{offer_id}/recurrence/draft-tours",
+    response_model=AdminSupplierOfferRecurrenceDraftToursRead,
+)
+def post_supplier_offer_recurrence_draft_tours(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminSupplierOfferRecurrenceDraftToursBody = Body(...),
+) -> AdminSupplierOfferRecurrenceDraftToursRead:
+    """
+    B8: create multiple **draft** `Tour` rows by shifting template departure/return (calendar days).
+
+    Does **not** create `SupplierOfferTourBridge`, does **not** activate for catalog, does **not** book or pay.
+    """
+    try:
+        res = SupplierOfferRecurrenceService().generate_draft_tours(
+            db,
+            supplier_offer_id=offer_id,
+            count=payload.count,
+            interval_days=payload.interval_days,
+            start_offset_days=payload.start_offset_days,
+        )
+    except SupplierOfferTourBridgeNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    except SupplierOfferRecurrenceParameterError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": exc.code, "message": exc.message},
+        ) from None
+    except SupplierOfferTourBridgeValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"errors": exc.missing_fields},
+        ) from None
+    except SupplierOfferTourBridgeStateError as exc:
+        if exc.code in ("packaging_not_approved", "lifecycle_rejected"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"errors": [exc.code], "message": exc.message},
+            ) from None
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return _admin_recurrence_draft_tours_read(res)
 
 
 @router.post("/supplier-offers/{offer_id}/execution-link", response_model=SupplierOfferExecutionLinkRead)
