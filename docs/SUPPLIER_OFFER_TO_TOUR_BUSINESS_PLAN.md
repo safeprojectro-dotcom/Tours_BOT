@@ -12,7 +12,9 @@
 
 ### Status (2026) — B10 → Mini App path
 
-**B10** (supplier offer → **`Tour`** bridge) and **B10.1–B10.5** (draft/activate-for-catalog, **full_bus** Mini App conversion, package-priced **Layer A** holds, boarding fallback) are **implemented** and **smoke-accepted** (**Supplier offer #8 → Tour #4 → reservation / payment / My bookings**). **Mini App** remains **execution truth** for catalog booking. **Canonical** **handoff:** [`B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md).
+**Prerequisites on record (completed, narrow scopes):** **B0–B4.3** — intake, structured data, AI/deterministic packaging, human-readable formatting, template/marketing rules, pricing/discount/availability truth; **B5** — admin packaging review (`approved_for_publish` = package approved, **not** Telegram publish and **not** Mini App activation); **B6** — branded Telegram preview JSON; **B7.1** — media review metadata; **B7.2** — `card_render_preview` plan (**no** real download/storage yet).
+
+**B9** (bridge **design**), **B10** (bridge **implementation**), **B10.1–B10.5** (draft, activate-for-catalog, **full_bus** Mini App semantics, **Layer A** package total, boarding fallback) are **implemented** and **smoke-accepted**. **Production path:** **Supplier offer #8 → Tour #4 → `open_for_sale` → Reserve bus → preparation → reservation → payment entry / mock complete → My bookings**. **Mini App** remains **execution truth**. **B10.6** (bot as router, not duplicate catalog) is **postponed** — see [`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`](OPEN_QUESTIONS_AND_TECH_DEBT.md) and [`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md). **Canonical** **checkpoint:** [`B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md).
 
 ---
 
@@ -71,9 +73,25 @@ This rule governs **B1–B13** and prevents accidental coupling of **moderation*
 
 ## 5. Next safe step (BUSINESS)
 
-- **Recommended (2026):** **B8 — Recurring supplier offers** — build on the **B10** bridge and stable **Tour** / **Layer A** path (see **B8** row in §2 table).
-- **Alternate:** **B7.3 — Publish-safe media pipeline** when marketing surfaces need stored/downloaded assets per B7 design.
-- **Completed / historical (do not re-scope as “next” without a new ticket):** **B2** data upgrade; **B6–B7.2** (see CHAT_HANDOFF BUSINESS line); **B9** bridge design; **B10** bridge implementation; **B10.1–B10.5** Mini App full_bus execution path — **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)**.
+**Forward order of work (2026, do not skip gates):**
+
+1. **B10.x** — documentation sync / continuity (**CHAT_HANDOFF**, **OPEN_QUESTIONS**, this file, **B10** bridge design **§10**) so the B-line state is unambiguous for the next agent. **Docs-only.**
+2. **B8** — **Recurring supplier offers** on top of the **explicit** supplier-offer → **Tour** bridge (see **B8** row in §2 and **§5.1** invariants). **Design first,** then implementation.
+3. **B7.3** — **Publish-safe media pipeline** only **after** storage / download / public-URL / moderation policy is decided (**B7** design §8; **B7.1/7.2** already done).
+4. **B11** or the **next** approved **B**-line step (e.g. **Telegram deep link routing**) per product priority — not before **B8** / **B7.3** order is consciously chosen.
+
+- **Recommended (2026) product build:** **B8** (see **§5.1**).
+- **Alternate path:** **B7.3** first if marketing **explicitly** requires stored/downloaded assets before recurrence work.
+- **Completed / historical (do not re-scope as “next” without a new ticket):** **B2** data upgrade; **B6–B7.2**; **B9** design; **B10** + **B10.1–B10.5** — **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)**.
+
+### 5.1 B8 dependencies and invariants (recurring supplier offers)
+
+- **Recurrence** must **use** the same **Supplier offer → Tour** **bridge** and **Layer A** rules: materialize or link **Tour** instances via **explicit** admin/service steps and **governed** policy — **not** silent **ORM/cron/AI** tour creation.
+- **Generated** **Tour** **instances** should **start** as **`draft`** (or another **documented** inactive state) **unless** a **dedicated** slice **defines** **safe,** **auditable** **activation** and **is** **explicitly** **in** **scope.**
+- **Bridge** **≠** **catalog** **activation** **≠** **Telegram** **channel** **publish** **≠** **booking** **/** **payment** — **preserve** for **each** **generated** **instance.**
+- **No** **booking,** **order,** or **payment** **mutation** **inside** **recurrence** **generation** **handlers** **themselves.**
+- **No** **automatic** **Telegram** **showcase** **publish** without **explicit** **ops** **/** **status** **policy.**
+- **Cite** **B9** / **B10** **/** **[`docs/SUPPLIER_OFFER_TO_TOUR_BRIDGE_DESIGN.md`](SUPPLIER_OFFER_TO_TOUR_BRIDGE_DESIGN.md)** **;** do **not** **fork** **execution** **link** **semantics** **(Y27).**
 
 ---
 
@@ -82,6 +100,6 @@ This rule governs **B1–B13** and prevents accidental coupling of **moderation*
 | Document | Role |
 |----------|------|
 | This file | **BUSINESS** roadmap **B1–B13** + core bridge rule. |
-| [`B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md) | **B10.x** completion, smoke, gates, tech debt, **B8** / **B7.3** next-step pointer. **B10.x** docs sync **2026-04-27:** bridge design **§10**, **OPEN_QUESTIONS** B7.3 wording (post-B10). |
+| [`B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md) | **B10.x** completion, smoke, gates, tech debt, **B8** / **B7.3** / **B11** order. **B10.x** handoff prompt: `docs/CURSOR_PROMPT_B10X_SYNC_HANDOFF_AFTER_SUPPLIER_OFFER_TO_TOUR_BRIDGE.md` (continuity). |
 | [`SUPPLIER_OFFER_INTAKE_AI_PACKAGING_MODERATION_DESIGN.md`](SUPPLIER_OFFER_INTAKE_AI_PACKAGING_MODERATION_DESIGN.md) | **B1** detailed design. |
 | `docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md` | Historical **V2** track delivery; use for **context**, not as a replacement numbering for **B** lines. |

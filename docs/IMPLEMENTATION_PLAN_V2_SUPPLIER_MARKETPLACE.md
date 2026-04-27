@@ -30,6 +30,10 @@ Deliver supplier-admin and request-marketplace capabilities as a major platform 
 - no broad reopening of closed Phase **7** **`grp_followup_*`** followup/operator chain outside explicit scoped integration points (**Phase 7.1** sales mode remains a separate, already-shipped sub-track — do not conflate)
 - PostgreSQL-first and service-layer policy ownership remain mandatory
 
+## B-line continuity (supplier offer → Mini App) — not V2 track numbers
+
+**Separate** from the **V2** table rows above. **Authoritative** product sequence: [`docs/SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md) (**B1–B13**). **As of 2026:** **B9** / **B10**–**B10.5** complete (explicit bridge, draft, activate-for-catalog, full_bus package + boarding); **B10.6** (bot as router) postponed. **Next:** **B8** recurring offers (design first), **then** **B7.3** when storage policy is set, **then** **B11** or the next **BUSINESS**-approved step. **Handoff:** [`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md), [`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md), [`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`](OPEN_QUESTIONS_AND_TECH_DEBT.md) (B10.x / B8 / B7.3 subsections).
+
 ## Track 0 - Freeze And Preserve Current Core
 **Status (documentation):** **completed**.
 **Goal**

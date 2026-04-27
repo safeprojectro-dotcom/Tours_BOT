@@ -24,7 +24,7 @@
 
 ## 2) Production smoke (accepted)
 
-- **Path:** **Supplier offer #8** → **Tour #4** → **`open_for_sale`** → **full_bus** whole-vehicle **reservation** → **payment entry** → **My bookings** (temporary reservation visible).
+- **Path:** **Supplier offer #8** → **Tour #4** → **`open_for_sale`** → **Reserve bus** → **preparation** → **reservation** → **payment entry / mock complete** → **My bookings** (reservation visible on path).
 - **Principle:** **Mini App** remains **execution truth** for catalog booking; the Telegram **channel post** and **“publish to Telegram”** are **separate** from **catalog** activation and **Mini App** bookability.
 
 ---

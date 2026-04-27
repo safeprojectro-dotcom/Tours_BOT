@@ -13,7 +13,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ### Completed (accepted)
 - **B9** **bridge** **design,** **B10** **bridge** **implementation,** **B10.1** **/** **B10.2** **(draft/activate** **for** **catalog),** **B10.3** **(full_bus** **fixed** **Mini** **App** **semantics),** **B10.4** **(package** **total** **on** **Layer** **A** **hold;** **not** **per-seat** **multiply),** **B10.5** **(boarding** **fallback** **for** **fixed** **full_bus).**
-- **Production** **smoke** **(accepted):** **Supplier** **offer** **#8** **→** **Tour** **#4** **→** **`open_for_sale`** **→** **whole-vehicle** **reservation** **→** **payment** **→** **My** **bookings.** **Mini** **App** **=** **execution** **truth.**
+- **Production** **smoke** **(accepted):** **Supplier** **offer** **#8** **→** **Tour** **#4** **→** **`open_for_sale`** **→** **Reserve** **bus** **→** **preparation** **→** **reservation** **→** **payment** **entry** **/** **mock** **complete** **→** **My** **bookings.** **Mini** **App** **=** **execution** **truth.**
 
 ### Safety gates (unchanged)
 - **`approved_for_publish`** **/** **B5** **packaging** **gates** **before** **bridge.**
@@ -22,12 +22,35 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Telegram** **public** **channel** **post** **/** **“publish** **to** **Telegram”** **separate** **from** **Mini** **App** **catalog** **bookability** **(B10.2** **activation).**
 
 ### Postponed (tech debt)
-- **B10.6** **—** **Telegram** **bot** **tour** **detail** **should** **become** **router** **/** **consultant** **(e.g.** **deep** **links** **to** **Mini** **App),** **not** **a** **duplicate** **Mini** **App** **catalog** **(remove** **stale** **“sold** **out”,** **debug** **fallbacks,** **duplicated** **content** **later).** **Explicit** **decision** **(2026):** **do** **not** **fix** **duplicate** **bot** **tour** **detail** **in** **this** **B10.x** **window.**
 - **If** **`ADMIN_API_TOKEN`** **or** **other** **secrets** **were** **exposed** **in** **logs** **/** **chat** **during** **smoke,** **rotate** **after** **smoke.** 
 
+#### B10.6 — Telegram private bot: router / consultant (postponed, non-blocking)
+
+- **Intent:** **Short** **summary,** **open** **exact** **Tour** **in** **Mini** **App** **(deep** **link),** **help** **/** **questions,** **custom** **trip** **/** **RFQ** **entry** **—** **not** **a** **second** **Mini** **App** **catalog** **view** **with** **duplicated** **tour** **body.**
+- **Risk** **if** **unchanged** **long-term:** **bot** **duplicates** **Mini** **App** **truth** **or** **shows** **stale** **/** **full_bus**-**inconsistent** **copy** **(e.g.** **“sold** **out”,** **debug** **fallbacks).**
+- **Accepted** **for** **now** **because** **Mini** **App** **execution** **path** **is** **strict** **and** **B10.x** **smoke** **passed.**
+- **Revisit** **before:** **B11** **(Telegram** **deep** **link** **routing** **as** **product** **prioritizes** **it),** **or** **before** **major** **group** **/** **private** **bot** **promotion** **that** **leans** **on** **tour** **copy** **in** **the** **bot.**
+- **Explicit** **decision** **(2026):** **no** **B10.6** **bot** **refactor** **in** **the** **B10.x** **doc-only** **/** **stabilization** **window;** **track** **here** **until** **a** **scoped** **ticket.**
+
+#### B7.3 — Publish-safe media pipeline (unresolved / deferred)
+
+- **Status:** **B7.1** **/** **B7.2** **done** **(metadata** **+** **`card_render_preview`** **plan**);** **no** **real** **pixel** **download** **/** **storage** **/** **channel** **bytes** **in** **that** **slice.**
+- **B7.3** **remains** **open** **until** **storage** **/** **download** **/** **public** **URL** **/** **moderation** **policy** **is** **decided** **(see** **B7** **design** **§8).**
+- **Order:** **after** **B8** **unless** **marketing** **explicitly** **needs** **B7.3** **first** **(see** **[`docs/SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md)** **§5).**
+
+#### B8 — Recurring supplier offers (upcoming risks / invariants)
+
+- **B8** **must** **create** **/** **link** **planned** **Tour** **instances** **through** **explicit** **service** **/** **admin** **/** **policy** **logic** **—** **not** **silent** **cron** **/** **ORM** **hooks** **/** **AI** **Tour** **rows.**
+- **Preserve** **B9** **/** **B10** **separation:** **bridge** **(materialize** **instance)** **≠** **catalog** **activation** **≠** **Telegram** **publish** **≠** **booking** **/** **payment.**
+- **No** **hidden** **bookability** **or** **activation:** **generated** **Tours** **default** **draft** **or** **otherwise** **inactive** **per** **policy** **unless** **a** **dedicated** **step** **implements** **safe,** **auditable** **activation** **rules.**
+- **No** **booking** **/** **payment** **side** **effects** **during** **recurrence** **generation** **itself.**
+- **No** **automatic** **Telegram** **channel** **publish** **from** **recurrence** **without** **explicit** **status** **/** **ops** **policy.**
+- **Design** **first,** **then** **implementation** **—** **see** **B8** **row** **in** **BUSINESS** **plan** **and** **§5** **/** **§6** **dependencies.**
+
 ### Next safe step
-- **Recommended:** **B8** **—** **recurring** **supplier** **offers** **(see** **[`docs/SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md)** **B8** **row).**
-- **Alternate:** **B7.3** **—** **publish-safe** **media** **pipeline.**
+- **Recommended:** **B8** **—** **recurring** **supplier** **offers** **(see** **[`docs/SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md)** **B8** **row** **and** **§5** **order).**
+- **Then** **(policy-dependent):** **B7.3** **—** **publish-safe** **media** **pipeline.**
+- **Then:** **B11** **or** **next** **approved** **BUSINESS**-**plan** **step** **(see** **§5).**
 
 ---
 

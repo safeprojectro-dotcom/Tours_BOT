@@ -5,7 +5,33 @@ Tours_BOT
 
 ## Continuity Sync — B10.x supplier offer → Tour → Mini App (2026)
 
-**B9** design and **B10** through **B10.5** (**bridge,** **draft/activate,** **full_bus** **Mini** **App** **semantics,** **package** **pricing,** **boarding** **fallback**) are **completed** with **production** **smoke** (**Offer** **#8** **→** **Tour** **#4** **→** **reservation** **/** **payment** **/** **My** **bookings**). **Mini** **App** **=** **execution** **truth.** **Postponed:** **B10.6** **(Telegram** **bot** **as** **router/consultant,** **not** **duplicate** **catalog).** **Recommended** **next:** **B8** **(recurring** **offers);** **alternate** **B7.3** **(media).** **Full** **checkpoint:** **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)** **and** **[`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`](OPEN_QUESTIONS_AND_TECH_DEBT.md)** **(B10.x** **section).**
+### Current checkpoint (B10.5 done / B10.6 postponed / next B8)
+
+- **Status:** **B10.5** completed and smoke-accepted; **B10.6** postponed (non-blocking). **Next safe implementation:** **B8** — recurring supplier offers on the explicit bridge. **Then** (when policy allows): **B7.3** publish-safe media. **Then** **B11** or the next **BUSINESS**-plan step as approved.
+- **Roles (2026):** **Telegram channel** = marketing showcase. **Telegram private bot** = router / consultant / entry (target: **B10.6** — not duplicate Mini App catalog). **Mini App** = execution truth and conversion. **Layer A** = booking / payment authority. **Supplier offer** = source facts. **Tour** = customer-facing catalog object. **Admin** = final bridge and activation decisions. **AI** = draft packaging only, not final publisher.
+- **Principle:** **visibility ≠ bookability.** Mini App execution truth stays strict; channel/bot can be softer for showcase but must not contradict Mini App bookability and pricing truth.
+
+**Production smoke (accepted):** **Supplier offer #8** → **Tour #4** → **`open_for_sale`** → **Reserve bus** → **preparation** → **reservation** → **payment entry / mock complete** → **My bookings**.
+
+**Separation of concerns (do not conflate):**
+
+1. **Bridge** (B10) — explicit admin create/link `Tour` + execution link; **no** booking/payment side effects in the bridge handler.
+2. **Catalog activation** (B10.2) — **`draft` → `open_for_sale`** / activate-for-catalog via **separate** explicit admin action.
+3. **Telegram channel “publish to Telegram”** — marketing; **separate** from Mini App catalog visibility.
+4. **Booking / payment** (Layer A) — only on the customer execution path after catalog rules allow it.
+
+Tours created from a supplier offer via the bridge start as **draft** and become **bookable in the Mini App** only after **explicit admin activation** (B10.2), not from bridge alone.
+
+**Full_bus fixed package (B10.3–B10.5) — recorded semantics:**
+
+- **`seats_count`** = full vehicle capacity (whole-bus charter), not a per-seat picker.
+- **`total_amount`** for **FULL_BUS** self-serve = **package** total (**`tour.base_price`**), not `base_price * seats_count`.
+- UI/policy: do **not** present “choose N seats” for this **full_bus fixed** profile; **per_seat** and **custom_request** remain separate product paths.
+- **Boarding fallback:** must **not** invent a fake `boarding_point_id`; server-resolved default / optional real id per B10.5.
+
+**B10.6 (postponed):** make Telegram **private bot** tour surfaces a **short summary + deep link into Mini App** (router/consultant), not a second catalog with duplicated or stale full_bus copy. **Acceptable now** because Mini App path is strict and smoke-passed. **Revisit** before **B11** (deep-link routing) or before major bot/catalog promotion (see `OPEN_QUESTIONS`).
+
+**Canonical detail:** [`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md), [`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`](OPEN_QUESTIONS_AND_TECH_DEBT.md) (B10.x and subsections), [`docs/SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md) §5–§6.
 
 **B10.x** **docs** **sync** **(2026-04-27):** **`SUPPLIER_OFFER_TO_TOUR_BRIDGE_DESIGN.md`** **§10** **=** **implementation** **status** **+** **forward** **pointer;** **`OPEN_QUESTIONS_AND_TECH_DEBT.md`** **B7.3** **/** **B9** **checkpoint** **—** **post-B10** **wording** **(no** **architecture** **change).**
 
