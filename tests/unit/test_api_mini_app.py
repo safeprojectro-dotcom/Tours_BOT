@@ -534,12 +534,12 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertTrue(body["sales_mode_policy"]["operator_path_required"])
 
         point_id = body["boarding_points"][0]["id"]
-        bad = self.client.get(
+        coerced = self.client.get(
             f"/mini-app/tours/{tour.code}/preparation-summary",
             params={"language_code": "en", "seats_count": 1, "boarding_point_id": point_id},
         )
-        self.assertEqual(bad.status_code, 400)
-        self.assertEqual(bad.json()["detail"], "invalid reservation preparation selection")
+        self.assertEqual(coerced.status_code, 200)
+        self.assertEqual(coerced.json()["seats_count"], 40)
 
         summary = self.client.get(
             f"/mini-app/tours/{tour.code}/preparation-summary",
@@ -594,7 +594,7 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertIsInstance(detail, dict)
         self.assertEqual(detail["code"], "mini_app_self_service_booking_not_available")
 
-    def test_full_bus_reservation_post_rejected_wrong_seats_count_when_virgin(self) -> None:
+    def test_full_bus_reservation_post_coerces_seats_count_when_virgin(self) -> None:
         tour = self.create_tour(
             code="FULL-BUS-RES-VIRGIN-BAD-COUNT",
             title_default="Charter Virgin Bad",
@@ -603,6 +603,7 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
             status=TourStatus.OPEN_FOR_SALE,
             seats_total=25,
             seats_available=25,
+            base_price="200.00",
             sales_mode=TourSalesMode.FULL_BUS,
         )
         point = self.create_boarding_point(tour)
@@ -612,10 +613,10 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
             f"/mini-app/tours/{tour.code}/reservations",
             json={"telegram_user_id": 90_002, "seats_count": 5, "boarding_point_id": point.id},
         )
-        self.assertEqual(response.status_code, 400)
-        detail = response.json()["detail"]
-        self.assertIsInstance(detail, dict)
-        self.assertEqual(detail["code"], "mini_app_charter_seats_count_mismatch")
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["order"]["seats_count"], 25)
+        self.assertEqual(str(body["order"]["total_amount"]), "200.00")
 
     def test_full_bus_reservation_post_succeeds_virgin_capacity(self) -> None:
         tour = self.create_tour(
@@ -639,7 +640,7 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual(body["order"]["seats_count"], 15)
-        self.assertEqual(str(body["order"]["total_amount"]), "750.00")
+        self.assertEqual(str(body["order"]["total_amount"]), "50.00")
 
     def test_full_bus_virgin_reservation_overview_and_payment_entry_reuses_pending_session(self) -> None:
         """Track 5g.4b: Mode 2 virgin hold uses same Layer A payment-entry path and idempotent reuse."""
@@ -679,7 +680,7 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         ov = overview.json()
         self.assertEqual(ov["order"]["id"], order_id)
         self.assertIsNotNone(ov["order"]["reservation_expires_at"])
-        self.assertEqual(str(ov["order"]["total_amount"]), "480.00")
+        self.assertEqual(str(ov["order"]["total_amount"]), "40.00")
 
         pay1 = self.client.post(
             f"/mini-app/orders/{order_id}/payment-entry",

@@ -7,7 +7,6 @@ from app.services.mini_app_booking import (
     MINI_APP_SOURCE_CHANNEL,
     MiniAppBookingService,
     MiniAppSelfServiceBookingNotAllowedError,
-    MiniAppCharterSeatsCountMismatchError,
 )
 from tests.unit.base import FoundationDBTestCase
 
@@ -216,6 +215,8 @@ class MiniAppBookingServiceTests(FoundationDBTestCase):
         )
         self.assertIsNotNone(summary)
         assert summary is not None
+        self.assertEqual(str(summary.order.total_amount), "60.00")
+        self.assertEqual(summary.order.seats_count, 10)
         self.session.commit()
 
         entry1 = svc.start_payment_entry(
@@ -262,7 +263,7 @@ class MiniAppBookingServiceTests(FoundationDBTestCase):
                 language_code="en",
             )
 
-    def test_mode2_virgin_wrong_seats_count_raises_mismatch_before_reservation(self) -> None:
+    def test_mode2_virgin_coerces_client_seats_count_to_fixed_charter(self) -> None:
         tour = self.create_tour(
             code="MINI-BOOK-MODE2-MISMATCH",
             departure_datetime=datetime.now(UTC) + timedelta(days=16),
@@ -270,18 +271,22 @@ class MiniAppBookingServiceTests(FoundationDBTestCase):
             status=TourStatus.OPEN_FOR_SALE,
             seats_total=8,
             seats_available=8,
+            base_price="400.00",
             sales_mode=TourSalesMode.FULL_BUS,
         )
         point = self.create_boarding_point(tour)
         self.session.commit()
 
         svc = MiniAppBookingService()
-        with self.assertRaises(MiniAppCharterSeatsCountMismatchError):
-            svc.create_temporary_reservation(
-                self.session,
-                tour_code=tour.code,
-                telegram_user_id=77_312,
-                seats_count=3,
-                boarding_point_id=point.id,
-                language_code="en",
-            )
+        summary = svc.create_temporary_reservation(
+            self.session,
+            tour_code=tour.code,
+            telegram_user_id=77_312,
+            seats_count=3,
+            boarding_point_id=point.id,
+            language_code="en",
+        )
+        self.assertIsNotNone(summary)
+        assert summary is not None
+        self.assertEqual(summary.order.seats_count, 8)
+        self.assertEqual(str(summary.order.total_amount), "400.00")

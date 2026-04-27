@@ -366,6 +366,7 @@ class BotMessageTemplateTests(unittest.TestCase):
                 code="BELGRADE-2",
                 departure_datetime=datetime(2026, 4, 5, 8, 0, tzinfo=UTC),
                 return_datetime=datetime(2026, 4, 6, 20, 0, tzinfo=UTC),
+                sales_mode=TourSalesMode.PER_SEAT,
                 localized_content=LocalizedTourContentRead(title="Belgrad"),
             ),
             boarding_point=OrderBoardingPointSummaryRead(

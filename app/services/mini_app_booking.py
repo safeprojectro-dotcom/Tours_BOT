@@ -68,9 +68,11 @@ class MiniAppBookingService:
         policy = TourSalesModePolicyService.policy_for_catalog_tour(tour)
         if not policy.mini_app_catalog_reservation_allowed:
             raise MiniAppSelfServiceBookingNotAllowedError
-        if policy.catalog_charter_fixed_seats_count is not None:
-            if seats_count != policy.catalog_charter_fixed_seats_count:
-                raise MiniAppCharterSeatsCountMismatchError
+        effective_seats = seats_count
+        if policy.bookable_as_full_bus_package and policy.catalog_charter_fixed_seats_count is not None:
+            effective_seats = policy.catalog_charter_fixed_seats_count
+        elif policy.catalog_charter_fixed_seats_count is not None and seats_count != policy.catalog_charter_fixed_seats_count:
+            raise MiniAppCharterSeatsCountMismatchError
 
         user = self._user_sync().sync_private_user(
             session,
@@ -86,7 +88,7 @@ class MiniAppBookingService:
             user_id=user.id,
             tour_id=tour.id,
             boarding_point_id=boarding_point_id,
-            seats_count=seats_count,
+            seats_count=effective_seats,
             source_channel=MINI_APP_SOURCE_CHANNEL,
         )
         if order is None:

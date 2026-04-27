@@ -14,6 +14,7 @@ from app.bot.constants import (
     START_TOUR_PREFIX,
 )
 from app.models.enums import TourStatus
+from app.repositories.tour import BoardingPointRepository
 from app.repositories.user import UserRepository
 from app.schemas.prepared import (
     CatalogBrowseFiltersRead,
@@ -327,7 +328,27 @@ class PrivateReservationPreparationService:
         if detail.tour.seats_available <= 0:
             return None
         if not detail.boarding_points:
-            return None
+            policy = TourSalesModePolicyService.policy_for_catalog_tour(detail.tour)
+            if not policy.bookable_as_full_bus_package:
+                return None
+            dep = detail.tour.departure_datetime
+            boarding_time = dep.time()
+            BoardingPointRepository().create_for_tour(
+                session,
+                tour_id=detail.tour.id,
+                city="Departure",
+                address="As published in the tour / program",
+                boarding_time=boarding_time,
+                notes="B10.4 default boarding for whole-bus catalog self-service.",
+            )
+            session.flush()
+            detail = self.tour_browse_service.get_tour_detail(
+                session,
+                tour_id=detail.tour.id,
+                language_code=language_code,
+            )
+            if detail is None or not detail.boarding_points:
+                return None
         return detail
 
     def list_seat_count_options(self, detail: PreparedTourDetailRead) -> tuple[int, ...]:
@@ -359,9 +380,10 @@ class PrivateReservationPreparationService:
         if cat_policy.per_seat_self_service_allowed:
             if seats_count not in self.list_seat_count_options(detail):
                 return None
-        elif cat_policy.mini_app_catalog_reservation_allowed:
-            fixed = cat_policy.catalog_charter_fixed_seats_count
-            if fixed is None or seats_count != fixed:
+        elif cat_policy.bookable_as_full_bus_package and cat_policy.catalog_charter_fixed_seats_count is not None:
+            seats_count = cat_policy.catalog_charter_fixed_seats_count
+        elif cat_policy.mini_app_catalog_reservation_allowed and cat_policy.catalog_charter_fixed_seats_count is not None:
+            if seats_count != cat_policy.catalog_charter_fixed_seats_count:
                 return None
         else:
             return None
@@ -372,6 +394,11 @@ class PrivateReservationPreparationService:
         )
         if boarding_point is None:
             return None
+
+        if cat_policy.bookable_as_full_bus_package and cat_policy.catalog_charter_fixed_seats_count is not None:
+            estimated = detail.tour.base_price
+        else:
+            estimated = detail.tour.base_price * seats_count
 
         return ReservationPreparationSummaryRead(
             tour=ReservationPreparationTourRead(
@@ -386,5 +413,5 @@ class PrivateReservationPreparationService:
             ),
             seats_count=seats_count,
             boarding_point=boarding_point,
-            estimated_total_amount=detail.tour.base_price * seats_count,
+            estimated_total_amount=estimated,
         )

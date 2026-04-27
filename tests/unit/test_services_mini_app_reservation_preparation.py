@@ -139,7 +139,7 @@ class MiniAppReservationPreparationServiceTests(FoundationDBTestCase):
         )
         self.assertIsNone(summary)
 
-    def test_build_preparation_summary_full_bus_virgin_requires_full_seat_count(self) -> None:
+    def test_build_preparation_summary_full_bus_virgin_coerces_seats_and_uses_package_total(self) -> None:
         tour = self.create_tour(
             code="FULL-BUS-SUMMARY-VIRGIN",
             departure_datetime=datetime(2027, 6, 18, 8, 0, tzinfo=UTC),
@@ -152,14 +152,17 @@ class MiniAppReservationPreparationServiceTests(FoundationDBTestCase):
         )
         point = self.create_boarding_point(tour)
 
-        bad = MiniAppReservationPreparationService().build_preparation_summary(
+        coerced = MiniAppReservationPreparationService().build_preparation_summary(
             self.session,
             code=tour.code,
             seats_count=3,
             boarding_point_id=point.id,
             language_code="en",
         )
-        self.assertIsNone(bad)
+        self.assertIsNotNone(coerced)
+        assert coerced is not None
+        self.assertEqual(coerced.seats_count, 7)
+        self.assertEqual(str(coerced.estimated_total_amount), "10.00")
 
         summary = MiniAppReservationPreparationService().build_preparation_summary(
             self.session,
@@ -171,7 +174,7 @@ class MiniAppReservationPreparationServiceTests(FoundationDBTestCase):
         self.assertIsNotNone(summary)
         assert summary is not None
         self.assertEqual(summary.seats_count, 7)
-        self.assertEqual(str(summary.estimated_total_amount), "70.00")
+        self.assertEqual(str(summary.estimated_total_amount), "10.00")
 
     def test_preparation_returns_none_for_invalid_or_non_preparable_tour(self) -> None:
         sold_out = self.create_tour(

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import patch
 
-from app.models.enums import BookingStatus, PaymentStatus, TourStatus
+from app.models.enums import BookingStatus, PaymentStatus, TourSalesMode, TourStatus
 from app.services.reservation_creation import TemporaryReservationService
 from tests.unit.base import FoundationDBTestCase
 
@@ -46,6 +46,37 @@ class TemporaryReservationServiceTests(FoundationDBTestCase):
         refreshed_tour = self.session.get(type(tour), tour.id)
         assert refreshed_tour is not None
         self.assertEqual(refreshed_tour.seats_available, 3)
+
+    @patch("app.services.reservation_creation.get_settings")
+    def test_create_temporary_reservation_full_bus_uses_package_total(self, mock_get_settings) -> None:
+        mock_get_settings.return_value.temp_reservation_ttl_minutes = None
+        user = self.create_user()
+        tour = self.create_tour(
+            code="FULL-BUS-RES-TOTAL",
+            seats_total=10,
+            seats_available=10,
+            base_price="500.00",
+            departure_datetime=datetime(2026, 5, 10, 8, 0, tzinfo=UTC),
+            sales_deadline=datetime(2026, 5, 9, 8, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            sales_mode=TourSalesMode.FULL_BUS,
+        )
+        point = self.create_boarding_point(tour, city="Arad")
+        self.session.commit()
+
+        order = TemporaryReservationService().create_temporary_reservation(
+            self.session,
+            user_id=user.id,
+            tour_id=tour.id,
+            boarding_point_id=point.id,
+            seats_count=10,
+            source_channel="mini_app",
+            now=datetime(2026, 5, 1, 8, 0, tzinfo=UTC),
+        )
+
+        self.assertIsNotNone(order)
+        assert order is not None
+        self.assertEqual(str(order.total_amount), "500.00")
 
     def test_create_temporary_reservation_rejects_invalid_boarding_point_or_seats(self) -> None:
         user = self.create_user()

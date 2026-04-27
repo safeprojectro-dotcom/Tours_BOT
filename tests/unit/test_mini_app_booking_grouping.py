@@ -4,7 +4,7 @@ import unittest
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from app.models.enums import BookingStatus, PaymentStatus
+from app.models.enums import BookingStatus, PaymentStatus, TourSalesMode
 from app.schemas.mini_app import (
     MiniAppBookingFacadeState,
     MiniAppBookingListItemRead,
@@ -28,6 +28,7 @@ def _minimal_item(
         code="T",
         departure_datetime=datetime(2026, 6, 1, 8, 0, tzinfo=UTC),
         return_datetime=datetime(2026, 6, 2, 20, 0, tzinfo=UTC),
+        sales_mode=TourSalesMode.PER_SEAT,
         localized_content=lc,
     )
     now = updated_at or datetime.now(UTC)

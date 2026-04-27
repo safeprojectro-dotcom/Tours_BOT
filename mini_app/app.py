@@ -174,6 +174,41 @@ def _preparation_note_for_policy(
     return shell(language_code, "prep_note", dev_id=dev)
 
 
+def _fixed_charter_effective_seats(preparation: MiniAppReservationPreparationRead | None) -> int | None:
+    """Whole-bus fixed charter: capacity is fixed; no per-seat picker."""
+    if preparation is None:
+        return None
+    policy = preparation.sales_mode_policy
+    if policy.seat_selection_ux == "fixed_charter" and policy.bookable_as_full_bus_package:
+        if policy.catalog_charter_fixed_seats_count is not None:
+            return policy.catalog_charter_fixed_seats_count
+        if preparation.seat_count_options:
+            return preparation.seat_count_options[0]
+    return None
+
+
+def _detail_price_and_availability_line(language_code: str | None, detail: MiniAppTourDetailRead) -> str:
+    policy = detail.sales_mode_policy
+    price = CatalogScreen._format_price(detail.tour.base_price)
+    cur = detail.tour.currency
+    if policy.bookable_as_full_bus_package and policy.catalog_charter_fixed_seats_count is not None:
+        return shell(
+            language_code,
+            "detail_line_full_bus_package",
+            price=price,
+            currency=cur,
+            n=str(policy.catalog_charter_fixed_seats_count),
+        )
+    return shell(
+        language_code,
+        "detail_line_per_seat",
+        price=price,
+        currency=cur,
+        free=str(detail.tour.seats_available),
+        total=str(detail.tour.seats_total),
+    )
+
+
 def _format_request_datetime(value: datetime) -> str:
     return CatalogScreen._format_datetime(value)
 
@@ -715,7 +750,7 @@ class TourDetailScreen:
                     color=ft.Colors.ON_SURFACE_VARIANT,
                 ),
                 ft.Text(
-                    f"{CatalogScreen._format_price(detail.tour.base_price)} {detail.tour.currency} | {detail.tour.seats_available} / {detail.tour.seats_total} seats left",
+                    _detail_price_and_availability_line(self.language_code, detail),
                     color=ft.Colors.ON_SURFACE_VARIANT,
                 ),
             ]
@@ -1053,7 +1088,6 @@ class ReservationPreparationScreen:
         self.nav_settings.text = shell(lg, "settings")
         self.boarding_dropdown.label = shell(lg, "label_boarding")
         self.preview_button.text = shell(lg, "btn_preview_summary")
-        self.confirm_reserve_button.text = shell(lg, "btn_confirm_reservation")
         if self._last_preparation is not None:
             self.preparation_note.value = _preparation_note_for_policy(
                 lg, self._last_preparation, self.telegram_user_id
@@ -1061,9 +1095,13 @@ class ReservationPreparationScreen:
             lp = self._last_preparation.sales_mode_policy
             fixed = lp.seat_selection_ux == "fixed_charter" and lp.bookable_as_full_bus_package
             self.seats_dropdown.label = shell(lg, "prep_label_seats_full_bus" if fixed else "label_seats")
+            self.confirm_reserve_button.text = (
+                shell(lg, "mini_app_cta_reserve_full_bus") if fixed else shell(lg, "btn_confirm_reservation")
+            )
         else:
             self.preparation_note.value = shell(lg, "prep_note", dev_id=str(self.telegram_user_id or "—"))
             self.seats_dropdown.label = shell(lg, "label_seats")
+            self.confirm_reserve_button.text = shell(lg, "btn_confirm_reservation")
         if self.loading_row.controls:
             self.loading_row.controls[1].value = shell(lg, "loading_reservation_options")
 
@@ -1117,9 +1155,15 @@ class ReservationPreparationScreen:
         if not self.current_tour_code:
             self._show_error("Tour not found.")
             return
-        if not self.seats_dropdown.value or not self.boarding_dropdown.value:
+        lg = self.language_code
+        eff_seats = _fixed_charter_effective_seats(self._last_preparation)
+        if not self.boarding_dropdown.value:
+            self._show_error(shell(lg, "prep_error_boarding_only"))
+            return
+        if eff_seats is None and not self.seats_dropdown.value:
             self._show_error("Choose seats and a boarding point to preview the summary.")
             return
+        seats_count = eff_seats if eff_seats is not None else int(self.seats_dropdown.value)
 
         self._set_loading(True)
         self.error_text.visible = False
@@ -1128,7 +1172,7 @@ class ReservationPreparationScreen:
         try:
             summary = await self.api_client.get_preparation_summary(
                 tour_code=self.current_tour_code,
-                seats_count=int(self.seats_dropdown.value),
+                seats_count=seats_count,
                 boarding_point_id=int(self.boarding_dropdown.value),
                 language_code=self.language_code,
             )
@@ -1225,6 +1269,7 @@ class ReservationPreparationScreen:
         self.seats_dropdown.value = str(preparation.seat_count_options[0]) if preparation.seat_count_options else None
         self.seats_dropdown.disabled = bool(fixed_charter)
         self.seats_dropdown.label = shell(lg, "prep_label_seats_full_bus" if fixed_charter else "label_seats")
+        self.seats_dropdown.visible = not fixed_charter
         self.boarding_dropdown.options = [
             ft.dropdown.Option(str(point.id), f"{point.city} - {point.address}")
             for point in preparation.boarding_points
@@ -1233,13 +1278,18 @@ class ReservationPreparationScreen:
             str(preparation.boarding_points[0].id) if preparation.boarding_points else None
         )
 
-        self.selection_container.controls.extend(
-            header_rows
-            + [
-                self.seats_dropdown,
+        prep_rows: list[ft.Control] = list(header_rows)
+        if not fixed_charter:
+            prep_rows.append(self.seats_dropdown)
+        prep_rows.extend(
+            [
                 self.boarding_dropdown,
                 ft.Row([self.preview_button], alignment=ft.MainAxisAlignment.START),
             ]
+        )
+        self.selection_container.controls.extend(prep_rows)
+        self.confirm_reserve_button.text = (
+            shell(lg, "mini_app_cta_reserve_full_bus") if fixed_charter else shell(lg, "btn_confirm_reservation")
         )
 
     def _render_summary(self, summary: ReservationPreparationSummaryRead | None) -> None:
@@ -1251,51 +1301,55 @@ class ReservationPreparationScreen:
         self.confirm_reserve_button.disabled = False
         lg = self.language_code
         prep = self._last_preparation
+        full_bus_summary = prep is not None and prep.sales_mode_policy.bookable_as_full_bus_package
+        title_key = "prep_summary_title_full_bus" if full_bus_summary else "prep_summary_title"
         if prep is not None and prep.sales_mode_policy.bookable_as_full_bus_package:
             seat_line = shell(lg, "prep_line_whole_bus_seats", n=str(summary.seats_count))
         else:
             seat_line = shell(lg, "prep_line_seats", n=str(summary.seats_count))
+        price_text = ft.Text(
+            shell(
+                lg,
+                "prep_line_estimated",
+                amount=CatalogScreen._format_price(summary.estimated_total_amount),
+                currency=summary.tour.currency,
+            )
+        )
+        boarding_time_text = ft.Text(
+            shell(lg, "prep_line_boarding_time", t=summary.boarding_point.time.strftime("%H:%M"))
+        )
+        boarding_place_text = ft.Text(
+            shell(
+                lg,
+                "prep_line_boarding",
+                city=summary.boarding_point.city,
+                addr=summary.boarding_point.address,
+            )
+        )
+        detail_lines: list[ft.Control] = [
+            ft.Text(summary.tour.localized_content.title, size=18, weight=ft.FontWeight.BOLD),
+        ]
+        if full_bus_summary:
+            detail_lines.append(ft.Text(shell(lg, "prep_line_capacity_fixed", n=str(summary.seats_count))))
+            detail_lines.append(price_text)
+            detail_lines.extend([boarding_place_text, boarding_time_text])
+        else:
+            detail_lines.append(ft.Text(seat_line))
+            detail_lines.extend([boarding_place_text, boarding_time_text, price_text])
+        detail_lines.append(
+            ft.Text(
+                shell(lg, "prep_hold_note"),
+                color=ft.Colors.ON_SURFACE_VARIANT,
+            )
+        )
         self.summary_container.controls.extend(
             [
-                ft.Text(shell(lg, "prep_summary_title"), size=20, weight=ft.FontWeight.W_600),
+                ft.Text(shell(lg, title_key), size=20, weight=ft.FontWeight.W_600),
                 ft.Container(
                     bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
                     border_radius=16,
                     padding=16,
-                    content=ft.Column(
-                        [
-                            ft.Text(summary.tour.localized_content.title, size=18, weight=ft.FontWeight.BOLD),
-                            ft.Text(seat_line),
-                            ft.Text(
-                                shell(
-                                    lg,
-                                    "prep_line_boarding",
-                                    city=summary.boarding_point.city,
-                                    addr=summary.boarding_point.address,
-                                )
-                            ),
-                            ft.Text(
-                                shell(
-                                    lg,
-                                    "prep_line_boarding_time",
-                                    t=summary.boarding_point.time.strftime("%H:%M"),
-                                )
-                            ),
-                            ft.Text(
-                                shell(
-                                    lg,
-                                    "prep_line_estimated",
-                                    amount=CatalogScreen._format_price(summary.estimated_total_amount),
-                                    currency=summary.tour.currency,
-                                )
-                            ),
-                            ft.Text(
-                                shell(lg, "prep_hold_note"),
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                            ),
-                        ],
-                        spacing=8,
-                    ),
+                    content=ft.Column(detail_lines, spacing=8),
                 ),
                 ft.Row([self.confirm_reserve_button], alignment=ft.MainAxisAlignment.START),
             ]
@@ -1311,9 +1365,15 @@ class ReservationPreparationScreen:
         if self.telegram_user_id is None:
             self._show_error(shell(self.language_code, "identity_required_my_data"))
             return
-        if not self.seats_dropdown.value or not self.boarding_dropdown.value:
+        lg = self.language_code
+        eff_seats = _fixed_charter_effective_seats(self._last_preparation)
+        if not self.boarding_dropdown.value:
+            self._show_error(shell(lg, "prep_error_boarding_only"))
+            return
+        if eff_seats is None and not self.seats_dropdown.value:
             self._show_error("Choose seats and a boarding point before confirming.")
             return
+        seats_count = eff_seats if eff_seats is not None else int(self.seats_dropdown.value)
 
         self._set_loading(True)
         self.error_text.visible = False
@@ -1323,7 +1383,7 @@ class ReservationPreparationScreen:
             summary = await self.api_client.create_temporary_reservation(
                 tour_code=self.current_tour_code,
                 telegram_user_id=self.telegram_user_id,
-                seats_count=int(self.seats_dropdown.value),
+                seats_count=seats_count,
                 boarding_point_id=int(self.boarding_dropdown.value),
                 language_code=self.language_code,
             )
@@ -1559,6 +1619,7 @@ class RfqBridgeExecutionScreen:
         self._tour_code: str | None = None
         self._order_id: int | None = None
         self._payment_elig: MiniAppBridgePaymentEligibilityRead | None = None
+        self._self_service_preparation: MiniAppReservationPreparationRead | None = None
 
         lg = language_code
         self.nav_back = ft.TextButton(
@@ -1615,7 +1676,16 @@ class RfqBridgeExecutionScreen:
         self.seats_dropdown.label = shell(lg, "label_seats")
         self.boarding_dropdown.label = shell(lg, "label_boarding")
         self.preview_button.text = shell(lg, "btn_preview_summary")
-        self.confirm_reserve_button.text = shell(lg, "btn_confirm_reservation")
+        if self._self_service_preparation is not None:
+            lp = self._self_service_preparation.sales_mode_policy
+            fixed = lp.seat_selection_ux == "fixed_charter" and lp.bookable_as_full_bus_package
+            self.seats_dropdown.label = shell(lg, "prep_label_seats_full_bus" if fixed else "label_seats")
+            self.confirm_reserve_button.text = (
+                shell(lg, "mini_app_cta_reserve_full_bus") if fixed else shell(lg, "btn_confirm_reservation")
+            )
+        else:
+            self.seats_dropdown.label = shell(lg, "label_seats")
+            self.confirm_reserve_button.text = shell(lg, "btn_confirm_reservation")
         self.continue_payment_button.text = shell(lg, "continue_to_payment")
         if self.loading_row.controls:
             self.loading_row.controls[1].value = shell(lg, "rfq_bridge_loading")
@@ -1643,6 +1713,7 @@ class RfqBridgeExecutionScreen:
         self._order_id = None
         self._tour_code = None
         self._bridge_prep = None
+        self._self_service_preparation = None
         self.confirm_reserve_button.visible = True
         self.preview_button.disabled = False
         self.flow_column.controls.clear()
@@ -1712,6 +1783,7 @@ class RfqBridgeExecutionScreen:
 
     def _render_empty_flow(self) -> None:
         self.flow_column.controls.clear()
+        self._self_service_preparation = None
 
     def _render_no_booking_step_state(self, *, message: str) -> None:
         self.flow_column.controls = [
@@ -1751,6 +1823,7 @@ class RfqBridgeExecutionScreen:
         self.summary_container.controls.clear()
         self.confirm_reserve_button.disabled = True
         self.flow_column.controls.clear()
+        self._self_service_preparation = preparation
 
         lg = self.language_code
         localized = preparation.tour.localized_content
@@ -1807,6 +1880,7 @@ class RfqBridgeExecutionScreen:
         self.seats_dropdown.value = str(preparation.seat_count_options[0]) if preparation.seat_count_options else None
         self.seats_dropdown.disabled = bool(fixed_charter)
         self.seats_dropdown.label = shell(lg, "prep_label_seats_full_bus" if fixed_charter else "label_seats")
+        self.seats_dropdown.visible = not fixed_charter
         self.boarding_dropdown.options = [
             ft.dropdown.Option(str(point.id), f"{point.city} - {point.address}")
             for point in preparation.boarding_points
@@ -1814,16 +1888,21 @@ class RfqBridgeExecutionScreen:
         self.boarding_dropdown.value = (
             str(preparation.boarding_points[0].id) if preparation.boarding_points else None
         )
+        self.confirm_reserve_button.text = (
+            shell(lg, "mini_app_cta_reserve_full_bus") if fixed_charter else shell(lg, "btn_confirm_reservation")
+        )
 
-        self.flow_column.controls.extend(
-            header_rows
-            + [
-                self.seats_dropdown,
+        flow_rows: list[ft.Control] = list(header_rows)
+        if not fixed_charter:
+            flow_rows.append(self.seats_dropdown)
+        flow_rows.extend(
+            [
                 self.boarding_dropdown,
                 ft.Row([self.preview_button], alignment=ft.MainAxisAlignment.START),
                 self.summary_container,
             ]
         )
+        self.flow_column.controls.extend(flow_rows)
 
     def _on_preview_summary(self, _: ft.ControlEvent) -> None:
         self.page.run_task(self._load_summary_async)
@@ -1832,16 +1911,22 @@ class RfqBridgeExecutionScreen:
         if self._tour_code is None:
             self._show_error("Tour not found.")
             return
-        if not self.seats_dropdown.value or not self.boarding_dropdown.value:
+        lg = self.language_code
+        eff_seats = _fixed_charter_effective_seats(self._self_service_preparation)
+        if not self.boarding_dropdown.value:
+            self._show_error(shell(lg, "prep_error_boarding_only"))
+            return
+        if eff_seats is None and not self.seats_dropdown.value:
             self._show_error("Choose seats and a boarding point to preview the summary.")
             return
+        seats_count = eff_seats if eff_seats is not None else int(self.seats_dropdown.value)
         self._set_flow_loading(True)
         self.error_text.visible = False
         self.page.update()
         try:
             summary = await self.api_client.get_preparation_summary(
                 tour_code=self._tour_code,
-                seats_count=int(self.seats_dropdown.value),
+                seats_count=seats_count,
                 boarding_point_id=int(self.boarding_dropdown.value),
                 language_code=self.language_code,
             )
@@ -1869,47 +1954,57 @@ class RfqBridgeExecutionScreen:
             return
         lg = self.language_code
         self.confirm_reserve_button.disabled = False
+        prep = self._self_service_preparation
+        full_bus_summary = prep is not None and prep.sales_mode_policy.bookable_as_full_bus_package
+        title_key = "prep_summary_title_full_bus" if full_bus_summary else "prep_summary_title"
+        seat_line = (
+            shell(lg, "prep_line_whole_bus_seats", n=str(summary.seats_count))
+            if (prep is not None and prep.sales_mode_policy.bookable_as_full_bus_package)
+            else shell(lg, "prep_line_seats", n=str(summary.seats_count))
+        )
+        price_text = ft.Text(
+            shell(
+                lg,
+                "prep_line_estimated",
+                amount=CatalogScreen._format_price(summary.estimated_total_amount),
+                currency=summary.tour.currency,
+            )
+        )
+        boarding_place_text = ft.Text(
+            shell(
+                lg,
+                "prep_line_boarding",
+                city=summary.boarding_point.city,
+                addr=summary.boarding_point.address,
+            )
+        )
+        boarding_time_text = ft.Text(
+            shell(lg, "prep_line_boarding_time", t=summary.boarding_point.time.strftime("%H:%M"))
+        )
+        detail_lines: list[ft.Control] = [
+            ft.Text(summary.tour.localized_content.title, size=16, weight=ft.FontWeight.BOLD),
+        ]
+        if full_bus_summary:
+            detail_lines.append(ft.Text(shell(lg, "prep_line_capacity_fixed", n=str(summary.seats_count))))
+            detail_lines.append(price_text)
+            detail_lines.extend([boarding_place_text, boarding_time_text])
+        else:
+            detail_lines.append(ft.Text(seat_line))
+            detail_lines.extend([boarding_place_text, boarding_time_text, price_text])
+        detail_lines.append(
+            ft.Text(
+                shell(lg, "prep_hold_note"),
+                color=ft.Colors.ON_SURFACE_VARIANT,
+            )
+        )
         self.summary_container.controls.extend(
             [
-                ft.Text(shell(lg, "prep_summary_title"), size=18, weight=ft.FontWeight.W_600),
+                ft.Text(shell(lg, title_key), size=18, weight=ft.FontWeight.W_600),
                 ft.Container(
                     bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
                     border_radius=16,
                     padding=16,
-                    content=ft.Column(
-                        [
-                            ft.Text(summary.tour.localized_content.title, size=16, weight=ft.FontWeight.BOLD),
-                            ft.Text(shell(lg, "prep_line_seats", n=str(summary.seats_count))),
-                            ft.Text(
-                                shell(
-                                    lg,
-                                    "prep_line_boarding",
-                                    city=summary.boarding_point.city,
-                                    addr=summary.boarding_point.address,
-                                )
-                            ),
-                            ft.Text(
-                                shell(
-                                    lg,
-                                    "prep_line_boarding_time",
-                                    t=summary.boarding_point.time.strftime("%H:%M"),
-                                )
-                            ),
-                            ft.Text(
-                                shell(
-                                    lg,
-                                    "prep_line_estimated",
-                                    amount=CatalogScreen._format_price(summary.estimated_total_amount),
-                                    currency=summary.tour.currency,
-                                )
-                            ),
-                            ft.Text(
-                                shell(lg, "prep_hold_note"),
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                            ),
-                        ],
-                        spacing=8,
-                    ),
+                    content=ft.Column(detail_lines, spacing=8),
                 ),
                 ft.Row([self.confirm_reserve_button], alignment=ft.MainAxisAlignment.START),
             ]
@@ -1919,9 +2014,15 @@ class RfqBridgeExecutionScreen:
         if self.request_id is None or self._tour_code is None:
             self._show_error("Missing request or tour.")
             return
-        if not self.seats_dropdown.value or not self.boarding_dropdown.value:
+        lg = self.language_code
+        eff_seats = _fixed_charter_effective_seats(self._self_service_preparation)
+        if not self.boarding_dropdown.value:
+            self._show_error(shell(lg, "prep_error_boarding_only"))
+            return
+        if eff_seats is None and not self.seats_dropdown.value:
             self._show_error("Choose seats and a boarding point before confirming.")
             return
+        seats_count = eff_seats if eff_seats is not None else int(self.seats_dropdown.value)
         self._set_flow_loading(True)
         self.error_text.visible = False
         self.page.update()
@@ -1929,7 +2030,7 @@ class RfqBridgeExecutionScreen:
             summary = await self.api_client.create_booking_bridge_reservation(
                 request_id=self.request_id,
                 telegram_user_id=self.dev_telegram_user_id,
-                seats_count=int(self.seats_dropdown.value),
+                seats_count=seats_count,
                 boarding_point_id=int(self.boarding_dropdown.value),
                 language_code=self.language_code,
             )
@@ -2625,12 +2726,20 @@ class MyBookingsScreen:
         title = tour.localized_content.title
         dep = CatalogScreen._format_datetime(tour.departure_datetime)
         amount = f"{CatalogScreen._format_price(s.order.total_amount)} {s.order.currency}"
-        seats_line = shell(
-            lg,
-            "booking_seats_amount",
-            amount=amount,
-            n=str(s.order.seats_count),
-        )
+        if tour.sales_mode is TourSalesMode.FULL_BUS:
+            seats_line = shell(
+                lg,
+                "booking_seats_amount_full_bus",
+                amount=amount,
+                n=str(s.order.seats_count),
+            )
+        else:
+            seats_line = shell(
+                lg,
+                "booking_seats_amount",
+                amount=amount,
+                n=str(s.order.seats_count),
+            )
         bk_label, pay_label = booking_facade_labels(lg, item.facade_state.value)
         oid = s.order.id
         return ft.Container(

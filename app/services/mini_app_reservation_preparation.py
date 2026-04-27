@@ -90,14 +90,16 @@ class MiniAppReservationPreparationService:
         mode_policy = TourSalesModePolicyService.policy_for_catalog_tour(tour)
         if not mode_policy.mini_app_catalog_reservation_allowed:
             return None
-        if mode_policy.catalog_charter_fixed_seats_count is not None:
-            if seats_count != mode_policy.catalog_charter_fixed_seats_count:
-                return None
+        effective_seats = seats_count
+        if mode_policy.bookable_as_full_bus_package and mode_policy.catalog_charter_fixed_seats_count is not None:
+            effective_seats = mode_policy.catalog_charter_fixed_seats_count
+        elif mode_policy.catalog_charter_fixed_seats_count is not None and seats_count != mode_policy.catalog_charter_fixed_seats_count:
+            return None
 
         return self.reservation_preparation_service.build_preparation_summary(
             session,
             tour_id=tour.id,
-            seats_count=seats_count,
+            seats_count=effective_seats,
             boarding_point_id=boarding_point_id,
             language_code=language_code,
         )

@@ -88,6 +88,7 @@ class OrderSummaryService:
                 code=prepared_tour.tour.code,
                 departure_datetime=prepared_tour.tour.departure_datetime,
                 return_datetime=prepared_tour.tour.return_datetime,
+                sales_mode=prepared_tour.tour.sales_mode,
                 localized_content=prepared_tour.localized_content,
             ),
             boarding_point=boarding_point_summary,

@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 
-from app.models.enums import BookingStatus, PaymentStatus, TourStatus
+from app.models.enums import BookingStatus, PaymentStatus, TourSalesMode, TourStatus
 from app.schemas.order import OrderRead
 from app.schemas.payment import PaymentRead
 from app.schemas.tour import BoardingPointRead, TourRead
@@ -81,6 +81,7 @@ class OrderTourSummaryRead(BaseModel):
     code: str
     departure_datetime: datetime
     return_datetime: datetime
+    sales_mode: TourSalesMode
     localized_content: LocalizedTourContentRead
 
 

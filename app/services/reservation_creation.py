@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourStatus
+from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourSalesMode, TourStatus
 from app.repositories.order import OrderRepository
 from app.repositories.tour import BoardingPointRepository, TourRepository
 from app.schemas.order import OrderRead
@@ -70,7 +70,11 @@ class TemporaryReservationService:
                 "payment_status": PaymentStatus.AWAITING_PAYMENT,
                 "cancellation_status": CancellationStatus.ACTIVE,
                 "reservation_expires_at": reservation_expires_at,
-                "total_amount": tour.base_price * seats_count,
+                "total_amount": (
+                    tour.base_price
+                    if tour.sales_mode is TourSalesMode.FULL_BUS
+                    else tour.base_price * seats_count
+                ),
                 "currency": tour.currency,
                 "source_channel": source_channel,
             },
