@@ -1,4 +1,13 @@
-"""B8: explicit admin generation of additional draft `Tour` rows from a packaging-approved supplier offer template."""
+"""B8: explicit admin generation of additional draft `Tour` rows from a packaging-approved supplier offer template.
+
+- Reuses :meth:`SupplierOfferTourBridgeService.create_draft_tour_from_offer_dates` for **field mapping only**; does
+  **not** create or update ``SupplierOfferTourBridge`` (that remains B10-only for the primary bridge when used).
+- **Idempotency:** none. Re-posting the same parameters creates **more** draft tours and audit rows (accepted tech debt
+  until a batch key or uniqueness on ``(source_supplier_offer_id, departure)`` is designed).
+- **start_offset_days=0:** the first instance uses the template offer’s **same** ``departure_datetime`` /
+  implied return. If a B10 bridge already materialized a ``Tour`` for that offer on those dates, operators may
+  now have a **second** distinct draft for the same calendar slot — use ``start_offset_days`` / ops discipline to avoid.
+"""
 
 from __future__ import annotations
 

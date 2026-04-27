@@ -24,6 +24,13 @@
 - `app/models/supplier_offer_recurrence_generated_tour.py` + migration `20260530_28`.
 - Tests: `tests/unit/test_supplier_offer_recurrence_b8.py`.
 
+## Stabilization notes (B8 slice 1)
+
+- **B8 does not** create, update, or delete `supplier_offer_tour_bridges` — only `SupplierOfferTourBridgeService` mapping helpers for inserting **draft** `tours` rows.
+- Generated tours are **`TourStatus.draft`**, not `open_for_sale`; no catalog activation in this path.
+- **Re-run:** the same `POST` body may be issued twice; the second call creates **additional** draft tours (non-idempotent). See `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` (B8 tech debt).
+- **start_offset_days=0:** first departure equals the offer’s `departure_datetime` (may **overlap** the primary bridged tour’s dates if the offer was already bridged to a `Tour` with the same — operators should use offsets or process discipline).
+
 ## Next (out of scope for slice 1)
 
 - Linking each generated `Tour` to a supplier-facing execution path (execution links, separate offers, or series entity).

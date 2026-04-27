@@ -47,6 +47,13 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **No** **automatic** **Telegram** **channel** **publish** **from** **recurrence** **without** **explicit** **status** **/** **ops** **policy.**
 - **Design** **first,** **then** **implementation** **—** **see** **B8** **row** **in** **BUSINESS** **plan** **and** **§5** **/** **§6** **dependencies.**
 
+#### B8 slice 1 (draft-tours API) — accepted behavior / tech debt (2026)
+
+- **Shipped:** **`POST` `/admin/supplier-offers/{id}/recurrence/draft-tours`** **—** see **[`docs/HANDOFF_B10X_TO_B8_RECURRING_SUPPLIER_OFFERS.md`](HANDOFF_B10X_TO_B8_RECURRING_SUPPLIER_OFFERS.md).**
+- **No** **`SupplierOfferTourBridge`** **mutation** **in** **B8**; **B8** **only** **reuses** **shared** **draft** **`Tour`** **insert** **mapping** **from** **`SupplierOfferTourBridgeService`** **(plus** **audit** **table** **`supplier_offer_recurrence_generated_tours`).**
+- **Re-run** **/** **duplicate** **POST:** **not** **idempotent** **—** **each** **call** **creates** **new** **draft** **`tours`**. **Future:** **`generation_batch_id`**, **or** **uniqueness** **on** **`(source_supplier_offer_id,` **`departure_datetime)`** **/** **`tour`**, **or** **admin** **confirm** **—** **revisit** **when** **recurrence** **UI** **or** **ops** **volume** **warrants** **it.**
+- **`start_offset_days=0`:** **first** **instance** **matches** **template** **`departure_datetime`**; **if** **B10** **already** **bridged** **a** **tour** **for** **that** **slot,** **B8** **can** **still** **add** **another** **draft** **for** **the** **same** **dates** **(distinct** **`tour`**, **`B8R-*`** **code).** **Mitigation:** **use** **`start_offset_days` ≥** **interval** **or** **ops** **discipline.**
+
 ### Next safe step
 - **Recommended:** **B8** **—** **recurring** **supplier** **offers** **(see** **[`docs/SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md)** **B8** **row** **and** **§5** **order).**
 - **Then** **(policy-dependent):** **B7.3** **—** **publish-safe** **media** **pipeline.**

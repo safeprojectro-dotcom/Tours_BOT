@@ -7,7 +7,7 @@ Tours_BOT
 
 ### Current checkpoint (B10.5 done / B10.6 postponed / next B8)
 
-- **Status:** **B10.5** completed and smoke-accepted; **B10.6** postponed (non-blocking). **Next safe implementation:** **B8** — recurring supplier offers on the explicit bridge. **Then** (when policy allows): **B7.3** publish-safe media. **Then** **B11** or the next **BUSINESS**-plan step as approved.
+- **Status:** **B10.5** completed and smoke-accepted; **B10.6** postponed (non-blocking). **B8** **slice 1** (`POST` …`/recurrence/draft-tours`, draft `Tour` + audit, **no** `SupplierOfferTourBridge`, **no** activation) **shipped** **—** see **[`docs/HANDOFF_B10X_TO_B8_RECURRING_SUPPLIER_OFFERS.md`](HANDOFF_B10X_TO_B8_RECURRING_SUPPLIER_OFFERS.md)** and **`OPEN_QUESTIONS`** **(B8** **tech** **debt:** re-run not idempotent, `start_offset_days=0` may duplicate bridged date). **Next:** **B8** follow-ups (links/activation policy) or **B7.3**; **B11** per product.
 - **Roles (2026):** **Telegram channel** = marketing showcase. **Telegram private bot** = router / consultant / entry (target: **B10.6** — not duplicate Mini App catalog). **Mini App** = execution truth and conversion. **Layer A** = booking / payment authority. **Supplier offer** = source facts. **Tour** = customer-facing catalog object. **Admin** = final bridge and activation decisions. **AI** = draft packaging only, not final publisher.
 - **Principle:** **visibility ≠ bookability.** Mini App execution truth stays strict; channel/bot can be softer for showcase but must not contradict Mini App bookability and pricing truth.
 

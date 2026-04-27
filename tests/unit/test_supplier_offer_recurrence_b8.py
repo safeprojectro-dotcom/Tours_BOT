@@ -6,8 +6,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
-from sqlalchemy import select
-from sqlalchemy import event
+from sqlalchemy import event, func, select
 
 from app.core.config import get_settings
 from app.db.session import get_db
@@ -19,8 +18,10 @@ from app.models.enums import (
     TourSalesMode,
     TourStatus,
 )
+from app.models.order import Order
 from app.models.supplier import SupplierOffer
 from app.models.supplier_offer_recurrence_generated_tour import SupplierOfferRecurrenceGeneratedTour
+from app.models.supplier_offer_tour_bridge import SupplierOfferTourBridge
 from app.models.tour import Tour
 from tests.unit.base import FoundationDBTestCase
 
@@ -118,3 +119,94 @@ class B8SupplierOfferRecurrenceAPITests(FoundationDBTestCase):
             json={"count": 30, "interval_days": 7, "start_offset_days": 0},
         )
         self.assertEqual(r.status_code, 422, r.text)
+
+    def test_generated_tours_are_draft_not_open_for_sale(self) -> None:
+        o = self._approved_offer()
+        self.session.commit()
+        r = self.client.post(
+            f"/admin/supplier-offers/{o.id}/recurrence/draft-tours",
+            headers=self._headers(),
+            json={"count": 1, "interval_days": 7, "start_offset_days": 14},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        tid = r.json()["items"][0]["tour_id"]
+        tr = self.session.get(Tour, tid)
+        assert tr is not None
+        self.assertEqual(tr.status, TourStatus.DRAFT)
+        self.assertNotEqual(tr.status, TourStatus.OPEN_FOR_SALE)
+
+    def test_recurrence_does_not_create_supplier_offer_tour_bridges(self) -> None:
+        o = self._approved_offer()
+        self.session.commit()
+        n_br = self.session.scalar(
+            select(func.count()).select_from(SupplierOfferTourBridge).where(
+                SupplierOfferTourBridge.supplier_offer_id == o.id
+            )
+        )
+        r = self.client.post(
+            f"/admin/supplier-offers/{o.id}/recurrence/draft-tours",
+            headers=self._headers(),
+            json={"count": 2, "interval_days": 1, "start_offset_days": 100},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        n_br2 = self.session.scalar(
+            select(func.count()).select_from(SupplierOfferTourBridge).where(
+                SupplierOfferTourBridge.supplier_offer_id == o.id
+            )
+        )
+        self.assertEqual(n_br, n_br2)
+
+    def test_recurrence_does_not_create_orders_for_new_tours(self) -> None:
+        o = self._approved_offer()
+        self.session.commit()
+        r = self.client.post(
+            f"/admin/supplier-offers/{o.id}/recurrence/draft-tours",
+            headers=self._headers(),
+            json={"count": 2, "interval_days": 3, "start_offset_days": 5},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        tour_ids = [x["tour_id"] for x in r.json()["items"]]
+        n_orders = self.session.scalar(
+            select(func.count()).select_from(Order).where(Order.tour_id.in_(tour_ids))
+        )
+        self.assertEqual(n_orders, 0)
+
+    def test_start_offset_zero_first_departure_matches_template(self) -> None:
+        o = self._approved_offer()
+        self.session.commit()
+        r = self.client.post(
+            f"/admin/supplier-offers/{o.id}/recurrence/draft-tours",
+            headers=self._headers(),
+            json={"count": 1, "interval_days": 7, "start_offset_days": 0},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        item = r.json()["items"][0]
+        dep = datetime.fromisoformat(item["departure_datetime"].replace("Z", "+00:00"))
+        self.assertEqual(dep, o.departure_datetime)
+        tr = self.session.get(Tour, item["tour_id"])
+        assert tr is not None
+        self.assertEqual(tr.departure_datetime, o.departure_datetime)
+
+    def test_duplicate_post_creates_duplicate_draft_tours(self) -> None:
+        o = self._approved_offer()
+        self.session.commit()
+        body = {"count": 1, "interval_days": 1, "start_offset_days": 200}
+        r1 = self.client.post(
+            f"/admin/supplier-offers/{o.id}/recurrence/draft-tours",
+            headers=self._headers(),
+            json=body,
+        )
+        r2 = self.client.post(
+            f"/admin/supplier-offers/{o.id}/recurrence/draft-tours",
+            headers=self._headers(),
+            json=body,
+        )
+        self.assertEqual(r1.status_code, 200, r1.text)
+        self.assertEqual(r2.status_code, 200, r2.text)
+        self.assertNotEqual(r1.json()["items"][0]["tour_id"], r2.json()["items"][0]["tour_id"])
+        n_gen = self.session.scalar(
+            select(func.count()).select_from(SupplierOfferRecurrenceGeneratedTour).where(
+                SupplierOfferRecurrenceGeneratedTour.source_supplier_offer_id == o.id
+            )
+        )
+        self.assertEqual(n_gen, 2)
