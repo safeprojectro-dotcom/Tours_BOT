@@ -10,6 +10,7 @@ from app.models.enums import SupplierOfferMediaReviewStatus
 from app.models.supplier import SupplierOffer
 from app.repositories.supplier import SupplierOfferRepository
 from app.schemas.supplier_admin import AdminSupplierOfferRead
+from app.services.supplier_offer_publish_safe_stub import merge_publish_safe_into_draft
 
 MEDIA_REVIEW_KEY = "media_review"
 B7_1_VERSION = "b7_1"
@@ -50,6 +51,7 @@ def _set_media_review(
         "reviewed_at": now.isoformat(),
         "reviewed_by": reviewed_by,
     }
+    d = merge_publish_safe_into_draft(row, d, marked_by=reviewed_by, now=now)
     row.packaging_draft_json = d
 
 

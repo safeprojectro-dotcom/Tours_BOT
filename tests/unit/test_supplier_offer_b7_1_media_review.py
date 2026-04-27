@@ -16,6 +16,13 @@ from app.models.enums import SupplierOfferLifecycle
 from app.models.order import Order
 from app.models.supplier import SupplierOffer
 from app.models.tour import Tour
+from app.services.supplier_offer_publish_safe_stub import (
+    B7_3B_VERSION,
+    EXPECTED_FUTURE_STORAGE,
+    REASON_NO_DURABLE_STORAGE,
+    STATUS_DEFERRED,
+    STORAGE_KIND_NONE,
+)
 from tests.unit.base import FoundationDBTestCase
 
 
@@ -93,6 +100,16 @@ class B71MediaReviewAPITests(FoundationDBTestCase):
         self.assertIsNone(mr.get("reason"))
         self.assertEqual(mr.get("reviewed_by"), "admin1")
         self.assertIsNotNone(mr.get("reviewed_at"))
+        ps = (r.json().get("packaging_draft_json") or {}).get("publish_safe") or {}
+        self.assertEqual(ps.get("version"), B7_3B_VERSION)
+        self.assertEqual(ps.get("status"), STATUS_DEFERRED)
+        self.assertEqual(ps.get("reason"), REASON_NO_DURABLE_STORAGE)
+        self.assertEqual(ps.get("storage_kind"), STORAGE_KIND_NONE)
+        self.assertIsNone(ps.get("object_key"))
+        self.assertIsNone(ps.get("public_url"))
+        self.assertEqual(ps.get("expected_future_storage"), EXPECTED_FUTURE_STORAGE)
+        self.assertEqual(ps.get("marked_by"), "admin1")
+        self.assertIn("telegram_photo", ps.get("source_media_reference") or "")
 
     def test_approve_without_cover_fails(self) -> None:
         o = self._offer(cover_media_reference=None)

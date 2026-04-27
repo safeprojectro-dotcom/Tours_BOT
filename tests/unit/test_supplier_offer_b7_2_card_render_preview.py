@@ -16,6 +16,11 @@ from app.models.enums import SupplierOfferLifecycle, TourSalesMode
 from app.models.order import Order
 from app.models.supplier import SupplierOffer
 from app.models.tour import Tour
+from app.services.supplier_offer_publish_safe_stub import (
+    B7_3B_VERSION,
+    REASON_NO_DURABLE_STORAGE,
+    STATUS_DEFERRED,
+)
 from tests.unit.base import FoundationDBTestCase
 
 
@@ -89,6 +94,12 @@ class B72CardRenderPreviewTests(FoundationDBTestCase):
         self.assertIn("title", roles)
         self.assertIn("date", roles)
         self.assertIn("price", roles)
+        ps = (r.json().get("packaging_draft_json") or {}).get("publish_safe") or {}
+        self.assertEqual(ps.get("version"), B7_3B_VERSION)
+        self.assertEqual(ps.get("status"), STATUS_DEFERRED)
+        self.assertEqual(ps.get("reason"), REASON_NO_DURABLE_STORAGE)
+        self.assertEqual(ps.get("source_media_reference"), ref)
+        self.assertEqual(ps.get("marked_by"), "a")
 
     def test_fallback_plan_ready(self) -> None:
         s = self.create_supplier()

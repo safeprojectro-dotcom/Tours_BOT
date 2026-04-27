@@ -12,6 +12,7 @@ from app.repositories.supplier import SupplierOfferRepository
 from app.schemas.supplier_admin import AdminSupplierOfferRead
 from app.services.branded_telegram_preview import _base_draft, build_branded_telegram_preview
 from app.services.supplier_offer_media_review_service import MEDIA_REVIEW_KEY
+from app.services.supplier_offer_publish_safe_stub import merge_publish_safe_into_draft
 
 B7_2_VERSION = "b7_2"
 
@@ -190,7 +191,13 @@ def persist_card_render_preview(session: Session, *, offer_id: int) -> AdminSupp
         raise CardRenderPreviewNotFoundError
     base = _base_draft(row.packaging_draft_json)
     plan = build_card_render_preview(row, base)
-    merged = {**base, "card_render_preview": plan}
+    merged: dict[str, Any] = {**base, "card_render_preview": plan}
+    marked_by: str | None = None
+    mr0 = base.get(MEDIA_REVIEW_KEY)
+    if isinstance(mr0, dict):
+        rb = mr0.get("reviewed_by")
+        marked_by = rb if isinstance(rb, str) else None
+    merged = merge_publish_safe_into_draft(row, merged, marked_by=marked_by)
     row.packaging_draft_json = merged
     session.flush()
     session.refresh(row)
