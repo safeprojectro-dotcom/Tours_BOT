@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.enums import TourStatus
+from app.models.enums import TourSalesMode, TourStatus
 from app.models.tour import BoardingPoint, Tour
 from app.repositories.order import OrderRepository
 from app.repositories.tour import (
@@ -26,6 +29,8 @@ from app.schemas.admin import (
     AdminTourTranslationUpsert,
 )
 from app.services.admin_read import AdminReadService
+from app.services.tour_sales_mode_policy import TourSalesModePolicyService
+from app.schemas.tour_sales_mode_policy import TourSalesModePolicyRead
 
 
 class AdminTourCreateValidationError(Exception):
@@ -56,6 +61,58 @@ class AdminTourTranslationNotFoundError(Exception):
 
 class AdminBoardingPointTranslationNotFoundError(Exception):
     """No boarding point translation row for this boarding point and language."""
+
+
+class AdminTourCatalogActivationValidationError(Exception):
+    def __init__(self, missing_fields: list[str]) -> None:
+        self.missing_fields = list(missing_fields)
+        super().__init__(f"Not ready for catalog: {', '.join(missing_fields)}")
+
+
+class AdminTourCatalogActivationStateError(Exception):
+    """Draft-only activation, or disallowed :class:`TourStatus` (e.g. cancelled / archived)."""
+
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__(message)
+
+
+@dataclass(frozen=True, slots=True)
+class AdminTourCatalogActivationResult:
+    """B10.2: `draft` → :attr:`~TourStatus.OPEN_FOR_SALE` for Mini App ``STATUS_SCOPE`` (idempotent if already open)."""
+
+    tour_id: int
+    code: str
+    status: TourStatus
+    idempotent_replay: bool
+    sales_mode: TourSalesMode
+    policy: TourSalesModePolicyRead
+
+
+def _collect_catalog_activation_missing(tour: Tour) -> list[str]:
+    """Core fields required before listing the tour in the Mini App catalog (B10.2)."""
+    missing: list[str] = []
+    if not (tour.title_default or "").strip():
+        missing.append("title_default")
+    if tour.departure_datetime is None:
+        missing.append("departure_datetime")
+    if tour.return_datetime is None:
+        missing.append("return_datetime")
+    if (
+        tour.departure_datetime is not None
+        and tour.return_datetime is not None
+        and tour.return_datetime <= tour.departure_datetime
+    ):
+        missing.append("return_datetime_after_departure")
+    if tour.base_price is None:
+        missing.append("base_price")
+    if not (tour.currency or "").strip():
+        missing.append("currency")
+    if tour.seats_total is None or tour.seats_total <= 0:
+        missing.append("seats_total")
+    if tour.sales_mode is None:  # pragma: no cover — column is non-null
+        missing.append("sales_mode")
+    return missing
 
 
 # Phase 6 / Step 15 — narrow archive/unarchive (no new enum member).
@@ -468,3 +525,61 @@ class AdminTourWriteService:
         detail = self._read.get_tour_detail(session, tour_id=tour_id)
         assert detail is not None
         return detail
+
+    def activate_tour_for_catalog(
+        self,
+        session: Session,
+        *,
+        tour_id: int,
+        activated_by: str | None = None,
+        notes: str | None = None,
+    ) -> AdminTourCatalogActivationResult:
+        """
+        B10.2: `draft` → `open_for_sale` so :class:`MiniAppCatalogService` can list the tour.
+        Idempotent if already `open_for_sale`. Does not change `seats_available` (full_bus safety).
+        ``activated_by`` / ``notes`` are accepted for API clients; no new audit row in this slice.
+        """
+        _ = activated_by, notes
+        stmt = select(Tour).where(Tour.id == tour_id).with_for_update()
+        tour = session.execute(stmt).scalar_one_or_none()
+        if tour is None:
+            raise AdminTourNotFoundError()
+
+        if tour.status == TourStatus.OPEN_FOR_SALE:
+            policy = TourSalesModePolicyService.policy_for_sales_mode(tour.sales_mode)
+            return AdminTourCatalogActivationResult(
+                tour_id=tour.id,
+                code=tour.code,
+                status=tour.status,
+                idempotent_replay=True,
+                sales_mode=tour.sales_mode,
+                policy=policy,
+            )
+        if tour.status in (TourStatus.CANCELLED, _TOUR_ARCHIVED_STATUS):
+            raise AdminTourCatalogActivationStateError(
+                "Cannot activate a cancelled or archived tour for catalog.",
+            )
+        if tour.status != TourStatus.DRAFT:
+            raise AdminTourCatalogActivationStateError(
+                f"Only draft tours can be activated for catalog (current status: {tour.status.value}).",
+            )
+
+        missing = _collect_catalog_activation_missing(tour)
+        if missing:
+            raise AdminTourCatalogActivationValidationError(missing)
+
+        self._tours.update_core_fields(
+            session,
+            tour_id=tour_id,
+            fields={"status": TourStatus.OPEN_FOR_SALE},
+        )
+        session.refresh(tour)
+        policy = TourSalesModePolicyService.policy_for_sales_mode(tour.sales_mode)
+        return AdminTourCatalogActivationResult(
+            tour_id=tour.id,
+            code=tour.code,
+            status=tour.status,
+            idempotent_replay=False,
+            sales_mode=tour.sales_mode,
+            policy=policy,
+        )

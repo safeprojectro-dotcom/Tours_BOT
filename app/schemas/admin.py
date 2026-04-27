@@ -101,6 +101,28 @@ class AdminTourCoreUpdate(BaseModel):
         return s
 
 
+class AdminTourActivateForCatalogBody(BaseModel):
+    """B10.2 optional body (no server-side audit columns in this slice)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    activated_by: str | None = None
+    notes: str | None = None
+
+
+class AdminTourActivateForCatalogRead(BaseModel):
+    """B10.2 response: catalog visibility is achieved via `status=open_for_sale` (see `MiniAppCatalogService.STATUS_SCOPE`)."""
+
+    tour_id: int
+    code: str
+    status: TourStatus
+    idempotent_replay: bool
+    sales_mode: TourSalesMode
+    per_seat_self_service_allowed: bool
+    operator_path_required: bool
+    mini_app_catalog_reservation_allowed: bool
+
+
 class AdminBoardingPointCreate(BaseModel):
     """Create one boarding stop for a tour (admin-only)."""
 

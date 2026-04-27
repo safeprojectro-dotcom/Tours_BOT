@@ -29,6 +29,8 @@ from app.schemas.admin import (
     AdminOrderListRead,
     AdminOrderMoveBody,
     AdminOverviewRead,
+    AdminTourActivateForCatalogBody,
+    AdminTourActivateForCatalogRead,
     AdminTourCoreUpdate,
     AdminTourCoverSet,
     AdminTourCreate,
@@ -168,6 +170,9 @@ from app.services.admin_tour_write import (
     AdminBoardingPointInUseError,
     AdminBoardingPointNotFoundError,
     AdminBoardingPointTranslationNotFoundError,
+    AdminTourCatalogActivationResult,
+    AdminTourCatalogActivationStateError,
+    AdminTourCatalogActivationValidationError,
     AdminTourCreateValidationError,
     AdminTourDuplicateCodeError,
     AdminTourNotFoundError,
@@ -265,6 +270,51 @@ def post_admin_tour_unarchive(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
     db.commit()
     return detail
+
+
+def _admin_tour_activate_for_catalog_read(res: AdminTourCatalogActivationResult) -> AdminTourActivateForCatalogRead:
+    p = res.policy
+    return AdminTourActivateForCatalogRead(
+        tour_id=res.tour_id,
+        code=res.code,
+        status=res.status,
+        idempotent_replay=res.idempotent_replay,
+        sales_mode=res.sales_mode,
+        per_seat_self_service_allowed=p.per_seat_self_service_allowed,
+        operator_path_required=p.operator_path_required,
+        mini_app_catalog_reservation_allowed=p.mini_app_catalog_reservation_allowed,
+    )
+
+
+@router.post(
+    "/tours/{tour_id}/activate-for-catalog",
+    response_model=AdminTourActivateForCatalogRead,
+)
+def post_admin_tour_activate_for_catalog(
+    tour_id: int,
+    db: Session = Depends(get_db),
+    payload: AdminTourActivateForCatalogBody | None = Body(default=None),
+) -> AdminTourActivateForCatalogRead:
+    """B10.2: `draft` → `open_for_sale` for Mini App catalog; no Telegram, no orders."""
+    body = payload or AdminTourActivateForCatalogBody()
+    try:
+        res = AdminTourWriteService().activate_tour_for_catalog(
+            db,
+            tour_id=tour_id,
+            activated_by=body.activated_by,
+            notes=body.notes,
+        )
+    except AdminTourNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour not found.") from None
+    except AdminTourCatalogActivationValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"errors": exc.missing_fields},
+        ) from None
+    except AdminTourCatalogActivationStateError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+    db.commit()
+    return _admin_tour_activate_for_catalog_read(res)
 
 
 @router.put("/tours/{tour_id}/translations/{language_code}", response_model=AdminTourDetailRead)
