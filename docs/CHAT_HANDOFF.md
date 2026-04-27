@@ -3,6 +3,10 @@
 ## Project
 Tours_BOT
 
+## Continuity Sync — B10.x supplier offer → Tour → Mini App (2026)
+
+**B9** design and **B10** through **B10.5** (**bridge,** **draft/activate,** **full_bus** **Mini** **App** **semantics,** **package** **pricing,** **boarding** **fallback**) are **completed** with **production** **smoke** (**Offer** **#8** **→** **Tour** **#4** **→** **reservation** **/** **payment** **/** **My** **bookings**). **Mini** **App** **=** **execution** **truth.** **Postponed:** **B10.6** **(Telegram** **bot** **as** **router/consultant,** **not** **duplicate** **catalog).** **Recommended** **next:** **B8** **(recurring** **offers);** **alternate** **B7.3** **(media).** **Full** **checkpoint:** **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)** **and** **[`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`](OPEN_QUESTIONS_AND_TECH_DEBT.md)** **(B10.x** **section).**
+
 ## Continuity Sync — UVXWA1 Checkpoint (2026-04-19)
 
 This section is the current continuity anchor for the post-UVXWA1 state. It is documentation synchronization only and does not change code semantics.
@@ -101,7 +105,7 @@ This section is the current continuity anchor for the post-UVXWA1 state. It is d
 - **B7 (design, accepted — no code in gate):** **Photo** **moderation** **&** **card** **generation** **rules** **before** **B7.1+** **implementation** — [`docs/SUPPLIER_OFFER_PHOTO_MODERATION_CARD_GENERATION_DESIGN.md`](docs/SUPPLIER_OFFER_PHOTO_MODERATION_CARD_GENERATION_DESIGN.md) **(states,** **media** **safety,** **quality,** **card** **model,** **admin** **flow,** **data** **options,** **B7.1**–**B7.3** **slices).**
 - **B7.1** **(implementation,** **completed):** **admin** **media** **review** **metadata** **in** **`packaging_draft_json.media_review`** **—** **no** **getFile,** **no** **publish.**
 - **B7.2** **(implementation,** **completed):** **`card_render_preview`** **JSON** **plan** **in** **`packaging_draft_json`** **(no** **image** **bytes;** **POST** **`/media/card-preview/generate`);** **next** **on** **media** **track:** **B7.3** **publish-safe** **media** **prep.**
-- **B9 (design, accepted — no code in gate):** **Supplier** **offer** **→** **Layer** **A** **`Tour`** **bridge** **—** [`docs/SUPPLIER_OFFER_TO_TOUR_BRIDGE_DESIGN.md`](docs/SUPPLIER_OFFER_TO_TOUR_BRIDGE_DESIGN.md) **(preconditions,** **create** **vs** **link,** **mapping,** **full_bus,** **idempotency,** **audit,** **B10** **slice** **list).** **Next** **safe** **implementation:** **B10** **—** **explicit** **admin** **bridge** **(migration** **+** **API** **+** **tests** **+** **smoke).**
+- **B9 (design, accepted — no code in gate):** **Supplier** **offer** **→** **Layer** **A** **`Tour`** **bridge** **—** [`docs/SUPPLIER_OFFER_TO_TOUR_BRIDGE_DESIGN.md`](docs/SUPPLIER_OFFER_TO_TOUR_BRIDGE_DESIGN.md) **(preconditions,** **create** **vs** **link,** **mapping,** **full_bus,** **idempotency,** **audit,** **B10** **slice** **list).** **B10** **implemented** **—** **see** **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)** **and** **§** **Continuity** **Sync** **—** **B10.x** **(above).**
 
 ### Supplier continuity truth (Y2/Y2.3/Y2.1a/Y24/Y25/Y27/Y28 accepted)
 - Supplier v1 model is **supplier entity + one primary Telegram-bound operator**.

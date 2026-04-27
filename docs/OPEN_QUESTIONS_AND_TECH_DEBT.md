@@ -7,6 +7,30 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ---
 
+## Checkpoint Sync — B10.x supplier offer → Tour → Mini App (2026)
+
+**Docs-only.** **Canonical** **full** **record:** **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)** **and** **short** **summary** **in** **[`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md)** **(Continuity** **Sync** **—** **B10.x).**
+
+### Completed (accepted)
+- **B9** **bridge** **design,** **B10** **bridge** **implementation,** **B10.1** **/** **B10.2** **(draft/activate** **for** **catalog),** **B10.3** **(full_bus** **fixed** **Mini** **App** **semantics),** **B10.4** **(package** **total** **on** **Layer** **A** **hold;** **not** **per-seat** **multiply),** **B10.5** **(boarding** **fallback** **for** **fixed** **full_bus).**
+- **Production** **smoke** **(accepted):** **Supplier** **offer** **#8** **→** **Tour** **#4** **→** **`open_for_sale`** **→** **whole-vehicle** **reservation** **→** **payment** **→** **My** **bookings.** **Mini** **App** **=** **execution** **truth.**
+
+### Safety gates (unchanged)
+- **`approved_for_publish`** **/** **B5** **packaging** **gates** **before** **bridge.**
+- **Bridge** **creates** **`draft`** **(or** **links** **per** **B9);** **not** **auto** **catalog-open.**
+- **Explicit** **activate-for-catalog** **/** **`open_for_sale`** **before** **customer** **listing.**
+- **Telegram** **public** **channel** **post** **/** **“publish** **to** **Telegram”** **separate** **from** **Mini** **App** **catalog** **bookability** **(B10.2** **activation).**
+
+### Postponed (tech debt)
+- **B10.6** **—** **Telegram** **bot** **tour** **detail** **should** **become** **router** **/** **consultant** **(e.g.** **deep** **links** **to** **Mini** **App),** **not** **a** **duplicate** **Mini** **App** **catalog** **(remove** **stale** **“sold** **out”,** **debug** **fallbacks,** **duplicated** **content** **later).** **Explicit** **decision** **(2026):** **do** **not** **fix** **duplicate** **bot** **tour** **detail** **in** **this** **B10.x** **window.**
+- **If** **`ADMIN_API_TOKEN`** **or** **other** **secrets** **were** **exposed** **in** **logs** **/** **chat** **during** **smoke,** **rotate** **after** **smoke.** 
+
+### Next safe step
+- **Recommended:** **B8** **—** **recurring** **supplier** **offers** **(see** **[`docs/SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md)** **B8** **row).**
+- **Alternate:** **B7.3** **—** **publish-safe** **media** **pipeline.**
+
+---
+
 ## Checkpoint Sync — BUSINESS line: supplier offer → tour (B1–B13 design baseline, 2026-04-25)
 
 **Docs-only** acceptance: forward **product** sequence for **supplier offer** intake, **AI** packaging, **admin** moderation, and **bridge** to **Layer A** **Tour** in the Mini App catalog. **V2** track numbering in `docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md` is **historical** delivery context; **B1**–**B13** in the BUSINESS plan is the **authoritative** ordered baseline for this domain.
@@ -22,7 +46,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 ### Next safe step (BUSINESS)
 - **B3 — Supplier dialog upgrade** *(historical baseline; if that slice is already implemented in your branch, use the B7 / B9 lines below).*: Telegram **/supplier_offer** (and related) **intake** **FSM/UX** **—** **step**-**by**-**step**, **one** **question** **at** **a** **time**, **validation** **and** **`ready_for_moderation`** **criteria** per **B1** **§3**, **wiring** **to** **B2** **fields** **where** **product** **chooses** **(no** **Layer** **A,** **no** **publish** **logic** **change,** **no** **AI** **)**. **Source:** **B1** design **§3**; **BUSINESS** plan **B3** **row** in [`SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md).
 - **B7.1 / B7.2 (photo & card, post-B6):** **Implemented** in-repo **(media_review** + **`card_render_preview`** **plan**); **next** **on** **that** **track** **(optional):** **B7.3** **publish-safe** **media** **—** see [`docs/SUPPLIER_OFFER_PHOTO_MODERATION_CARD_GENERATION_DESIGN.md`](SUPPLIER_OFFER_PHOTO_MODERATION_CARD_GENERATION_DESIGN.md) **§8.**
-- **B10 (offer → Tour bridge, after B9 design):** **explicit** **admin** **bridge** **implementation** **—** see [`docs/SUPPLIER_OFFER_TO_TOUR_BRIDGE_DESIGN.md`](SUPPLIER_OFFER_TO_TOUR_BRIDGE_DESIGN.md) **§10** **and** **BUSINESS** plan **B10** **row** in [`SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md).
+- **B10 (offer → Tour bridge):** **Completed** **(B10** **+** **B10.1**–**B10.5** **smoke** **path).** **Record:** **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md).** **Forward** **BUSINESS** **priority** **(recommended):** **B8** **—** **recurring** **supplier** **offers**; **alternate** **B7.3.**
 
 ### B9 design checkpoint (supplier offer → Tour bridge, 2026-04-26)
 **Docs-only** (no `app/`, no migrations in this gate). **Canonical design:** [`docs/SUPPLIER_OFFER_TO_TOUR_BRIDGE_DESIGN.md`](SUPPLIER_OFFER_TO_TOUR_BRIDGE_DESIGN.md) — **core** **principle,** **preconditions** **(packaging** **`approved_for_publish`,** **lifecycle** **gate,** **field** **completeness),** **create** **vs** **link** **to** **existing** **`Tour`,** **data** **mapping** **to** **`tours`/`tour_translations`,** **full_bus** **vs** **per_seat,** **Tour** **`draft`** **default,** **idempotency,** **audit,** **non-goals,** **B10** **next** **steps.** **Relates** **to** **Y27** **`supplier_offer_execution_links`** **without** **replacing** **that** **table’s** **meaning.**

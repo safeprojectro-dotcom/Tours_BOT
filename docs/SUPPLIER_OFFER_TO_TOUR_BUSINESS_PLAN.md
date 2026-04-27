@@ -10,6 +10,10 @@
 - `docs/TRACK_0_CORE_BOOKING_PLATFORM_BASELINE.md` — Layer A must-not-break.
 - Execution-link and conversion bridge work already documented (e.g. Y27, Y30, operator link workflow gates).
 
+### Status (2026) — B10 → Mini App path
+
+**B10** (supplier offer → **`Tour`** bridge) and **B10.1–B10.5** (draft/activate-for-catalog, **full_bus** Mini App conversion, package-priced **Layer A** holds, boarding fallback) are **implemented** and **smoke-accepted** (**Supplier offer #8 → Tour #4 → reservation / payment / My bookings**). **Mini App** remains **execution truth** for catalog booking. **Canonical** **handoff:** [`B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md).
+
 ---
 
 ## 1. Core business rule (non-negotiable)
@@ -67,7 +71,9 @@ This rule governs **B1–B13** and prevents accidental coupling of **moderation*
 
 ## 5. Next safe step (BUSINESS)
 
-- **B2 — Supplier offer content / data upgrade** (design and/or implementation ticket as scoped): extend or normalize **`supplier_offers`** (and related) to carry **B1** intake and packaging state **cleanly**—**after** B1 design acceptance, **before** treating B3/B4 as “done” in production.
+- **Recommended (2026):** **B8 — Recurring supplier offers** — build on the **B10** bridge and stable **Tour** / **Layer A** path (see **B8** row in §2 table).
+- **Alternate:** **B7.3 — Publish-safe media pipeline** when marketing surfaces need stored/downloaded assets per B7 design.
+- **Completed / historical (do not re-scope as “next” without a new ticket):** **B2** data upgrade; **B6–B7.2** (see CHAT_HANDOFF BUSINESS line); **B9** bridge design; **B10** bridge implementation; **B10.1–B10.5** Mini App full_bus execution path — **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)**.
 
 ---
 
@@ -76,5 +82,6 @@ This rule governs **B1–B13** and prevents accidental coupling of **moderation*
 | Document | Role |
 |----------|------|
 | This file | **BUSINESS** roadmap **B1–B13** + core bridge rule. |
+| [`B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md) | **B10.x** completion, smoke, gates, tech debt, **B8** / **B7.3** next-step pointer. |
 | [`SUPPLIER_OFFER_INTAKE_AI_PACKAGING_MODERATION_DESIGN.md`](SUPPLIER_OFFER_INTAKE_AI_PACKAGING_MODERATION_DESIGN.md) | **B1** detailed design. |
 | `docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md` | Historical **V2** track delivery; use for **context**, not as a replacement numbering for **B** lines. |

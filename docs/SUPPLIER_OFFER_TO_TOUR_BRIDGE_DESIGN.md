@@ -1,6 +1,6 @@
 # Supplier offer → Tour bridge (B9 design)
 
-**Status:** design only (B9). **No** migrations, **no** `app/` code, **no** automatic Tour creation in this document.
+**Status:** **B9** — **authoritative design** for the bridge (gates, invariants, create/bind semantics). **B10+** **implementation** exists in `app/`: create/link **`Tour`**, **draft** by default, **activate-for-catalog** (B10.2), **Layer A** **full_bus** package path (B10.3–B10.5). This document remains the **architectural** contract; **operational** completion and **smoke** are summarized in [`B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md).
 
 **Aligns with:** [`SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md) §1 (explicit bridge, no silent ORM, no AI Tour); existing **Y27.1** `supplier_offer_execution_links` (operator **link to existing** tour) — B9/B10 add the **create-from-offer** path and the **governance** contract for when a Tour is allowed to exist in the catalog.
 
