@@ -73,10 +73,12 @@ class SupplierOfferShowcaseRoTests(unittest.TestCase):
         self.assertIn("<b>Transport:</b>", cap)
         self.assertIn("<b>Locuri:</b>", cap)
         self.assertIn("<b>Preț:</b>", cap)
+        self.assertIn("orientativ", cap)
         self.assertIn("10 mai 2026, 11:00", cap)
         self.assertIn("11 mai 2026, 21:00", cap)
-        self.assertIn("Detalii", cap)
-        self.assertIn("Rezervă", cap)
+        self.assertIn("Disponibilitatea", cap)
+        self.assertIn("Deschide în bot", cap)
+        self.assertIn("Vezi în aplicație", cap)
         self.assertIn("/supplier-offers/7", cap)
         self.assertIn("Abonează-te la canal", cap)
         self.assertNotIn("full_bus", cap.lower())
@@ -111,12 +113,13 @@ class SupplierOfferShowcaseRoTests(unittest.TestCase):
         self.assertIn("Include: transport.", pub.caption_html)
         self.assertIn("Nu include: bilete de intrare", pub.caption_html)
 
-    def test_photo_url_when_set(self) -> None:
+    def test_photo_url_always_none_text_first_b12(self) -> None:
+        """B12/B13: channel send is text-only; showcase_photo_url ignored for publication payload."""
         pub = build_showcase_publication(
             _offer(showcase_photo_url=" https://cdn.example.com/a.jpg "),
             _cfg(),
         )
-        self.assertEqual(pub.photo_url, "https://cdn.example.com/a.jpg")
+        self.assertIsNone(pub.photo_url)
 
     def test_photo_url_none_when_missing(self) -> None:
         pub = build_showcase_publication(_offer(showcase_photo_url=None), _cfg())

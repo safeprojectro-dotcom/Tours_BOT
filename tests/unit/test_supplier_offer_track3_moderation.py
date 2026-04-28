@@ -500,8 +500,8 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
             telegram_mini_app_url = "https://t.me/mybot/myapp"
 
         html = format_supplier_offer_showcase_html(offer, _Cfg())  # type: ignore[arg-type]
-        self.assertIn("Detalii", html)
-        self.assertIn("Rezervă", html)
+        self.assertIn("Deschide în bot", html)
+        self.assertIn("Vezi în aplicație", html)
         self.assertIn("supoffer_", html)
         self.assertIn("Plecare:", html)
         self.assertIn("Întoarcere:", html)
