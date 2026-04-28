@@ -500,10 +500,10 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
             telegram_mini_app_url = "https://t.me/mybot/myapp"
 
         html = format_supplier_offer_showcase_html(offer, _Cfg())  # type: ignore[arg-type]
-        self.assertIn("Deschide în bot", html)
-        self.assertIn("Vezi în aplicație", html)
+        self.assertIn("Detalii", html)
+        self.assertIn("Rezervă", html)
         self.assertIn("supoffer_", html)
-        self.assertIn("<b>Perioada:</b>", html)
+        self.assertIn("📅", html)
         self.assertIn("Abonează-te la canal", html)
         self.assertNotIn("<test>", html)  # escaped
         self.assertRegex(html, r'href="https://t\.me/mybot\?start=supoffer_')
