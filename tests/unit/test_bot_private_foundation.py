@@ -470,3 +470,21 @@ class PrivateBotSalesModeReadTests(FoundationDBTestCase):
         asst_data = [b.callback_data for row in assisted.inline_keyboard for b in row]
         self.assertIn(f"{REQUEST_BOOKING_ASSISTANCE_CALLBACK_PREFIX}:42", asst_data)
         self.assertFalse(any(x and x.startswith("prepare:tour:") for x in asst_data))
+
+    def test_tour_detail_keyboard_primary_webapp_exact_tour_url_b10_6(self) -> None:
+        from app.services.supplier_offer_deep_link import mini_app_tour_detail_url
+
+        m = build_tour_detail_keyboard(
+            language_code="en",
+            tour_id=99,
+            mini_app_url="https://web.example/app/",
+            tour_code="BELGRADE-1",
+            per_seat_self_service_allowed=True,
+        )
+        urls = [
+            b.web_app.url
+            for row in m.inline_keyboard
+            for b in row
+            if b.web_app is not None
+        ]
+        self.assertIn(mini_app_tour_detail_url(mini_app_url="https://web.example/app/", tour_code="BELGRADE-1"), urls)

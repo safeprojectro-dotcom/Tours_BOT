@@ -225,6 +225,7 @@ async def handle_start(
                     language_code=user.preferred_language,
                     tour_id=detail.tour.id,
                     mini_app_url=settings.telegram_mini_app_url,
+                    tour_code=detail.tour.code,
                     per_seat_self_service_allowed=detail.sales_mode_policy.per_seat_self_service_allowed,
                 ),
             )
@@ -1062,6 +1063,7 @@ async def handle_tour_detail(callback: CallbackQuery, state: FSMContext) -> None
             language_code=language_code,
             tour_id=detail.tour.id,
             mini_app_url=settings.telegram_mini_app_url,
+            tour_code=detail.tour.code,
             per_seat_self_service_allowed=detail.sales_mode_policy.per_seat_self_service_allowed,
         ),
     )

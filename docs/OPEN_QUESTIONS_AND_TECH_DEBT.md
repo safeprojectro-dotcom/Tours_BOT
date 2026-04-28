@@ -83,8 +83,8 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 #### B7.3B / B10.6 / B11 (not B8.3)
 
 - **B7.3B** **—** **optional** **metadata** **`publish_safe`** **stub** **(no** **download** **)** **—** only **if** **ops** **needs** **;** else **B7.3** **implementation** **stays** **at** **policy** **+** **existing** **metadata** **until** **storage** **slice.**
-- **B10.6** **—** **Telegram** **private** **bot** **router** **/** **consultant** **(postponed,** **not** **implemented** **as** **this** **handoff** **).**
-- **B11** **—** **Telegram** **deep**-**link** **routing** **(not** **implemented** **here** **;** **separate** **product** **step** **).**
+- **B10.6** **—** **Telegram** **private** **bot** **router** **/** **consultant** **:** **first** **slice** **implemented** **—** **`/start tour_<code>`** **and** **in-chat** **tour-detail** **keyboard** **primary** **WebApp** **`{MINI_APP}/tours/{code}`** **;** **further** **B10.6** **(e.g.** **thin** **`/start`** **/** **`/tours`** **catalog** **)** **deferred** **.**
+- **B11** **—** **`/start supoffer_<id>`** **deep** **link** **routing** **implemented** **(see** **`CHAT_HANDOFF`**, **§24** **Track** **3** **CTA** **).**
 
 ### Next safe step
 - **B8** **(slice** **1** + **B8.2** + **B8.3** **):** **documented** **complete** for **continuity** **—** this **B8.4** **sync.**

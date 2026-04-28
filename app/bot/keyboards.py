@@ -32,7 +32,7 @@ from app.bot.constants import (
 )
 from app.bot.messages import format_budget_filter_summary, translate
 from app.schemas.prepared import CatalogTourCardRead, PreparedTourDetailRead
-from app.services.supplier_offer_deep_link import mini_app_supplier_offer_url
+from app.services.supplier_offer_deep_link import mini_app_supplier_offer_url, mini_app_tour_detail_url
 
 
 def build_language_keyboard(language_codes: tuple[str, ...]) -> InlineKeyboardMarkup:
@@ -196,9 +196,20 @@ def build_tour_detail_keyboard(
     language_code: str | None,
     tour_id: int | None = None,
     mini_app_url: str | None = None,
+    tour_code: str | None = None,
     per_seat_self_service_allowed: bool = True,
 ) -> InlineKeyboardMarkup:
+    """B10.6: optional primary WebApp to exact Mini App ``/tours/{code}`` when ``tour_code`` is set (aligns with B11)."""
     builder = InlineKeyboardBuilder()
+    tc = (tour_code or "").strip()
+    base = (mini_app_url or "").strip()
+    if base and tc:
+        builder.row(
+            _mini_app_web_app_button(
+                text=translate(language_code, "open_tour_detail_mini_app"),
+                url=mini_app_tour_detail_url(mini_app_url=mini_app_url, tour_code=tc),
+            )
+        )
     if tour_id is not None and per_seat_self_service_allowed:
         builder.button(
             text=translate(language_code, "prepare_reservation"),
@@ -218,9 +229,12 @@ def build_tour_detail_keyboard(
         callback_data=CHANGE_LANGUAGE_CALLBACK,
     )
     if mini_app_url:
-        builder.row(
-            _mini_app_web_app_button(text=translate(language_code, "open_mini_app"), url=mini_app_url)
-        )
+        if base and tc:
+            append_mini_app_url_buttons(builder, language_code=language_code, mini_app_url=mini_app_url)
+        else:
+            builder.row(
+                _mini_app_web_app_button(text=translate(language_code, "open_mini_app"), url=mini_app_url)
+            )
     builder.adjust(1)
     return builder.as_markup()
 
