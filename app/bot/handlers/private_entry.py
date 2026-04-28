@@ -39,6 +39,7 @@ from app.bot.keyboards import (
     build_language_keyboard,
     build_mini_app_entry_keyboard,
     build_private_home_keyboard,
+    build_private_sup_offer_start_keyboard,
     build_preparation_summary_keyboard,
     build_payment_entry_keyboard,
     build_seat_count_keyboard,
@@ -83,6 +84,7 @@ from app.services.group_private_cta import (
     START_PAYLOAD_GRP_PRIVATE,
     match_group_cta_start_payload,
 )
+from app.services.supplier_offer_bot_start_routing import resolve_sup_offer_start_mini_app_routing
 from app.services.supplier_offer_deep_link import parse_supplier_offer_start_arg
 from app.services.order_summary import OrderSummaryService
 from app.services.payment_entry import PaymentEntryService
@@ -163,22 +165,47 @@ async def handle_start(
             sup_offer = session.get(SupplierOffer, showcase_offer_id)
             if sup_offer is None or sup_offer.lifecycle_status != SupplierOfferLifecycle.PUBLISHED:
                 await message.answer(translate(user.preferred_language, "sup_offer_not_available"))
-            else:
-                display_title = (sup_offer.title or "").strip()
-                if not display_title:
-                    display_title = translate(user.preferred_language, "sup_offer_intro_title_fallback")
+                await _send_catalog_overview(
+                    message,
+                    language_code=user.preferred_language,
+                    prefer_edit=True,
+                )
+                return
+
+            display_title = (sup_offer.title or "").strip()
+            if not display_title:
+                display_title = translate(user.preferred_language, "sup_offer_intro_title_fallback")
+            nav = resolve_sup_offer_start_mini_app_routing(
+                session,
+                offer=sup_offer,
+                mini_app_base_url=settings.telegram_mini_app_url or "",
+            )
+            lg = user.preferred_language
+            if nav.exact_tour_mini_app_url and nav.linked_tour_code:
                 intro = translate(
-                    user.preferred_language,
+                    lg,
+                    "start_sup_offer_intro_exact_tour",
+                    title=display_title,
+                    tour_code=nav.linked_tour_code,
+                )
+            else:
+                intro = translate(
+                    lg,
                     "start_sup_offer_intro",
                     title=display_title,
                 )
-                await message.answer(
-                    intro,
-                    reply_markup=build_private_home_keyboard(
-                        language_code=user.preferred_language,
-                        mini_app_url=settings.telegram_mini_app_url,
-                    ),
-                )
+            await message.answer(
+                intro,
+                reply_markup=build_private_sup_offer_start_keyboard(
+                    language_code=lg,
+                    mini_app_url=settings.telegram_mini_app_url,
+                    supplier_offer_id=sup_offer.id,
+                    exact_tour_mini_app_url=nav.exact_tour_mini_app_url,
+                ),
+            )
+            # B11: exact Tour Mini App router — do not duplicate generic chat catalog below.
+            if nav.exact_tour_mini_app_url and nav.linked_tour_code:
+                return
             await _send_catalog_overview(
                 message,
                 language_code=user.preferred_language,

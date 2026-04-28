@@ -32,6 +32,7 @@ from app.bot.constants import (
 )
 from app.bot.messages import format_budget_filter_summary, translate
 from app.schemas.prepared import CatalogTourCardRead, PreparedTourDetailRead
+from app.services.supplier_offer_deep_link import mini_app_supplier_offer_url
 
 
 def build_language_keyboard(language_codes: tuple[str, ...]) -> InlineKeyboardMarkup:
@@ -117,6 +118,55 @@ def build_private_home_keyboard(
         callback_data=CHANGE_LANGUAGE_CALLBACK,
     )
     builder.adjust(1, 1, 1, 1, 1)
+    return builder.as_markup()
+
+
+def build_private_sup_offer_start_keyboard(
+    *,
+    language_code: str | None,
+    mini_app_url: str | None,
+    supplier_offer_id: int,
+    exact_tour_mini_app_url: str | None = None,
+) -> InlineKeyboardMarkup:
+    """B11: featured-offer `/start` — primary tour detail WebApp URL when safe, else offer landing."""
+    builder = InlineKeyboardBuilder()
+    if exact_tour_mini_app_url:
+        builder.row(
+            _mini_app_web_app_button(
+                text=translate(language_code, "open_sup_offer_linked_tour_mini_app"),
+                url=exact_tour_mini_app_url,
+            )
+        )
+    elif mini_app_url:
+        landing = mini_app_supplier_offer_url(mini_app_url=mini_app_url, offer_id=supplier_offer_id)
+        builder.row(
+            _mini_app_web_app_button(
+                text=translate(language_code, "open_sup_offer_landing_mini_app"),
+                url=landing,
+            )
+        )
+    append_mini_app_url_buttons(builder, language_code=language_code, mini_app_url=mini_app_url)
+    builder.button(
+        text=translate(language_code, "browse_by_date"),
+        callback_data=FILTER_BY_DATE_CALLBACK,
+    )
+    builder.button(
+        text=translate(language_code, "browse_by_destination"),
+        callback_data=FILTER_BY_DESTINATION_CALLBACK,
+    )
+    builder.button(
+        text=translate(language_code, "browse_by_budget"),
+        callback_data=FILTER_BY_BUDGET_CALLBACK,
+    )
+    builder.button(
+        text=translate(language_code, "open_catalog"),
+        callback_data=BROWSE_TOURS_CALLBACK,
+    )
+    builder.button(
+        text=translate(language_code, "change_language"),
+        callback_data=CHANGE_LANGUAGE_CALLBACK,
+    )
+    builder.adjust(1, 1, 1, 1, 1, 1)
     return builder.as_markup()
 
 

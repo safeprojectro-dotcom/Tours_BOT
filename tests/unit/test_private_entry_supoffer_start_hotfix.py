@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import unittest
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiogram.filters.command import CommandObject
 
 from app.bot.constants import LANGUAGE_CALLBACK_PREFIX
 from app.bot.handlers import private_entry
-from app.models.enums import SupplierOfferLifecycle
+from app.models.enums import SupplierOfferLifecycle, TourStatus
+from app.models.supplier import SupplierOfferExecutionLink
 from tests.unit.base import FoundationDBTestCase
 
 
@@ -198,6 +200,51 @@ class PrivateEntrySupofferStartHotfixTests(FoundationDBTestCase):
             self.assertIn("Deferred Offer", joined)
             self.assertGreaterEqual(message.answer.call_count, 2)
             cat2.assert_awaited()
+
+        self._run(body())
+
+    def test_start_supoffer_exact_tour_skips_generic_catalog_overview(self) -> None:
+        """B11: active execution link + OPEN_FOR_SALE visible tour — no `_send_catalog_overview` spam."""
+        self.create_user(telegram_user_id=77_200, preferred_language="en")
+        sup = self.create_supplier()
+        departure = datetime.now(UTC) + timedelta(days=21)
+        tour = self.create_tour(
+            code="B11-SKIP-CAT",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=departure,
+            return_datetime=departure + timedelta(days=1),
+            sales_deadline=departure - timedelta(days=1),
+            seats_available=8,
+        )
+        offer = self.create_supplier_offer(
+            sup,
+            title="Router To Tour",
+            lifecycle_status=SupplierOfferLifecycle.PUBLISHED,
+        )
+        self.session.add(
+            SupplierOfferExecutionLink(supplier_offer_id=offer.id, tour_id=tour.id, link_status="active")
+        )
+        self.session.commit()
+        oid = offer.id
+
+        async def body() -> None:
+            message = _private_message(telegram_user_id=77_200)
+            state = MagicMock()
+            state.clear = AsyncMock()
+            cmd = CommandObject(prefix="/", command="start", mention=None, args=f"supoffer_{oid}")
+            binder = _SessionLocalBinder(self.session)
+            mock_settings = MagicMock()
+            mock_settings.telegram_mini_app_url = "https://mini.example/app"
+            mock_settings.telegram_default_language = "en"
+            mock_settings.telegram_supported_language_codes = ("en", "ro")
+            with patch.object(private_entry, "get_settings", return_value=mock_settings):
+                with patch.object(private_entry, "SessionLocal", binder):
+                    with patch.object(private_entry, "_send_catalog_overview", new_callable=AsyncMock) as cat:
+                        await private_entry.handle_start(message, state, cmd)
+
+            cat.assert_not_awaited()
+            intro = message.answer.call_args[0][0]
+            self.assertIn("B11-SKIP-CAT", intro)
 
         self._run(body())
 

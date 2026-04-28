@@ -35,3 +35,14 @@ def mini_app_supplier_offer_url(*, mini_app_url: str, offer_id: int) -> str:
     if not base:
         raise ValueError("mini_app_url is required")
     return f"{base}/supplier-offers/{int(offer_id)}"
+
+
+def mini_app_tour_detail_url(*, mini_app_url: str, tour_code: str) -> str:
+    """B11: `{base}/tours/{tour_code}` — client-side Mini App route (align with `MiniAppTourDetailService`)."""
+    base = mini_app_url.strip().rstrip("/")
+    tc = (tour_code or "").strip()
+    if not base:
+        raise ValueError("mini_app_url is required")
+    if not tc:
+        raise ValueError("tour_code is required")
+    return f"{base}/tours/{tc}"
