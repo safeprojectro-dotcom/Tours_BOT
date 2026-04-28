@@ -155,6 +155,7 @@ from app.schemas.supplier_admin import (
     AdminSupplierOfferListRead,
     AdminSupplierOfferPublishResult,
     AdminSupplierOfferRead,
+    AdminSupplierOfferShowcasePreviewRead,
     AdminSupplierOfferRejectBody,
     AdminSupplierOfferRecurrenceDraftToursBody,
     AdminSupplierOfferRecurrenceDraftToursRead,
@@ -1110,6 +1111,18 @@ def get_admin_supplier_offer_by_id(offer_id: int, db: Session = Depends(get_db))
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.")
     return AdminSupplierOfferRead.model_validate(row, from_attributes=True)
+
+
+@router.get("/supplier-offers/{offer_id}/showcase-preview", response_model=AdminSupplierOfferShowcasePreviewRead)
+def get_admin_supplier_offer_showcase_preview(
+    offer_id: int,
+    db: Session = Depends(get_db),
+) -> AdminSupplierOfferShowcasePreviewRead:
+    """B12/B13.4: read-only preview of the exact Telegram HTML that ``publish`` would send (no Telegram I/O)."""
+    try:
+        return SupplierOfferModerationService().showcase_preview(db, offer_id=offer_id)
+    except SupplierOfferModerationNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
 
 
 @router.post("/supplier-offers/{offer_id}/packaging/generate", response_model=AdminSupplierOfferRead)

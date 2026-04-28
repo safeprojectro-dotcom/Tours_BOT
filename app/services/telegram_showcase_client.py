@@ -45,8 +45,19 @@ def _post_telegram_api(
     return int(mid)
 
 
-def send_channel_html_message(*, bot_token: str, chat_id: str, text: str, timeout_s: float = 30.0) -> int:
-    """POST sendMessage; return message_id. Raises TelegramShowcaseSendError on failure."""
+def send_channel_html_message(
+    *,
+    bot_token: str,
+    chat_id: str,
+    text: str,
+    timeout_s: float = 30.0,
+    disable_web_page_preview: bool = True,
+) -> int:
+    """POST sendMessage; return message_id. Raises TelegramShowcaseSendError on failure.
+
+    ``disable_web_page_preview`` defaults to True so Mini App/channel links do not expand
+    an automatic web preview card below the caption (B12/B13.3).
+    """
     return _post_telegram_api(
         bot_token=bot_token,
         method="sendMessage",
@@ -54,7 +65,7 @@ def send_channel_html_message(*, bot_token: str, chat_id: str, text: str, timeou
             "chat_id": chat_id,
             "text": text,
             "parse_mode": "HTML",
-            "disable_web_page_preview": False,
+            "disable_web_page_preview": disable_web_page_preview,
         },
         timeout_s=timeout_s,
     )
@@ -154,4 +165,5 @@ def send_showcase_publication(
         chat_id=chat_id,
         text=caption_html,
         timeout_s=timeout_s,
+        disable_web_page_preview=True,
     )

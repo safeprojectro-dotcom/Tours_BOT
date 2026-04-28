@@ -487,6 +487,72 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         active_after_close = [link for link in links if link.link_status == "active"]
         self.assertEqual(active_after_close, [])
 
+    def test_admin_showcase_preview_read_only_matches_template(self) -> None:
+        """B12/B13.4: GET showcase-preview builds caption + CTA URLs; does not call Telegram."""
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        mock_cfg = SimpleNamespace(
+            telegram_bot_username="previewbot",
+            telegram_mini_app_url="https://example.com/app",
+            telegram_offer_showcase_channel_id="",
+            telegram_bot_token="",
+        )
+        with (
+            patch(
+                "app.services.supplier_offer_moderation_service.get_settings",
+                return_value=mock_cfg,
+            ),
+            patch("app.services.telegram_showcase_client._post_telegram_api") as tg_send,
+        ):
+            r = self.client.get(f"/admin/supplier-offers/{oid}/showcase-preview", headers=headers)
+        tg_send.assert_not_called()
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["supplier_offer_id"], oid)
+        self.assertEqual(body["lifecycle_status"], "ready_for_moderation")
+        self.assertFalse(body["can_publish_now"])
+        self.assertGreater(len(body["warnings"]), 0)
+        self.assertTrue(any("Only approved" in w for w in body["warnings"]))
+        self.assertEqual(body["publication_mode"], "text_only")
+        self.assertIsNone(body["showcase_photo_url"])
+        self.assertTrue(body["disable_web_page_preview"])
+        self.assertIn("https://t.me/previewbot?start=supoffer_", body["cta_detalii_href"])
+        self.assertIn(f"/supplier-offers/{oid}", body["cta_rezerva_href"])
+        self.assertIn("<a ", body["caption_html"])
+        self.assertIn("Previzualizare", body["preview_notice"])
+
+    def test_admin_showcase_preview_can_publish_when_approved_and_config_complete(self) -> None:
+        """B13.4A: can_publish_now when approved + channel/token; empty warnings if CTAs build."""
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        apr = self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
+        self.assertEqual(apr.status_code, 200, apr.text)
+        mock_cfg = SimpleNamespace(
+            telegram_bot_username="previewbot",
+            telegram_mini_app_url="https://example.com/app",
+            telegram_offer_showcase_channel_id="-10012345",
+            telegram_bot_token="secret-token-for-tests",
+        )
+        with patch(
+            "app.services.supplier_offer_moderation_service.get_settings",
+            return_value=mock_cfg,
+        ):
+            r = self.client.get(f"/admin/supplier-offers/{oid}/showcase-preview", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["lifecycle_status"], "approved")
+        self.assertTrue(body["can_publish_now"])
+        self.assertEqual(body["warnings"], [])
+
+    def test_admin_showcase_preview_404_unknown_offer(self) -> None:
+        r = self.client.get(
+            "/admin/supplier-offers/999999001/showcase-preview",
+            headers={"Authorization": "Bearer test-admin-secret"},
+        )
+        self.assertEqual(r.status_code, 404)
+
     def test_showcase_html_contains_cta_links(self) -> None:
         supplier = self.create_supplier(code="HTML-S")
         offer = self.create_supplier_offer(

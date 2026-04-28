@@ -14,7 +14,7 @@ from app.services.supplier_offer_showcase_message import (
     format_datetime_ro_bucharest,
     parse_boarding_places,
 )
-from app.services.telegram_showcase_client import send_showcase_publication
+from app.services.telegram_showcase_client import send_channel_html_message, send_showcase_publication
 
 
 def _cfg() -> SimpleNamespace:
@@ -184,6 +184,34 @@ class SupplierOfferShowcaseRoTests(unittest.TestCase):
         self.assertEqual(mid, 20)
         ph.assert_not_called()
         msg.assert_called_once()
+        self.assertEqual(msg.call_args.kwargs.get("disable_web_page_preview"), True)
+        self.assertEqual(msg.call_args.kwargs.get("text"), "cap")
+
+    def test_send_showcase_publication_preserves_links_in_caption_when_no_preview(self) -> None:
+        cap = '<a href="https://t.me/bot?start=supoffer_1">Detalii</a>'
+        with patch(
+            "app.services.telegram_showcase_client._post_telegram_api",
+            return_value=77,
+        ) as post:
+            mid = send_showcase_publication(
+                bot_token="tok",
+                chat_id="-100",
+                caption_html=cap,
+                photo_url=None,
+            )
+        self.assertEqual(mid, 77)
+        payload = post.call_args.kwargs["payload"]
+        self.assertEqual(payload["text"], cap)
+        self.assertEqual(payload["parse_mode"], "HTML")
+        self.assertTrue(payload["disable_web_page_preview"])
+        post.assert_called_once()
+        kw = post.call_args.kwargs
+        self.assertEqual(kw["method"], "sendMessage")
+
+    def test_send_channel_html_message_disables_preview_by_default(self) -> None:
+        with patch("app.services.telegram_showcase_client._post_telegram_api", return_value=5) as post:
+            send_channel_html_message(bot_token="a", chat_id="x", text="y")
+        self.assertTrue(post.call_args.kwargs["payload"]["disable_web_page_preview"])
 
 
 if __name__ == "__main__":

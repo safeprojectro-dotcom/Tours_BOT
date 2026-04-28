@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -108,6 +108,29 @@ class AdminSupplierOfferRejectBody(BaseModel):
 class AdminSupplierOfferPublishResult(BaseModel):
     offer: AdminSupplierOfferRead
     telegram_message_id: int | None = None
+
+
+class AdminSupplierOfferShowcasePreviewRead(BaseModel):
+    """Read-only: final channel showcase caption as rendered by ``build_showcase_publication`` (B12/B13.4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    supplier_offer_id: int
+    lifecycle_status: str
+    caption_html: str
+    publication_mode: Literal["text_only", "photo_with_caption"]
+    showcase_photo_url: str | None
+    disable_web_page_preview: bool
+    cta_detalii_href: str | None
+    cta_rezerva_href: str | None
+    can_publish_now: bool
+    warnings: list[str]
+    preview_notice: str = Field(
+        default=(
+            "Local preview only — nothing was sent to Telegram. "
+            "Previzualizare locală — nu a fost trimis nimic pe Telegram."
+        ),
+    )
 
 
 class SupplierOfferExecutionLinkRead(BaseModel):
