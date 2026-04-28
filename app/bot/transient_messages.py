@@ -69,6 +69,84 @@ async def register_catalog_bundle(bot: Bot, chat_id: int, welcome_message_id: in
     d[CATALOG_MESSAGE] = list_message_id
 
 
+async def register_router_home_singleton(bot: Bot, chat_id: int, message_id: int) -> None:
+    """One router banner (B10.6B); replaces prior home-only or home+catalog registration."""
+    for cat in (LANGUAGE_PROMPT, FILTER_STEP, HOME_MESSAGE, CATALOG_MESSAGE):
+        await _pop_and_delete(bot, chat_id, cat)
+    _store.setdefault(chat_id, {})[HOME_MESSAGE] = message_id
+
+
+async def send_or_edit_router_home(
+    message: Message,
+    *,
+    text: str,
+    reply_markup: Any,
+    prefer_edit: bool,
+) -> None:
+    """
+    Router-first ``/start`` / ``/tours`` — single tracked message (no in-chat catalog cards).
+
+    Downgrades legacy two-message home+catalog pairs by deleting the catalog message and editing the home slot.
+    """
+    bot = message.bot
+    chat_id = message.chat.id
+
+    if prefer_edit:
+        bucket = _store.get(chat_id)
+        if bucket:
+            hid = bucket.get(HOME_MESSAGE)
+            cid = bucket.get(CATALOG_MESSAGE)
+            if hid is not None and cid is not None:
+                await _delete_silently(bot, chat_id, cid)
+                bucket.pop(CATALOG_MESSAGE, None)
+                try:
+                    await bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=hid,
+                        text=text,
+                        reply_markup=reply_markup,
+                    )
+                    await _clear_language_and_filter_prompts(bot, chat_id)
+                    return
+                except Exception:
+                    logger.debug(
+                        "edit router home (from catalog pair) failed chat_id=%s hid=%s",
+                        chat_id,
+                        hid,
+                        exc_info=True,
+                    )
+                    await _delete_silently(bot, chat_id, hid)
+                    bucket.pop(HOME_MESSAGE, None)
+                    if not bucket:
+                        _store.pop(chat_id, None)
+            elif hid is not None and cid is None:
+                try:
+                    await bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=hid,
+                        text=text,
+                        reply_markup=reply_markup,
+                    )
+                    await _clear_language_and_filter_prompts(bot, chat_id)
+                    return
+                except Exception:
+                    logger.debug(
+                        "edit router home singleton failed chat_id=%s hid=%s",
+                        chat_id,
+                        hid,
+                        exc_info=True,
+                    )
+                    await _delete_silently(bot, chat_id, hid)
+                    b = _store.get(chat_id)
+                    if b:
+                        b.pop(HOME_MESSAGE, None)
+                        if not b:
+                            _store.pop(chat_id, None)
+
+    sent = await message.answer(text=text, reply_markup=reply_markup)
+    await register_router_home_singleton(bot, chat_id, sent.message_id)
+
+
 async def send_or_edit_home_catalog_pair(
     message: Message,
     *,
@@ -87,6 +165,17 @@ async def send_or_edit_home_catalog_pair(
     chat_id = message.chat.id
 
     if prefer_edit:
+        bucket = _store.get(chat_id)
+        if bucket:
+            hid_router = bucket.get(HOME_MESSAGE)
+            cid_router = bucket.get(CATALOG_MESSAGE)
+            if hid_router is not None and cid_router is None:
+                # B10.6B: replace router singleton with a full home + in-chat catalog pair
+                await _delete_silently(bot, chat_id, hid_router)
+                bucket.pop(HOME_MESSAGE, None)
+                if not bucket:
+                    _store.pop(chat_id, None)
+
         bucket = _store.get(chat_id)
         hid = bucket.get(HOME_MESSAGE) if bucket else None
         cid = bucket.get(CATALOG_MESSAGE) if bucket else None

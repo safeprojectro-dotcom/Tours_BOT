@@ -14,6 +14,7 @@ from app.bot.transient_messages import (
     register_catalog_bundle,
     register_transient,
     send_or_edit_home_catalog_pair,
+    send_or_edit_router_home,
 )
 
 
@@ -162,6 +163,75 @@ class TransientMessagesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(msg.answer.await_count, 2)
         self.assertEqual(tm._store[2004][HOME_MESSAGE], 70)
         self.assertEqual(tm._store[2004][CATALOG_MESSAGE], 71)
+
+    async def test_router_home_registers_home_only(self) -> None:
+        bot = AsyncMock()
+        msg = MagicMock()
+        msg.bot = bot
+        msg.chat.id = 3001
+        sent = MagicMock()
+        sent.message_id = 99
+        msg.answer = AsyncMock(return_value=sent)
+
+        await send_or_edit_router_home(msg, text="r", reply_markup=None, prefer_edit=False)
+
+        bot.delete_message.assert_not_awaited()
+        self.assertEqual(tm._store[3001][HOME_MESSAGE], 99)
+        self.assertNotIn(CATALOG_MESSAGE, tm._store[3001])
+
+    async def test_router_home_prefers_edit_singleton(self) -> None:
+        bot = AsyncMock()
+        bot.edit_message_text = AsyncMock()
+        msg = MagicMock()
+        msg.bot = bot
+        msg.chat.id = 3002
+        msg.answer = AsyncMock()
+        tm._store[3002] = {HOME_MESSAGE: 55}
+
+        await send_or_edit_router_home(msg, text="x", reply_markup=None, prefer_edit=True)
+
+        bot.edit_message_text.assert_awaited_once()
+        msg.answer.assert_not_awaited()
+
+    async def test_router_home_from_pair_deletes_catalog_and_edits_home(self) -> None:
+        bot = AsyncMock()
+        bot.edit_message_text = AsyncMock()
+        msg = MagicMock()
+        msg.bot = bot
+        msg.chat.id = 3003
+        tm._store[3003] = {HOME_MESSAGE: 10, CATALOG_MESSAGE: 11}
+
+        await send_or_edit_router_home(msg, text="rf", reply_markup=None, prefer_edit=True)
+
+        bot.delete_message.assert_awaited_once_with(chat_id=3003, message_id=11)
+        bot.edit_message_text.assert_awaited_once()
+        self.assertEqual(tm._store[3003][HOME_MESSAGE], 10)
+        self.assertNotIn(CATALOG_MESSAGE, tm._store[3003])
+
+    async def test_catalog_pair_after_router_singleton_removes_singleton_first(self) -> None:
+        bot = AsyncMock()
+        bot.edit_message_text = AsyncMock()
+        msg = MagicMock()
+        msg.bot = bot
+        msg.chat.id = 3004
+        tm._store[3004] = {HOME_MESSAGE: 77}
+        sw = MagicMock()
+        sw.message_id = 80
+        sc = MagicMock()
+        sc.message_id = 81
+        msg.answer = AsyncMock(side_effect=[sw, sc])
+
+        await send_or_edit_home_catalog_pair(
+            msg,
+            welcome_text="w",
+            welcome_markup=None,
+            catalog_text="c",
+            catalog_markup=None,
+            prefer_edit=True,
+        )
+
+        bot.delete_message.assert_any_call(chat_id=3004, message_id=77)
+        self.assertEqual(msg.answer.await_count, 2)
 
 
 if __name__ == "__main__":

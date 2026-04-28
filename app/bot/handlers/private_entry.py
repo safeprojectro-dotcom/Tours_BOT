@@ -71,6 +71,7 @@ from app.bot.transient_messages import (
     answer_and_register_language_prompt,
     register_catalog_bundle,
     send_or_edit_home_catalog_pair,
+    send_or_edit_router_home,
 )
 from app.core.config import get_settings
 from app.db.session import SessionLocal
@@ -231,7 +232,7 @@ async def handle_start(
             )
             return
 
-    await _send_catalog_overview(
+    await _send_router_home(
         message,
         language_code=user.preferred_language,
         prefer_edit=True,
@@ -263,7 +264,7 @@ async def handle_tours_command(message: Message, state: FSMContext) -> None:
         return
 
     await state.clear()
-    await _send_catalog_overview(
+    await _send_router_home(
         message,
         language_code=language_code,
         prefer_edit=True,
@@ -631,7 +632,7 @@ async def handle_language_selected(callback: CallbackQuery, state: FSMContext) -
         await handle_start(callback.message, state, cmd)
         return
 
-    await _send_catalog_overview(callback.message, language_code=language_code)
+    await _send_router_home(callback.message, language_code=language_code, prefer_edit=True)
 
 
 @router.callback_query(F.data.startswith(f"{REQUEST_BOOKING_ASSISTANCE_CALLBACK_PREFIX}:"))
@@ -1109,6 +1110,25 @@ async def handle_destination_preference_message(message: Message, state: FSMCont
         language_code=language_code,
         filters=filters,
         filter_summary=format_destination_filter_summary(language_code, query),
+    )
+
+
+async def _send_router_home(
+    message: Message,
+    *,
+    language_code: str,
+    prefer_edit: bool = False,
+) -> None:
+    """B10.6B: generic entry — Mini App CTAs + optional chat filters; no automatic in-chat tour cards."""
+    settings = get_settings()
+    await send_or_edit_router_home(
+        message,
+        text=translate(language_code, "router_home_body"),
+        reply_markup=build_private_home_keyboard(
+            language_code=language_code,
+            mini_app_url=settings.telegram_mini_app_url,
+        ),
+        prefer_edit=prefer_edit,
     )
 
 

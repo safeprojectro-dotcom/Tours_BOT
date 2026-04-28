@@ -142,7 +142,7 @@ class PrivateEntrySupofferStartHotfixTests(FoundationDBTestCase):
 
         self._run(body())
 
-    def test_start_without_payload_still_sends_catalog(self) -> None:
+    def test_start_without_payload_still_sends_router_home(self) -> None:
         self.create_user(telegram_user_id=77_104, preferred_language="en")
         self.session.commit()
 
@@ -153,10 +153,10 @@ class PrivateEntrySupofferStartHotfixTests(FoundationDBTestCase):
             cmd = CommandObject(prefix="/", command="start", mention=None, args=None)
             binder = _SessionLocalBinder(self.session)
             with patch.object(private_entry, "SessionLocal", binder):
-                with patch.object(private_entry, "_send_catalog_overview", new_callable=AsyncMock) as cat:
+                with patch.object(private_entry, "_send_router_home", new_callable=AsyncMock) as rf:
                     await private_entry.handle_start(message, state, cmd)
 
-            cat.assert_awaited_once()
+            rf.assert_awaited_once()
 
         self._run(body())
 

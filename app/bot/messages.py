@@ -21,6 +21,9 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "language_saved": "Language updated to {language_name}.",
         "welcome": "Welcome. The Mini App is the main place to browse tours, manage bookings, and complete payment.",
         "browse_cta": "In this chat you can use quick filters or the short tour list. For the full experience, open the Mini App.",
+        "router_home_body": "Open the Mini App to browse current tours and complete booking safely.\n\n"
+        "Optional shortcuts in this chat narrow options; tap “Browse tours” below for previews in chat.\n"
+        "Support: /help, /contact, /human.",
         "open_mini_app_bookings": "My bookings (Mini App)",
         "help_command_reply": "This chat is your guide.\n\n"
         "• Open Mini App — full catalog, booking, and payment\n"
@@ -404,6 +407,9 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "language_saved": "Limba a fost schimbata in {language_name}.",
         "welcome": "Bun venit. Mini App este locul principal pentru catalog, rezervari si plata.",
         "browse_cta": "In acest chat poti folosi filtre rapide sau lista scurta de mai jos. Pentru experienta completa, deschide Mini App.",
+        "router_home_body": "Deschide Mini App pentru tururi actuale și rezervare în siguranță.\n\n"
+        "Scurtături opționale în chat filtrează; folosește „Arată lista în chat” pentru previzualizări.\n"
+        "Suport: /help, /contact, /human.",
         "open_mini_app_bookings": "Rezervarile mele (Mini App)",
         "help_command_reply": "Acest chat este ghidul tau.\n\n"
         "• Deschide Mini App — catalog complet, rezervare si plata\n"
@@ -692,6 +698,9 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "language_saved": "Yazyk obnovlen: {language_name}.",
         "welcome": "Dobro pozhalovat. Mini App — osnovnoy interfeys dlya kataloga, upravleniya bronyami i oplaty.",
         "browse_cta": "V etom chate dostupny bystrye filtry i korotkiy spisok. Polnyy funktsional — v Mini App.",
+        "router_home_body": "Otkroyte Mini App, chtoby posmotret aktualnyye tury i bezopasno oformit bron.\n\n"
+        "V chate dostupny bystrye filtry; «polnyy spisok v chate» — esli nuzhen predprosmotr zdes.\n"
+        "Podderzhka: /help, /contact, /human.",
         "catalog_empty": "Seychas net otkrytykh turov dlya pokaza. Poprobuyte pozhe.",
         "catalog_intro": "Vot do 3 otkrytykh turov, kotorye mozhno posmotret seychas:",
         "tour_missing": "Ya ne nashel etot tur v tekushchem kataloge.",
@@ -771,6 +780,9 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "language_saved": "Jezik je promenjen na {language_name}.",
         "welcome": "Dobro dosli. Mini App je glavno mesto za katalog, rezervacije i placanje.",
         "browse_cta": "U chatu mozete koristiti brze filtere ili kratak spisak. Kompletno iskustvo je u Mini App.",
+        "router_home_body": "Otvorite Mini App da pregledate ture i bezbedno rezervisete.\n\n"
+        "U chatu su brzi filteri i po potrebi celokupan spisak u cetu.\n"
+        "Podrška: /help, /contact, /human.",
         "catalog_empty": "Trenutno nema otvorenih tura za prikaz. Pokusajte kasnije.",
         "catalog_intro": "Evo do 3 otvorene ture koje sada mozete pogledati:",
         "tour_missing": "Nisam pronasao tu turu u trenutnom katalogu.",
@@ -850,6 +862,9 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "language_saved": "A nyelv erre valtozott: {language_name}.",
         "welcome": "Udvozlunk. A Mini App a fo felulet a turakhoz, foglalasokhoz es fizeteshez.",
         "browse_cta": "A chatben gyors szurok es rovid lista erheto el. A teljes elmenyhez nyissa meg a Mini Appot.",
+        "router_home_body": "Nyissa meg a Mini Appot az aktualis turakhoz es a biztonsagos foglalashoz.\n\n"
+        "A chatben gyors szűrők; a teljes lista gombbali megjelenitheto.\n"
+        "Támogatas: /help, /contact, /human.",
         "catalog_empty": "Jelenleg nincs nyitott tur, amit meg tudnek mutatni. Probalkozzon kesobb.",
         "catalog_intro": "Itt van legfeljebb 3 most nyitott tur:",
         "tour_missing": "Ezt a turat nem talaltam meg az aktualis katalogusban.",
@@ -929,6 +944,9 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "language_saved": "Lingua aggiornata in {language_name}.",
         "welcome": "Benvenuto. La Mini App e il punto principale per catalogo, prenotazioni e pagamento.",
         "browse_cta": "In chat puoi usare filtri rapidi o un elenco breve. Lesperienza completa e nella Mini App.",
+        "router_home_body": "Apri la Mini App per sfogliare i tour aggiornati e prenotare con sicurezza.\n\n"
+        "Filtr rapidi in chat; pulsante lista completa nel chat se vuoi anteprime qui.\n"
+        "Supporto: /help, /contact, /human.",
         "catalog_empty": "Al momento non ci sono tour aperti da mostrare. Riprova piu tardi.",
         "catalog_intro": "Ecco fino a 3 tour aperti che puoi vedere adesso:",
         "tour_missing": "Non ho trovato quel tour nel catalogo attuale.",
@@ -1008,6 +1026,9 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "language_saved": "Sprache aktualisiert: {language_name}.",
         "welcome": "Willkommen. Die Mini App ist die Hauptoberflaeche fuer Katalog, Buchungen und Zahlung.",
         "browse_cta": "In diesem Chat gibt es Schnellfilter und eine kurze Liste. Die volle Funktion bietet die Mini App.",
+        "router_home_body": "Oeffnen Sie die Mini App, um aktuelle Touren zu sehen und sicher zu buchen.\n\n"
+        "Hier gibt es Schnellfilter; ueber „vollständige Liste im Chat“ optional Vorschau-Karten.\n"
+        "Support: /help, /contact, /human.",
         "catalog_empty": "Zurzeit gibt es keine offenen Touren zum Anzeigen. Bitte spaeter erneut versuchen.",
         "catalog_intro": "Hier sind bis zu 3 offene Touren, die Sie jetzt ansehen koennen:",
         "tour_missing": "Ich konnte diese Tour im aktuellen Katalog nicht finden.",

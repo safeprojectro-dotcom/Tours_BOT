@@ -275,6 +275,11 @@ class PrivateReservationPreparationServiceTests(FoundationDBTestCase):
 
 
 class BotMessageTemplateTests(unittest.TestCase):
+    def test_router_home_body_translate_contains_mini_app_and_support(self) -> None:
+        body = translate("en", "router_home_body")
+        self.assertIn("Mini App", body)
+        self.assertIn("/help", body)
+
     def test_translate_falls_back_to_english(self) -> None:
         self.assertEqual(
             translate("unknown", "catalog_empty"),

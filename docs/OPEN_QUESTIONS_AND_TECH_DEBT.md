@@ -83,7 +83,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 #### B7.3B / B10.6 / B11 (not B8.3)
 
 - **B7.3B** **—** **optional** **metadata** **`publish_safe`** **stub** **(no** **download** **)** **—** only **if** **ops** **needs** **;** else **B7.3** **implementation** **stays** **at** **policy** **+** **existing** **metadata** **until** **storage** **slice.**
-- **B10.6** **—** **Telegram** **private** **bot** **router** **/** **consultant** **:** **first** **slice** **implemented** **—** **`/start tour_<code>`** **and** **in-chat** **tour-detail** **keyboard** **primary** **WebApp** **`{MINI_APP}/tours/{code}`** **;** **further** **B10.6** **(e.g.** **thin** **`/start`** **/** **`/tours`** **catalog** **)** **deferred** **.**
+- **B10.6** **—** **Telegram** **private** **bot** **router** **/** **consultant** **:** **first** **slice** **`/start tour_<code>` →** **exact** **Mini** **App** **`/tours/{code}`** **:** **implemented.** **B10.6B** **—** **generic** **`/start`** **/** **`/tours`** **(and** **language** **confirm** **without** **pending** **deep** **link** **):** **router** **message** **only** **(no** **auto** **in-chat** **tour** **cards** **);** **`_send_catalog_overview`** **for** **explicit** **browse** **paths** **.** **Further** **(e.g.** **copy** **polish,** **grp_*** **router** **thinning** **)** **—** **explicit** **ticket** **if** **needed** **.**
 - **B11** **—** **`/start supoffer_<id>`** **deep** **link** **routing** **implemented** **(see** **`CHAT_HANDOFF`**, **§24** **Track** **3** **CTA** **).**
 
 ### Next safe step
