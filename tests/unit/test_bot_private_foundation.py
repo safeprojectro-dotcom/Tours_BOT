@@ -430,7 +430,8 @@ class PrivateBotSalesModeReadTests(FoundationDBTestCase):
         self.assertIsNotNone(detail)
         assert detail is not None
         body = format_tour_detail_message("en", detail)
-        self.assertIn("Automated per-seat reservation", body)
+        self.assertIn("Automated self-serve booking", body)
+        self.assertIn("charter or whole-vehicle package", body)
         self.assertFalse(detail.sales_mode_policy.per_seat_self_service_allowed)
 
     def test_format_catalog_message_marks_full_bus_card(self) -> None:
