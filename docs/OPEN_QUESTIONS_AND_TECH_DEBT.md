@@ -89,7 +89,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 ### Next safe step
 - **B8** **(slice** **1** + **B8.2** + **B8.3** **):** **documented** **complete** for **continuity** **—** this **B8.4** **sync.**
 - **B7.3A** **:** **media** **policy** **accepted** **(CHAT_HANDOFF,** **OPEN_QUESTIONS,** **B7** **design** **).**
-- **Next** **(choose** **explicitly,** **not** **implied** **as** **approved** **):** **B7.3B** **stub** **/** **B7** **storage** **slice** **when** **ready** **;** **B11** **(deep** **links** **if** **product** **ready** **);** **B10.6** **(bot** **if** **priority** **);** **B12/B13** **further** **(showcase** **media** **`publish_safe`** **gate** **/** **preview** **endpoint** **)** **when** **prioritized** **.** **Track** **3** **showcase** **—** **B12/B13** **first** **implementation** **slice** **(template** **+** **text-only** **+** **`supoffer`** **CTA)** **done** **(see** **`CHAT_HANDOFF`** **).**
+- **Next** **(choose** **explicitly,** **not** **implied** **as** **approved** **):** **B7.3B** **stub** **/** **B7** **storage** **slice** **when** **ready** **;** **B11** **(deep** **links** **if** **product** **ready** **);** **B10.6** **(bot** **if** **priority** **);** **B12/B13** **further** **(showcase** **media** **`publish_safe`** **gate** **/** **preview** **endpoint** **)** **when** **prioritized** **.** **Track** **3** **showcase** **—** **B12/B13** **first** **implementation** **slice** **+** **B13.1** **branded** **RO** **emoji** **template** **`supplier_offer_showcase_message`** **(still** **text-only**, **safe** **`supoffer`**/**Mini** **App** **CTAs**, **no** **channel** **`/tours/{code}`**, **no** **photo**) **done** **(see** **`CHAT_HANDOFF`** **).**
 
 ---
 

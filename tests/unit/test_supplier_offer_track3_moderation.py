@@ -503,8 +503,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertIn("Deschide în bot", html)
         self.assertIn("Vezi în aplicație", html)
         self.assertIn("supoffer_", html)
-        self.assertIn("Plecare:", html)
-        self.assertIn("Întoarcere:", html)
+        self.assertIn("<b>Perioada:</b>", html)
         self.assertIn("Abonează-te la canal", html)
         self.assertNotIn("<test>", html)  # escaped
         self.assertRegex(html, r'href="https://t\.me/mybot\?start=supoffer_')

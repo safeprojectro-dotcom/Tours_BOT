@@ -40,6 +40,10 @@ def _offer(**kwargs: object) -> SimpleNamespace:
         "currency": "EUR",
         "service_composition": SupplierServiceComposition.TRANSPORT_ONLY,
         "showcase_photo_url": None,
+        "short_hook": None,
+        "marketing_summary": None,
+        "included_text": None,
+        "excluded_text": None,
     }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
@@ -68,11 +72,10 @@ class SupplierOfferShowcaseRoTests(unittest.TestCase):
     def test_caption_romanian_labels_and_no_raw_sales_mode(self) -> None:
         pub = build_showcase_publication(_offer(), _cfg())
         cap = pub.caption_html
-        self.assertIn("<b>Plecare:</b>", cap)
-        self.assertIn("<b>Întoarcere:</b>", cap)
-        self.assertIn("<b>Transport:</b>", cap)
-        self.assertIn("<b>Locuri:</b>", cap)
-        self.assertIn("<b>Preț:</b>", cap)
+        self.assertIn("<b>Perioada:</b>", cap)
+        self.assertIn("🚐 <b>Transport:</b>", cap)
+        self.assertIn("👥 <b>Capacitate:</b>", cap)
+        self.assertIn("💰 <b>Preț:</b>", cap)
         self.assertIn("orientativ", cap)
         self.assertIn("10 mai 2026, 11:00", cap)
         self.assertIn("11 mai 2026, 21:00", cap)
@@ -87,7 +90,8 @@ class SupplierOfferShowcaseRoTests(unittest.TestCase):
 
     def test_full_bus_soft_phrase_not_raw_enum(self) -> None:
         pub = build_showcase_publication(_offer(sales_mode=TourSalesMode.FULL_BUS), _cfg())
-        self.assertIn("Potrivit pentru grupuri", pub.caption_html)
+        self.assertIn("Închiriere / grup întreg", pub.caption_html)
+        self.assertIn("Ofertă pentru grup", pub.caption_html)
         self.assertNotIn("FULL_BUS", pub.caption_html)
 
     def test_boarding_one_place(self) -> None:
@@ -95,23 +99,27 @@ class SupplierOfferShowcaseRoTests(unittest.TestCase):
             _offer(boarding_places_text="Timișoara"),
             _cfg(),
         )
-        self.assertIn("<b>Îmbarcare:</b> Timișoara", pub.caption_html)
+        self.assertIn("<b>Ruta:</b> Timișoara", pub.caption_html)
 
     def test_boarding_multiple_compact(self) -> None:
         pub = build_showcase_publication(
             _offer(boarding_places_text="Timișoara|Lugoj"),
             _cfg(),
         )
+        self.assertIn("<b>Ruta:</b>", pub.caption_html)
         self.assertIn("Timișoara • Lugoj", pub.caption_html)
 
     def test_no_boarding_omits_line(self) -> None:
         pub = build_showcase_publication(_offer(boarding_places_text=None), _cfg())
         self.assertNotIn("Îmbarcare", pub.caption_html)
+        self.assertNotIn("<b>Ruta:", pub.caption_html)
 
     def test_include_nu_include_from_composition(self) -> None:
         pub = build_showcase_publication(_offer(), _cfg())
-        self.assertIn("Include: transport.", pub.caption_html)
-        self.assertIn("Nu include: bilete de intrare", pub.caption_html)
+        self.assertIn("<b>Include:</b>", pub.caption_html)
+        self.assertIn("• transport", pub.caption_html)
+        self.assertIn("<b>Nu include:</b>", pub.caption_html)
+        self.assertIn("bilete de intrare", pub.caption_html)
 
     def test_photo_url_always_none_text_first_b12(self) -> None:
         """B12/B13: channel send is text-only; showcase_photo_url ignored for publication payload."""
