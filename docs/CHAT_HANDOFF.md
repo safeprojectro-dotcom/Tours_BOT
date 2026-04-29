@@ -17,6 +17,8 @@ Tours_BOT
 
 **BUSINESS-plan-v2 audit (post-core conversion):** **[`docs/BUSINESS_PLAN_V2_COMPLETION_AUDIT_AFTER_CORE_CONVERSION.md`](BUSINESS_PLAN_V2_COMPLETION_AUDIT_AFTER_CORE_CONVERSION.md)** — **not** **`BUSINESS_PLAN_V3`** **;** **not** a roadmap rewrite **;** summarizes MVP-closed/test-proven chain **,** remaining gaps **,** next blocks **.** Use as checkpoint **before** choosing the next large slice **; first recommended:** production/staging E2E smoke **/** real supplier-offer walkthrough **.**
 
+**Production/staging smoke procedure:** **[`docs/PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md`](PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md)** — operator checklist **(** dry-run Mode **A** / live Mode **B)** **;** **not** new product functionality **.** Mutating live calls need explicit safe **`OFFER_ID`** **/** staging or test-channel confirmation **.** Mode **B** **not** executed in-repo yet **;** **next** product choice depends on real smoke outcome **.**
+
 ---
 
 

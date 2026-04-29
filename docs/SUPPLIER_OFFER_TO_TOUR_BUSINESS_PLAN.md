@@ -22,6 +22,8 @@
 
 **BUSINESS-plan-v2 completion audit (docs checkpoint):** **[`docs/BUSINESS_PLAN_V2_COMPLETION_AUDIT_AFTER_CORE_CONVERSION.md`](BUSINESS_PLAN_V2_COMPLETION_AUDIT_AFTER_CORE_CONVERSION.md)** — **not** **`BUSINESS_PLAN_V3`** **;** **not** replacing this file **;** summarizes done/partial/open **; use before next large block **; recommended next:** production/staging E2E smoke **/** real supplier-offer walkthrough **.**
 
+**Production/staging smoke checklist:** **[`docs/PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md`](PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md)** — full operator path **(** dry-run **/** live **)** **;** **not** new functionality **.** Safe **`OFFER_ID`** **/** staging **or** test channel **before** mutating calls **.** Mode **B** **not** executed yet **;** next BUSINESS slice follows **real** smoke outcome **.**
+
 ---
 
 ## 1. Core business rule (non-negotiable)

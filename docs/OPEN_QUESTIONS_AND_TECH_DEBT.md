@@ -37,6 +37,14 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ---
 
+## Checkpoint Sync — Production E2E walkthrough pointers (2026-04-29)
+
+**Docs-only.**
+
+- **[`PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md`](PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md)** created — **smoke procedure** **(** operator checklist**)**, **not** new shipped functionality **;** **Mode** **A** dry-run **/** **Mode** **B** live **.** Live mutating admin calls **require** explicit safe **`OFFER_ID`** **/** staging **or** test-channel confirmation **.** Mode **B** **not** run from repo yet **(** no staging/prod credentials **/** **`OFFER_ID`** provided**) — next roadmap fork depends on **real** smoke **PASS/FAIL** **(** audit → admin UX **vs** AI copy **vs** blocker remediation **)**.
+
+---
+
 ## Checkpoint Sync — B10.x supplier offer → Tour → Mini App (2026)
 
 **Docs-only.** **Canonical** **full** **record:** **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)** **and** **short** **summary** **in** **[`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md)** **(Continuity** **Sync** **—** **B10.x).**
