@@ -116,6 +116,10 @@ ADMIN_OPS_OW_SHOWCASE_PREVIEW_PREFIX = "ao:ow:s:"
 ADMIN_OPS_OW_PKG_APPROVE_PROPOSE_PREFIX = "ao:ow:pa:"
 ADMIN_OPS_OW_PKG_APPROVE_CONFIRM_PREFIX = "ao:ow:pc:"
 ADMIN_OPS_OW_PKG_APPROVE_CANCEL_PREFIX = "ao:ow:px:"
+# Slice C2B2: packaging generate-draft propose / confirm / cancel (suffix = offer id)
+ADMIN_OPS_OW_PKG_GEN_PROPOSE_PREFIX = "ao:ow:pg:"
+ADMIN_OPS_OW_PKG_GEN_CONFIRM_PREFIX = "ao:ow:qg:"
+ADMIN_OPS_OW_PKG_GEN_CANCEL_PREFIX = "ao:ow:qx:"
 
 ADMIN_SUPPLIERS_ACTION_CALLBACK_PREFIX = "admin:suppliers:action:"
 ADMIN_SUPPLIERS_NAV_CALLBACK_PREFIX = "admin:suppliers:nav:"
