@@ -29,6 +29,14 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ---
 
+## Checkpoint Sync — BUSINESS-plan-v2 audit pointers (2026-04-29)
+
+**Docs-only.**
+
+- **[`BUSINESS_PLAN_V2_COMPLETION_AUDIT_AFTER_CORE_CONVERSION.md`](BUSINESS_PLAN_V2_COMPLETION_AUDIT_AFTER_CORE_CONVERSION.md)** — audit **after** core supplier-offer → Mini App catalog conversion **;** treats that chain as **MVP-closed / test-proven** **;** lists gaps **.** **Not** **`BUSINESS_PLAN_V3`** **;** **does not** replace **`SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`** **or** **`IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md`** **.** Use as **current status checkpoint** before the next large block **;** **first recommended:** production/staging E2E smoke **/** real supplier-offer walkthrough **(** admin UX **/** AI-approved copy wiring also in audit **).**
+
+---
+
 ## Checkpoint Sync — B10.x supplier offer → Tour → Mini App (2026)
 
 **Docs-only.** **Canonical** **full** **record:** **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)** **and** **short** **summary** **in** **[`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md)** **(Continuity** **Sync** **—** **B10.x).**

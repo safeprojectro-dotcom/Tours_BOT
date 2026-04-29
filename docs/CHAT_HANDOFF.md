@@ -15,6 +15,8 @@ Tours_BOT
 
 **Next functional block:** **SUPPLIER OFFER → CENTRAL MINI APP CATALOG CONVERSION CLOSURE:** reviewed **`conversion_closure`** on **`GET .../review-package`** **;** **unit E2E-style proof** **`tests/unit/test_supplier_offer_catalog_conversion_closure.py`** **(explicit bridge → activate-for-catalog → `MiniAppCatalogService` lists Tour **without** execution link → publish → execution link → landing + B11 URL → all closure booleans true **`next_missing_step` null** **).** **Moderation-only approval** **without** **`approved_for_publish`** **does not** **materialize bridge/Tour** **(negative test).** **Central catalog visibility is `Tour`-/`OPEN_FOR_SALE`-driven** **;** **landing + bot exact tour routing require active execution link.** **Layer A booking/payment unchanged.**
 
+**BUSINESS-plan-v2 audit (post-core conversion):** **[`docs/BUSINESS_PLAN_V2_COMPLETION_AUDIT_AFTER_CORE_CONVERSION.md`](BUSINESS_PLAN_V2_COMPLETION_AUDIT_AFTER_CORE_CONVERSION.md)** — **not** **`BUSINESS_PLAN_V3`** **;** **not** a roadmap rewrite **;** summarizes MVP-closed/test-proven chain **,** remaining gaps **,** next blocks **.** Use as checkpoint **before** choosing the next large slice **; first recommended:** production/staging E2E smoke **/** real supplier-offer walkthrough **.**
+
 ---
 
 
