@@ -60,6 +60,8 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 **Slice C2A (Telegram — только безопасные кнопки):** inline-кнопки могут появиться только для кодов **`review_package_refresh`** и **`get_showcase_preview`** (из **`operator_workflow.actions`**, если **`enabled`**). Колбэки **не выполняют POST**: карточка перезагружается свежим **`review-package`**; превью showcase через **`SupplierOfferModerationService.showcase_preview`** (**ничего не отправляет в канал**). Публикация (**publish**), bridge, активация каталога, execution link и другие мутации — **не в C2A**; отдельный продуктовый слайс с подтверждением.
 
+**Slice C2B — дизайн принят (реализация отдельным слайсом C2B1):** следующая мутация в Telegram — **только packaging**: кнопка **`approve_packaging_for_publish`** из **`operator_workflow.actions`**, только если **`enabled`**; обязательное **двухшаговое подтверждение**; перед исполнением — **повторное чтение** **`GET …/review-package`**; выполнять **только если действие всё ещё включено**; **без** скрытых цепочек и **без** batch «весь workflow». Кнопку **`approve_offer_moderation`** через workflow **не добавлять** — legacy **Aprobă / Respinge** остаются модерацией до отдельной консолидации. **Не входят в C2B1:** **`publish_showcase_channel`**, **`activate_tour_for_catalog`**, **`create_execution_link`**, **`create_tour_bridge`** (отложены).
+
 ---
 
 ## Связанные документы
@@ -77,5 +79,5 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 | Поле | Значение |
 |------|----------|
-| **Тип** | Playbook Slice A + Slice B (**`operator_workflow`**) + Slice C1 / C1.1 / **C2A** (Telegram) |
+| **Тип** | Playbook Slice A + Slice B (**`operator_workflow`**) + Slice C1 / C1.1 / **C2A** (Telegram) + **C2B** дизайн / план **C2B1** (approve packaging) |
 | **Язык** | Русский |
