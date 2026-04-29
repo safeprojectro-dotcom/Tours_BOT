@@ -13,9 +13,10 @@ Tours_BOT
 
 **Verified:** unit suites including `test_supplier_offer_review_package.py` (+ bridge/moderation/showcase related); **53 passed**; **`compileall app alembic`** OK.
 
-**Next functional block:** **SUPPLIER OFFER → CENTRAL MINI APP CATALOG CONVERSION CLOSURE.**
+**Next functional block:** **SUPPLIER OFFER → CENTRAL MINI APP CATALOG CONVERSION CLOSURE:** reviewed **`conversion_closure`** on **`GET .../review-package`** **;** **unit E2E-style proof** **`tests/unit/test_supplier_offer_catalog_conversion_closure.py`** **(explicit bridge → activate-for-catalog → `MiniAppCatalogService` lists Tour **without** execution link → publish → execution link → landing + B11 URL → all closure booleans true **`next_missing_step` null** **).** **Moderation-only approval** **without** **`approved_for_publish`** **does not** **materialize bridge/Tour** **(negative test).** **Central catalog visibility is `Tour`-/`OPEN_FOR_SALE`-driven** **;** **landing + bot exact tour routing require active execution link.** **Layer A booking/payment unchanged.**
 
 ---
+
 
 ## Continuity Sync — B8 recurring supplier offers (2026) — B8.4 docs sync
 

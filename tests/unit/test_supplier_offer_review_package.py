@@ -12,6 +12,8 @@ from sqlalchemy import event
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
+from app.models.enums import SupplierOfferPackagingStatus
+from app.models.supplier import SupplierOffer
 from tests.unit.base import FoundationDBTestCase
 
 
@@ -120,11 +122,22 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
         self.assertIsNone(body["linked_tour_catalog"])
         self.assertFalse(body["mini_app_conversion_preview"]["applicable"])
         self.assertIn("approve_packaging", body["recommended_next_actions"])
+        cc = body["conversion_closure"]
+        self.assertFalse(cc["has_tour_bridge"])
+        self.assertFalse(cc["has_active_execution_link"])
+        self.assertEqual(cc["next_missing_step"], "approve_packaging")
 
     def test_review_package_execution_link_precheck_when_published_without_link(self) -> None:
         _, token = self._bootstrap_supplier_token()
         oid = self._ready_offer(token)
         headers = {"Authorization": "Bearer test-admin-secret"}
+        sup_offer = self.session.get(SupplierOffer, oid)
+        self.assertIsNotNone(sup_offer)
+        sup_offer.packaging_status = SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH
+        sup_offer.included_text = "Included"
+        sup_offer.excluded_text = "Excluded"
+        self.session.commit()
+
         self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
         mock_cfg = SimpleNamespace(
             telegram_bot_username="testbot",
@@ -158,3 +171,8 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
         self.assertIsNone(er["execution_link_precheck_note"])
         actions = body["recommended_next_actions"]
         self.assertIn("create_execution_link", actions)
+        cc = body["conversion_closure"]
+        self.assertFalse(cc["has_tour_bridge"])
+        self.assertFalse(cc["has_active_execution_link"])
+        self.assertFalse(cc["supplier_offer_landing_routes_to_tour"])
+        self.assertEqual(cc["next_missing_step"], "create_tour_bridge")

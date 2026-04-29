@@ -201,6 +201,20 @@ class AdminSupplierOfferMiniAppConversionPreviewRead(BaseModel):
     linked_tour_code: str | None = None
 
 
+class AdminSupplierOfferConversionClosureRead(BaseModel):
+    """Read-only closure checklist for supplier-offer → central Mini App catalog (aggregates existing gates)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    has_tour_bridge: bool
+    has_catalog_visible_tour: bool
+    has_active_execution_link: bool
+    supplier_offer_landing_routes_to_tour: bool
+    bot_deeplink_routes_to_tour: bool
+    central_catalog_contains_tour: bool
+    next_missing_step: str | None = None
+
+
 class AdminSupplierOfferReviewPackageRead(BaseModel):
     """Read-only aggregated admin review surface (no mutations)."""
 
@@ -213,6 +227,7 @@ class AdminSupplierOfferReviewPackageRead(BaseModel):
     linked_tour_catalog: AdminSupplierOfferLinkedTourCatalogRead | None
     execution_links_review: AdminSupplierOfferExecutionLinksReviewRead
     mini_app_conversion_preview: AdminSupplierOfferMiniAppConversionPreviewRead
+    conversion_closure: AdminSupplierOfferConversionClosureRead
     warnings: list[str]
     recommended_next_actions: list[str]
 

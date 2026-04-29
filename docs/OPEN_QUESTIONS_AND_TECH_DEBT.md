@@ -15,7 +15,17 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Out of scope for this read:** Telegram publish; `Tour` create/link; catalog activation; execution-link creation; booking/payment mutations.
 - **Incident:** **`SupplierOfferSupplierNotificationService`** was missing from admin route imports — **`NameError`** swallowed after approve/publish/retract; **import restored** so supplier notifications fire from HTTP admin paths again (separate from review-package behavior).
 
-**Next functional block:** **SUPPLIER OFFER → CENTRAL MINI APP CATALOG CONVERSION CLOSURE.**
+**Next functional block:** **SUPPLIER OFFER → CENTRAL MINI APP CATALOG CONVERSION CLOSURE:** **`conversion_closure`** **field + below.**
+
+---
+
+## Checkpoint Sync — Catalog conversion closure (2026-04-29)
+
+**Docs-only summary.**
+
+- **Explicit admin chain** is **test-proven** in **`tests/unit/test_supplier_offer_catalog_conversion_closure.py`** **:** bridge **`POST .../tour-bridge`**, **`POST .../activate-for-catalog`**, **`MiniAppCatalogService.list_catalog`** sees **`OPEN_FOR_SALE`** Tour **before** execution link exists **;** showcase **`POST .../publish`** **;** **`POST .../execution-link`** **;** landing **`MiniAppSupplierOfferLandingService`**, B11 **`resolve_sup_offer_start_mini_app_routing`**, review-package **`conversion_closure`** all **`true`**, **`next_missing_step`** **`null`** **.**
+- **Moderation approve alone** **(packaging not `approved_for_publish`)** **does not** create **`SupplierOfferTourBridge`** **/** **`Tour`** **;** **`next_missing_step`** **`approve_packaging`** **.**
+- **No** auto-publish **/** auto-activation **/** hidden ORM triggers **;** **booking/payment** services **unchanged** **(tests do not invoke orders/reservations/payments).**
 
 ---
 

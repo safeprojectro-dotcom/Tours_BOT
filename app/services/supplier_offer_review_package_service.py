@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.models.enums import SupplierOfferLifecycle, SupplierOfferPackagingStatus
+from app.core.config import get_settings
+from app.models.enums import SupplierOfferLifecycle, SupplierOfferPackagingStatus, TourStatus
 from app.models.supplier import SupplierOffer
+from app.models.tour import Tour
 from app.repositories.supplier import SupplierOfferRepository
 from app.repositories.supplier_offer_execution_link import SupplierOfferExecutionLinkRepository
 from app.schemas.supplier_admin import (
     AdminSupplierOfferBridgeReadinessRead,
+    AdminSupplierOfferConversionClosureRead,
     AdminSupplierOfferExecutionLinksReviewRead,
     AdminSupplierOfferLinkedTourCatalogRead,
     AdminSupplierOfferMiniAppConversionPreviewRead,
@@ -20,7 +23,12 @@ from app.schemas.supplier_admin import (
     SupplierOfferExecutionLinkRead,
 )
 from app.services.admin_tour_write import AdminTourWriteService, TourCatalogActivationPreview
-from app.services.mini_app_supplier_offer_landing import MiniAppSupplierOfferLandingService
+from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
+from app.services.mini_app_supplier_offer_landing import (
+    MiniAppSupplierOfferLandingService,
+    SupplierOfferConversionPreviewForAdmin,
+)
+from app.services.supplier_offer_bot_start_routing import resolve_sup_offer_start_mini_app_routing
 from app.services.supplier_offer_moderation_service import SupplierOfferModerationService
 from app.services.supplier_offer_tour_bridge_service import (
     SupplierOfferBridgeMaterializationReadiness,
@@ -84,6 +92,129 @@ def _recommended_next_actions(
     if lifecycle_published and not has_active_execution_link:
         actions.append("create_execution_link")
     return actions[:12]
+
+
+def _next_missing_conversion_step(
+    *,
+    offer: SupplierOffer,
+    bridge_rd: SupplierOfferBridgeMaterializationReadiness,
+    active_bridge: SupplierOfferTourBridgeResult | None,
+    catalog: TourCatalogActivationPreview | None,
+    lifecycle_pub: bool,
+    can_create_exec: bool,
+    tour_row: Tour | None,
+    catalog_contains: bool,
+    landing_ok: bool,
+    bot_ok: bool,
+) -> str | None:
+    """Single suggested gate — explicit admin sequence; does not auto-trigger actions."""
+    if offer.packaging_status is not SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH:
+        return "approve_packaging"
+    if offer.lifecycle_status is SupplierOfferLifecycle.REJECTED:
+        return "address_moderation_rejection"
+    if bridge_rd.missing_fields:
+        return "complete_required_offer_fields_for_bridge"
+    if active_bridge is None:
+        if bridge_rd.can_attempt_bridge:
+            return "create_tour_bridge"
+        return "resolve_tour_bridge_prerequisites"
+    if catalog is not None:
+        if catalog.catalog_activation_missing_fields:
+            return "complete_linked_tour_for_catalog_activation"
+        if catalog.b8_same_offer_date_conflict:
+            return "resolve_catalog_activation_conflict"
+        if catalog.can_activate_for_catalog:
+            return "activate_tour_for_catalog"
+    if offer.lifecycle_status is SupplierOfferLifecycle.READY_FOR_MODERATION:
+        return "moderation_approve"
+    if offer.lifecycle_status is SupplierOfferLifecycle.APPROVED:
+        return "publish_showcase_channel"
+    if not lifecycle_pub:
+        return "advance_offer_to_published_for_execution_link"
+    if can_create_exec:
+        return "create_execution_link"
+    if tour_row is None:
+        return "ensure_linked_tour_materialized"
+    if tour_row.status is not TourStatus.OPEN_FOR_SALE:
+        return "activate_tour_for_catalog"
+    if not catalog_contains:
+        return "ensure_customer_catalog_visibility_window"
+    if not landing_ok:
+        return "ensure_supplier_offer_landing_resolution"
+    if not bot_ok:
+        return "ensure_bot_deep_link_mini_app_base_url"
+    return None
+
+
+def _build_conversion_closure(
+    *,
+    offer: SupplierOffer,
+    bridge_rd: SupplierOfferBridgeMaterializationReadiness,
+    active_bridge: SupplierOfferTourBridgeResult | None,
+    catalog: TourCatalogActivationPreview | None,
+    active_exec: object | None,
+    lifecycle_pub: bool,
+    can_create_exec: bool,
+    conv: SupplierOfferConversionPreviewForAdmin,
+    tour_row: Tour | None,
+    session: Session,
+) -> AdminSupplierOfferConversionClosureRead:
+    has_bridge = active_bridge is not None
+    has_exec = active_exec is not None
+
+    has_catalog_visible = (
+        tour_row is not None and tour_row.status is TourStatus.OPEN_FOR_SALE
+    )
+    catalog_contains = False
+    if tour_row is not None and tour_row.status is TourStatus.OPEN_FOR_SALE:
+        catalog_contains = tour_is_customer_catalog_visible(
+            departure_datetime=tour_row.departure_datetime,
+            sales_deadline=tour_row.sales_deadline,
+        )
+
+    landing_ok = (
+        conv.applicable
+        and bool(conv.linked_tour_id)
+        and bool((conv.linked_tour_code or "").strip())
+    )
+
+    mini_base = (get_settings().telegram_mini_app_url or "").strip()
+    nav = resolve_sup_offer_start_mini_app_routing(session, offer=offer, mini_app_base_url=mini_base)
+    bot_ok = nav.exact_tour_mini_app_url is not None
+
+    next_step = _next_missing_conversion_step(
+        offer=offer,
+        bridge_rd=bridge_rd,
+        active_bridge=active_bridge,
+        catalog=catalog,
+        lifecycle_pub=lifecycle_pub,
+        can_create_exec=can_create_exec,
+        tour_row=tour_row,
+        catalog_contains=catalog_contains,
+        landing_ok=landing_ok,
+        bot_ok=bot_ok,
+    )
+
+    all_green = (
+        has_bridge
+        and has_catalog_visible
+        and catalog_contains
+        and has_exec
+        and landing_ok
+        and bot_ok
+    )
+    if all_green:
+        next_step = None
+
+    return AdminSupplierOfferConversionClosureRead(
+        has_tour_bridge=has_bridge,
+        has_catalog_visible_tour=has_catalog_visible,
+        has_active_execution_link=has_exec,
+        supplier_offer_landing_routes_to_tour=landing_ok,
+        bot_deeplink_routes_to_tour=bot_ok,
+        central_catalog_contains_tour=catalog_contains,
+        next_missing_step=next_step,
+    )
 
 
 def _bridge_result_to_read(res: SupplierOfferTourBridgeResult) -> AdminSupplierOfferTourBridgeRead:
@@ -203,6 +334,23 @@ class SupplierOfferReviewPackageService:
             else None
         )
 
+        tour_row: Tour | None = None
+        if active_bridge_result is not None:
+            tour_row = session.get(Tour, active_bridge_result.tour_id)
+
+        closure = _build_conversion_closure(
+            offer=row,
+            bridge_rd=bridge_rd,
+            active_bridge=active_bridge_result,
+            catalog=catalog_preview,
+            active_exec=active_exec,
+            lifecycle_pub=lifecycle_pub,
+            can_create_exec=can_create,
+            conv=conv,
+            tour_row=tour_row,
+            session=session,
+        )
+
         return AdminSupplierOfferReviewPackageRead(
             offer=offer_read,
             showcase_preview=showcase,
@@ -220,6 +368,7 @@ class SupplierOfferReviewPackageService:
                 execution_link_precheck_note=exec_note,
             ),
             mini_app_conversion_preview=mini_app,
+            conversion_closure=closure,
             warnings=warnings,
             recommended_next_actions=actions,
         )
