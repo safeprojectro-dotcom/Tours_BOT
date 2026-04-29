@@ -21,6 +21,8 @@ Tours_BOT
 
 **AI fact lock — Slice 1A:** **[`docs/AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md`](AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md)** — source facts snapshot **`v1`** + **`fact_claims`** validator **`;`** **`GET …/review-package`** exposes **`ai_public_copy_review`** **`;`** **no** external AI **`;`** showcase/publish/booking/bridge **unchanged.** **Next** slice **:** persist **`ai_public_copy_v1`** stub on packaging generate **or** admin AI copy workflow **—** product decision **.**
 
+**Admin Content Quality Gate — Slice 1:** **[`docs/ADMIN_CONTENT_QUALITY_GATE.md`](ADMIN_CONTENT_QUALITY_GATE.md)** — read-only **`content_quality_review`** on **`GET …/review-package`** **`;`** deterministic copy/discount warnings **`;`** **`review_supplier_offer_content_quality`** in **`recommended_next_actions`** when needed **`;`** **no** publish/bridge/catalog/booking changes **.** **Next** possible **:** admin UX around **`review-package`** **or** AI copy + fact lock **.**
+
 ---
 
 

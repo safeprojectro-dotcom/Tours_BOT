@@ -56,6 +56,16 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ---
 
+## Checkpoint Sync — Admin Content Quality Gate Slice 1 (2026-04-29)
+
+**Docs-only.**
+
+- **[`ADMIN_CONTENT_QUALITY_GATE.md`](ADMIN_CONTENT_QUALITY_GATE.md)** — read-only **`content_quality_review`** on **`GET …/review-package`** **`;`** packaging truth + thin hook/marketing/description heuristics **`;`** merged **`warnings`** **`;`** **`review_supplier_offer_content_quality`** **`;`** **does not** block publish **/** bridge **/** catalog **/** bookings **.**
+- **Public behavior unchanged** vs pre-slice **(** showcase **,** Mini App **,** Layer A **).**
+- **Next possible block:** admin UX around **`review-package`** **or** AI copy generation with **[fact lock](AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md)** **.**
+
+---
+
 ## Checkpoint Sync — B10.x supplier offer → Tour → Mini App (2026)
 
 **Docs-only.** **Canonical** **full** **record:** **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)** **and** **short** **summary** **in** **[`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md)** **(Continuity** **Sync** **—** **B10.x).**

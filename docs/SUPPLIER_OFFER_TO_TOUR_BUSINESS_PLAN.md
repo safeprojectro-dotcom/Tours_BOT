@@ -26,6 +26,8 @@
 
 **AI fact lock — Slice 1A (implementation checkpoint):** **[`docs/AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md`](AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md)** — source facts snapshot + **`fact_claims`** validator **`;`** **`review-package`** **`ai_public_copy_review`** **`;`** public channel/Mini App/booking/bridge behavior **unchanged** **`;`** next **:** **`ai_public_copy_v1`** persistence on packaging generate **vs** admin AI workflow **.**
 
+**Admin Content Quality Gate — Slice 1:** **[`docs/ADMIN_CONTENT_QUALITY_GATE.md`](ADMIN_CONTENT_QUALITY_GATE.md)** — read-only **`content_quality_review`** **`;`** weak-copy/discount warnings **`;`** **`review_supplier_offer_content_quality`** **`;`** no booking/showcase/bridge semantics change **`;`** next **:** operator UX **or** AI copy + fact lock **.**
+
 ---
 
 ## 1. Core business rule (non-negotiable)

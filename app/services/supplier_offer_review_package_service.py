@@ -13,6 +13,7 @@ from app.repositories.supplier_offer_execution_link import SupplierOfferExecutio
 from app.schemas.supplier_admin import (
     AdminSupplierOfferAiPublicCopyReviewRead,
     AdminSupplierOfferBridgeReadinessRead,
+    AdminSupplierOfferContentQualityReviewRead,
     AdminSupplierOfferConversionClosureRead,
     AdminSupplierOfferExecutionLinksReviewRead,
     AdminSupplierOfferLinkedTourCatalogRead,
@@ -31,6 +32,7 @@ from app.services.mini_app_supplier_offer_landing import (
 )
 from app.services.supplier_offer_ai_public_copy_fact_lock import evaluate_ai_public_copy_fact_lock
 from app.services.supplier_offer_bot_start_routing import resolve_sup_offer_start_mini_app_routing
+from app.services.supplier_offer_content_quality_review import evaluate_content_quality_review
 from app.services.supplier_offer_moderation_service import SupplierOfferModerationService
 from app.services.supplier_offer_tour_bridge_service import (
     SupplierOfferBridgeMaterializationReadiness,
@@ -50,6 +52,7 @@ def _merge_warnings(
     bridge_missing: list[str],
     catalog: TourCatalogActivationPreview | None,
     ai_fact_lock: AdminSupplierOfferAiPublicCopyReviewRead | None = None,
+    content_quality: AdminSupplierOfferContentQualityReviewRead | None = None,
 ) -> list[str]:
     out: list[str] = []
     out.extend(showcase.warnings)
@@ -69,6 +72,9 @@ def _merge_warnings(
         out.extend(ai_fact_lock.warnings)
         for bi in ai_fact_lock.blocking_issues:
             out.append("AI fact lock: " + bi)
+    if content_quality is not None:
+        for w in content_quality.warnings:
+            out.append(f"Content quality [{w.code}]: {w.message}")
     return out
 
 
@@ -81,10 +87,13 @@ def _recommended_next_actions(
     has_active_execution_link: bool,
     lifecycle_published: bool,
     ai_fact_lock: AdminSupplierOfferAiPublicCopyReviewRead | None = None,
+    content_quality: AdminSupplierOfferContentQualityReviewRead | None = None,
 ) -> list[str]:
     actions: list[str] = []
     if ai_fact_lock is not None and ai_fact_lock.ai_block_present and not ai_fact_lock.fact_lock_passed:
         actions.append("resolve_ai_public_copy_fact_lock")
+    if content_quality is not None and content_quality.has_quality_warnings:
+        actions.append("review_supplier_offer_content_quality")
     if offer.packaging_status is not SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH:
         actions.append("approve_packaging")
     if bridge_rd.missing_fields:
@@ -323,6 +332,7 @@ class SupplierOfferReviewPackageService:
         )
 
         ai_public_copy_review = evaluate_ai_public_copy_fact_lock(row)
+        content_quality_review = evaluate_content_quality_review(row)
 
         warnings = _merge_warnings(
             showcase=showcase,
@@ -330,6 +340,7 @@ class SupplierOfferReviewPackageService:
             bridge_missing=bridge_rd.missing_fields,
             catalog=catalog_preview,
             ai_fact_lock=ai_public_copy_review,
+            content_quality=content_quality_review,
         )
 
         actions = _recommended_next_actions(
@@ -340,6 +351,7 @@ class SupplierOfferReviewPackageService:
             has_active_execution_link=active_exec is not None,
             lifecycle_published=lifecycle_pub,
             ai_fact_lock=ai_public_copy_review,
+            content_quality=content_quality_review,
         )
 
         active_link_read = (
@@ -384,6 +396,7 @@ class SupplierOfferReviewPackageService:
             mini_app_conversion_preview=mini_app,
             conversion_closure=closure,
             ai_public_copy_review=ai_public_copy_review,
+            content_quality_review=content_quality_review,
             warnings=warnings,
             recommended_next_actions=actions,
         )

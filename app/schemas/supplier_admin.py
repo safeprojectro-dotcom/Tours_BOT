@@ -231,6 +231,24 @@ class AdminSupplierOfferAiPublicCopyReviewRead(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class ContentQualityWarningItemRead(BaseModel):
+    """Single deterministic content-quality signal (admin visibility only — does not block flows)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    message: str
+
+
+class AdminSupplierOfferContentQualityReviewRead(BaseModel):
+    """Marketing/copy readiness slice for admin review-package (read-only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    warnings: list[ContentQualityWarningItemRead] = Field(default_factory=list)
+    has_quality_warnings: bool = False
+
+
 class AdminSupplierOfferReviewPackageRead(BaseModel):
     """Read-only aggregated admin review surface (no mutations)."""
 
@@ -245,6 +263,7 @@ class AdminSupplierOfferReviewPackageRead(BaseModel):
     mini_app_conversion_preview: AdminSupplierOfferMiniAppConversionPreviewRead
     conversion_closure: AdminSupplierOfferConversionClosureRead
     ai_public_copy_review: AdminSupplierOfferAiPublicCopyReviewRead
+    content_quality_review: AdminSupplierOfferContentQualityReviewRead
     warnings: list[str]
     recommended_next_actions: list[str]
 
