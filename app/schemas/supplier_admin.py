@@ -215,6 +215,22 @@ class AdminSupplierOfferConversionClosureRead(BaseModel):
     next_missing_step: str | None = None
 
 
+class AdminSupplierOfferAiPublicCopyReviewRead(BaseModel):
+    """AI public copy fact-lock slice (read-only). Compares optional ``packaging_draft_json.ai_public_copy_v1`` to live facts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_facts_version: str
+    snapshot_content_hash: str
+    ai_block_present: bool
+    packaged_snapshot_ref: str | None = None
+    snapshot_stale: bool = False
+    fact_claims_present: bool = False
+    fact_lock_passed: bool = True
+    blocking_issues: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class AdminSupplierOfferReviewPackageRead(BaseModel):
     """Read-only aggregated admin review surface (no mutations)."""
 
@@ -228,6 +244,7 @@ class AdminSupplierOfferReviewPackageRead(BaseModel):
     execution_links_review: AdminSupplierOfferExecutionLinksReviewRead
     mini_app_conversion_preview: AdminSupplierOfferMiniAppConversionPreviewRead
     conversion_closure: AdminSupplierOfferConversionClosureRead
+    ai_public_copy_review: AdminSupplierOfferAiPublicCopyReviewRead
     warnings: list[str]
     recommended_next_actions: list[str]
 

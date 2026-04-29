@@ -11,6 +11,7 @@ from app.models.tour import Tour
 from app.repositories.supplier import SupplierOfferRepository
 from app.repositories.supplier_offer_execution_link import SupplierOfferExecutionLinkRepository
 from app.schemas.supplier_admin import (
+    AdminSupplierOfferAiPublicCopyReviewRead,
     AdminSupplierOfferBridgeReadinessRead,
     AdminSupplierOfferConversionClosureRead,
     AdminSupplierOfferExecutionLinksReviewRead,
@@ -28,6 +29,7 @@ from app.services.mini_app_supplier_offer_landing import (
     MiniAppSupplierOfferLandingService,
     SupplierOfferConversionPreviewForAdmin,
 )
+from app.services.supplier_offer_ai_public_copy_fact_lock import evaluate_ai_public_copy_fact_lock
 from app.services.supplier_offer_bot_start_routing import resolve_sup_offer_start_mini_app_routing
 from app.services.supplier_offer_moderation_service import SupplierOfferModerationService
 from app.services.supplier_offer_tour_bridge_service import (
@@ -47,6 +49,7 @@ def _merge_warnings(
     bridge_blocking: list[str],
     bridge_missing: list[str],
     catalog: TourCatalogActivationPreview | None,
+    ai_fact_lock: AdminSupplierOfferAiPublicCopyReviewRead | None = None,
 ) -> list[str]:
     out: list[str] = []
     out.extend(showcase.warnings)
@@ -62,6 +65,10 @@ def _merge_warnings(
             "Catalog activation may be blocked (B8.3): another open_for_sale tour exists for the same "
             "source supplier offer and departure.",
         )
+    if ai_fact_lock is not None:
+        out.extend(ai_fact_lock.warnings)
+        for bi in ai_fact_lock.blocking_issues:
+            out.append("AI fact lock: " + bi)
     return out
 
 
@@ -73,8 +80,11 @@ def _recommended_next_actions(
     catalog: TourCatalogActivationPreview | None,
     has_active_execution_link: bool,
     lifecycle_published: bool,
+    ai_fact_lock: AdminSupplierOfferAiPublicCopyReviewRead | None = None,
 ) -> list[str]:
     actions: list[str] = []
+    if ai_fact_lock is not None and ai_fact_lock.ai_block_present and not ai_fact_lock.fact_lock_passed:
+        actions.append("resolve_ai_public_copy_fact_lock")
     if offer.packaging_status is not SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH:
         actions.append("approve_packaging")
     if bridge_rd.missing_fields:
@@ -312,11 +322,14 @@ class SupplierOfferReviewPackageService:
             linked_tour_code=conv.linked_tour_code if conv.applicable else None,
         )
 
+        ai_public_copy_review = evaluate_ai_public_copy_fact_lock(row)
+
         warnings = _merge_warnings(
             showcase=showcase,
             bridge_blocking=bridge_rd.blocking_codes,
             bridge_missing=bridge_rd.missing_fields,
             catalog=catalog_preview,
+            ai_fact_lock=ai_public_copy_review,
         )
 
         actions = _recommended_next_actions(
@@ -326,6 +339,7 @@ class SupplierOfferReviewPackageService:
             catalog=catalog_preview,
             has_active_execution_link=active_exec is not None,
             lifecycle_published=lifecycle_pub,
+            ai_fact_lock=ai_public_copy_review,
         )
 
         active_link_read = (
@@ -369,6 +383,7 @@ class SupplierOfferReviewPackageService:
             ),
             mini_app_conversion_preview=mini_app,
             conversion_closure=closure,
+            ai_public_copy_review=ai_public_copy_review,
             warnings=warnings,
             recommended_next_actions=actions,
         )

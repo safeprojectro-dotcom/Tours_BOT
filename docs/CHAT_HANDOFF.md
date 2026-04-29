@@ -19,6 +19,8 @@ Tours_BOT
 
 **Production/staging smoke procedure:** **[`docs/PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md`](PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md)** — operator checklist **(** dry-run Mode **A** / live Mode **B)** **;** **not** new product functionality **.** Mutating live calls need explicit safe **`OFFER_ID`** **/** staging or test-channel confirmation **.** Mode **B** **not** executed in-repo yet **;** **next** product choice depends on real smoke outcome **.**
 
+**AI fact lock — Slice 1A:** **[`docs/AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md`](AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md)** — source facts snapshot **`v1`** + **`fact_claims`** validator **`;`** **`GET …/review-package`** exposes **`ai_public_copy_review`** **`;`** **no** external AI **`;`** showcase/publish/booking/bridge **unchanged.** **Next** slice **:** persist **`ai_public_copy_v1`** stub on packaging generate **or** admin AI copy workflow **—** product decision **.**
+
 ---
 
 

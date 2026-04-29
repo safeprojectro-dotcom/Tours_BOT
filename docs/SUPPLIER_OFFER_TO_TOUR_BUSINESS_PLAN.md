@@ -24,6 +24,8 @@
 
 **Production/staging smoke checklist:** **[`docs/PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md`](PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md)** — full operator path **(** dry-run **/** live **)** **;** **not** new functionality **.** Safe **`OFFER_ID`** **/** staging **or** test channel **before** mutating calls **.** Mode **B** **not** executed yet **;** next BUSINESS slice follows **real** smoke outcome **.**
 
+**AI fact lock — Slice 1A (implementation checkpoint):** **[`docs/AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md`](AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md)** — source facts snapshot + **`fact_claims`** validator **`;`** **`review-package`** **`ai_public_copy_review`** **`;`** public channel/Mini App/booking/bridge behavior **unchanged** **`;`** next **:** **`ai_public_copy_v1`** persistence on packaging generate **vs** admin AI workflow **.**
+
 ---
 
 ## 1. Core business rule (non-negotiable)

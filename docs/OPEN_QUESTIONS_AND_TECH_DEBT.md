@@ -45,6 +45,17 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ---
 
+## Checkpoint Sync — AI fact lock Slice 1A (2026-04-29)
+
+**Docs + code read-path.**
+
+- **[`AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md`](AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md)** — AI **not** commercial source of truth **`;`** snapshot **`v1`** + hash **`;`** optional **`packaging_draft_json.ai_public_copy_v1.fact_claims`** validated vs live facts **`;`** stale **/** unknown key **/** mismatch **/** invalid shape blockers **`;`** empty claims warning **.**
+- **Implemented:** **`evaluate_ai_public_copy_fact_lock`**, **`GET …/review-package`** **`ai_public_copy_review`**, **`resolve_ai_public_copy_fact_lock`** in **`recommended_next_actions`** when lock fails **`;`** **`tests/unit/test_supplier_offer_ai_public_copy_fact_lock.py`** **.**
+- **Unchanged:** showcase publish HTML builder **,** **`POST …/publish`** **,** booking/payment **,** bridge/catalog activation **,** no external AI **.**
+- **Next slice (**product**):** persist **`ai_public_copy_v1`** stub on packaging generate **or** admin AI copy workflow **.**
+
+---
+
 ## Checkpoint Sync — B10.x supplier offer → Tour → Mini App (2026)
 
 **Docs-only.** **Canonical** **full** **record:** **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)** **and** **short** **summary** **in** **[`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md)** **(Continuity** **Sync** **—** **B10.x).**
