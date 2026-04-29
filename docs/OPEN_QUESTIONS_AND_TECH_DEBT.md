@@ -66,6 +66,15 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ---
 
+## Checkpoint Sync — Admin operator workflow playbook (2026)
+
+**Docs-only.**
+
+- **[`ADMIN_OPERATOR_WORKFLOW.md`](ADMIN_OPERATOR_WORKFLOW.md)** created — canonical admin/operator sequence (supplier offer → catalog/showcase/conversion); **always start with** **`GET …/review-package`**; **no** auto-publish, auto-bridge, auto-catalog activation, or auto-execution-link.
+- **Next code slice:** read-only **`operator_workflow`** section on **`GET …/review-package`** (endpoint hints **/** disabled reasons **/** primary next action; **no** mutation from the read path).
+
+---
+
 ## Checkpoint Sync — B10.x supplier offer → Tour → Mini App (2026)
 
 **Docs-only.** **Canonical** **full** **record:** **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)** **and** **short** **summary** **in** **[`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md)** **(Continuity** **Sync** **—** **B10.x).**

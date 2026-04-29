@@ -23,6 +23,8 @@ Tours_BOT
 
 **Admin Content Quality Gate — Slice 1:** **[`docs/ADMIN_CONTENT_QUALITY_GATE.md`](ADMIN_CONTENT_QUALITY_GATE.md)** — read-only **`content_quality_review`** on **`GET …/review-package`** **`;`** deterministic copy/discount warnings **`;`** **`review_supplier_offer_content_quality`** in **`recommended_next_actions`** when needed **`;`** **no** publish/bridge/catalog/booking changes **.** **Next** possible **:** admin UX around **`review-package`** **or** AI copy + fact lock **.**
 
+**Admin operator workflow playbook (docs-only):** **[`docs/ADMIN_OPERATOR_WORKFLOW.md`](ADMIN_OPERATOR_WORKFLOW.md)** — canonical operator sequence for supplier-offer review → catalog/showcase/conversion; **always start with** **`GET …/review-package`**; **no** auto-publish **/** auto-bridge **/** auto-catalog activation **/** auto-execution-link **.** **Next code slice:** read-only **`operator_workflow`** on **`GET …/review-package`** (hints only; **no** Telegram buttons **/** web admin UI **/** batch actions yet).
+
 ---
 
 
