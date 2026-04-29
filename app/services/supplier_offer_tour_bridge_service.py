@@ -67,6 +67,15 @@ class SupplierOfferTourBridgeResult:
     source_lifecycle_status: str
 
 
+@dataclass(frozen=True, slots=True)
+class SupplierOfferBridgeMaterializationReadiness:
+    """Read-only bridge readiness (same rules as ``create_or_replay_bridge`` precursors)."""
+
+    can_attempt_bridge: bool
+    missing_fields: list[str]
+    blocking_codes: list[str]
+
+
 def _nonempty(s: str | None) -> bool:
     return bool(s and s.strip())
 
@@ -191,6 +200,21 @@ class SupplierOfferTourBridgeService:
     def ensure_offer_eligible_for_tour_materialization(self, offer: SupplierOffer) -> None:
         """Public alias for B8 batch generation: same rules as bridge create (packaging, lifecycle, required fields)."""
         self._assert_eligible_for_materialization(offer)
+
+    def read_bridge_materialization_readiness(self, offer: SupplierOffer) -> SupplierOfferBridgeMaterializationReadiness:
+        """Read-only: whether ``POST .../tour-bridge`` could succeed without mutations."""
+        missing = _collect_missing(offer)
+        blocking: list[str] = []
+        if offer.packaging_status is not SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH:
+            blocking.append("packaging_not_approved")
+        if offer.lifecycle_status is SupplierOfferLifecycle.REJECTED:
+            blocking.append("lifecycle_rejected")
+        can_attempt = not blocking and not missing
+        return SupplierOfferBridgeMaterializationReadiness(
+            can_attempt_bridge=can_attempt,
+            missing_fields=missing,
+            blocking_codes=blocking,
+        )
 
     def _insert_draft_tour_from_offer_dates(
         self,
@@ -490,6 +514,7 @@ class SupplierOfferTourBridgeService:
 __all__ = [
     "SupplierOfferTourBridgeService",
     "SupplierOfferTourBridgeResult",
+    "SupplierOfferBridgeMaterializationReadiness",
     "SupplierOfferTourBridgeNotFoundError",
     "SupplierOfferTourBridgeStateError",
     "SupplierOfferTourBridgeValidationError",

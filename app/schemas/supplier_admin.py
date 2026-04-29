@@ -110,6 +110,25 @@ class AdminSupplierOfferPublishResult(BaseModel):
     telegram_message_id: int | None = None
 
 
+class SupplierOfferExecutionLinkRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    supplier_offer_id: int
+    tour_id: int
+    link_status: str
+    close_reason: str | None = None
+    link_note: str | None = None
+    closed_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SupplierOfferExecutionLinkListRead(BaseModel):
+    items: list[SupplierOfferExecutionLinkRead]
+    total_returned: int
+
+
 class AdminSupplierOfferShowcasePreviewRead(BaseModel):
     """Read-only: final channel showcase caption as rendered by ``build_showcase_publication`` (B12/B13.4)."""
 
@@ -133,23 +152,69 @@ class AdminSupplierOfferShowcasePreviewRead(BaseModel):
     )
 
 
-class SupplierOfferExecutionLinkRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class AdminSupplierOfferBridgeReadinessRead(BaseModel):
+    """Read-only: ``POST .../tour-bridge`` precursor checks (packaging + required fields)."""
 
-    id: int
-    supplier_offer_id: int
+    model_config = ConfigDict(extra="forbid")
+
+    can_attempt_bridge: bool
+    missing_fields: list[str]
+    blocking_codes: list[str]
+
+
+class AdminSupplierOfferLinkedTourCatalogRead(BaseModel):
+    """Linked bridged Tour: Mini App catalog activation readiness (orthogonal to showcase lifecycle)."""
+
+    model_config = ConfigDict(extra="forbid")
+
     tour_id: int
-    link_status: str
-    close_reason: str | None = None
-    link_note: str | None = None
-    closed_at: datetime | None = None
-    created_at: datetime
-    updated_at: datetime
+    tour_code: str
+    tour_status: str
+    sales_mode: TourSalesMode
+    seats_available: int
+    catalog_activation_missing_fields: list[str]
+    catalog_listed_for_mini_app: bool
+    can_activate_for_catalog: bool
+    b8_same_offer_date_conflict: bool
 
 
-class SupplierOfferExecutionLinkListRead(BaseModel):
-    items: list[SupplierOfferExecutionLinkRead]
-    total_returned: int
+class AdminSupplierOfferExecutionLinksReviewRead(BaseModel):
+    """Execution-link slice for conversion path (requires lifecycle ``published`` to create)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total_links_returned: int
+    active_link: SupplierOfferExecutionLinkRead | None
+    can_create_execution_link: bool
+    execution_link_precheck_note: str | None = None
+
+
+class AdminSupplierOfferMiniAppConversionPreviewRead(BaseModel):
+    """Mirror of landing actionability when offer lifecycle is ``published`` (else not applicable)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    applicable: bool
+    actionability_state: str | None = None
+    has_execution_link: bool | None = None
+    linked_tour_id: int | None = None
+    linked_tour_code: str | None = None
+
+
+class AdminSupplierOfferReviewPackageRead(BaseModel):
+    """Read-only aggregated admin review surface (no mutations)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    offer: AdminSupplierOfferRead
+    showcase_preview: AdminSupplierOfferShowcasePreviewRead
+    bridge_readiness: AdminSupplierOfferBridgeReadinessRead
+    active_tour_bridge: AdminSupplierOfferTourBridgeRead | None
+    linked_tour_catalog: AdminSupplierOfferLinkedTourCatalogRead | None
+    execution_links_review: AdminSupplierOfferExecutionLinksReviewRead
+    mini_app_conversion_preview: AdminSupplierOfferMiniAppConversionPreviewRead
+    warnings: list[str]
+    recommended_next_actions: list[str]
 
 
 class AdminSupplierOfferExecutionLinkBody(BaseModel):

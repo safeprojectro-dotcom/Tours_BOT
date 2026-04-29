@@ -78,6 +78,10 @@ from app.services.supplier_offer_moderation_service import (
     SupplierOfferPublicationConfigError,
 )
 from app.services.supplier_offer_supplier_notification_service import SupplierOfferSupplierNotificationService
+from app.services.supplier_offer_review_package_service import (
+    SupplierOfferReviewPackageNotFoundError,
+    SupplierOfferReviewPackageService,
+)
 from app.services.supplier_offer_execution_link_service import (
     SupplierOfferExecutionLinkNotFoundError,
     SupplierOfferExecutionLinkService,
@@ -155,6 +159,7 @@ from app.schemas.supplier_admin import (
     AdminSupplierOfferListRead,
     AdminSupplierOfferPublishResult,
     AdminSupplierOfferRead,
+    AdminSupplierOfferReviewPackageRead,
     AdminSupplierOfferShowcasePreviewRead,
     AdminSupplierOfferRejectBody,
     AdminSupplierOfferRecurrenceDraftToursBody,
@@ -1122,6 +1127,18 @@ def get_admin_supplier_offer_showcase_preview(
     try:
         return SupplierOfferModerationService().showcase_preview(db, offer_id=offer_id)
     except SupplierOfferModerationNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+
+
+@router.get("/supplier-offers/{offer_id}/review-package", response_model=AdminSupplierOfferReviewPackageRead)
+def get_admin_supplier_offer_review_package(
+    offer_id: int,
+    db: Session = Depends(get_db),
+) -> AdminSupplierOfferReviewPackageRead:
+    """Aggregated read-only review (packaging axis + moderation axis + bridge/catalog + showcase preview); no mutations."""
+    try:
+        return SupplierOfferReviewPackageService().review_package(db, offer_id=offer_id)
+    except SupplierOfferReviewPackageNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
 
 

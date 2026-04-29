@@ -27,6 +27,17 @@ class SupplierOfferLandingActionability:
     linked_tour_code: str | None = None
 
 
+@dataclass(frozen=True)
+class SupplierOfferConversionPreviewForAdmin:
+    """Minimal conversion preview for admin review-package (read-only)."""
+
+    applicable: bool
+    actionability_state: MiniAppSupplierOfferActionabilityState | None = None
+    has_execution_link: bool = False
+    linked_tour_id: int | None = None
+    linked_tour_code: str | None = None
+
+
 class MiniAppSupplierOfferLandingService:
     """Read-only landing context for published supplier offers (Y30.1)."""
 
@@ -155,4 +166,22 @@ class MiniAppSupplierOfferLandingService:
                 showcase_chat_id=row.showcase_chat_id,
                 showcase_message_id=row.showcase_message_id,
             ),
+        )
+
+    def read_conversion_preview_for_admin_review(
+        self,
+        session: Session,
+        *,
+        offer: SupplierOffer,
+    ) -> SupplierOfferConversionPreviewForAdmin:
+        """Read-only slice for ``GET .../review-package`` when ``lifecycle_status`` may be non-published."""
+        if offer.lifecycle_status != SupplierOfferLifecycle.PUBLISHED:
+            return SupplierOfferConversionPreviewForAdmin(applicable=False)
+        actionability = self._resolve_actionability(session, offer=offer)
+        return SupplierOfferConversionPreviewForAdmin(
+            applicable=True,
+            actionability_state=actionability.state,
+            has_execution_link=actionability.has_execution_link,
+            linked_tour_id=actionability.linked_tour_id,
+            linked_tour_code=actionability.linked_tour_code,
         )

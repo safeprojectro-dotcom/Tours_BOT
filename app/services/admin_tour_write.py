@@ -118,6 +118,21 @@ def _collect_catalog_activation_missing(tour: Tour) -> list[str]:
     return missing
 
 
+@dataclass(frozen=True)
+class TourCatalogActivationPreview:
+    """Read-only catalog activation readiness for admin review (no mutations)."""
+
+    tour_id: int
+    tour_code: str
+    tour_status: str
+    sales_mode: TourSalesMode
+    seats_available: int
+    catalog_activation_missing_fields: list[str]
+    catalog_listed_for_mini_app: bool
+    can_activate_for_catalog: bool
+    b8_same_offer_date_conflict: bool
+
+
 # Phase 6 / Step 15 — narrow archive/unarchive (no new enum member).
 # Reuse SALES_CLOSED as the admin "archived" bucket: Mini App catalog lists only OPEN_FOR_SALE,
 # so moving here hides the tour from public catalog without hard delete.
@@ -607,4 +622,49 @@ class AdminTourWriteService:
             idempotent_replay=False,
             sales_mode=tour.sales_mode,
             policy=policy,
+        )
+
+    def preview_catalog_activation_for_tour(
+        self,
+        session: Session,
+        *,
+        tour_id: int,
+    ) -> TourCatalogActivationPreview | None:
+        """Read-only preview for admin review package (no mutations, no row locks)."""
+        tour = session.get(Tour, tour_id)
+        if tour is None:
+            return None
+        missing = list(_collect_catalog_activation_missing(tour))
+        listed = tour.status == TourStatus.OPEN_FOR_SALE
+        b8_conflict = False
+        if tour.status == TourStatus.DRAFT and not missing:
+            source_offer_id = self._b8_recurrence_audit.get_source_supplier_offer_id_for_tour(
+                session,
+                tour_id=tour_id,
+            )
+            if source_offer_id is not None:
+                conflict = self._tours.get_open_for_sale_conflict_for_recurrence_activation(
+                    session,
+                    source_supplier_offer_id=source_offer_id,
+                    departure_datetime=tour.departure_datetime,
+                    exclude_tour_id=tour_id,
+                )
+                b8_conflict = conflict is not None
+
+        can_activate = (
+            tour.status == TourStatus.DRAFT
+            and not missing
+            and not b8_conflict
+            and tour.status not in (TourStatus.CANCELLED, _TOUR_ARCHIVED_STATUS)
+        )
+        return TourCatalogActivationPreview(
+            tour_id=tour.id,
+            tour_code=tour.code,
+            tour_status=tour.status.value,
+            sales_mode=tour.sales_mode,
+            seats_available=int(tour.seats_available),
+            catalog_activation_missing_fields=missing,
+            catalog_listed_for_mini_app=listed,
+            can_activate_for_catalog=can_activate,
+            b8_same_offer_date_conflict=b8_conflict,
         )

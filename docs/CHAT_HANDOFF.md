@@ -3,6 +3,20 @@
 ## Project
 Tours_BOT
 
+## Continuity Sync — Admin Offer Review & Approval Gate — Slice 1 (2026-04-27)
+
+**Read-only endpoint:** **`GET /admin/supplier-offers/{offer_id}/review-package`** aggregates offer snapshot, packaging axis, moderation/showcase axis, showcase preview, bridge readiness, active bridge / linked Tour, catalog activation readiness, execution-link readiness, Mini App conversion preview, warnings, and `recommended_next_actions`.
+
+**Does not:** publish to Telegram; create or link `Tour`; activate catalog; create execution links; mutate booking/payment.
+
+**Related fix:** missing import **`SupplierOfferSupplierNotificationService`** on HTTP admin routes restored — supplier Telegram notifications after moderation approve / publish / retract work as intended (orthogonal to review-package reads; no change to bridge/catalog/Mini App activation semantics).
+
+**Verified:** unit suites including `test_supplier_offer_review_package.py` (+ bridge/moderation/showcase related); **53 passed**; **`compileall app alembic`** OK.
+
+**Next functional block:** **SUPPLIER OFFER → CENTRAL MINI APP CATALOG CONVERSION CLOSURE.**
+
+---
+
 ## Continuity Sync — B8 recurring supplier offers (2026) — B8.4 docs sync
 
 ### Current checkpoint (B8 implemented; B8.3 done)

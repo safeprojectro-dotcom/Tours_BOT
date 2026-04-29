@@ -183,6 +183,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
             patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
             patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=90),
             patch("app.services.supplier_offer_moderation_service.delete_channel_message", return_value=True),
+            patch("app.services.supplier_offer_supplier_notification_service.get_settings", return_value=mock_cfg),
             patch("app.services.supplier_offer_supplier_notification_service.send_private_text_message", return_value=123) as notify_send,
         ):
             self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)

@@ -7,6 +7,18 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ---
 
+## Checkpoint Sync — Admin Offer Review Package — Slice 1 (2026-04-27)
+
+**Docs-only.**
+
+- **Endpoint:** **`GET /admin/supplier-offers/{offer_id}/review-package`** — read-only; aggregates offer snapshot, packaging axis, moderation/showcase axis, showcase preview, bridge readiness, active bridge / linked Tour, catalog activation readiness, execution-link readiness, Mini App conversion preview, warnings, `recommended_next_actions`.
+- **Out of scope for this read:** Telegram publish; `Tour` create/link; catalog activation; execution-link creation; booking/payment mutations.
+- **Incident:** **`SupplierOfferSupplierNotificationService`** was missing from admin route imports — **`NameError`** swallowed after approve/publish/retract; **import restored** so supplier notifications fire from HTTP admin paths again (separate from review-package behavior).
+
+**Next functional block:** **SUPPLIER OFFER → CENTRAL MINI APP CATALOG CONVERSION CLOSURE.**
+
+---
+
 ## Checkpoint Sync — B10.x supplier offer → Tour → Mini App (2026)
 
 **Docs-only.** **Canonical** **full** **record:** **[`docs/B10_X_SYNC_CHECKPOINT_2026.md`](B10_X_SYNC_CHECKPOINT_2026.md)** **and** **short** **summary** **in** **[`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md)** **(Continuity** **Sync** **—** **B10.x).**
