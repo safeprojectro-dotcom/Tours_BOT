@@ -33,6 +33,8 @@ Tours_BOT
 
 **Telegram Button UX Policy (accepted, docs-only):** Private admin card is **not** a developer console **`;`** labels **1–2 words**, action/outcome oriented **`;`** **no** snake_case **,** endpoints **,** enums **,** HTTP in button text **`;`** disabled **`operator_workflow`** actions **hidden** (not greyed) **`;`** safe reads — **no** confirmation **`;`** safe mutations — **confirmation + re-read `GET …/review-package`** before execute **`;`** preferred order **:** observe/read → packaging → legacy moderation → Orders **/** Requests → navigation **`;`** **`create_tour_bridge`**, **`activate_tour_for_catalog`**, **`create_execution_link`**, **`publish_showcase_channel`** postponed on Telegram **`;`** **next code slice:** rename/reorder current Telegram buttons only (**no** new actions)**.** Label direction **:** **`review_package_refresh`** → **Actualizează / Refresh** **`;`** **`get_showcase_preview`** → **Preview** **`;`** **`generate_packaging_draft`** → **Generează text** or **Pregătește** **`;`** **`approve_packaging_for_publish`** → **Aprobă text / Aprobă pachet** (not bare **Aprobă**) **`;`** legacy moderation → **Aprobă oferta**, **Respinge oferta** **.**
 
+**Slice C2B3 (implemented):** Offer-detail keyboard uses that policy **`;`** logical row order (**workflow read-only → packaging mutations → legacy moderation lifecycle → Orders **`/`** Requests → navigation**) **`;`** RO **`/`** EN short labels only **`;`** **no** new callbacks **`/`** actions **`;`** conversion **`/`** public Telegram shortcuts remain postponed **.**
+
 ---
 
 

@@ -62,6 +62,8 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 **Политика UX кнопок Telegram (принята, docs-only):** карточка админа **не** консоль разработчика; подписи **1–2 слова**, по действию/результату; **не** snake_case, endpoints, enum, HTTP в тексте кнопок. Отключённые действия **`operator_workflow`** — **скрывать**, не показывать как disabled. Безопасное чтение — без подтверждения; безопасная мутация — подтверждение и повторное **`GET …/review-package`** перед выполнением. Ориентир подписей RO/EN (следующий код-слайс — **только** переименование/порядок, **без** новых действий): **`review_package_refresh`** → **Actualizează / Refresh**; **`get_showcase_preview`** → **Preview**; **`generate_packaging_draft`** → **Generează text** или **Pregătește**; **`approve_packaging_for_publish`** → **Aprobă text / Aprobă pachet** (не голое «Aprobă»); legacy модерация → **Aprobă oferta**, **Respinge oferta**. Порядок кнопок: наблюдение/чтение → packaging → legacy модерация → Orders/Requests → навигация. Конверсия/public в Telegram (**bridge**, активация каталога, execution link, publish showcase) — **отложены**.
 
+**Slice C2B3 (Telegram):** реализованы только короткие подписи RO/EN и логический порядок кнопок в карточке оффера (**observe/read → packaging → legacy модерация → Orders/Requests → навигация**); новые колбэки и действия **не** добавлялись.
+
 ---
 
 ## Связанные документы
@@ -80,5 +82,5 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 | Поле | Значение |
 |------|----------|
-| **Тип** | Playbook Slice A + Slice B (**`operator_workflow`**) + Slice C1 / C1.1 / **C2A** / **C2B1** / **C2B2** (Telegram) + UX policy (подписи/порядок — см. §3) |
+| **Тип** | Playbook Slice A + Slice B (**`operator_workflow`**) + Slice C1 / C1.1 / **C2A** / **C2B1** / **C2B2** / **C2B3** (Telegram) + UX policy (подписи/порядок — см. §3) |
 | **Язык** | Русский |

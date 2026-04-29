@@ -84,6 +84,8 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 **Docs-only.** **Accepted:** Telegram admin offer card is **not** a developer console **;** button labels **1–2 words**, human-readable, sequential, safe for mixed experience **;** **no** snake_case action codes **/** endpoints **/** enums **/** HTTP methods in labels **;** disabled **`operator_workflow`** actions **hidden** (not shown as disabled) **;** safe reads — **no** confirmation **;** safe mutations — **two-step confirmation + re-read `GET …/review-package`** before execute **.** **Preferred order:** refresh → preview → generate packaging → approve packaging → legacy moderation → Orders **/** Requests → navigation **.** **`create_tour_bridge`**, **`activate_tour_for_catalog`**, **`create_execution_link`**, **`publish_showcase_channel`** remain **postponed** on Telegram **;** **next code slice:** rename/reorder current Telegram buttons only (**no** new buttons/actions)**.** **Label direction (RO/EN):** **`review_package_refresh`** → **Actualizează / Refresh** **;** **`get_showcase_preview`** → **Preview** **;** **`generate_packaging_draft`** → **Generează text** or **Pregătește** **;** **`approve_packaging_for_publish`** → **Aprobă text / Aprobă pachet** **;** legacy moderation → **Aprobă oferta**, **Respinge oferta** (disambiguate from packaging approval)**.**
 
+**Slice C2B3 implemented:** Telegram offer-detail keyboard **`_detail_keyboard`** only **`;`** labels and row order aligned with policy **`;`** **no** new callbacks **`/`** actions **`;`** conversion **`/`** public workflow buttons still postponed **.**
+
 ---
 
 ## Checkpoint Sync — B10.x supplier offer → Tour → Mini App (2026)

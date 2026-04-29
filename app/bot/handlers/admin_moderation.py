@@ -349,27 +349,33 @@ def _action_button_rows(language_code: str | None, offer: AdminSupplierOfferRead
 
 
 def _detail_keyboard(language_code: str | None, offer: AdminSupplierOfferRead, session: Session) -> InlineKeyboardBuilder:
+    """Slice C2B3: observe/read → packaging workflow → legacy lifecycle actions → ops → navigation."""
     kb = InlineKeyboardBuilder()
-    for title, action_payload in _action_button_rows(language_code, offer):
-        kb.button(
-            text=title,
-            callback_data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{action_payload}",
-        )
+    workflow_buttons: list[tuple[str, str]] = []
     try:
         pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer.id)
         ow = pkg.operator_workflow
         for cb_data, label_key in _operator_workflow_c2a_callback_specs(offer.id, ow):
-            kb.button(text=translate(language_code, label_key), callback_data=cb_data)
+            workflow_buttons.append((translate(language_code, label_key), cb_data))
         gen_cb = _operator_workflow_c2b2_generate_propose_callback(offer.id, ow)
         if gen_cb:
-            kb.button(text=translate(language_code, "admin_offer_ow_pkg_gen_btn_propose"), callback_data=gen_cb)
+            workflow_buttons.append((translate(language_code, "admin_offer_ow_pkg_gen_btn_propose"), gen_cb))
         propose_cb = _operator_workflow_c2b1_packaging_propose_callback(offer.id, ow)
         if propose_cb:
-            kb.button(text=translate(language_code, "admin_offer_ow_pkg_btn_propose"), callback_data=propose_cb)
+            workflow_buttons.append((translate(language_code, "admin_offer_ow_pkg_btn_propose"), propose_cb))
     except SupplierOfferReviewPackageNotFoundError:
         pass
     except Exception as exc:
         logger.warning("operator_workflow C2A keyboard skipped for offer_id=%s: %s", offer.id, exc)
+
+    legacy_buttons: list[tuple[str, str]] = []
+    for title, action_payload in _action_button_rows(language_code, offer):
+        legacy_buttons.append((title, f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{action_payload}"))
+
+    for text, cb_data in workflow_buttons:
+        kb.button(text=text, callback_data=cb_data)
+    for text, cb_data in legacy_buttons:
+        kb.button(text=text, callback_data=cb_data)
 
     kb.button(
         text=translate(language_code, "admin_ops_orders_button"),
