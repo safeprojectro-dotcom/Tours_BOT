@@ -44,6 +44,9 @@ from app.bot.constants import (
     ADMIN_OFFERS_NAV_NEXT,
     ADMIN_OFFERS_NAV_PREV,
     ADMIN_OPS_ORDER_DETAIL_PREFIX,
+    ADMIN_OPS_OW_PKG_APPROVE_CANCEL_PREFIX,
+    ADMIN_OPS_OW_PKG_APPROVE_CONFIRM_PREFIX,
+    ADMIN_OPS_OW_PKG_APPROVE_PROPOSE_PREFIX,
     ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX,
     ADMIN_OPS_OW_SHOWCASE_PREVIEW_PREFIX,
     ADMIN_OPS_ORDERS_PAGE_PREFIX,
@@ -64,6 +67,7 @@ from app.models.enums import (
     CustomMarketplaceRequestStatus,
     OperatorWorkflowIntent,
     SupplierOfferLifecycle,
+    SupplierOfferPackagingStatus,
     TourStatus,
 )
 from app.repositories.user import UserRepository
@@ -72,6 +76,7 @@ from app.models.tour import Tour
 from app.schemas.supplier_admin import (
     AdminSupplierOfferOperatorWorkflowRead,
     AdminSupplierOfferRead,
+    AdminSupplierOfferReviewPackageRead,
     AdminSupplierOfferShowcasePreviewRead,
 )
 from app.services.admin_read import AdminReadService
@@ -94,6 +99,11 @@ from app.services.supplier_offer_moderation_service import (
     SupplierOfferModerationService,
     SupplierOfferModerationStateError,
     SupplierOfferPublicationConfigError,
+)
+from app.services.supplier_offer_packaging_review_service import (
+    SupplierOfferPackagingReviewNotFoundError,
+    SupplierOfferPackagingReviewService,
+    SupplierOfferPackagingReviewStateError,
 )
 from app.services.supplier_offer_review_package_service import (
     SupplierOfferReviewPackageNotFoundError,
@@ -132,12 +142,69 @@ _LINK_SELECTION_ACTIONS = (
 )
 
 OPERATOR_WORKFLOW_C2A_ACTION_CODES = frozenset({"review_package_refresh", "get_showcase_preview"})
+OPERATOR_WORKFLOW_C2B1_PACKAGING_APPROVE_CODE = "approve_packaging_for_publish"
 _SHOWCASE_PREVIEW_BODY_MAX = 3200
 
 
 def _strip_simple_html(html: str | None) -> str:
     s = re.sub(r"<[^>]+>", " ", html or "")
     return " ".join(s.split())
+
+
+def _operator_workflow_c2b1_packaging_propose_callback(
+    offer_id: int,
+    ow: AdminSupplierOfferOperatorWorkflowRead,
+) -> str | None:
+    """Single propose callback when packaging approve action is enabled (Slice C2B1)."""
+    for act in ow.actions:
+        if act.code == OPERATOR_WORKFLOW_C2B1_PACKAGING_APPROVE_CODE and act.enabled:
+            return f"{ADMIN_OPS_OW_PKG_APPROVE_PROPOSE_PREFIX}{offer_id}"
+    return None
+
+
+def _accept_warnings_for_packaging_approve(ps: SupplierOfferPackagingStatus | str) -> bool:
+    if isinstance(ps, str):
+        try:
+            ps = SupplierOfferPackagingStatus(ps)
+        except ValueError:
+            return False
+    return ps is SupplierOfferPackagingStatus.NEEDS_ADMIN_REVIEW
+
+
+def _packaging_status_translation_key(ps: SupplierOfferPackagingStatus | str) -> str:
+    v = ps.value if isinstance(ps, SupplierOfferPackagingStatus) else str(ps)
+    return f"supplier_offer_packaging_status_{v}"
+
+
+def _packaging_approve_confirm_prompt_text(
+    language_code: str | None,
+    pkg: AdminSupplierOfferReviewPackageRead,
+) -> str:
+    oid = str(pkg.offer.id)
+    ps = pkg.offer.packaging_status
+    ps_label = translate(language_code, _packaging_status_translation_key(ps))
+    lines = [
+        translate(language_code, "admin_offer_ow_pkg_confirm_title", offer_id=oid),
+        translate(language_code, "admin_offer_ow_pkg_confirm_packaging_status", status=ps_label),
+    ]
+    if ps == SupplierOfferPackagingStatus.NEEDS_ADMIN_REVIEW:
+        lines.append(translate(language_code, "admin_offer_ow_pkg_confirm_warning_note"))
+    lines.append(translate(language_code, "admin_offer_ow_pkg_confirm_question"))
+    return "\n".join(lines)
+
+
+def _packaging_approve_confirmation_keyboard(language_code: str | None, *, offer_id: int) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    kb.button(
+        text=translate(language_code, "admin_offer_ow_pkg_confirm_ok"),
+        callback_data=f"{ADMIN_OPS_OW_PKG_APPROVE_CONFIRM_PREFIX}{offer_id}",
+    )
+    kb.button(
+        text=translate(language_code, "admin_offer_ow_pkg_confirm_cancel"),
+        callback_data=f"{ADMIN_OPS_OW_PKG_APPROVE_CANCEL_PREFIX}{offer_id}",
+    )
+    kb.adjust(2)
+    return kb
 
 
 def _operator_workflow_c2a_callback_specs(
@@ -242,8 +309,12 @@ def _detail_keyboard(language_code: str | None, offer: AdminSupplierOfferRead, s
         )
     try:
         pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer.id)
-        for cb_data, label_key in _operator_workflow_c2a_callback_specs(offer.id, pkg.operator_workflow):
+        ow = pkg.operator_workflow
+        for cb_data, label_key in _operator_workflow_c2a_callback_specs(offer.id, ow):
             kb.button(text=translate(language_code, label_key), callback_data=cb_data)
+        propose_cb = _operator_workflow_c2b1_packaging_propose_callback(offer.id, ow)
+        if propose_cb:
+            kb.button(text=translate(language_code, "admin_offer_ow_pkg_btn_propose"), callback_data=propose_cb)
     except SupplierOfferReviewPackageNotFoundError:
         pass
     except Exception as exc:
@@ -1706,6 +1777,111 @@ async def admin_ops_operator_workflow_c2a(query: CallbackQuery, state: FSMContex
         await query.message.answer(body)
         await query.answer()
     except (SupplierOfferReviewPackageNotFoundError, SupplierOfferModerationNotFoundError):
+        await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+
+
+@router.callback_query(
+    F.data.startswith(ADMIN_OPS_OW_PKG_APPROVE_PROPOSE_PREFIX)
+    | F.data.startswith(ADMIN_OPS_OW_PKG_APPROVE_CONFIRM_PREFIX)
+    | F.data.startswith(ADMIN_OPS_OW_PKG_APPROVE_CANCEL_PREFIX)
+)
+async def admin_ops_operator_workflow_c2b1_packaging(query: CallbackQuery, state: FSMContext) -> None:
+    """Slice C2B1: approve_packaging_for_publish with mandatory confirmation."""
+    if query.from_user is None or query.data is None or query.message is None:
+        return
+    with SessionLocal() as session:
+        lg = _user_service().resolve_language(
+            session,
+            telegram_user_id=query.from_user.id,
+            telegram_language_code=query.from_user.language_code,
+        )
+    if await _deny_if_not_allowed(query, language_code=lg):
+        await state.clear()
+        return
+
+    data = query.data
+
+    if data.startswith(ADMIN_OPS_OW_PKG_APPROVE_CANCEL_PREFIX):
+        raw_id = data.removeprefix(ADMIN_OPS_OW_PKG_APPROVE_CANCEL_PREFIX)
+        offer_id = int(raw_id) if raw_id.isdigit() else 0
+        if offer_id <= 0:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        try:
+            await query.message.edit_text(translate(lg, "admin_offer_ow_pkg_confirm_cancelled"))
+        except TelegramBadRequest:
+            await query.message.answer(translate(lg, "admin_offer_ow_pkg_confirm_cancelled"))
+        await query.answer()
+        return
+
+    if data.startswith(ADMIN_OPS_OW_PKG_APPROVE_PROPOSE_PREFIX):
+        raw_id = data.removeprefix(ADMIN_OPS_OW_PKG_APPROVE_PROPOSE_PREFIX)
+        offer_id = int(raw_id) if raw_id.isdigit() else 0
+        if offer_id <= 0:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        try:
+            with SessionLocal() as session:
+                pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+                approve_ok = any(
+                    a.code == OPERATOR_WORKFLOW_C2B1_PACKAGING_APPROVE_CODE and a.enabled
+                    for a in pkg.operator_workflow.actions
+                )
+                if not approve_ok:
+                    await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                    return
+                prompt = _telegram_plain_trim(_packaging_approve_confirm_prompt_text(lg, pkg))
+                markup = _packaging_approve_confirmation_keyboard(lg, offer_id=offer_id).as_markup()
+            await query.message.answer(prompt, reply_markup=markup)
+            await query.answer()
+        except SupplierOfferReviewPackageNotFoundError:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+        return
+
+    raw_id = data.removeprefix(ADMIN_OPS_OW_PKG_APPROVE_CONFIRM_PREFIX)
+    offer_id = int(raw_id) if raw_id.isdigit() else 0
+    if offer_id <= 0:
+        await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+        return
+
+    try:
+        with SessionLocal() as session:
+            pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+            approve_ok = any(
+                a.code == OPERATOR_WORKFLOW_C2B1_PACKAGING_APPROVE_CODE and a.enabled
+                for a in pkg.operator_workflow.actions
+            )
+            if not approve_ok:
+                await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                return
+            accept_warnings = _accept_warnings_for_packaging_approve(pkg.offer.packaging_status)
+            reviewed_by = f"telegram:{query.from_user.id}"
+            svc = SupplierOfferPackagingReviewService()
+            try:
+                updated = svc.approve(
+                    session,
+                    offer_id=offer_id,
+                    accept_warnings=accept_warnings,
+                    reviewed_by=reviewed_by,
+                )
+                session.commit()
+            except SupplierOfferPackagingReviewNotFoundError:
+                session.rollback()
+                await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+                return
+            except SupplierOfferPackagingReviewStateError as exc:
+                session.rollback()
+                await query.message.answer(
+                    translate(lg, "admin_offer_ow_pkg_failed", detail=exc.message),
+                )
+                await query.answer()
+                return
+
+            await query.message.answer(translate(lg, "admin_offer_ow_pkg_done", offer_id=str(offer_id)))
+            body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=updated))
+            await query.message.answer(body, reply_markup=_detail_keyboard(lg, updated, session).as_markup())
+            await query.answer()
+    except SupplierOfferReviewPackageNotFoundError:
         await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
 
 

@@ -112,6 +112,10 @@ ADMIN_OPS_REQUEST_OP_INTENT_SUPPLIER_PREFIX = "ao:ods:"
 # Slice C2A: operator_workflow read-only Telegram callbacks (suffix = offer id)
 ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX = "ao:ow:r:"
 ADMIN_OPS_OW_SHOWCASE_PREVIEW_PREFIX = "ao:ow:s:"
+# Slice C2B1: packaging approve propose / confirm / cancel (suffix = offer id)
+ADMIN_OPS_OW_PKG_APPROVE_PROPOSE_PREFIX = "ao:ow:pa:"
+ADMIN_OPS_OW_PKG_APPROVE_CONFIRM_PREFIX = "ao:ow:pc:"
+ADMIN_OPS_OW_PKG_APPROVE_CANCEL_PREFIX = "ao:ow:px:"
 
 ADMIN_SUPPLIERS_ACTION_CALLBACK_PREFIX = "admin:suppliers:action:"
 ADMIN_SUPPLIERS_NAV_CALLBACK_PREFIX = "admin:suppliers:nav:"
