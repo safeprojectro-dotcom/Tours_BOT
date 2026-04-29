@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import UTC, date, datetime, time, timedelta
 
@@ -49,6 +50,7 @@ from app.bot.constants import (
     ADMIN_OPS_REQUESTS_PAGE_PREFIX,
 )
 from app.bot.messages import translate
+from app.bot.supplier_offer_operator_workflow_telegram import format_operator_workflow_for_telegram
 from app.bot.services import TelegramUserContextService
 from app.bot.state import AdminModerationState
 from app.core.config import get_settings
@@ -84,8 +86,13 @@ from app.services.supplier_offer_moderation_service import (
     SupplierOfferModerationStateError,
     SupplierOfferPublicationConfigError,
 )
+from app.services.supplier_offer_review_package_service import (
+    SupplierOfferReviewPackageNotFoundError,
+    SupplierOfferReviewPackageService,
+)
 from app.services.supplier_offer_supplier_notification_service import SupplierOfferSupplierNotificationService
 
+logger = logging.getLogger(__name__)
 router = Router(name="admin-moderation")
 router.message.filter(F.chat.type == "private")
 router.callback_query.filter(F.message.chat.type == "private")
@@ -497,6 +504,22 @@ def _queue_text(language_code: str | None, *, offers: list[AdminSupplierOfferRea
     return "\n".join(lines)
 
 
+def _operator_workflow_telegram_append(session, language_code: str | None, *, offer_id: int) -> str | None:
+    """Read-only projection from ``GET …/review-package`` — never performs admin mutations."""
+    try:
+        pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+    except SupplierOfferReviewPackageNotFoundError:
+        return None
+    except Exception as exc:
+        logger.warning("operator_workflow telegram block skipped for offer_id=%s: %s", offer_id, exc)
+        return None
+    return format_operator_workflow_for_telegram(
+        pkg.operator_workflow,
+        language_code=language_code,
+        translate_fn=translate,
+    )
+
+
 def _offer_detail_text(session, language_code: str | None, *, offer: AdminSupplierOfferRead) -> str:
     supplier = session.get(Supplier, offer.supplier_id)
     supplier_label = supplier.display_name if supplier is not None else f"#{offer.supplier_id}"
@@ -533,7 +556,11 @@ def _offer_detail_text(session, language_code: str | None, *, offer: AdminSuppli
                 reason=offer.moderation_rejection_reason,
             )
         )
-    return "\n".join(lines)
+    base = "\n".join(lines)
+    ow = _operator_workflow_telegram_append(session, language_code, offer_id=offer.id)
+    if ow:
+        return base + "\n\n" + ow
+    return base
 
 
 def _link_history_text(session, language_code: str | None, *, offer_id: int) -> tuple[str, bool]:

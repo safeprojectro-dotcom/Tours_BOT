@@ -25,6 +25,8 @@ Tours_BOT
 
 **Admin operator workflow — Slice B (implemented):** **`GET …/review-package`** includes read-only **`operator_workflow`** (**`state`**, **`primary_next_action`**, **`actions[]`** with **`danger_level`** ∈ **`safe_read`**, **`safe_mutation`**, **`conversion_enabling`**, **`public_dangerous`** — showcase publish is **`public_dangerous`** even when disabled — **`requires_confirmation`**, endpoint hints, **`blocking_reasons`**, **`warnings`**). **Does not** execute POSTs or mutate booking/showcase/bridge from the read path; **no** Telegram buttons **/** web admin UI **/** batch endpoints. Playbook doc: **[`docs/ADMIN_OPERATOR_WORKFLOW.md`](ADMIN_OPERATOR_WORKFLOW.md)**.
 
+**Admin operator workflow — Slice C1 (implemented):** Telegram **private admin offer detail** (moderation workspace) appends **read-only** **`operator_workflow`** text from **`SupplierOfferReviewPackageService.review_package()`** — display only; formatter performs **no** POSTs **;** **no** publish **/** bridge **/** activate-for-catalog **/** execution-link buttons. **Possible Slice C2:** inline buttons driven by **`operator_workflow.actions`**, lowest-risk first **+** explicit confirmation **— not started automatically.**
+
 ---
 
 

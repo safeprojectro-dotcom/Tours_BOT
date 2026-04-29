@@ -54,6 +54,8 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 **Slice B (API):** ответ **`GET …/review-package`** содержит read-only **`operator_workflow`**: текущее **`state`**, **`primary_next_action`**, список **`actions`** с **`danger_level`** (**`safe_read`** / **`safe_mutation`** / **`conversion_enabling`** / **`public_dangerous`** — публикация showcase всегда **`public_dangerous`** при выключенном действии тоже), **`requires_confirmation`**, подсказки **`endpoint`**. Ничего не выполняется этим **GET**; кнопки Telegram / веб-админки / batch не добавляются.
 
+**Slice C1 (Telegram admin-карточка):** текст карточки оффера в приватном admin-потоке (**`/admin_ops`** и др.) дополняется **только отображением** того же **`operator_workflow`**, собранного через **`SupplierOfferReviewPackageService.review_package()`** (**state**, следующий шаг, danger/confirm/endpoint, до трёх блокеров и трёх предупреждений, заметка **`public_dangerous`**, footer read-only). Из форматтера **никакой POST не выполняется**; кнопок publish **/** bridge **/** activate catalog **/** execution link **нет**. Возможный **slice C2** — inline-кнопки по **`operator_workflow.actions`** с безопасных шагов и явным подтверждением — только по отдельному решению.
+
 ---
 
 ## Связанные документы
@@ -71,5 +73,5 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 | Поле | Значение |
 |------|----------|
-| **Тип** | Playbook Slice A (документация) + Slice B read-model в **`GET …/review-package`** |
+| **Тип** | Playbook Slice A + Slice B (**`operator_workflow`** в **`GET …/review-package`**) + Slice C1 (только текст в Telegram admin-карточке) |
 | **Язык** | Русский |
