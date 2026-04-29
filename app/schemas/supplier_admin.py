@@ -249,6 +249,41 @@ class AdminSupplierOfferContentQualityReviewRead(BaseModel):
     has_quality_warnings: bool = False
 
 
+OperatorWorkflowDangerLevel = Literal[
+    "safe_read",
+    "safe_mutation",
+    "conversion_enabling",
+    "public_dangerous",
+]
+
+
+class AdminSupplierOfferOperatorWorkflowActionRead(BaseModel):
+    """Single suggested admin HTTP action for operator workflow (hints only — gates remain authoritative)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    label: str
+    enabled: bool
+    danger_level: OperatorWorkflowDangerLevel
+    requires_confirmation: bool
+    method: Literal["GET", "POST"]
+    endpoint: str
+    disabled_reason: str | None = None
+
+
+class AdminSupplierOfferOperatorWorkflowRead(BaseModel):
+    """Read-only operator playbook projection for ``GET …/review-package`` (no mutations)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    state: str
+    primary_next_action: str | None = None
+    actions: list[AdminSupplierOfferOperatorWorkflowActionRead]
+    blocking_reasons: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class AdminSupplierOfferReviewPackageRead(BaseModel):
     """Read-only aggregated admin review surface (no mutations)."""
 
@@ -264,6 +299,7 @@ class AdminSupplierOfferReviewPackageRead(BaseModel):
     conversion_closure: AdminSupplierOfferConversionClosureRead
     ai_public_copy_review: AdminSupplierOfferAiPublicCopyReviewRead
     content_quality_review: AdminSupplierOfferContentQualityReviewRead
+    operator_workflow: AdminSupplierOfferOperatorWorkflowRead
     warnings: list[str]
     recommended_next_actions: list[str]
 

@@ -68,10 +68,10 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ## Checkpoint Sync — Admin operator workflow playbook (2026)
 
-**Docs-only.**
+**Slice B implemented (read-model on review-package).**
 
-- **[`ADMIN_OPERATOR_WORKFLOW.md`](ADMIN_OPERATOR_WORKFLOW.md)** created — canonical admin/operator sequence (supplier offer → catalog/showcase/conversion); **always start with** **`GET …/review-package`**; **no** auto-publish, auto-bridge, auto-catalog activation, or auto-execution-link.
-- **Next code slice:** read-only **`operator_workflow`** section on **`GET …/review-package`** (endpoint hints **/** disabled reasons **/** primary next action; **no** mutation from the read path).
+- **`GET …/review-package`** exposes read-only **`operator_workflow`**: **`state`**, **`primary_next_action`**, **`actions[]`** (**`code`**, **`label`**, **`enabled`**, **`danger_level`**, **`requires_confirmation`**, **`method`**, **`endpoint`**, **`disabled_reason`**), **`blocking_reasons`**, **`warnings`**. **`danger_level`** values: **`safe_read`**, **`safe_mutation`**, **`conversion_enabling`**, **`public_dangerous`** (showcase **`POST …/publish`** is always **`public_dangerous`**; **`enabled`** only when **`showcase_preview.can_publish_now`**). **No** action execution from **`GET`**; **no** Telegram buttons **/** web UI **/** batch endpoints.
+- Playbook (human): **[`ADMIN_OPERATOR_WORKFLOW.md`](ADMIN_OPERATOR_WORKFLOW.md)** — **always start with** **`GET …/review-package`**; **no** auto-publish **/** auto-bridge **/** auto-catalog activation **/** auto-execution-link.
 
 ---
 

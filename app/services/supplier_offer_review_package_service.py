@@ -33,6 +33,7 @@ from app.services.mini_app_supplier_offer_landing import (
 from app.services.supplier_offer_ai_public_copy_fact_lock import evaluate_ai_public_copy_fact_lock
 from app.services.supplier_offer_bot_start_routing import resolve_sup_offer_start_mini_app_routing
 from app.services.supplier_offer_content_quality_review import evaluate_content_quality_review
+from app.services.supplier_offer_operator_workflow import build_operator_workflow
 from app.services.supplier_offer_moderation_service import SupplierOfferModerationService
 from app.services.supplier_offer_tour_bridge_service import (
     SupplierOfferBridgeMaterializationReadiness,
@@ -377,26 +378,42 @@ class SupplierOfferReviewPackageService:
             session=session,
         )
 
+        bridge_readiness_read = AdminSupplierOfferBridgeReadinessRead(
+            can_attempt_bridge=bridge_rd.can_attempt_bridge,
+            missing_fields=bridge_rd.missing_fields,
+            blocking_codes=bridge_rd.blocking_codes,
+        )
+        execution_links_read = AdminSupplierOfferExecutionLinksReviewRead(
+            total_links_returned=len(all_links),
+            active_link=active_link_read,
+            can_create_execution_link=can_create,
+            execution_link_precheck_note=exec_note,
+        )
+        operator_workflow = build_operator_workflow(
+            tour_id=active_bridge_result.tour_id if active_bridge_result else None,
+            packaging_status=offer_read.packaging_status,
+            lifecycle_status=offer_read.lifecycle_status,
+            closure=closure,
+            bridge_readiness=bridge_readiness_read,
+            linked_tour_catalog=linked_catalog,
+            execution_links_review=execution_links_read,
+            showcase_preview=showcase,
+            ai_public_copy_review=ai_public_copy_review,
+            content_quality_review=content_quality_review,
+        )
+
         return AdminSupplierOfferReviewPackageRead(
             offer=offer_read,
             showcase_preview=showcase,
-            bridge_readiness=AdminSupplierOfferBridgeReadinessRead(
-                can_attempt_bridge=bridge_rd.can_attempt_bridge,
-                missing_fields=bridge_rd.missing_fields,
-                blocking_codes=bridge_rd.blocking_codes,
-            ),
+            bridge_readiness=bridge_readiness_read,
             active_tour_bridge=_bridge_result_to_read(active_bridge_result) if active_bridge_result else None,
             linked_tour_catalog=linked_catalog,
-            execution_links_review=AdminSupplierOfferExecutionLinksReviewRead(
-                total_links_returned=len(all_links),
-                active_link=active_link_read,
-                can_create_execution_link=can_create,
-                execution_link_precheck_note=exec_note,
-            ),
+            execution_links_review=execution_links_read,
             mini_app_conversion_preview=mini_app,
             conversion_closure=closure,
             ai_public_copy_review=ai_public_copy_review,
             content_quality_review=content_quality_review,
+            operator_workflow=operator_workflow,
             warnings=warnings,
             recommended_next_actions=actions,
         )

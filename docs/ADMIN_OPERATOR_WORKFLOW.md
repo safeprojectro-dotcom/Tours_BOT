@@ -52,6 +52,8 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 **Частый смок без канала:** шаги **9–10** можно помечать как «не выполнялись», если публикация в реальный канал по тексту/политике небезопасна — каталог при этом уже может быть «зелёным» по шагам **5–7**.
 
+**Slice B (API):** ответ **`GET …/review-package`** содержит read-only **`operator_workflow`**: текущее **`state`**, **`primary_next_action`**, список **`actions`** с **`danger_level`** (**`safe_read`** / **`safe_mutation`** / **`conversion_enabling`** / **`public_dangerous`** — публикация showcase всегда **`public_dangerous`** при выключенном действии тоже), **`requires_confirmation`**, подсказки **`endpoint`**. Ничего не выполняется этим **GET**; кнопки Telegram / веб-админки / batch не добавляются.
+
 ---
 
 ## Связанные документы
@@ -69,5 +71,5 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 | Поле | Значение |
 |------|----------|
-| **Тип** | Playbook Slice A (только документация) |
+| **Тип** | Playbook Slice A (документация) + Slice B read-model в **`GET …/review-package`** |
 | **Язык** | Русский |

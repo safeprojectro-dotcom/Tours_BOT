@@ -129,6 +129,22 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
         self.assertFalse(cc["has_tour_bridge"])
         self.assertFalse(cc["has_active_execution_link"])
         self.assertEqual(cc["next_missing_step"], "approve_packaging")
+        ow = body["operator_workflow"]
+        self.assertEqual(ow["state"], "awaiting_packaging_approval")
+        self.assertEqual(ow["primary_next_action"], "generate_packaging_draft")
+        self.assertIn("Tour bridge blocked:", " ".join(ow["blocking_reasons"]))
+        codes = [a["code"] for a in ow["actions"]]
+        self.assertIn("activate_tour_for_catalog", codes)
+        act = next(a for a in ow["actions"] if a["code"] == "activate_tour_for_catalog")
+        self.assertFalse(act["enabled"])
+        self.assertIsNotNone(act["disabled_reason"])
+        self.assertEqual(act["danger_level"], "conversion_enabling")
+        pub = next(a for a in ow["actions"] if a["code"] == "publish_showcase_channel")
+        self.assertEqual(pub["danger_level"], "public_dangerous")
+        self.assertTrue(pub["requires_confirmation"])
+        self.assertFalse(pub["enabled"])
+        gen = next(a for a in ow["actions"] if a["code"] == "generate_packaging_draft")
+        self.assertEqual(gen["danger_level"], "safe_mutation")
 
     def test_review_package_execution_link_precheck_when_published_without_link(self) -> None:
         _, token = self._bootstrap_supplier_token()
@@ -179,3 +195,5 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
         self.assertFalse(cc["has_active_execution_link"])
         self.assertFalse(cc["supplier_offer_landing_routes_to_tour"])
         self.assertEqual(cc["next_missing_step"], "create_tour_bridge")
+        ow = body["operator_workflow"]
+        self.assertEqual(ow["primary_next_action"], "create_tour_bridge")
