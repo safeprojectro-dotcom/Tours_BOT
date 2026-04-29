@@ -60,7 +60,7 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 **Slice C2A (Telegram — только безопасные кнопки):** inline-кнопки могут появиться только для кодов **`review_package_refresh`** и **`get_showcase_preview`** (из **`operator_workflow.actions`**, если **`enabled`**). Колбэки **не выполняют POST**: карточка перезагружается свежим **`review-package`**; превью showcase через **`SupplierOfferModerationService.showcase_preview`** (**ничего не отправляет в канал**). Публикация (**publish**), bridge, активация каталога, execution link и другие мутации — **не в C2A**; отдельный продуктовый слайс с подтверждением.
 
-**Slice C2B / C2B1 / C2B2 (Telegram — мутации packaging):** **реализованы C2B1 и C2B2.** **C2B1:** inline-кнопка **`approve_packaging_for_publish`** из **`operator_workflow.actions`**, только если **`enabled`**; первый тап — **только** диалог подтверждения; подтверждение снова читает **`GET …/review-package`** и исполняет **только** **`SupplierOfferPackagingReviewService.approve`** (при **`needs_admin_review`** — **`accept_warnings=true`**, как в Admin API); **`reviewed_by`** вида **`telegram:{admin_id}`**; отмена **без** мутации; после успеха — обновлённая карточка оффера. **C2B2:** **`generate_packaging_draft`** — кнопка только при **`enabled`**; первый тап — только подтверждение; подтверждение снова читает **`review-package`** и выполняет **только** **`SupplierOfferPackagingService.generate_and_persist`** (как **`POST …/packaging/generate`**), если действие всё ещё **`enabled`**; **не** автоматическое одобрение packaging; отмена без мутации; карточка обновляется после успеха/ошибки. Кнопку **`approve_offer_moderation`** через workflow **нет** — legacy **Aprobă / Respinge** без изменений; **нет** кнопок publish / bridge / активация каталога / execution link. **Дальше (продукт):** ручная проверка на новой оферте; консолидация legacy модерации; **`create_tour_bridge`** — позже в слайсе конверсионных действий; конверсия/public-действия — отдельные слайсы.
+**Политика UX кнопок Telegram (принята, docs-only):** карточка админа **не** консоль разработчика; подписи **1–2 слова**, по действию/результату; **не** snake_case, endpoints, enum, HTTP в тексте кнопок. Отключённые действия **`operator_workflow`** — **скрывать**, не показывать как disabled. Безопасное чтение — без подтверждения; безопасная мутация — подтверждение и повторное **`GET …/review-package`** перед выполнением. Ориентир подписей RO/EN (следующий код-слайс — **только** переименование/порядок, **без** новых действий): **`review_package_refresh`** → **Actualizează / Refresh**; **`get_showcase_preview`** → **Preview**; **`generate_packaging_draft`** → **Generează text** или **Pregătește**; **`approve_packaging_for_publish`** → **Aprobă text / Aprobă pachet** (не голое «Aprobă»); legacy модерация → **Aprobă oferta**, **Respinge oferta**. Порядок кнопок: наблюдение/чтение → packaging → legacy модерация → Orders/Requests → навигация. Конверсия/public в Telegram (**bridge**, активация каталога, execution link, publish showcase) — **отложены**.
 
 ---
 
@@ -72,6 +72,7 @@ GET /admin/supplier-offers/{offer_id}/review-package
 | [`ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md) | Превью и публикация showcase |
 | [`ADMIN_CONTENT_QUALITY_GATE.md`](ADMIN_CONTENT_QUALITY_GATE.md) | Советы по качеству текста (**не блокирует API**) |
 | [`AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md`](AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md) | Fact-lock для **`ai_public_copy_v1`** |
+| *(UX)* | Политика подписей/порядка Telegram — см. абзац **«Политика UX кнопок Telegram»** выше |
 
 ---
 
@@ -79,5 +80,5 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 | Поле | Значение |
 |------|----------|
-| **Тип** | Playbook Slice A + Slice B (**`operator_workflow`**) + Slice C1 / C1.1 / **C2A** / **C2B1** / **C2B2** (Telegram) |
+| **Тип** | Playbook Slice A + Slice B (**`operator_workflow`**) + Slice C1 / C1.1 / **C2A** / **C2B1** / **C2B2** (Telegram) + UX policy (подписи/порядок — см. §3) |
 | **Язык** | Русский |
