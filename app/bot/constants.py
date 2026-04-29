@@ -109,6 +109,9 @@ ADMIN_OPS_REQUEST_MARK_UNDER_REVIEW_PREFIX = "ao:mr:"
 # Y37.4/5: distinct from ao:od: (order detail) on purpose — avoid callback collision
 ADMIN_OPS_REQUEST_OP_INTENT_MANUAL_PREFIX = "ao:odm:"
 ADMIN_OPS_REQUEST_OP_INTENT_SUPPLIER_PREFIX = "ao:ods:"
+# Slice C2A: operator_workflow read-only Telegram callbacks (suffix = offer id)
+ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX = "ao:ow:r:"
+ADMIN_OPS_OW_SHOWCASE_PREVIEW_PREFIX = "ao:ow:s:"
 
 ADMIN_SUPPLIERS_ACTION_CALLBACK_PREFIX = "admin:suppliers:action:"
 ADMIN_SUPPLIERS_NAV_CALLBACK_PREFIX = "admin:suppliers:nav:"

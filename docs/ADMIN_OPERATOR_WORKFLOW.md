@@ -56,7 +56,9 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 **Slice C1 (Telegram admin-карточка):** текст карточки оффера в приватном admin-потоке (**`/admin_ops`** и др.) дополняется **только отображением** того же **`operator_workflow`**, собранного через **`SupplierOfferReviewPackageService.review_package()`**. Полная сводка по-прежнему только в **`GET …/review-package`**.
 
-**Slice C1.1:** в Telegram блок **компактный** (без длинных **`endpoint`** и сырых **`danger_level`** в тексте): **`state`**, код следующего шага, короткие подписи риска/подтверждения, до трёх блокеров и трёх предупреждений (предпочтительно коды), короткий footer read-only. Из форматтера **никакой POST не выполняется**; кнопок publish **/** bridge **/** activate catalog **/** execution link **нет**. Возможный **slice C2** — inline-кнопки по **`operator_workflow.actions`** с безопасных шагов и явным подтверждением — только по отдельному решению.
+**Slice C1.1:** в Telegram блок **компактный** (без длинных **`endpoint`** и сырых **`danger_level`** в тексте): **`state`**, код следующего шага, короткие подписи риска/подтверждения, до трёх блокеров и трёх предупреждений (предпочтительно коды), короткий footer read-only.
+
+**Slice C2A (Telegram — только безопасные кнопки):** inline-кнопки могут появиться только для кодов **`review_package_refresh`** и **`get_showcase_preview`** (из **`operator_workflow.actions`**, если **`enabled`**). Колбэки **не выполняют POST**: карточка перезагружается свежим **`review-package`**; превью showcase через **`SupplierOfferModerationService.showcase_preview`** (**ничего не отправляет в канал**). Публикация (**publish**), bridge, активация каталога, execution link и другие мутации — **не в C2A**; отдельный продуктовый слайс с подтверждением.
 
 ---
 
@@ -75,5 +77,5 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 | Поле | Значение |
 |------|----------|
-| **Тип** | Playbook Slice A + Slice B (**`operator_workflow`** в **`GET …/review-package`**) + Slice C1 / C1.1 (только текст в Telegram admin-карточке) |
+| **Тип** | Playbook Slice A + Slice B (**`operator_workflow`**) + Slice C1 / C1.1 / **C2A** (Telegram) |
 | **Язык** | Русский |

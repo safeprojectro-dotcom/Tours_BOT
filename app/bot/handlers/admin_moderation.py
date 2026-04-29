@@ -12,6 +12,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy import or_
+from sqlalchemy.orm import Session
+
+from aiogram.exceptions import TelegramBadRequest
 
 from app.bot.constants import (
     ADMIN_OFFERS_ACTION_APPROVE,
@@ -41,6 +44,8 @@ from app.bot.constants import (
     ADMIN_OFFERS_NAV_NEXT,
     ADMIN_OFFERS_NAV_PREV,
     ADMIN_OPS_ORDER_DETAIL_PREFIX,
+    ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX,
+    ADMIN_OPS_OW_SHOWCASE_PREVIEW_PREFIX,
     ADMIN_OPS_ORDERS_PAGE_PREFIX,
     ADMIN_OPS_REQUEST_ASSIGN_ME_PREFIX,
     ADMIN_OPS_REQUEST_DETAIL_PREFIX,
@@ -64,7 +69,11 @@ from app.models.enums import (
 from app.repositories.user import UserRepository
 from app.models.supplier import Supplier
 from app.models.tour import Tour
-from app.schemas.supplier_admin import AdminSupplierOfferRead
+from app.schemas.supplier_admin import (
+    AdminSupplierOfferOperatorWorkflowRead,
+    AdminSupplierOfferRead,
+    AdminSupplierOfferShowcasePreviewRead,
+)
 from app.services.admin_read import AdminReadService
 from app.services.custom_marketplace_request_service import (
     CustomMarketplaceRequestAssignConflictError,
@@ -122,6 +131,76 @@ _LINK_SELECTION_ACTIONS = (
     ADMIN_OFFERS_ACTION_SELECT_LINK_TOUR,
 )
 
+OPERATOR_WORKFLOW_C2A_ACTION_CODES = frozenset({"review_package_refresh", "get_showcase_preview"})
+_SHOWCASE_PREVIEW_BODY_MAX = 3200
+
+
+def _strip_simple_html(html: str | None) -> str:
+    s = re.sub(r"<[^>]+>", " ", html or "")
+    return " ".join(s.split())
+
+
+def _operator_workflow_c2a_callback_specs(
+    offer_id: int,
+    ow: AdminSupplierOfferOperatorWorkflowRead,
+) -> list[tuple[str, str]]:
+    """Build C2A callback payloads paired with ``messages.py`` keys for button labels."""
+    specs: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for act in ow.actions:
+        if act.code not in OPERATOR_WORKFLOW_C2A_ACTION_CODES or not act.enabled:
+            continue
+        if act.code in seen:
+            continue
+        seen.add(act.code)
+        if act.code == "review_package_refresh":
+            specs.append((f"{ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX}{offer_id}", "admin_offer_ow_btn_review_refresh"))
+        elif act.code == "get_showcase_preview":
+            specs.append((f"{ADMIN_OPS_OW_SHOWCASE_PREVIEW_PREFIX}{offer_id}", "admin_offer_ow_btn_showcase_preview"))
+    return specs
+
+
+def _showcase_preview_telegram_text(language_code: str | None, preview: AdminSupplierOfferShowcasePreviewRead) -> str:
+    caption_plain = _strip_simple_html(preview.caption_html)
+    if len(caption_plain) > _SHOWCASE_PREVIEW_BODY_MAX:
+        caption_plain = caption_plain[: _SHOWCASE_PREVIEW_BODY_MAX - 1].rstrip() + "…"
+    photo_note = translate(
+        language_code,
+        "admin_offer_showcase_preview_photo_yes" if (preview.showcase_photo_url or "").strip() else "admin_offer_showcase_preview_photo_no",
+    )
+    warn_lines = ""
+    if preview.warnings:
+        warn_lines = "\n".join(f"• {w}" for w in preview.warnings[:12])
+    lines = [
+        translate(language_code, "admin_offer_showcase_preview_title", offer_id=str(preview.supplier_offer_id)),
+        translate(language_code, "admin_offer_showcase_preview_notice"),
+        translate(language_code, "admin_offer_showcase_preview_lifecycle", lifecycle=preview.lifecycle_status),
+        translate(language_code, "admin_offer_showcase_preview_mode", mode=preview.publication_mode),
+        photo_note,
+        translate(
+            language_code,
+            "admin_offer_showcase_preview_can_publish",
+            value=translate(
+                language_code,
+                "admin_offer_showcase_preview_yes"
+                if preview.can_publish_now
+                else "admin_offer_showcase_preview_no",
+            ),
+        ),
+    ]
+    if warn_lines:
+        lines.append(translate(language_code, "admin_offer_showcase_preview_warnings_intro"))
+        lines.append(warn_lines)
+    lines.append(translate(language_code, "admin_offer_showcase_preview_caption_intro"))
+    lines.append(caption_plain if caption_plain else translate(language_code, "admin_offer_showcase_preview_caption_empty"))
+    return "\n".join(lines)
+
+
+def _telegram_plain_trim(text: str, *, max_chars: int = 4090) -> str:
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 1].rstrip() + "…"
+
 
 def _user_service() -> TelegramUserContextService:
     settings = get_settings()
@@ -154,13 +233,22 @@ def _action_button_rows(language_code: str | None, offer: AdminSupplierOfferRead
     return rows
 
 
-def _detail_keyboard(language_code: str | None, offer: AdminSupplierOfferRead) -> InlineKeyboardBuilder:
+def _detail_keyboard(language_code: str | None, offer: AdminSupplierOfferRead, session: Session) -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     for title, action_payload in _action_button_rows(language_code, offer):
         kb.button(
             text=title,
             callback_data=f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{action_payload}",
         )
+    try:
+        pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer.id)
+        for cb_data, label_key in _operator_workflow_c2a_callback_specs(offer.id, pkg.operator_workflow):
+            kb.button(text=translate(language_code, label_key), callback_data=cb_data)
+    except SupplierOfferReviewPackageNotFoundError:
+        pass
+    except Exception as exc:
+        logger.warning("operator_workflow C2A keyboard skipped for offer_id=%s: %s", offer.id, exc)
+
     kb.button(
         text=translate(language_code, "admin_ops_orders_button"),
         callback_data=f"{ADMIN_OPS_ORDERS_PAGE_PREFIX}0",
@@ -173,7 +261,7 @@ def _detail_keyboard(language_code: str | None, offer: AdminSupplierOfferRead) -
     kb.button(text=translate(language_code, "admin_offer_nav_next"), callback_data=ADMIN_OFFERS_NAV_NEXT)
     kb.button(text=translate(language_code, "admin_offer_nav_back"), callback_data=ADMIN_OFFERS_NAV_BACK)
     kb.button(text=translate(language_code, "admin_offer_nav_home"), callback_data=ADMIN_OFFERS_NAV_HOME)
-    kb.adjust(2, 2, 2)
+    kb.adjust(2)
     return kb
 
 
@@ -1115,7 +1203,7 @@ async def _show_current_offer(message: Message, state: FSMContext, *, language_c
             return
         offer = SupplierOfferModerationService()._to_read(offer_row)
         detail_text = _offer_detail_text(session, language_code, offer=offer)
-        await message.answer(detail_text, reply_markup=_detail_keyboard(language_code, offer).as_markup())
+        await message.answer(detail_text, reply_markup=_detail_keyboard(language_code, offer, session).as_markup())
 
 
 async def _open_queue(message: Message, state: FSMContext, *, queue_mode: str) -> None:
@@ -1157,7 +1245,7 @@ async def _open_queue(message: Message, state: FSMContext, *, queue_mode: str) -
         current = offers[0]
         await message.answer(
             _offer_detail_text(session, lg, offer=current),
-            reply_markup=_detail_keyboard(lg, current).as_markup(),
+            reply_markup=_detail_keyboard(lg, current, session).as_markup(),
         )
 
 
@@ -1556,6 +1644,71 @@ async def admin_ops_request_operator_decision_handler(query: CallbackQuery, stat
     await query.answer()
 
 
+@router.callback_query(
+    F.data.startswith(ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX)
+    | F.data.startswith(ADMIN_OPS_OW_SHOWCASE_PREVIEW_PREFIX)
+)
+async def admin_ops_operator_workflow_c2a(query: CallbackQuery, state: FSMContext) -> None:
+    """Slice C2A: read-only callbacks aligned with ``operator_workflow.actions`` (no POST mutations)."""
+    if query.from_user is None or query.data is None or query.message is None:
+        return
+    with SessionLocal() as session:
+        lg = _user_service().resolve_language(
+            session,
+            telegram_user_id=query.from_user.id,
+            telegram_language_code=query.from_user.language_code,
+        )
+    if await _deny_if_not_allowed(query, language_code=lg):
+        await state.clear()
+        return
+
+    data = query.data
+    try:
+        if data.startswith(ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX):
+            raw_id = data.removeprefix(ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX)
+            offer_id = int(raw_id) if raw_id.isdigit() else 0
+            if offer_id <= 0:
+                await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+                return
+            with SessionLocal() as session:
+                pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+                refresh_ok = any(a.code == "review_package_refresh" and a.enabled for a in pkg.operator_workflow.actions)
+                if not refresh_ok:
+                    await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                    return
+                row = SupplierOfferModerationService()._offers.get_any(session, offer_id=offer_id)
+                if row is None:
+                    await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+                    return
+                offer = SupplierOfferModerationService()._to_read(row)
+                body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=offer))
+                markup = _detail_keyboard(lg, offer, session).as_markup()
+            try:
+                await query.message.edit_text(body, reply_markup=markup)
+            except TelegramBadRequest:
+                await query.message.answer(body, reply_markup=markup)
+            await query.answer()
+            return
+
+        raw_id = data.removeprefix(ADMIN_OPS_OW_SHOWCASE_PREVIEW_PREFIX)
+        offer_id = int(raw_id) if raw_id.isdigit() else 0
+        if offer_id <= 0:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        with SessionLocal() as session:
+            pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+            preview_ok = any(a.code == "get_showcase_preview" and a.enabled for a in pkg.operator_workflow.actions)
+            if not preview_ok:
+                await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                return
+            preview = SupplierOfferModerationService().showcase_preview(session, offer_id=offer_id)
+            body = _telegram_plain_trim(_showcase_preview_telegram_text(lg, preview))
+        await query.message.answer(body)
+        await query.answer()
+    except (SupplierOfferReviewPackageNotFoundError, SupplierOfferModerationNotFoundError):
+        await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+
+
 @router.callback_query(F.data.in_({ADMIN_OFFERS_NAV_HOME, ADMIN_OFFERS_NAV_BACK, ADMIN_OFFERS_NAV_NEXT, ADMIN_OFFERS_NAV_PREV}))
 async def admin_queue_navigation(query: CallbackQuery, state: FSMContext) -> None:
     if query.from_user is None or query.data is None or query.message is None:
@@ -1621,7 +1774,7 @@ async def admin_queue_navigation(query: CallbackQuery, state: FSMContext) -> Non
         offer = SupplierOfferModerationService()._to_read(row)
         await query.message.answer(
             _offer_detail_text(session, lg, offer=offer),
-            reply_markup=_detail_keyboard(lg, offer).as_markup(),
+            reply_markup=_detail_keyboard(lg, offer, session).as_markup(),
         )
     await query.answer()
 
@@ -2017,7 +2170,7 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                 offer = moderation._to_read(row)
                 await query.message.answer(
                     _offer_detail_text(session, lg, offer=offer),
-                    reply_markup=_detail_keyboard(lg, offer).as_markup(),
+                    reply_markup=_detail_keyboard(lg, offer, session).as_markup(),
                 )
             elif not queue_ids:
                 await state.clear()
@@ -2218,7 +2371,7 @@ async def admin_offer_reject_reason(message: Message, state: FSMContext) -> None
                 offer = moderation._to_read(row)
                 await message.answer(
                     _offer_detail_text(session, lg, offer=offer),
-                    reply_markup=_detail_keyboard(lg, offer).as_markup(),
+                    reply_markup=_detail_keyboard(lg, offer, session).as_markup(),
                 )
             elif not queue_ids:
                 await state.clear()
