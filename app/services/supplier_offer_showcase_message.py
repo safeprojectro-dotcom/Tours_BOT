@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from app.bot.constants import SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX
 from app.core.config import Settings
 from app.models.enums import SupplierServiceComposition, TourSalesMode
 from app.models.supplier import SupplierOffer
@@ -331,13 +332,28 @@ class ShowcasePublication:
     photo_url: str | None
 
 
+def showcase_photo_send_argument_from_offer(offer: SupplierOffer) -> str | None:
+    """Argument for Telegram ``sendPhoto`` ``photo``: stripped ``file_id`` or ``https`` URL. No bytes fetch."""
+    ref = (getattr(offer, "cover_media_reference", None) or "").strip()
+    if not ref:
+        return None
+    if ref.startswith(SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX):
+        fid = ref.removeprefix(SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX).strip()
+        return fid or None
+    low = ref.lower()
+    if low.startswith(("http://", "https://")):
+        return ref
+    return None
+
+
 def build_showcase_publication(offer: SupplierOffer, settings: Settings) -> ShowcasePublication:
-    """Romanian marketing caption; **B12/B13 slice:** ``photo_url`` is always ``None`` (text-only send)."""
+    """Romanian marketing caption + optional photo (Telegram ``file_id`` or HTTPS URL from cover reference)."""
     facts = _template_fact_lines_html(offer)
     cta = _cta_block_html(offer_id=offer.id, settings=settings)
     footer = _footer_lines_html()
     caption_html = _assemble_showcase_html(facts=facts, cta_row=cta, footer=footer)
-    return ShowcasePublication(caption_html=caption_html, photo_url=None)
+    photo_arg = showcase_photo_send_argument_from_offer(offer)
+    return ShowcasePublication(caption_html=caption_html, photo_url=photo_arg)
 
 
 def format_supplier_offer_showcase_html(offer: SupplierOffer, settings: Settings) -> str:

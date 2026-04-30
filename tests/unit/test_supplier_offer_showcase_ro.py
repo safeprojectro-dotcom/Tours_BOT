@@ -45,6 +45,7 @@ def _offer(**kwargs: object) -> SimpleNamespace:
         "included_text": None,
         "excluded_text": None,
         "program_text": None,
+        "cover_media_reference": None,
     }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
@@ -142,10 +143,27 @@ class SupplierOfferShowcaseRoTests(unittest.TestCase):
         self.assertIn("Plecare din X", cap)
         self.assertIn("Etapă 2", cap)
 
-    def test_photo_url_always_none_text_first_b12(self) -> None:
-        """B12/B13: channel send is text-only; showcase_photo_url ignored for publication payload."""
+    def test_photo_url_from_cover_telegram_prefix(self) -> None:
         pub = build_showcase_publication(
-            _offer(showcase_photo_url=" https://cdn.example.com/a.jpg "),
+            _offer(cover_media_reference="telegram_photo:AgACAgUAAxkBAAIB"),
+            _cfg(),
+        )
+        self.assertEqual(pub.photo_url, "AgACAgUAAxkBAAIB")
+
+    def test_photo_url_from_https_cover(self) -> None:
+        pub = build_showcase_publication(
+            _offer(cover_media_reference="https://cdn.example.com/a.jpg"),
+            _cfg(),
+        )
+        self.assertEqual(pub.photo_url, "https://cdn.example.com/a.jpg")
+
+    def test_photo_url_none_unknown_cover_format(self) -> None:
+        pub = build_showcase_publication(_offer(cover_media_reference="not-a-url"), _cfg())
+        self.assertIsNone(pub.photo_url)
+
+    def test_legacy_showcase_photo_url_field_not_used_for_send_photo(self) -> None:
+        pub = build_showcase_publication(
+            _offer(showcase_photo_url="https://ignored.example/x.jpg", cover_media_reference=None),
             _cfg(),
         )
         self.assertIsNone(pub.photo_url)

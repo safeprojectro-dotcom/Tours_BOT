@@ -86,6 +86,8 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 **Slice C2B3 implemented:** Telegram offer-detail keyboard **`_detail_keyboard`** only **`;`** labels and row order aligned with policy **`;`** **no** new callbacks **`/`** actions **`;`** conversion **`/`** public workflow buttons still postponed **.**
 
+**Slice C2B4 implemented:** Telegram admin **Preview** **`(`** **`get_showcase_preview`** **`)`** sends **`sendPhoto`** to the admin private chat when **`showcase_photo_url`** is set from **`offer.cover_media_reference`** (**`telegram_photo:{file_id}`** or HTTPS)**;** uses the same **`caption_html`** as **`GET …/showcase-preview`** **`/`** **`POST …/publish`** (**`build_showcase_publication`**)**;** local-preview notice **;** caption split when **`>`** cap **;** text fallback if no photo **`/`** send fails **;** **no** channel publish **`/`** lifecycle mutation **.**
+
 ---
 
 ## Checkpoint Sync — B10.x supplier offer → Tour → Mini App (2026)

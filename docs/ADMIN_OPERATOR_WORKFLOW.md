@@ -64,6 +64,8 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 **Slice C2B3 (Telegram):** реализованы только короткие подписи RO/EN и логический порядок кнопок в карточке оффера (**observe/read → packaging → legacy модерация → Orders/Requests → навигация**); новые колбэки и действия **не** добавлялись.
 
+**Slice C2B4:** Telegram **Preview**: при используемом **`cover_media_reference`** (**`telegram_photo:{file_id}`** или **HTTPS**) админ получает **`sendPhoto`** с тем же **`caption_html`**, что выдаёт **`build_showcase_publication`** (**GET …/showcase-preview** / будущий канал); только приватный чат админа; явное уведомление «локальная превью — не в канал»; без **`publish`**, без записи **`showcase_message_id`**. Нет фото / ошибка отправки — текстовый превью как раньше.
+
 ---
 
 ## Связанные документы
@@ -82,5 +84,5 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 | Поле | Значение |
 |------|----------|
-| **Тип** | Playbook Slice A + Slice B (**`operator_workflow`**) + Slice C1 / C1.1 / **C2A** / **C2B1** / **C2B2** / **C2B3** (Telegram) + UX policy (подписи/порядок — см. §3) |
+| **Тип** | Playbook Slice A + Slice B (**`operator_workflow`**) + Slice C1 / C1.1 / **C2A** / **C2B1** / **C2B2** / **C2B3** / **C2B4** (Telegram) + UX policy (подписи/порядок — см. §3) |
 | **Язык** | Русский |

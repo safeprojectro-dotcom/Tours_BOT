@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import html as html_lib
 from datetime import UTC, date, datetime, time, timedelta
 
 from aiogram import F, Router
@@ -309,6 +310,48 @@ def _showcase_preview_telegram_text(language_code: str | None, preview: AdminSup
     lines.append(translate(language_code, "admin_offer_showcase_preview_caption_intro"))
     lines.append(caption_plain if caption_plain else translate(language_code, "admin_offer_showcase_preview_caption_empty"))
     return "\n".join(lines)
+
+
+_SHOWCASE_PREVIEW_CAPTION_MAX = 1024
+
+
+async def _answer_showcase_preview_in_admin_chat(
+    query: CallbackQuery,
+    *,
+    language_code: str | None,
+    preview: AdminSupplierOfferShowcasePreviewRead,
+) -> None:
+    """C2B4: optional photo + same HTML caption as channel sendPhoto; never publishes to channel."""
+    notice = translate(language_code, "admin_offer_showcase_preview_notice")
+    caption_html = preview.caption_html or ""
+    photo = (preview.showcase_photo_url or "").strip()
+
+    if not photo:
+        body = _telegram_plain_trim(_showcase_preview_telegram_text(language_code, preview))
+        await query.message.answer(body)
+        return
+
+    header_html = f"<i>{html_lib.escape(notice)}</i>"
+    combined = f"{header_html}\n\n{caption_html}"
+    try:
+        if len(combined) <= _SHOWCASE_PREVIEW_CAPTION_MAX:
+            await query.message.answer_photo(photo=photo, caption=combined, parse_mode="HTML")
+            return
+        short_hint = translate(language_code, "admin_offer_showcase_preview_caption_split_hint")
+        short_cap = f"{header_html}\n\n<i>{html_lib.escape(short_hint)}</i>"
+        if len(short_cap) > _SHOWCASE_PREVIEW_CAPTION_MAX:
+            short_cap = short_cap[: _SHOWCASE_PREVIEW_CAPTION_MAX - 1].rstrip() + "…"
+        await query.message.answer_photo(photo=photo, caption=short_cap, parse_mode="HTML")
+        await query.message.answer(caption_html, parse_mode="HTML")
+    except TelegramBadRequest as exc:
+        logger.warning(
+            "admin showcase preview photo failed offer_id=%s: %s",
+            preview.supplier_offer_id,
+            exc,
+        )
+        warn = translate(language_code, "admin_offer_showcase_preview_photo_send_failed")
+        fallback = "\n\n".join([warn, _showcase_preview_telegram_text(language_code, preview)])
+        await query.message.answer(_telegram_plain_trim(fallback))
 
 
 def _telegram_plain_trim(text: str, *, max_chars: int = 4090) -> str:
@@ -1830,8 +1873,7 @@ async def admin_ops_operator_workflow_c2a(query: CallbackQuery, state: FSMContex
                 await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
                 return
             preview = SupplierOfferModerationService().showcase_preview(session, offer_id=offer_id)
-            body = _telegram_plain_trim(_showcase_preview_telegram_text(lg, preview))
-        await query.message.answer(body)
+        await _answer_showcase_preview_in_admin_chat(query, language_code=lg, preview=preview)
         await query.answer()
     except (SupplierOfferReviewPackageNotFoundError, SupplierOfferModerationNotFoundError):
         await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)

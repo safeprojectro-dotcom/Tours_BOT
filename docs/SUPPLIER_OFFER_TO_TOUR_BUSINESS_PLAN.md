@@ -32,6 +32,8 @@
 
 **Slice C2B3 implemented:** Labels and **`_detail_keyboard`** row order only **`;`** **no** new callbacks **`/`** actions **`;`** legacy moderation approve **`/`** reject disambiguated **`;`** public **`/`** conversion Telegram shortcuts remain postponed **.**
 
+**Slice C2B4 implemented:** Telegram **Preview** delivers **`sendPhoto`** **`+`** channel-caption parity when cover reference supports it (**private admin chat only**)**;** **`build_showcase_publication`** now surfaces **`photo_url`** from **`cover_media_reference`** for preview **`/`** publish **`;`** **no** channel publish from this path alone **.**
+
 **Supplier Offer → Central Mini App Catalog Conversion Closure — test evidence (2026-04-29):** explicit admin sequence **(bridge → activate-for-catalog → catalog lists Tour without execution link → publish → execution link → closure complete)** covered by **`tests/unit/test_supplier_offer_catalog_conversion_closure.py`** **;** moderation-only approval without **`approved_for_publish`** does not create bridge/Tour **;** catalog visibility remains **`Tour`**-driven **;** landing + bot exact **`/tours/{code}`** routing require active execution link **;** Layer A booking/payment semantics unchanged **.**
 
 **BUSINESS-plan-v2 completion audit (docs checkpoint):** **[`docs/BUSINESS_PLAN_V2_COMPLETION_AUDIT_AFTER_CORE_CONVERSION.md`](BUSINESS_PLAN_V2_COMPLETION_AUDIT_AFTER_CORE_CONVERSION.md)** — **not** **`BUSINESS_PLAN_V3`** **;** **not** replacing this file **;** summarizes done/partial/open **; use before next large block **; recommended next:** production/staging E2E smoke **/** real supplier-offer walkthrough **.**
