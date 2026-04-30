@@ -90,6 +90,8 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 **Slice C2B5 implemented:** **`review-package`** **`/`** **`operator_workflow`** surface read-only **`cover_media_quality_review`** (deterministic warnings only)**;** uses B7.1 **`media_review`** when present**;** **no** publish hard gate**,** **no** media mutations**,** **no** Telegram **`OK foto`** buttons **.**
 
+**Slice C2B6 implemented:** Telegram **«Cere poză»** **`/`** **Request photo** (when **`cover_media_reference`** set) **`→`** **`request_replacement`** after confirm **`+`** **`review-package`** re-read **`;`** fixed audit **`reason`**, **`reviewed_by = telegram:{admin_id}`** **`;`** **no** **`cover_media_reference`** mutation**,** **no** **`publish`** change **.**
+
 ---
 
 ## Checkpoint Sync — B10.x supplier offer → Tour → Mini App (2026)

@@ -120,6 +120,10 @@ ADMIN_OPS_OW_PKG_APPROVE_CANCEL_PREFIX = "ao:ow:px:"
 ADMIN_OPS_OW_PKG_GEN_PROPOSE_PREFIX = "ao:ow:pg:"
 ADMIN_OPS_OW_PKG_GEN_CONFIRM_PREFIX = "ao:ow:qg:"
 ADMIN_OPS_OW_PKG_GEN_CANCEL_PREFIX = "ao:ow:qx:"
+# Slice C2B6: request cover photo replacement (media_review replacement_requested) propose / confirm / cancel
+ADMIN_OPS_OW_MEDIA_REQ_PROPOSE_PREFIX = "ao:ow:mr:"
+ADMIN_OPS_OW_MEDIA_REQ_CONFIRM_PREFIX = "ao:ow:mrc:"
+ADMIN_OPS_OW_MEDIA_REQ_CANCEL_PREFIX = "ao:ow:mrx:"
 
 ADMIN_SUPPLIERS_ACTION_CALLBACK_PREFIX = "admin:suppliers:action:"
 ADMIN_SUPPLIERS_NAV_CALLBACK_PREFIX = "admin:suppliers:nav:"

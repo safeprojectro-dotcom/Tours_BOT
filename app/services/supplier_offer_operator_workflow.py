@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.models.enums import SupplierOfferLifecycle, SupplierOfferPackagingStatus
+from app.models.enums import SupplierOfferLifecycle, SupplierOfferMediaReviewStatus, SupplierOfferPackagingStatus
 from app.schemas.supplier_admin import (
     AdminSupplierOfferAiPublicCopyReviewRead,
     AdminSupplierOfferBridgeReadinessRead,
@@ -62,6 +62,15 @@ _PIPELINE_POST_CODES = (
     "create_execution_link",
 )
 
+_REQUEST_COVER_PHOTO_BLOCKED_MEDIA_STATUSES = frozenset(
+    {
+        SupplierOfferMediaReviewStatus.REPLACEMENT_REQUESTED.value,
+        SupplierOfferMediaReviewStatus.REJECTED_IRRELEVANT.value,
+        SupplierOfferMediaReviewStatus.REJECTED_BAD_QUALITY.value,
+        SupplierOfferMediaReviewStatus.FALLBACK_CARD_REQUIRED.value,
+    },
+)
+
 
 def _norm_packaging(st: SupplierOfferPackagingStatus | str) -> SupplierOfferPackagingStatus:
     if isinstance(st, SupplierOfferPackagingStatus):
@@ -100,6 +109,8 @@ def build_operator_workflow(
     ai_public_copy_review: AdminSupplierOfferAiPublicCopyReviewRead,
     content_quality_review: AdminSupplierOfferContentQualityReviewRead,
     cover_media_quality_review: AdminSupplierOfferCoverMediaQualityReviewRead,
+    offer_has_cover_media_reference: bool = False,
+    media_review_status_for_cover_photo_request: str | None = None,
 ) -> AdminSupplierOfferOperatorWorkflowRead:
     """Derive read-only operator hints from existing review-package slices only.
 
@@ -246,6 +257,31 @@ def build_operator_workflow(
             method="GET",
             endpoint="/admin/supplier-offers/{offer_id}/showcase-preview",
             disabled_reason=None,
+        ),
+    )
+
+    req_photo_dr: list[str] = []
+    if not offer_has_cover_media_reference:
+        req_photo_dr.append("No cover_media_reference on offer — nothing to flag for replacement.")
+    if (
+        media_review_status_for_cover_photo_request
+        and media_review_status_for_cover_photo_request in _REQUEST_COVER_PHOTO_BLOCKED_MEDIA_STATUSES
+    ):
+        req_photo_dr.append(
+            "Cover media review already flags this photo "
+            f"({media_review_status_for_cover_photo_request}) — replacement request not available."
+        )
+    req_photo_ok = not req_photo_dr
+    actions.append(
+        AdminSupplierOfferOperatorWorkflowActionRead(
+            code="request_cover_photo_replacement",
+            label="Request cover photo replacement",
+            enabled=req_photo_ok,
+            danger_level="safe_mutation",
+            requires_confirmation=True,
+            method="POST",
+            endpoint="/admin/supplier-offers/{offer_id}/media/request-replacement",
+            disabled_reason=_disabled_note(req_photo_dr),
         ),
     )
 

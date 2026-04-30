@@ -37,6 +37,8 @@ Tours_BOT
 
 **Slice C2B3 (implemented):** Offer-detail keyboard uses that policy **`;`** logical row order (**workflow read-only → packaging mutations → legacy moderation lifecycle → Orders **`/`** Requests → navigation**) **`;`** RO **`/`** EN short labels only **`;`** **no** new callbacks **`/`** actions **`;`** conversion **`/`** public Telegram shortcuts remain postponed **.**
 
+**Slice C2B6 (implemented):** Telegram offer detail adds **«Cere poză» / Request photo** when **`cover_media_reference`** is set **`;`** confirmation **`+`** re-read **`review-package`** **`;`** executes **`SupplierOfferMediaReviewService.request_replacement`** (fixed audit reason, **`reviewed_by = telegram:{admin_id}`**) **`;`** **does not** change **`cover_media_reference`** or **`publish`**.
+
 ---
 
 

@@ -148,6 +148,97 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
         self.assertFalse(pub["enabled"])
         gen = next(a for a in ow["actions"] if a["code"] == "generate_packaging_draft")
         self.assertEqual(gen["danger_level"], "safe_mutation")
+        req_ph = next(a for a in ow["actions"] if a["code"] == "request_cover_photo_replacement")
+        self.assertFalse(req_ph["enabled"])
+
+    def test_review_package_request_cover_photo_enabled_when_cover_reference_present(self) -> None:
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        u = self.client.put(
+            f"/supplier-admin/offers/{oid}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"cover_media_reference": "https://cdn.example/hero.jpg"},
+        )
+        self.assertEqual(u.status_code, 200, u.text)
+        mock_cfg = SimpleNamespace(
+            telegram_bot_username="testbot",
+            telegram_mini_app_url="https://example.com/mini",
+            telegram_offer_showcase_channel_id="",
+            telegram_bot_token="",
+        )
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        with patch(
+            "app.services.supplier_offer_moderation_service.get_settings",
+            return_value=mock_cfg,
+        ):
+            r = self.client.get(f"/admin/supplier-offers/{oid}/review-package", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        req_ph = next(a for a in r.json()["operator_workflow"]["actions"] if a["code"] == "request_cover_photo_replacement")
+        self.assertTrue(req_ph["enabled"])
+        self.assertIsNone(req_ph["disabled_reason"])
+
+    def test_review_package_request_cover_photo_disabled_when_media_review_blocks(self) -> None:
+        """C2B6 correction: replacement_requested / rejected_* / fallback hides Telegram action."""
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        u = self.client.put(
+            f"/supplier-admin/offers/{oid}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"cover_media_reference": "https://cdn.example/hero.jpg"},
+        )
+        self.assertEqual(u.status_code, 200, u.text)
+        row = self.session.get(SupplierOffer, oid)
+        self.assertIsNotNone(row)
+        row.packaging_draft_json = {"media_review": {"status": "replacement_requested"}}
+        self.session.commit()
+
+        mock_cfg = SimpleNamespace(
+            telegram_bot_username="testbot",
+            telegram_mini_app_url="https://example.com/mini",
+            telegram_offer_showcase_channel_id="",
+            telegram_bot_token="",
+        )
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        with patch(
+            "app.services.supplier_offer_moderation_service.get_settings",
+            return_value=mock_cfg,
+        ):
+            r = self.client.get(f"/admin/supplier-offers/{oid}/review-package", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        req_ph = next(a for a in r.json()["operator_workflow"]["actions"] if a["code"] == "request_cover_photo_replacement")
+        self.assertFalse(req_ph["enabled"])
+        self.assertIsNotNone(req_ph["disabled_reason"])
+        self.assertIn("replacement_requested", req_ph["disabled_reason"])
+
+    def test_review_package_request_cover_photo_still_enabled_when_media_review_approved(self) -> None:
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        u = self.client.put(
+            f"/supplier-admin/offers/{oid}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"cover_media_reference": "https://cdn.example/hero.jpg"},
+        )
+        self.assertEqual(u.status_code, 200, u.text)
+        row = self.session.get(SupplierOffer, oid)
+        self.assertIsNotNone(row)
+        row.packaging_draft_json = {"media_review": {"status": "approved_for_card"}}
+        self.session.commit()
+
+        mock_cfg = SimpleNamespace(
+            telegram_bot_username="testbot",
+            telegram_mini_app_url="https://example.com/mini",
+            telegram_offer_showcase_channel_id="",
+            telegram_bot_token="",
+        )
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        with patch(
+            "app.services.supplier_offer_moderation_service.get_settings",
+            return_value=mock_cfg,
+        ):
+            r = self.client.get(f"/admin/supplier-offers/{oid}/review-package", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        req_ph = next(a for a in r.json()["operator_workflow"]["actions"] if a["code"] == "request_cover_photo_replacement")
+        self.assertTrue(req_ph["enabled"])
 
     def test_review_package_execution_link_precheck_when_published_without_link(self) -> None:
         _, token = self._bootstrap_supplier_token()

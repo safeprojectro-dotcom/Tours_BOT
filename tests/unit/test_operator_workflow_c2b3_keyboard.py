@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 from app.bot.constants import (
     ADMIN_OFFERS_ACTION_APPROVE,
     ADMIN_OFFERS_ACTION_CALLBACK_PREFIX,
+    ADMIN_OPS_OW_MEDIA_REQ_PROPOSE_PREFIX,
     ADMIN_OPS_OW_PKG_APPROVE_PROPOSE_PREFIX,
     ADMIN_OPS_OW_PKG_GEN_PROPOSE_PREFIX,
     ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX,
@@ -64,6 +65,7 @@ class OperatorWorkflowC2b3KeyboardTests(unittest.TestCase):
             actions=[
                 _read_act("review_package_refresh"),
                 _read_act("get_showcase_preview"),
+                _mut_act("request_cover_photo_replacement"),
                 _mut_act("generate_packaging_draft"),
                 _mut_act("approve_packaging_for_publish"),
             ],
@@ -80,7 +82,8 @@ class OperatorWorkflowC2b3KeyboardTests(unittest.TestCase):
 
         ix = {t: n for n, t in enumerate(texts)}
         self.assertLess(ix["Actualizează"], ix["Preview"])
-        self.assertLess(ix["Preview"], ix["Pregătește"])
+        self.assertLess(ix["Preview"], ix["Cere poză"])
+        self.assertLess(ix["Cere poză"], ix["Pregătește"])
         self.assertLess(ix["Pregătește"], ix["Aprobă text"])
         self.assertLess(ix["Aprobă text"], ix["Aprobă oferta"])
         self.assertLess(ix["Aprobă oferta"], ix["Respinge oferta"])
@@ -93,6 +96,7 @@ class OperatorWorkflowC2b3KeyboardTests(unittest.TestCase):
 
         self.assertTrue(any(str(c).startswith(ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX) for c in callbacks if c))
         self.assertTrue(any(str(c).startswith(ADMIN_OPS_OW_SHOWCASE_PREVIEW_PREFIX) for c in callbacks if c))
+        self.assertTrue(any(str(c).startswith(ADMIN_OPS_OW_MEDIA_REQ_PROPOSE_PREFIX) for c in callbacks if c))
         self.assertTrue(any(str(c).startswith(ADMIN_OPS_OW_PKG_GEN_PROPOSE_PREFIX) for c in callbacks if c))
         self.assertTrue(any(str(c).startswith(ADMIN_OPS_OW_PKG_APPROVE_PROPOSE_PREFIX) for c in callbacks if c))
         approve_legacy = f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_APPROVE}:99"

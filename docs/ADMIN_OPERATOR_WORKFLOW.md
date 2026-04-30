@@ -62,11 +62,13 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 **Политика UX кнопок Telegram (принята, docs-only):** карточка админа **не** консоль разработчика; подписи **1–2 слова**, по действию/результату; **не** snake_case, endpoints, enum, HTTP в тексте кнопок. Отключённые действия **`operator_workflow`** — **скрывать**, не показывать как disabled. Безопасное чтение — без подтверждения; безопасная мутация — подтверждение и повторное **`GET …/review-package`** перед выполнением. Ориентир подписей RO/EN (следующий код-слайс — **только** переименование/порядок, **без** новых действий): **`review_package_refresh`** → **Actualizează / Refresh**; **`get_showcase_preview`** → **Preview**; **`generate_packaging_draft`** → **Generează text** или **Pregătește**; **`approve_packaging_for_publish`** → **Aprobă text / Aprobă pachet** (не голое «Aprobă»); legacy модерация → **Aprobă oferta**, **Respinge oferta**. Порядок кнопок: наблюдение/чтение → packaging → legacy модерация → Orders/Requests → навигация. Конверсия/public в Telegram (**bridge**, активация каталога, execution link, publish showcase) — **отложены**.
 
-**Slice C2B3 (Telegram):** реализованы только короткие подписи RO/EN и логический порядок кнопок в карточке оффера (**observe/read → packaging → legacy модерация → Orders/Requests → навигация**); новые колбэки и действия **не** добавлялись.
+**Slice C2B3 (Telegram):** реализованы только короткие подписи RO/EN и логический порядок кнопок в карточке оффера (**observe/read → packaging → legacy модерация → Orders/Requests → навигация**); дальнейшие мутационные колбэки добавлены отдельными слайсами (**C2B6** — см. ниже).
 
 **Slice C2B4:** Telegram **Preview**: при используемом **`cover_media_reference`** (**`telegram_photo:{file_id}`** или **HTTPS**) админ получает **`sendPhoto`** с тем же **`caption_html`**, что выдаёт **`build_showcase_publication`** (**GET …/showcase-preview** / будущий канал); только приватный чат админа; явное уведомление «локальная превью — не в канал»; без **`publish`**, без записи **`showcase_message_id`**. Нет фото / ошибка отправки — текстовый превью как раньше.
 
 **Slice C2B5:** В **`GET …/review-package`** добавлен read-only блок **`cover_media_quality_review`** и строки в суммарных **`warnings`** **`/`** **`operator_workflow.warnings`**: детерминированные сигналы по **`cover_media_reference`** (нет **`/`** не **`sendPhoto`**), рассогласование **`showcase_photo_url`**, снимок B7.1 **`media_review`** против текущей обложки, отрицательные статусы **`media_review`**, напоминание **`approve-for-card`** если фото технически отправляется, но явного **`approved_for_card`** для этой ссылки нет. Не блокирует **`publish`**, не меняет медиа.
+
+**Slice C2B6:** В Telegram-карточке оффера — кнопка **«Cere poză» / Request photo** (если заполнен **`cover_media_reference`**): подтверждение в два шага **`+`** повторное чтение **`review-package`** перед выполнением **`;`** вызывает **`SupplierOfferMediaReviewService.request_replacement`** (фиксированная причина в аудите, **`reviewed_by = telegram:{admin_id}`**) **`;`** **не** меняет **`cover_media_reference`**, **не** трогает **`publish`**, **не** шлёт в канал **.**
 
 ---
 
@@ -86,5 +88,5 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 | Поле | Значение |
 |------|----------|
-| **Тип** | Playbook Slice A + Slice B (**`operator_workflow`**) + Slice C1 / C1.1 / **C2A** / **C2B1** / **C2B2** / **C2B3** / **C2B4** / **C2B5** (Telegram) + UX policy (подписи/порядок — см. §3) |
+| **Тип** | Playbook Slice A + Slice B (**`operator_workflow`**) + Slice C1 / C1.1 / **C2A** / **C2B1** / **C2B2** / **C2B3** / **C2B4** / **C2B5** / **C2B6** (Telegram) + UX policy (подписи/порядок — см. §3) |
 | **Язык** | Русский |

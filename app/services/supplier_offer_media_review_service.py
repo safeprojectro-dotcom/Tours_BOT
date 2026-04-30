@@ -15,6 +15,11 @@ from app.services.supplier_offer_publish_safe_stub import merge_publish_safe_int
 MEDIA_REVIEW_KEY = "media_review"
 B7_1_VERSION = "b7_1"
 
+# C2B6: Telegram admin “request photo” uses this fixed audit string (Admin API otherwise requires free-text reason).
+DEFAULT_TELEGRAM_PREVIEW_COVER_REPLACEMENT_REASON = (
+    "Marked from Telegram admin preview: cover photo needs replacement."
+)
+
 
 class SupplierOfferMediaReviewNotFoundError(Exception):
     pass
@@ -31,6 +36,16 @@ def _as_draft_dict(row: SupplierOffer) -> dict:
     if isinstance(p, dict):
         return dict(p)
     return {}
+
+
+def media_review_status_value(row: SupplierOffer) -> str | None:
+    """Return ``packaging_draft_json.media_review.status`` when present (B7.1 / C2B6)."""
+
+    mr = _as_draft_dict(row).get(MEDIA_REVIEW_KEY)
+    if not isinstance(mr, dict):
+        return None
+    st = (mr.get("status") or "").strip()
+    return st or None
 
 
 def _set_media_review(
