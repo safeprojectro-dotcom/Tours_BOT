@@ -42,9 +42,11 @@ Showcase publication should be understood as **three** conceptual layers. They a
    - CTA line present: **Detalii** and **Rezervă** (or equivalent branded line from the template).
    - **`can_publish_now`:** **`true`** when lifecycle + Telegram config allow **`POST .../publish`** to succeed technically.
    - **`warnings`:** empty, or consciously accepted (see policy below).
-4. **Publish:**  
+4. **Cover/media signals (C2B5):** On **`GET …/review-package`**, check **`cover_media_quality_review`** (and aggregated **`warnings`**) for deterministic hints: missing or non-sendable showcase photo reference, **`showcase_photo_url`** vs **`cover_media_reference`**, B7.1 **`media_review`** drift or negative status, reminder to **`POST …/media/approve-for-card`** after visual Preview when appropriate. **Does not** block publish in code.
+
+5. **Publish:**  
    **`POST /admin/supplier-offers/{offer_id}/publish`**
-5. **If wrong after publish:**  
+6. **If wrong after publish:**  
    **`POST /admin/supplier-offers/{offer_id}/retract`** as needed → fix supplier/admin data → **preview again** → **publish again** if appropriate.
 
 ---

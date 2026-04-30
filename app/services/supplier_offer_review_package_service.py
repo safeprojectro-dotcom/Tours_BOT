@@ -15,6 +15,7 @@ from app.schemas.supplier_admin import (
     AdminSupplierOfferBridgeReadinessRead,
     AdminSupplierOfferContentQualityReviewRead,
     AdminSupplierOfferConversionClosureRead,
+    AdminSupplierOfferCoverMediaQualityReviewRead,
     AdminSupplierOfferExecutionLinksReviewRead,
     AdminSupplierOfferLinkedTourCatalogRead,
     AdminSupplierOfferMiniAppConversionPreviewRead,
@@ -33,6 +34,7 @@ from app.services.mini_app_supplier_offer_landing import (
 from app.services.supplier_offer_ai_public_copy_fact_lock import evaluate_ai_public_copy_fact_lock
 from app.services.supplier_offer_bot_start_routing import resolve_sup_offer_start_mini_app_routing
 from app.services.supplier_offer_content_quality_review import evaluate_content_quality_review
+from app.services.supplier_offer_cover_media_quality_review import evaluate_cover_media_quality_review
 from app.services.supplier_offer_operator_workflow import build_operator_workflow
 from app.services.supplier_offer_moderation_service import SupplierOfferModerationService
 from app.services.supplier_offer_tour_bridge_service import (
@@ -54,6 +56,7 @@ def _merge_warnings(
     catalog: TourCatalogActivationPreview | None,
     ai_fact_lock: AdminSupplierOfferAiPublicCopyReviewRead | None = None,
     content_quality: AdminSupplierOfferContentQualityReviewRead | None = None,
+    cover_media_quality: AdminSupplierOfferCoverMediaQualityReviewRead | None = None,
 ) -> list[str]:
     out: list[str] = []
     out.extend(showcase.warnings)
@@ -76,6 +79,9 @@ def _merge_warnings(
     if content_quality is not None:
         for w in content_quality.warnings:
             out.append(f"Content quality [{w.code}]: {w.message}")
+    if cover_media_quality is not None:
+        for w in cover_media_quality.warnings:
+            out.append(f"Cover media [{w.code}]: {w.message}")
     return out
 
 
@@ -334,6 +340,7 @@ class SupplierOfferReviewPackageService:
 
         ai_public_copy_review = evaluate_ai_public_copy_fact_lock(row)
         content_quality_review = evaluate_content_quality_review(row)
+        cover_media_quality_review = evaluate_cover_media_quality_review(row)
 
         warnings = _merge_warnings(
             showcase=showcase,
@@ -342,6 +349,7 @@ class SupplierOfferReviewPackageService:
             catalog=catalog_preview,
             ai_fact_lock=ai_public_copy_review,
             content_quality=content_quality_review,
+            cover_media_quality=cover_media_quality_review,
         )
 
         actions = _recommended_next_actions(
@@ -400,6 +408,7 @@ class SupplierOfferReviewPackageService:
             showcase_preview=showcase,
             ai_public_copy_review=ai_public_copy_review,
             content_quality_review=content_quality_review,
+            cover_media_quality_review=cover_media_quality_review,
         )
 
         return AdminSupplierOfferReviewPackageRead(
@@ -413,6 +422,7 @@ class SupplierOfferReviewPackageService:
             conversion_closure=closure,
             ai_public_copy_review=ai_public_copy_review,
             content_quality_review=content_quality_review,
+            cover_media_quality_review=cover_media_quality_review,
             operator_workflow=operator_workflow,
             warnings=warnings,
             recommended_next_actions=actions,

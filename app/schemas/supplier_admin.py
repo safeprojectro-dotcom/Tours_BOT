@@ -249,6 +249,24 @@ class AdminSupplierOfferContentQualityReviewRead(BaseModel):
     has_quality_warnings: bool = False
 
 
+class CoverMediaWarningItemRead(BaseModel):
+    """Single deterministic cover/showcase media signal (C2B5 — admin visibility only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    message: str
+
+
+class AdminSupplierOfferCoverMediaQualityReviewRead(BaseModel):
+    """Cover vs showcase builder vs B7.1 media_review alignment (read-only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    warnings: list[CoverMediaWarningItemRead] = Field(default_factory=list)
+    has_warnings: bool = False
+
+
 OperatorWorkflowDangerLevel = Literal[
     "safe_read",
     "safe_mutation",
@@ -299,6 +317,7 @@ class AdminSupplierOfferReviewPackageRead(BaseModel):
     conversion_closure: AdminSupplierOfferConversionClosureRead
     ai_public_copy_review: AdminSupplierOfferAiPublicCopyReviewRead
     content_quality_review: AdminSupplierOfferContentQualityReviewRead
+    cover_media_quality_review: AdminSupplierOfferCoverMediaQualityReviewRead
     operator_workflow: AdminSupplierOfferOperatorWorkflowRead
     warnings: list[str]
     recommended_next_actions: list[str]

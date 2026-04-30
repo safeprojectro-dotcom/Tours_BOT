@@ -8,6 +8,7 @@ from app.schemas.supplier_admin import (
     AdminSupplierOfferBridgeReadinessRead,
     AdminSupplierOfferContentQualityReviewRead,
     AdminSupplierOfferConversionClosureRead,
+    AdminSupplierOfferCoverMediaQualityReviewRead,
     AdminSupplierOfferExecutionLinksReviewRead,
     AdminSupplierOfferLinkedTourCatalogRead,
     AdminSupplierOfferOperatorWorkflowActionRead,
@@ -98,6 +99,7 @@ def build_operator_workflow(
     showcase_preview: AdminSupplierOfferShowcasePreviewRead,
     ai_public_copy_review: AdminSupplierOfferAiPublicCopyReviewRead,
     content_quality_review: AdminSupplierOfferContentQualityReviewRead,
+    cover_media_quality_review: AdminSupplierOfferCoverMediaQualityReviewRead,
 ) -> AdminSupplierOfferOperatorWorkflowRead:
     """Derive read-only operator hints from existing review-package slices only.
 
@@ -348,6 +350,8 @@ def build_operator_workflow(
     if advisory_fact_lock:
         ow_warnings.append("AI public copy fact lock requires attention (see ai_public_copy_review).")
     for w in content_quality_review.warnings:
+        ow_warnings.append(f"[{w.code}] {w.message}")
+    for w in cover_media_quality_review.warnings:
         ow_warnings.append(f"[{w.code}] {w.message}")
 
     return AdminSupplierOfferOperatorWorkflowRead(

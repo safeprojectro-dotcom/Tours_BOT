@@ -22,7 +22,7 @@
 GET /admin/supplier-offers/{offer_id}/review-package
 ```
 
-**`review-package`** — единая **сводка только для чтения**: оффер, **`conversion_closure`**, **`recommended_next_actions`**, **`warnings`**, **`bridge_readiness`**, **`linked_tour_catalog`**, **`showcase_preview`**, **`execution_links_review`**, **`mini_app_conversion_preview`**, **`content_quality_review`**, **`ai_public_copy_review`**.  
+**`review-package`** — единая **сводка только для чтения**: оффер, **`conversion_closure`**, **`recommended_next_actions`**, **`warnings`**, **`bridge_readiness`**, **`linked_tour_catalog`**, **`showcase_preview`**, **`execution_links_review`**, **`mini_app_conversion_preview`**, **`content_quality_review`**, **`cover_media_quality_review`**, **`ai_public_copy_review`**.  
 
 Ничего не меняет в базе и не шлёт Telegram — только наблюдение. Любой следующий **POST** — осознанное действие после проверки этой сводки.
 
@@ -66,6 +66,8 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 **Slice C2B4:** Telegram **Preview**: при используемом **`cover_media_reference`** (**`telegram_photo:{file_id}`** или **HTTPS**) админ получает **`sendPhoto`** с тем же **`caption_html`**, что выдаёт **`build_showcase_publication`** (**GET …/showcase-preview** / будущий канал); только приватный чат админа; явное уведомление «локальная превью — не в канал»; без **`publish`**, без записи **`showcase_message_id`**. Нет фото / ошибка отправки — текстовый превью как раньше.
 
+**Slice C2B5:** В **`GET …/review-package`** добавлен read-only блок **`cover_media_quality_review`** и строки в суммарных **`warnings`** **`/`** **`operator_workflow.warnings`**: детерминированные сигналы по **`cover_media_reference`** (нет **`/`** не **`sendPhoto`**), рассогласование **`showcase_photo_url`**, снимок B7.1 **`media_review`** против текущей обложки, отрицательные статусы **`media_review`**, напоминание **`approve-for-card`** если фото технически отправляется, но явного **`approved_for_card`** для этой ссылки нет. Не блокирует **`publish`**, не меняет медиа.
+
 ---
 
 ## Связанные документы
@@ -84,5 +86,5 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 | Поле | Значение |
 |------|----------|
-| **Тип** | Playbook Slice A + Slice B (**`operator_workflow`**) + Slice C1 / C1.1 / **C2A** / **C2B1** / **C2B2** / **C2B3** / **C2B4** (Telegram) + UX policy (подписи/порядок — см. §3) |
+| **Тип** | Playbook Slice A + Slice B (**`operator_workflow`**) + Slice C1 / C1.1 / **C2A** / **C2B1** / **C2B2** / **C2B3** / **C2B4** / **C2B5** (Telegram) + UX policy (подписи/порядок — см. §3) |
 | **Язык** | Русский |
