@@ -92,6 +92,8 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 **Slice C2B6 implemented:** Telegram **«Cere poză»** **`/`** **Request photo** (when **`cover_media_reference`** set) **`→`** **`request_replacement`** after confirm **`+`** **`review-package`** re-read **`;`** fixed audit **`reason`**, **`reviewed_by = telegram:{admin_id}`** **`;`** **no** **`cover_media_reference`** mutation**,** **no** **`publish`** change **.**
 
+**Slice C2B7.1 implemented:** **`PUT /admin/supplier-offers/{offer_id}/cover`** with JSON **`{ "cover_media_reference": "<telegram_photo:… or https URL or null>" }`** sets only **`SupplierOffer.cover_media_reference`** (central admin token)**;** **no** upload**,** **no** **`publish`**, **no** **`media_review`** mutation — operators may **`POST …/media/approve-for-card`** afterward to refresh B7.1 snapshot **.**
+
 ---
 
 ## Checkpoint Sync — B10.x supplier offer → Tour → Mini App (2026)

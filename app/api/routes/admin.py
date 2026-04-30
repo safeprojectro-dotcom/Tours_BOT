@@ -151,6 +151,7 @@ from app.schemas.supplier_admin import (
     AdminMediaReviewApproveBody,
     AdminMediaReviewFallbackBody,
     AdminMediaReviewRejectBody,
+    AdminSupplierOfferCoverPutBody,
     AdminPackagingApproveBody,
     AdminPackagingReasonBody,
     AdminPackagingTelegramDraftPatch,
@@ -173,6 +174,10 @@ from app.schemas.supplier_admin import (
     SupplierOfferRead,
 )
 from app.repositories.supplier import SupplierOfferRepository
+from app.services.supplier_offer_admin_cover_service import (
+    SupplierOfferAdminCoverNotFoundError,
+    SupplierOfferAdminCoverService,
+)
 from app.services.admin_supplier_write import AdminSupplierDuplicateCodeError, AdminSupplierWriteService
 from app.services.supplier_onboarding_service import (
     SupplierOnboardingApprovalValidationError,
@@ -1116,6 +1121,26 @@ def get_admin_supplier_offer_by_id(offer_id: int, db: Session = Depends(get_db))
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.")
     return AdminSupplierOfferRead.model_validate(row, from_attributes=True)
+
+
+@router.put("/supplier-offers/{offer_id}/cover", response_model=AdminSupplierOfferRead)
+def put_admin_supplier_offer_cover(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    body: AdminSupplierOfferCoverPutBody = Body(...),
+) -> AdminSupplierOfferRead:
+    """C2B7.1: set ``cover_media_reference`` only (no upload, no publish, does not mutate B7.1 ``media_review``)."""
+    try:
+        out = SupplierOfferAdminCoverService().put_cover_media_reference(
+            db,
+            offer_id=offer_id,
+            cover_media_reference=body.cover_media_reference,
+        )
+        db.commit()
+        return out
+    except SupplierOfferAdminCoverNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
 
 
 @router.get("/supplier-offers/{offer_id}/showcase-preview", response_model=AdminSupplierOfferShowcasePreviewRead)

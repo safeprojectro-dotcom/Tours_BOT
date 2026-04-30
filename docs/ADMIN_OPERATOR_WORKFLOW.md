@@ -70,6 +70,8 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 **Slice C2B6:** В Telegram-карточке оффера — кнопка **«Cere poză» / Request photo** (если заполнен **`cover_media_reference`**): подтверждение в два шага **`+`** повторное чтение **`review-package`** перед выполнением **`;`** вызывает **`SupplierOfferMediaReviewService.request_replacement`** (фиксированная причина в аудите, **`reviewed_by = telegram:{admin_id}`**) **`;`** **не** меняет **`cover_media_reference`**, **не** трогает **`publish`**, **не** шлёт в канал **.**
 
+**Slice C2B7.1:** Центральный **Admin API** — **`PUT /admin/supplier-offers/{offer_id}/cover`** **`(`** JSON **`cover_media_reference`** **`)`** задаёт только колонку **`SupplierOffer.cover_media_reference`** (или **`null`** для сброса)**;** без загрузки файлов**,** без **`publish`**, без изменения **`packaging_draft_json.media_review`** — после замены обложки при необходимости отдельно **`POST …/media/approve-for-card`**.
+
 ---
 
 ## Связанные документы
@@ -88,5 +90,5 @@ GET /admin/supplier-offers/{offer_id}/review-package
 
 | Поле | Значение |
 |------|----------|
-| **Тип** | Playbook Slice A + Slice B (**`operator_workflow`**) + Slice C1 / C1.1 / **C2A** / **C2B1** / **C2B2** / **C2B3** / **C2B4** / **C2B5** / **C2B6** (Telegram) + UX policy (подписи/порядок — см. §3) |
+| **Тип** | Playbook Slice A + Slice B (**`operator_workflow`**) + Slice C1 / C1.1 / **C2A** / **C2B1** / **C2B2** / **C2B3** / **C2B4** / **C2B5** / **C2B6** (Telegram) + **C2B7.1** (**HTTP** **`PUT …/cover`**) + UX policy (подписи/порядок — см. §3) |
 | **Язык** | Русский |

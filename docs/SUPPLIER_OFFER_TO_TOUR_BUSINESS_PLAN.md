@@ -38,6 +38,8 @@
 
 **Slice C2B6 implemented:** Telegram **`request_cover_photo_replacement`** (**Cere poză** **`/`** **Request photo**) **`→`** **`media/request-replacement`** semantics via **`SupplierOfferMediaReviewService.request_replacement`** **`;`** **no** cover PATCH**,** **no** publish gate **.**
 
+**Slice C2B7.1 implemented:** **`PUT /admin/supplier-offers/{offer_id}/cover`** sets **`SupplierOffer.cover_media_reference`** only ( **`telegram_photo:{file_id}`**, HTTPS URL**,** or **`null`**) **`;`** central admin only **`;`** **no** publish**,** **no** **`media_review`** mutation**,** **no** file upload **.**
+
 **Supplier Offer → Central Mini App Catalog Conversion Closure — test evidence (2026-04-29):** explicit admin sequence **(bridge → activate-for-catalog → catalog lists Tour without execution link → publish → execution link → closure complete)** covered by **`tests/unit/test_supplier_offer_catalog_conversion_closure.py`** **;** moderation-only approval without **`approved_for_publish`** does not create bridge/Tour **;** catalog visibility remains **`Tour`**-driven **;** landing + bot exact **`/tours/{code}`** routing require active execution link **;** Layer A booking/payment semantics unchanged **.**
 
 **BUSINESS-plan-v2 completion audit (docs checkpoint):** **[`docs/BUSINESS_PLAN_V2_COMPLETION_AUDIT_AFTER_CORE_CONVERSION.md`](BUSINESS_PLAN_V2_COMPLETION_AUDIT_AFTER_CORE_CONVERSION.md)** — **not** **`BUSINESS_PLAN_V3`** **;** **not** replacing this file **;** summarizes done/partial/open **; use before next large block **; recommended next:** production/staging E2E smoke **/** real supplier-offer walkthrough **.**

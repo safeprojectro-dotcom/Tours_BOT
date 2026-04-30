@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.bot.constants import SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX
 from app.models.enums import (
     SupplierOfferLifecycle,
     SupplierOfferPackagingStatus,
@@ -89,6 +90,51 @@ class SupplierOfferListRead(BaseModel):
 class AdminSupplierOfferListRead(BaseModel):
     items: list[AdminSupplierOfferRead]
     total_returned: int
+
+
+class AdminSupplierOfferCoverPutBody(BaseModel):
+    """C2B7.1: central-admin-only showcase hero reference (no upload, no publish)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cover_media_reference: str | None = Field(
+        ...,
+        max_length=1024,
+        description="telegram_photo:{file_id}, http(s) URL, or null to clear showcase hero photo.",
+    )
+
+    @field_validator("cover_media_reference")
+    @classmethod
+    def strip_and_validate_cover_scheme(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            return v
+        s = v.strip()
+        if not s:
+            raise ValueError(
+                "cover_media_reference must not be whitespace-only; use null to clear the showcase hero photo.",
+            )
+        prefix = SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX
+        if s.startswith(prefix):
+            fid = s.removeprefix(prefix).strip()
+            if not fid:
+                raise ValueError(
+                    "cover_media_reference must be telegram_photo:{file_id} with a non-empty file_id.",
+                )
+            return f"{prefix}{fid}"
+        low = s.lower()
+        if low.startswith("https://"):
+            if len(s) <= len("https://"):
+                raise ValueError("cover_media_reference https URL must include a non-empty path or host.")
+            return s
+        if low.startswith("http://"):
+            if len(s) <= len("http://"):
+                raise ValueError("cover_media_reference http URL must include a non-empty path or host.")
+            return s
+        raise ValueError(
+            "cover_media_reference must be telegram_photo:{file_id}, http://..., https://..., or null.",
+        )
 
 
 class AdminSupplierOfferRejectBody(BaseModel):

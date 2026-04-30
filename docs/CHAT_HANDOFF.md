@@ -39,6 +39,8 @@ Tours_BOT
 
 **Slice C2B6 (implemented):** Telegram offer detail adds **«Cere poză» / Request photo** when **`cover_media_reference`** is set **`;`** confirmation **`+`** re-read **`review-package`** **`;`** executes **`SupplierOfferMediaReviewService.request_replacement`** (fixed audit reason, **`reviewed_by = telegram:{admin_id}`**) **`;`** **does not** change **`cover_media_reference`** or **`publish`**.
 
+**Slice C2B7.1 (implemented):** **`PUT /admin/supplier-offers/{offer_id}/cover`** (central admin **`ADMIN_API_TOKEN`**) sets only **`cover_media_reference`** (string or **`null`**)**;** no Telegram upload**,** no **`publish`**, no automatic **`media_review`** update — use **`POST …/media/approve-for-card`** when B7.1 snapshot should match the new hero ref **.**
+
 ---
 
 

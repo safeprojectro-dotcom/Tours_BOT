@@ -233,3 +233,120 @@ class B71MediaReviewAPITests(FoundationDBTestCase):
         self.assertIsNone(row.showcase_chat_id)
         self.assertEqual(self.session.scalar(select(func.count()).select_from(Tour)), n_tour)
         self.assertEqual(self.session.scalar(select(func.count()).select_from(Order)), n_order)
+
+    def test_put_cover_requires_auth(self) -> None:
+        o = self._offer(cover_media_reference="https://old.example/a.jpg")
+        self.session.commit()
+        r = self.client.put(
+            f"/admin/supplier-offers/{o.id}/cover",
+            json={"cover_media_reference": "https://new.example/b.jpg"},
+        )
+        self.assertEqual(r.status_code, 401)
+
+    def test_put_cover_updates_reference_preserves_media_review(self) -> None:
+        o = self._offer(cover_media_reference=f"{SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX}old")
+        o.packaging_draft_json = {"media_review": {"status": "replacement_requested", "cover_media_reference": "telegram_photo:old"}}
+        self.session.commit()
+        h = {"Authorization": "Bearer test-admin-b71"}
+        ref_new = "https://cdn.example/new-hero.jpg"
+        r = self.client.put(
+            f"/admin/supplier-offers/{o.id}/cover",
+            headers=h,
+            json={"cover_media_reference": ref_new},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json().get("cover_media_reference"), ref_new)
+        mr = (r.json().get("packaging_draft_json") or {}).get("media_review") or {}
+        self.assertEqual(mr.get("status"), "replacement_requested")
+        self.assertIn("old", mr.get("cover_media_reference") or "")
+
+    def test_put_cover_not_found(self) -> None:
+        h = {"Authorization": "Bearer test-admin-b71"}
+        r = self.client.put(
+            "/admin/supplier-offers/999991777/cover",
+            headers=h,
+            json={"cover_media_reference": "https://x/y.jpg"},
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_put_cover_whitespace_only_422(self) -> None:
+        o = self._offer(cover_media_reference="https://x/y.jpg")
+        self.session.commit()
+        h = {"Authorization": "Bearer test-admin-b71"}
+        r = self.client.put(
+            f"/admin/supplier-offers/{o.id}/cover",
+            headers=h,
+            json={"cover_media_reference": "   "},
+        )
+        self.assertEqual(r.status_code, 422)
+
+    def test_put_cover_rejects_disallowed_schemes_422(self) -> None:
+        o = self._offer(cover_media_reference="https://x/y.jpg")
+        self.session.commit()
+        h = {"Authorization": "Bearer test-admin-b71"}
+        for bad in ("ftp://x/y", "file:///etc/passwd", "abc", "s3://bucket/key", "telegram_photo:", "telegram_photo:   "):
+            r = self.client.put(
+                f"/admin/supplier-offers/{o.id}/cover",
+                headers=h,
+                json={"cover_media_reference": bad},
+            )
+            self.assertEqual(r.status_code, 422, (bad, r.text))
+
+    def test_put_cover_accepts_http_and_https_urls(self) -> None:
+        o = self._offer(cover_media_reference="https://first.example/a.jpg")
+        self.session.commit()
+        h = {"Authorization": "Bearer test-admin-b71"}
+        r_http = self.client.put(
+            f"/admin/supplier-offers/{o.id}/cover",
+            headers=h,
+            json={"cover_media_reference": "http://cdn.example/p.jpg"},
+        )
+        self.assertEqual(r_http.status_code, 200, r_http.text)
+        self.assertEqual(r_http.json().get("cover_media_reference"), "http://cdn.example/p.jpg")
+        r_https = self.client.put(
+            f"/admin/supplier-offers/{o.id}/cover",
+            headers=h,
+            json={"cover_media_reference": "HTTPS://Upper.example/Z  ".strip()},
+        )
+        self.assertEqual(r_https.status_code, 200, r_https.text)
+        self.assertEqual(r_https.json().get("cover_media_reference"), "HTTPS://Upper.example/Z")
+
+    def test_put_cover_accepts_telegram_photo_with_trimmed_file_id(self) -> None:
+        o = self._offer(cover_media_reference="https://x/y.jpg")
+        self.session.commit()
+        h = {"Authorization": "Bearer test-admin-b71"}
+        ref = f"{SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX}  AgACAgI  "
+        r = self.client.put(
+            f"/admin/supplier-offers/{o.id}/cover",
+            headers=h,
+            json={"cover_media_reference": ref},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json().get("cover_media_reference"), f"{SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX}AgACAgI")
+
+    def test_put_cover_null_clears(self) -> None:
+        o = self._offer(cover_media_reference="https://x/y.jpg")
+        self.session.commit()
+        h = {"Authorization": "Bearer test-admin-b71"}
+        r = self.client.put(
+            f"/admin/supplier-offers/{o.id}/cover",
+            headers=h,
+            json={"cover_media_reference": None},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIsNone(r.json().get("cover_media_reference"))
+
+    def test_put_cover_when_lifecycle_approved(self) -> None:
+        o = self._offer(cover_media_reference="https://first.example/a.jpg")
+        o.lifecycle_status = SupplierOfferLifecycle.APPROVED
+        self.session.commit()
+        h = {"Authorization": "Bearer test-admin-b71"}
+        ref2 = "https://second.example/b.jpg"
+        r = self.client.put(
+            f"/admin/supplier-offers/{o.id}/cover",
+            headers=h,
+            json={"cover_media_reference": f"  {ref2}  "},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json().get("cover_media_reference"), ref2)
+        self.assertEqual(r.json().get("lifecycle_status"), "approved")

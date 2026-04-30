@@ -44,7 +44,7 @@ Showcase publication should be understood as **three** conceptual layers. They a
    - **`warnings`:** empty, or consciously accepted (see policy below).
 4. **Cover/media signals (C2B5):** On **`GET …/review-package`**, check **`cover_media_quality_review`** (and aggregated **`warnings`**) for deterministic hints: missing or non-sendable showcase photo reference, **`showcase_photo_url`** vs **`cover_media_reference`**, B7.1 **`media_review`** drift or negative status, reminder to **`POST …/media/approve-for-card`** after visual Preview when appropriate. **Does not** block publish in code.
 
-5. **Telegram admin (C2B6):** Optional **Request photo / Cere poză** on the offer card records **`media_review`** **`replacement_requested`** after confirmation — **does not** overwrite **`cover_media_reference`** **`;`** align with supplier **`/`** HTTP workflows for a new asset **.**
+5. **Telegram admin (C2B6):** Optional **Request photo / Cere poză** on the offer card records **`media_review`** **`replacement_requested`** after confirmation — **does not** overwrite **`cover_media_reference`** **`;`** replace the showcase hero via **`PUT /admin/supplier-offers/{offer_id}/cover`** (C2B7.1) **`;`** then **`POST …/media/approve-for-card`** if you want B7.1 snapshot aligned with the new ref **`;`** align with supplier **`/`** HTTP workflows when the supplier can still edit **`.**
 
 6. **Publish:**  
    **`POST /admin/supplier-offers/{offer_id}/publish`**
