@@ -61,6 +61,25 @@ Align with **`tests/unit/test_supplier_offer_catalog_conversion_closure.py`** an
 
 Central catalog can list the Tour **before** step 7 (**OPEN_FOR_SALE** **does not** depend on execution link). Landing **exact Tour** and **`supoffer_<id>`** routing **require** active execution link **+** catalog visibility rules (**audit / tests**).
 
+### Telegram admin card parity (C2B8B + C2B10T-A/B/C)
+
+The **same conversion gates** can be exercised from the **Telegram** private admin offer detail (moderation / ops workspace): buttons show only when the corresponding **`operator_workflow.actions[]`** entry is **`enabled`** on a fresh **`GET …/review-package`** (bot re-reads **`review-package`** on **propose** and again on **confirm**, same pattern as **C2B8B** for publish).
+
+**Workflow keyboard order** when all are enabled (implementation: **`_detail_keyboard`** in **`app/bot/handlers/admin_moderation.py`**):
+
+```text
+Link tour → List for sale → Publish → Booking link
+```
+
+| Telegram label (EN / RO) | Workflow `code` | Service / HTTP parity |
+|---------------------------|-----------------|------------------------|
+| **Link tour** / **Leagă tur** | `create_tour_bridge` | `SupplierOfferTourBridgeService.create_or_replay_bridge` → **`POST …/tour-bridge`** |
+| **List for sale** / **În catalog** | `activate_tour_for_catalog` | `AdminTourWriteService.activate_tour_for_catalog` → **`POST …/tours/{tour_id}/activate-for-catalog`** |
+| **Publish** / **Publică** | `publish_showcase_channel` | `SupplierOfferModerationService.publish` → **`POST …/publish`** |
+| **Booking link** / **Link rezervări** | `create_execution_link` | `SupplierOfferExecutionLinkService.link_offer_to_tour` → **`POST …/execution-link`** |
+
+**Ops ordering:** The **HTTP** checklist above uses **bridge → activate-for-catalog → (preview) publish → execution-link**. Telegram **UI** lists **publish** after **activate-for-catalog** but **before** **Booking link**; **business rules are unchanged** (execution link still requires **`published`** lifecycle). Use **`review-package`** / **`conversion_closure`** as the single source of truth for what is allowed next.
+
 ---
 
 ## Checklist (operator path)
@@ -215,6 +234,7 @@ curl -sS "BASE/mini-app/supplier-offers/OFFER_ID" | jq .
 | 10 Landing | | |
 | 11 Bot / **`conversion_closure.bot_*`** | OK / NOT RUN | |
 | 12 Layer A | N/A / spot-check | |
+| (opt.) **Telegram** admin offer card (**C2B8B** + **C2B10T-A/B/C**) | OK / NOT RUN | Same gates as HTTP **;** keyboard **Link tour → List for sale → Publish → Booking link** **;** use allowlisted admin Telegram user **.**
 
 ---
 
@@ -224,3 +244,4 @@ curl -sS "BASE/mini-app/supplier-offers/OFFER_ID" | jq .
 |-------|--------|
 | **Created** | 2026-04-29 |
 | **Kind** | Production/staging E2E smoke checklist (**operator**) |
+| **Telegram parity** | **2026-05-09** — **C2B10T-D** runbook: **C2B8B** + **C2B10T-A/B/C** mapped in § «Telegram admin card parity» **.**
