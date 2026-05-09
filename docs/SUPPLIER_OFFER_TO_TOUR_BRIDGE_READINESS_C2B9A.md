@@ -10,7 +10,7 @@
 
 The **explicit offer→Tour bridge** is **already implemented** in the backend: **`supplier_offer_tour_bridges`**, **`SupplierOfferTourBridgeService`**, admin **`POST/GET …/tour-bridge`**, **`POST …/execution-link`**, **`POST …/tours/{tour_id}/activate-for-catalog`**, **`review-package`** aggregates (**bridge readiness**, **conversion_closure**, **operator_workflow** hints), and **B11**-style **`/start supoffer_<id>`** routing via **`resolve_sup_offer_start_mini_app_routing`** (active execution link + **`OPEN_FOR_SALE`** + catalog visibility).
 
-**C2B9A finding:** the main **gap** is **not** “missing bridge code” but **(a)** **operator UX / Telegram** (conversion actions still **postponed** on the admin card except packaging + showcase publish), **(b)** **documentation drift** in a few places (e.g. BUSINESS plan still listing all conversion shortcuts as “postponed” while **C2B8B** shipped **`publish_showcase_channel`** on Telegram), **(c)** **product-prioritized follow-ups** (**B7.3** media bytes, **B10.6** bot-as-router, **B11** polish / edge cases).
+**C2B9A finding:** the main **gap** is **not** “missing bridge code” but **(a)** **operator UX / Telegram** (**`create_tour_bridge`** / **`activate_tour_for_catalog`** still **not** on the admin card; **`create_execution_link`** only via HTTP **or** published-offer link wizard), **(b)** **documentation drift** (partially cleared by **C2B9B** docs sync **2026-05-09**), **(c)** **product-prioritized follow-ups** (**B7.3** media bytes, **B10.6** bot-as-router, **B11** polish / edge cases).
 
 ---
 
@@ -76,9 +76,9 @@ Disabled reasons / blocking reasons are derived from existing review slices (bri
 
 | Category | Gap |
 |----------|-----|
-| **Telegram operator UX** | **`create_tour_bridge`**, **`activate_tour_for_catalog`**, **`create_execution_link`** still **not** exposed as workflow mutation buttons (by design/policy); operators rely on **Admin API** or Telegram execution-link subset for **published** offers only. |
-| **Single “readiness” narrative** | Operators must stitch **review-package**, **conversion_closure**, and playbooks; **C2B9A** doc + optional runbook subsection could reduce ambiguity. |
-| **Docs sync** | **`SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`** §Telegram policy still states all conversion/public shortcuts “postponed” — **C2B8B** contradicts for **`publish_showcase_channel`** (**`CHAT_HANDOFF`** already updated). |
+| **Telegram operator UX** | **`create_tour_bridge`**, **`activate_tour_for_catalog`** **not** on the admin card (by design/policy) **`;`** **`create_execution_link`** **—** HTTP **or** Telegram link wizard for **`published`** offers only. |
+| **Single “readiness” narrative** | **C2B9B:** end-to-end chain documented in **BUSINESS** plan, **`ADMIN_OPERATOR_WORKFLOW`**, showcase runbook **`;`** **`GET …/review-package`** remains the single **read** surface before mutations. |
+| **Docs sync** | **C2B9B (2026-05-09):** **`SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`**, **`ADMIN_OPERATOR_WORKFLOW.md`**, **`ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`**, **`CHAT_HANDOFF.md`** aligned with bridge + C2B8B showcase publish + B11 chain (**this** file §4 **C2B9B** row **done**). |
 | **B7.3 media bytes** | Policy **B7.3A** accepted; **storage / download / render** not done — affects polish of showcase vs catalog hero parity (**not** a bridge blocker for core path). |
 | **B10.6** | “Bot as router, not duplicate catalog” — **postponed**; channel CTAs today combine bot + Mini App per existing B11 landing contract. |
 | **Audit / observability** | Bridge and link rows exist; **cross-session “who did what when”** for ops may need richer admin read-side or exports (product call). |
@@ -106,7 +106,7 @@ Naming is **suggestive**; adjust to project ticket scheme.
 
 | Slice | Scope |
 |-------|--------|
-| **C2B9B (docs-only)** | Reconcile **`SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`** Telegram § with **C2B8B**; add **“conversion checklist”** subsection (bridge → activate → execution link → B11 smoke) pointing to **`review-package`** fields. |
+| **C2B9B (docs-only)** | **Done (2026-05-09):** BUSINESS plan + operator playbook + showcase runbook + handoff — conversion chain packaging → readiness → showcase (**HTTP** / **Telegram C2B8B**) → **`tour-bridge`** → **`activate-for-catalog`** → execution link → **B11** → **Layer A**. |
 | **C2B10T-A (Telegram, narrow)** | Optional: **one** conversion action on admin card (e.g. **`create_tour_bridge`** only) with **same** pattern как **C2B8B** (propose, confirm, double **review-package** read). **Scope gate:** product approval; **do not** ship all three mutations at once without UX review. |
 | **C2B10T-B** | **`activate_tour_for_catalog`** from Telegram ( **`conversion_enabling`**, confirmation), only if **C2B10T-A** stable. |
 | **C2B10T-C** | **`create_execution_link`** from Telegram **already partially** covered by published-offer link UI; align with **`operator_workflow`** **`enabled`** flags if needed. |
@@ -117,9 +117,9 @@ Naming is **suggestive**; adjust to project ticket scheme.
 
 ## 5. Recommended immediate next Cursor prompt
 
-**Title:** `CURSOR_PROMPT_SUPPLIER_OFFER_CONVERSION_DOCS_SYNC_C2B9B`
+**After C2B9B:** optional **C2B10T-*** Telegram conversion buttons ( **`create_tour_bridge`** first, then **`activate_tour_for_catalog`**) **—** **product** **approval** **only** **;** **or** **B7.3B** **/** **B11** **polish** **per** **`OPEN_QUESTIONS_AND_TECH_DEBT.md`**.
 
-**Scope:** Docs-only: update **`SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`** (and **`ADMIN_OPERATOR_WORKFLOW.md`** if needed) so Telegram policy reflects **C2B8B**; add a short **operator conversion checklist** (bridge → activate-for-catalog → execution link → verify **`conversion_closure`** + optional **`/start supoffer_<id>`** smoke). **No** code, migrations, or Mini App changes.
+**Reference (completed):** **`CURSOR_PROMPT_SUPPLIER_OFFER_CONVERSION_DOCS_SYNC_C2B9B`** — **[`docs/CURSOR_PROMPT_SUPPLIER_OFFER_CONVERSION_DOCS_SYNC_C2B9B.md`](CURSOR_PROMPT_SUPPLIER_OFFER_CONVERSION_DOCS_SYNC_C2B9B.md)**.
 
 ---
 
@@ -137,4 +137,4 @@ Naming is **suggestive**; adjust to project ticket scheme.
 
 ## 7. CHAT_HANDOFF pointer
 
-Planning checkpoint: this file (**`docs/SUPPLIER_OFFER_TO_TOUR_BRIDGE_READINESS_C2B9A.md`**); implementation follow-up **C2B9B** or **C2B10T-*** per §4.
+Planning checkpoint: this file (**`docs/SUPPLIER_OFFER_TO_TOUR_BRIDGE_READINESS_C2B9A.md`**); **C2B9B** docs sync **done** **;** next optional **C2B10T-*** or **B7.3B** / **B11** per §5.

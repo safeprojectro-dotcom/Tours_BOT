@@ -71,17 +71,29 @@ Do not implement:
 
 Docs-only updates are allowed if needed.
 
-## Likely next steps after C2B9A
+## After C2B9A (audit outcome — 2026-05-09)
 
-Depending on audit result, likely sequence may be:
+**Authoritative report:** [`docs/SUPPLIER_OFFER_TO_TOUR_BRIDGE_READINESS_C2B9A.md`](SUPPLIER_OFFER_TO_TOUR_BRIDGE_READINESS_C2B9A.md).
 
-1. C2B9B — bridge design/read-model finalization if needed.
-2. C2B10A — central admin create/link Tour from supplier offer, guarded and explicit.
-3. C2B10B — execution link activation/actionability.
-4. C2B11 follow-up — Telegram deep link routes to exact Mini App Tour only when active execution link exists.
-5. C2B12 — admin/ops visibility.
+**Finding:** The **explicit** offer→Tour conversion path (**B10**) is **already implemented** in the backend: `supplier_offer_tour_bridges`, `SupplierOfferTourBridgeService`, admin `POST/GET …/tour-bridge`, execution-link HTTP, `POST …/tours/{tour_id}/activate-for-catalog`, `review-package` (`bridge_readiness`, `conversion_closure`, `operator_workflow`), and **`/start supoffer_<id>`** routing via `resolve_sup_offer_start_mini_app_routing` when an active execution link + `OPEN_FOR_SALE` + catalog visibility allow it.
 
-Exact names and order must follow Cursor’s audit and current repo state.
+**Main gaps are not “missing bridge”** but: **(1)** Telegram admin card still **postpones** `create_tour_bridge` / `activate_tour_for_catalog` (packaging + showcase publish + link wizard for **`published`** are elsewhere), **(2)** **~~docs drift~~** **cleared by C2B9B** (**2026-05-09**), **(3)** product follow-ups: B7.3 media bytes, B10.6 bot-as-router, optional B11 polish.
+
+Continuity: [`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md) (C2B9A planning line).
+
+## Likely next steps after audit (revised)
+
+Order follows current repo — **do not** treat “implement bridge HTTP” as greenfield.
+
+1. ~~**C2B9B (docs-only, recommended first):** Sync `SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md` / `ADMIN_OPERATOR_WORKFLOW.md`; add a short **conversion checklist** (bridge → activate-for-catalog → execution link → verify `conversion_closure` + optional `supoffer_` smoke). Suggested prompt: `CURSOR_PROMPT_SUPPLIER_OFFER_CONVERSION_DOCS_SYNC_C2B9B`.~~ **Done (2026-05-09):** BUSINESS plan + `ADMIN_OPERATOR_WORKFLOW.md` + `ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md` + `CHAT_HANDOFF.md` + C2B9A doc updates.
+2. **C2B10T-*** **(optional, narrow):** Telegram workflow buttons for **one** conversion action at a time (e.g. `create_tour_bridge` only), **same** propose/confirm/double **review-package** pattern as C2B8B; requires product sign-off.
+3. **B7.3B / B10.6 / B11** — per [`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`](OPEN_QUESTIONS_AND_TECH_DEBT.md); not assumed here.
+
+**Obsolete placeholders** (if an older plan assumed no B10 — **not** current repo):
+
+- ~~C2B10A — central admin create/link Tour~~ → **done (B10)**.
+- ~~C2B10B — execution link~~ → **HTTP + partial Telegram** exist.
+- ~~C2B11 exact deep link~~ → **implemented** in `supplier_offer_bot_start_routing` (gated).
 
 ## Post-Cursor review checklist
 

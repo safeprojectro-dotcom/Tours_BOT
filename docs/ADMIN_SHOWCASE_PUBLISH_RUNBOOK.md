@@ -4,6 +4,8 @@
 
 **Related:** Track 3 moderation in [`CHAT_HANDOFF.md`](CHAT_HANDOFF.md); B12/B13 business line [`SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md); preview readiness fields [`docs/CURSOR_PROMPT_B12_B13_4A_SHOWCASE_PREVIEW_READINESS_FIELDS.md`](CURSOR_PROMPT_B12_B13_4A_SHOWCASE_PREVIEW_READINESS_FIELDS.md).
 
+**Full conversion chain (offer → catalog → execution link → B11):** перед и после канала сверяйтесь с **`GET …/review-package`** и канонической последовательностью в **[`docs/ADMIN_OPERATOR_WORKFLOW.md`](ADMIN_OPERATOR_WORKFLOW.md)** (**C2B9B**): packaging **→** готовность **→** showcase publish (**HTTP** **или** **Telegram C2B8B** при **`publish_showcase_channel.enabled`**) **→** мост **`Tour`** **→** **`activate-for-catalog`** **→** **execution link** (**после** **`published`**) **→** **`supoffer_<id>`** открывает точный тур только при активной ссылке **`+`** **`OPEN_FOR_SALE`** **`+`** видимости каталога **→** **Layer A** бронирование/оплата.
+
 ---
 
 ## Preconditions
