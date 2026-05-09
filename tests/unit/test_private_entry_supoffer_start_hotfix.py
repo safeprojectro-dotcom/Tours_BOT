@@ -92,7 +92,7 @@ class PrivateEntrySupofferStartHotfixTests(FoundationDBTestCase):
             message.answer.assert_called()
             intro = message.answer.call_args[0][0]
             self.assertIn("Channel Promo Trip", intro)
-            self.assertIn("featured offer", intro.lower())
+            self.assertIn("announced", intro.lower())
 
         self._run(body())
 
@@ -245,6 +245,7 @@ class PrivateEntrySupofferStartHotfixTests(FoundationDBTestCase):
             cat.assert_not_awaited()
             intro = message.answer.call_args[0][0]
             self.assertIn("B11-SKIP-CAT", intro)
+            self.assertIn("available for booking", intro.lower())
 
         self._run(body())
 

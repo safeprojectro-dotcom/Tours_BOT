@@ -85,7 +85,11 @@ from app.services.group_private_cta import (
     START_PAYLOAD_GRP_PRIVATE,
     match_group_cta_start_payload,
 )
-from app.services.supplier_offer_bot_start_routing import resolve_sup_offer_start_mini_app_routing
+from app.services.supplier_offer_bot_start_routing import (
+    SupplierOfferStartCopyBucket,
+    SupplierOfferStartMiniAppRouting,
+    resolve_sup_offer_start_mini_app_routing,
+)
 from app.services.supplier_offer_deep_link import parse_supplier_offer_start_arg
 from app.services.order_summary import OrderSummaryService
 from app.services.payment_entry import PaymentEntryService
@@ -98,6 +102,53 @@ router.callback_query.filter(F.message.chat.type == "private")
 
 # Deep-link /start args are stashed here when the user has no preferred_language yet (channel link first open).
 PENDING_PRIVATE_START_ARGS_KEY = "pending_private_start_args"
+
+
+def _supplier_offer_start_intro(
+    language_code: str,
+    *,
+    title: str,
+    nav: SupplierOfferStartMiniAppRouting,
+) -> str:
+    """B10.6A: customer copy from resolver **copy_bucket** only (no routing logic here)."""
+    lg = language_code
+    bucket = nav.copy_bucket
+    if bucket is SupplierOfferStartCopyBucket.EXACT_TOUR_MINI_APP:
+        code = (nav.linked_tour_code or "").strip()
+        if not code:
+            return translate(lg, "start_sup_offer_router_unavailable", title=title)
+        intro = translate(
+            lg,
+            "start_sup_offer_router_exact_tour",
+            title=title,
+            tour_code=code,
+        )
+        if nav.linked_is_full_bus:
+            intro = f"{intro}\n\n{translate(lg, 'start_sup_offer_router_exact_tour_full_bus_note')}"
+        return intro
+    if bucket is SupplierOfferStartCopyBucket.PUBLISHED_NO_EXECUTION_LINK:
+        return translate(lg, "start_sup_offer_router_published_no_link", title=title)
+    if bucket is SupplierOfferStartCopyBucket.PUBLISHED_DEPARTURE_NOT_IN_CATALOG:
+        if nav.context_tour_code:
+            return translate(
+                lg,
+                "start_sup_offer_router_departure_not_in_catalog",
+                title=title,
+                tour_code=nav.context_tour_code,
+            )
+        return translate(lg, "start_sup_offer_router_unavailable", title=title)
+    if bucket is SupplierOfferStartCopyBucket.PUBLISHED_DEPARTURE_NOT_VISIBLE:
+        if nav.context_tour_code:
+            return translate(
+                lg,
+                "start_sup_offer_router_departure_not_visible",
+                title=title,
+                tour_code=nav.context_tour_code,
+            )
+        return translate(lg, "start_sup_offer_router_unavailable", title=title)
+    if bucket is SupplierOfferStartCopyBucket.PUBLISHED_MINI_APP_BASE_MISSING:
+        return translate(lg, "start_sup_offer_router_mini_app_config", title=title)
+    return translate(lg, "start_sup_offer_router_unavailable", title=title)
 
 
 @router.message(CommandStart())
@@ -182,19 +233,7 @@ async def handle_start(
                 mini_app_base_url=settings.telegram_mini_app_url or "",
             )
             lg = user.preferred_language
-            if nav.exact_tour_mini_app_url and nav.linked_tour_code:
-                intro = translate(
-                    lg,
-                    "start_sup_offer_intro_exact_tour",
-                    title=display_title,
-                    tour_code=nav.linked_tour_code,
-                )
-            else:
-                intro = translate(
-                    lg,
-                    "start_sup_offer_intro",
-                    title=display_title,
-                )
+            intro = _supplier_offer_start_intro(lg, title=display_title, nav=nav)
             await message.answer(
                 intro,
                 reply_markup=build_private_sup_offer_start_keyboard(

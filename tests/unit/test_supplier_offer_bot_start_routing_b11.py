@@ -6,7 +6,10 @@ from datetime import UTC, datetime, timedelta
 
 from app.models.enums import SupplierOfferLifecycle, TourSalesMode, TourStatus
 from app.models.supplier import SupplierOfferExecutionLink
-from app.services.supplier_offer_bot_start_routing import resolve_sup_offer_start_mini_app_routing
+from app.services.supplier_offer_bot_start_routing import (
+    SupplierOfferStartCopyBucket,
+    resolve_sup_offer_start_mini_app_routing,
+)
 from tests.unit.base import FoundationDBTestCase
 
 
@@ -47,6 +50,8 @@ class SupplierOfferBotStartRoutingB11Tests(FoundationDBTestCase):
         self.assertEqual(r.exact_tour_mini_app_url, "https://example.com/webapp/tours/B11-LINKED-OK")
         self.assertEqual(r.linked_tour_code, "B11-LINKED-OK")
         self.assertFalse(r.linked_is_full_bus)
+        self.assertIs(r.copy_bucket, SupplierOfferStartCopyBucket.EXACT_TOUR_MINI_APP)
+        self.assertEqual(r.context_tour_code, "B11-LINKED-OK")
 
     def test_no_exact_url_when_no_execution_link(self) -> None:
         supplier = self.create_supplier()
@@ -59,6 +64,29 @@ class SupplierOfferBotStartRoutingB11Tests(FoundationDBTestCase):
             mini_app_base_url="https://example.com/",
         )
         self.assertIsNone(r.exact_tour_mini_app_url)
+        self.assertIs(r.copy_bucket, SupplierOfferStartCopyBucket.PUBLISHED_NO_EXECUTION_LINK)
+
+    def test_link_broken_when_linked_tour_code_blank(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(supplier, lifecycle_status=SupplierOfferLifecycle.PUBLISHED)
+        departure = datetime.now(UTC) + timedelta(days=14)
+        tour = self.create_tour(
+            code="   ",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=departure,
+            return_datetime=departure + timedelta(days=1),
+            sales_deadline=departure - timedelta(days=1),
+            seats_available=5,
+        )
+        self.session.add(
+            SupplierOfferExecutionLink(supplier_offer_id=offer.id, tour_id=tour.id, link_status="active")
+        )
+        self.session.commit()
+        self.session.refresh(offer)
+
+        r = resolve_sup_offer_start_mini_app_routing(self.session, offer=offer, mini_app_base_url="https://x.com/")
+        self.assertIsNone(r.exact_tour_mini_app_url)
+        self.assertIs(r.copy_bucket, SupplierOfferStartCopyBucket.PUBLISHED_LINK_BROKEN)
 
     def test_no_exact_url_when_linked_tour_draft(self) -> None:
         supplier = self.create_supplier()
@@ -87,6 +115,8 @@ class SupplierOfferBotStartRoutingB11Tests(FoundationDBTestCase):
 
         r = resolve_sup_offer_start_mini_app_routing(self.session, offer=offer, mini_app_base_url="https://x.com/")
         self.assertIsNone(r.exact_tour_mini_app_url)
+        self.assertIs(r.copy_bucket, SupplierOfferStartCopyBucket.PUBLISHED_DEPARTURE_NOT_IN_CATALOG)
+        self.assertEqual(r.context_tour_code, "B11-DRAFT")
 
     def test_no_exact_url_when_visibility_window_closed(self) -> None:
         supplier = self.create_supplier()
@@ -113,6 +143,8 @@ class SupplierOfferBotStartRoutingB11Tests(FoundationDBTestCase):
 
         r = resolve_sup_offer_start_mini_app_routing(self.session, offer=offer, mini_app_base_url="https://x.com/")
         self.assertIsNone(r.exact_tour_mini_app_url)
+        self.assertIs(r.copy_bucket, SupplierOfferStartCopyBucket.PUBLISHED_DEPARTURE_NOT_VISIBLE)
+        self.assertEqual(r.context_tour_code, "B11-SLATE")
 
     def test_full_bus_flag_set_for_linked_full_bus_open(self) -> None:
         supplier = self.create_supplier()
@@ -143,3 +175,27 @@ class SupplierOfferBotStartRoutingB11Tests(FoundationDBTestCase):
         r = resolve_sup_offer_start_mini_app_routing(self.session, offer=offer, mini_app_base_url="https://a.com/")
         self.assertIsNotNone(r.exact_tour_mini_app_url)
         self.assertTrue(r.linked_is_full_bus)
+        self.assertIs(r.copy_bucket, SupplierOfferStartCopyBucket.EXACT_TOUR_MINI_APP)
+
+    def test_mini_app_base_missing_bucket_keeps_exact_url_none(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(supplier, lifecycle_status=SupplierOfferLifecycle.PUBLISHED)
+        departure = datetime.now(UTC) + timedelta(days=14)
+        tour = self.create_tour(
+            code="B11-NO-BASE",
+            status=TourStatus.OPEN_FOR_SALE,
+            departure_datetime=departure,
+            return_datetime=departure + timedelta(days=1),
+            sales_deadline=departure - timedelta(days=1),
+            seats_available=5,
+        )
+        self.session.add(
+            SupplierOfferExecutionLink(supplier_offer_id=offer.id, tour_id=tour.id, link_status="active")
+        )
+        self.session.commit()
+        self.session.refresh(offer)
+
+        r = resolve_sup_offer_start_mini_app_routing(self.session, offer=offer, mini_app_base_url="")
+        self.assertIsNone(r.exact_tour_mini_app_url)
+        self.assertIs(r.copy_bucket, SupplierOfferStartCopyBucket.PUBLISHED_MINI_APP_BASE_MISSING)
+        self.assertEqual(r.context_tour_code, "B11-NO-BASE")
