@@ -3,6 +3,8 @@ from functools import lru_cache
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.media_storage_types import MediaStorageBackend
+
 
 class Settings(BaseSettings):
     app_name: str = Field(default="Tours_BOT", alias="APP_NAME")
@@ -38,6 +40,18 @@ class Settings(BaseSettings):
     #: Shared secret for read-only admin API (`GET /admin/...`). If unset, admin routes stay disabled.
     admin_api_token: str | None = Field(default=None, alias="ADMIN_API_TOKEN")
 
+    #: B7.4C: durable media ingestion foundation (no real S3 in this slice). Unknown values treated as ``disabled``.
+    media_storage_backend: str = Field(default=MediaStorageBackend.DISABLED.value, alias="MEDIA_STORAGE_BACKEND")
+    media_storage_bucket: str | None = Field(default=None, alias="MEDIA_STORAGE_BUCKET")
+    media_storage_endpoint_url: str | None = Field(default=None, alias="MEDIA_STORAGE_ENDPOINT_URL")
+    media_storage_public_base_url: str | None = Field(default=None, alias="MEDIA_STORAGE_PUBLIC_BASE_URL")
+    media_storage_region: str | None = Field(default=None, alias="MEDIA_STORAGE_REGION")
+    media_storage_access_key_id: str | None = Field(default=None, alias="MEDIA_STORAGE_ACCESS_KEY_ID")
+    media_storage_secret_access_key: str | None = Field(default=None, alias="MEDIA_STORAGE_SECRET_ACCESS_KEY")
+    media_storage_max_bytes: int = Field(default=15_000_000, alias="MEDIA_STORAGE_MAX_BYTES")
+    #: When False, HTTPS cover URLs fail eligibility until policy enables outbound fetch (B7.4B).
+    media_storage_allow_https_fetch: bool = Field(default=False, alias="MEDIA_STORAGE_ALLOW_HTTPS_FETCH")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -58,6 +72,59 @@ class Settings(BaseSettings):
         if n < 1 or n > 10080:
             return None
         return n
+
+    @field_validator("media_storage_backend", mode="before")
+    @classmethod
+    def _coerce_media_storage_backend(cls, v: object) -> str:
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return MediaStorageBackend.DISABLED.value
+        s = str(v).strip().lower()
+        allowed = {m.value for m in MediaStorageBackend}
+        return s if s in allowed else MediaStorageBackend.DISABLED.value
+
+    @field_validator("media_storage_max_bytes", mode="before")
+    @classmethod
+    def _coerce_media_storage_max_bytes(cls, v: object) -> int:
+        if v is None or v == "":
+            return 15_000_000
+        try:
+            n = int(v)
+        except (TypeError, ValueError):
+            return 15_000_000
+        #: ~1 KiB .. ~500 MB; clamp invalid env to default.
+        if n < 1024 or n > 500_000_000:
+            return 15_000_000
+        return n
+
+    @field_validator(
+        "media_storage_bucket",
+        "media_storage_endpoint_url",
+        "media_storage_public_base_url",
+        "media_storage_region",
+        "media_storage_access_key_id",
+        "media_storage_secret_access_key",
+        mode="before",
+    )
+    @classmethod
+    def _empty_media_storage_str_none(cls, v: object) -> str | None:
+        if v is None or v == "":
+            return None
+        s = str(v).strip()
+        return s or None
+
+    @field_validator("media_storage_allow_https_fetch", mode="before")
+    @classmethod
+    def _coerce_media_storage_allow_https_fetch(cls, v: object) -> bool:
+        if v is None or v == "":
+            return False
+        if isinstance(v, bool):
+            return v
+        s = str(v).strip().lower()
+        return s in {"1", "true", "yes", "on"}
+
+    @property
+    def media_storage_backend_parsed(self) -> MediaStorageBackend:
+        return MediaStorageBackend(self.media_storage_backend)
 
     @property
     def telegram_supported_language_codes(self) -> tuple[str, ...]:
