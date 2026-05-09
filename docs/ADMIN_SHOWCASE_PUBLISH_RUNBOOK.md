@@ -31,6 +31,8 @@ Showcase publication should be understood as **three** conceptual layers. They a
 
 **B12A (template library metadata):** **`POST …/packaging/generate`** also writes **`packaging_draft_json.showcase_marketing_template_library_v1`** — deterministic **template id** inference from **`SupplierOffer`** facts (e.g. early-bird only when discount value **and** **`discount_valid_until`** are set; no auto “last seats” without verified inventory). **Advisory only** for **`review-package` / ops**; **`GET …/showcase-preview`** and **`POST …/publish`** still use **`build_showcase_publication`** unchanged until a future slice wires template choice into the channel builder.
 
+**B12B (template preview + selection metadata):** **`GET …/review-package`** includes **`showcase_template_preview`** (inferred / effective template, ops-only HTML lines, choices, **`channel_publish_unchanged: true`**). **`PATCH …/packaging/showcase-template`** persists **`admin_selected_*`** (and **`admin_live_seats_remaining`** when **`last_seats_urgent`**) into the same JSON block — **packaging metadata only**. **Selecting a template does not publish** and **does not approve packaging**; **`POST …/publish`** and showcase preview HTML **remain** the existing path until **B13** (or later) explicitly wires template into **`build_showcase_publication`**. Regenerate packaging preserves admin selection keys; PATCH is blocked when packaging is **`approved_for_publish`**.
+
 ---
 
 ## Checklist: preview → verify → publish

@@ -160,6 +160,21 @@ def build_operator_workflow(
         ),
     )
 
+    tpl_enabled = gen_enabled
+    tpl_dr = list(gen_dr)
+    actions.append(
+        AdminSupplierOfferOperatorWorkflowActionRead(
+            code="patch_showcase_marketing_template",
+            label="Set showcase marketing template (metadata)",
+            enabled=tpl_enabled,
+            danger_level="safe_mutation",
+            requires_confirmation=False,
+            method="PATCH",
+            endpoint="/admin/supplier-offers/{offer_id}/packaging/showcase-template",
+            disabled_reason=_disabled_note(tpl_dr),
+        ),
+    )
+
     appr_ok = pk in (
         SupplierOfferPackagingStatus.PACKAGING_GENERATED,
         SupplierOfferPackagingStatus.NEEDS_ADMIN_REVIEW,

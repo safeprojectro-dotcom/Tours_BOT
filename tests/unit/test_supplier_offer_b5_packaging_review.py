@@ -151,6 +151,68 @@ class B5PackagingReviewAPITests(FoundationDBTestCase):
         self.assertEqual(j["packaging_status"], "clarification_requested")
         self.assertEqual(j.get("clarification_reason"), "Need price clarity")
 
+    def test_patch_showcase_template_sets_metadata(self) -> None:
+        o = self._offer_with_packaging(packaging_status=SupplierOfferPackagingStatus.PACKAGING_GENERATED)
+        o.packaging_draft_json = dict(o.packaging_draft_json or {})
+        o.packaging_draft_json["showcase_marketing_template_library_v1"] = {
+            "schema_version": 1,
+            "inferred_template_id": "per_seat_standard",
+        }
+        self.session.commit()
+        h = {"Authorization": "Bearer test-admin-b5"}
+        r = self.client.patch(
+            f"/admin/supplier-offers/{o.id}/packaging/showcase-template",
+            headers=h,
+            json={"template_id": "short_announcement"},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        lib = (r.json().get("packaging_draft_json") or {}).get("showcase_marketing_template_library_v1") or {}
+        self.assertEqual(lib.get("admin_selected_template_id"), "short_announcement")
+        self.assertIsNotNone(lib.get("admin_selected_at"))
+
+    def test_patch_showcase_last_seats_requires_live(self) -> None:
+        o = self._offer_with_packaging(packaging_status=SupplierOfferPackagingStatus.PACKAGING_GENERATED)
+        o.packaging_draft_json = dict(o.packaging_draft_json or {})
+        o.packaging_draft_json["showcase_marketing_template_library_v1"] = {"schema_version": 1}
+        self.session.commit()
+        h = {"Authorization": "Bearer test-admin-b5"}
+        r = self.client.patch(
+            f"/admin/supplier-offers/{o.id}/packaging/showcase-template",
+            headers=h,
+            json={"template_id": "last_seats_urgent"},
+        )
+        self.assertEqual(r.status_code, 400, r.text)
+
+    def test_patch_showcase_clear_selection(self) -> None:
+        o = self._offer_with_packaging(packaging_status=SupplierOfferPackagingStatus.PACKAGING_GENERATED)
+        o.packaging_draft_json = dict(o.packaging_draft_json or {})
+        o.packaging_draft_json["showcase_marketing_template_library_v1"] = {
+            "schema_version": 1,
+            "admin_selected_template_id": "short_announcement",
+            "admin_selected_at": "t",
+        }
+        self.session.commit()
+        h = {"Authorization": "Bearer test-admin-b5"}
+        r = self.client.patch(
+            f"/admin/supplier-offers/{o.id}/packaging/showcase-template",
+            headers=h,
+            json={"template_id": None},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        lib = (r.json().get("packaging_draft_json") or {}).get("showcase_marketing_template_library_v1") or {}
+        self.assertNotIn("admin_selected_template_id", lib)
+
+    def test_patch_showcase_template_fails_after_approve(self) -> None:
+        o = self._offer_with_packaging(packaging_status=SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH)
+        self.session.commit()
+        h = {"Authorization": "Bearer test-admin-b5"}
+        r = self.client.patch(
+            f"/admin/supplier-offers/{o.id}/packaging/showcase-template",
+            headers=h,
+            json={"template_id": "short_announcement"},
+        )
+        self.assertEqual(r.status_code, 400, r.text)
+
     def test_patch_draft_updates_telegram_only(self) -> None:
         o = self._offer_with_packaging(packaging_status=SupplierOfferPackagingStatus.PACKAGING_GENERATED)
         self.session.commit()

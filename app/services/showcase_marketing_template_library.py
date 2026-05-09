@@ -7,6 +7,7 @@ Supplemental lines are factual only (discounts from real columns; seat counts on
 from __future__ import annotations
 
 import html
+from datetime import UTC, datetime
 from typing import Any, TypeAlias
 
 from app.models.enums import (
@@ -128,10 +129,155 @@ def merge_showcase_marketing_template_library_v1(
     packaging_draft_extras: dict[str, Any],
     offer: SupplierOffer,
 ) -> None:
-    """Mutates ``packaging_draft_extras`` in place."""
-    packaging_draft_extras["showcase_marketing_template_library_v1"] = build_showcase_marketing_template_library_v1(
-        offer
+    """Mutates ``packaging_draft_extras`` in place. Preserves admin B12B selection keys when regenerating."""
+    preserved: dict[str, Any] = {}
+    prev = offer.packaging_draft_json
+    if isinstance(prev, dict):
+        blk = prev.get("showcase_marketing_template_library_v1")
+        if isinstance(blk, dict):
+            for k in ("admin_selected_template_id", "admin_selected_at", "admin_live_seats_remaining"):
+                if k in blk and blk[k] is not None:
+                    preserved[k] = blk[k]
+    new_block = build_showcase_marketing_template_library_v1(offer)
+    new_block.update(preserved)
+    packaging_draft_extras["showcase_marketing_template_library_v1"] = new_block
+
+
+def extract_showcase_marketing_template_library_v1(offer: SupplierOffer) -> JsonDict:
+    """Return the v1 library block from ``offer.packaging_draft_json`` or {}."""
+    prev = offer.packaging_draft_json
+    if not isinstance(prev, dict):
+        return {}
+    blk = prev.get("showcase_marketing_template_library_v1")
+    return dict(blk) if isinstance(blk, dict) else {}
+
+
+SHOWCASE_TEMPLATE_LIBRARY_ADMIN_KEYS: frozenset[str] = frozenset(
+    {"admin_selected_template_id", "admin_selected_at", "admin_live_seats_remaining"}
+)
+
+
+def resolve_effective_showcase_marketing_template(
+    offer: SupplierOffer,
+) -> tuple[ShowcaseMarketingTemplateId, ShowcaseMarketingTemplateId | None, list[str]]:
+    """Effective template for previews: admin selection when valid, else inference.
+
+    Returns ``(effective, selected_or_none, warnings)``.
+    """
+    inferred = infer_showcase_marketing_template(offer)
+    lib = extract_showcase_marketing_template_library_v1(offer)
+    raw_sel = lib.get("admin_selected_template_id")
+    if raw_sel is None or (isinstance(raw_sel, str) and not raw_sel.strip()):
+        return inferred, None, []
+
+    if not isinstance(raw_sel, str):
+        return inferred, None, ["invalid_admin_selected_template_id_type"]
+
+    try:
+        selected = ShowcaseMarketingTemplateId(raw_sel.strip())
+    except ValueError:
+        return inferred, None, ["unknown_admin_selected_template_id"]
+
+    if selected == ShowcaseMarketingTemplateId.LAST_SEATS_URGENT:
+        n_raw = lib.get("admin_live_seats_remaining")
+        try:
+            n_int = int(n_raw) if n_raw is not None else None
+        except (TypeError, ValueError):
+            n_int = None
+        if not last_seats_urgent_allowed(live_seats_remaining=n_int):
+            return inferred, selected, ["last_seats_urgent_requires_positive_verified_live_seats_remaining"]
+
+    return selected, selected, []
+
+
+def live_seats_for_preview(offer: SupplierOffer, template_id: ShowcaseMarketingTemplateId) -> int | None:
+    """Seat count for template preview helpers (LAST_SEATS only)."""
+    if template_id != ShowcaseMarketingTemplateId.LAST_SEATS_URGENT:
+        return None
+    lib = extract_showcase_marketing_template_library_v1(offer)
+    n_raw = lib.get("admin_live_seats_remaining")
+    try:
+        return int(n_raw) if n_raw is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def validate_admin_showcase_template_patch(
+    *,
+    template_id: str | None,
+    live_seats_remaining: int | None,
+) -> str | None:
+    """Return user-facing error message or ``None`` if OK."""
+    if template_id is None:
+        return None
+    try:
+        tid = ShowcaseMarketingTemplateId(template_id.strip())
+    except ValueError:
+        return "template_id must be a known ShowcaseMarketingTemplateId value"
+    if tid == ShowcaseMarketingTemplateId.LAST_SEATS_URGENT:
+        if live_seats_remaining is None or live_seats_remaining < 1:
+            return "live_seats_remaining (>= 1) is required when template_id is last_seats_urgent"
+    return None
+
+
+def apply_admin_showcase_template_to_library_block(
+    block: JsonDict,
+    *,
+    template_id: str | None,
+    live_seats_remaining: int | None,
+) -> None:
+    """Mutates ``block`` in place (expected: ``showcase_marketing_template_library_v1`` contents)."""
+    now = datetime.now(UTC).isoformat()
+    for k in SHOWCASE_TEMPLATE_LIBRARY_ADMIN_KEYS:
+        block.pop(k, None)
+    if template_id is None:
+        return
+    block["admin_selected_template_id"] = template_id.strip()
+    block["admin_selected_at"] = now
+    try:
+        tid = ShowcaseMarketingTemplateId(template_id.strip())
+    except ValueError:
+        return
+    if tid == ShowcaseMarketingTemplateId.LAST_SEATS_URGENT and live_seats_remaining is not None:
+        block["admin_live_seats_remaining"] = int(live_seats_remaining)
+    elif tid != ShowcaseMarketingTemplateId.LAST_SEATS_URGENT:
+        pass
+
+
+def build_showcase_template_preview_payload(offer: SupplierOffer) -> dict[str, Any]:
+    """Plain dict for :class:`AdminSupplierOfferShowcaseTemplatePreviewRead` (avoid circular imports)."""
+    inferred = infer_showcase_marketing_template(offer)
+    lib = extract_showcase_marketing_template_library_v1(offer)
+    raw_selected = lib.get("admin_selected_template_id")
+    selected_out: str | None = raw_selected.strip() if isinstance(raw_selected, str) and raw_selected.strip() else None
+
+    effective, _, notes = resolve_effective_showcase_marketing_template(offer)
+    live = live_seats_for_preview(offer, effective)
+    preview_lines = build_preview_fact_lines_for_template(
+        offer,
+        effective,
+        live_seats_remaining=live,
     )
+
+    choices = [
+        {
+            "template_id": m.value,
+            "requires_verified_live_seats": m == ShowcaseMarketingTemplateId.LAST_SEATS_URGENT,
+        }
+        for m in ShowcaseMarketingTemplateId
+    ]
+
+    overrides = effective != inferred
+    return {
+        "inferred_template_id": inferred.value,
+        "selected_template_id": selected_out,
+        "effective_template_id": effective.value,
+        "selection_overrides_inference": overrides,
+        "preview_fact_lines_ro_html": preview_lines,
+        "channel_publish_unchanged": True,
+        "notes": notes,
+        "template_choices": choices,
+    }
 
 
 def build_preview_fact_lines_for_template(

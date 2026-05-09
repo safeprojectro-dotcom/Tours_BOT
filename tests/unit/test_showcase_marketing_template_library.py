@@ -18,6 +18,7 @@ from app.services.showcase_marketing_template_library import (
     infer_showcase_marketing_template,
     last_seats_urgent_allowed,
     merge_showcase_marketing_template_library_v1,
+    resolve_effective_showcase_marketing_template,
 )
 from tests.unit.base import FoundationDBTestCase
 
@@ -112,6 +113,39 @@ class ShowcaseMarketingTemplateLibraryTests(FoundationDBTestCase):
         self.assertFalse(last_seats_urgent_allowed(live_seats_remaining=None))
         self.assertFalse(last_seats_urgent_allowed(live_seats_remaining=0))
         self.assertTrue(last_seats_urgent_allowed(live_seats_remaining=3))
+
+    def test_merge_preserves_admin_selection_on_regenerate(self) -> None:
+        sup = self.create_supplier()
+        dep = datetime(2026, 9, 8, 8, 0, tzinfo=UTC)
+        offer = self.create_supplier_offer(sup, departure_datetime=dep, return_datetime=dep + timedelta(days=1))
+        offer.packaging_draft_json = {
+            "telegram_post_draft": "x",
+            "showcase_marketing_template_library_v1": {
+                "schema_version": 1,
+                "inferred_template_id": "per_seat_standard",
+                "admin_selected_template_id": "short_announcement",
+                "admin_selected_at": "2026-01-01T00:00:00+00:00",
+            },
+        }
+        extras: dict = {"telegram_post_draft": "y"}
+        merge_showcase_marketing_template_library_v1(extras, offer)
+        block = extras["showcase_marketing_template_library_v1"]
+        self.assertEqual(block.get("admin_selected_template_id"), "short_announcement")
+        self.assertEqual(block.get("admin_selected_at"), "2026-01-01T00:00:00+00:00")
+        self.assertEqual(block.get("inferred_template_id"), ShowcaseMarketingTemplateId.PER_SEAT_STANDARD.value)
+
+    def test_resolve_effective_last_seats_without_verified_seats_falls_back(self) -> None:
+        sup = self.create_supplier()
+        dep = datetime(2026, 9, 12, 8, 0, tzinfo=UTC)
+        offer = self.create_supplier_offer(sup, departure_datetime=dep, return_datetime=dep + timedelta(days=1))
+        offer.packaging_draft_json = {
+            "showcase_marketing_template_library_v1": {
+                "admin_selected_template_id": ShowcaseMarketingTemplateId.LAST_SEATS_URGENT.value,
+            }
+        }
+        eff, _sel, notes = resolve_effective_showcase_marketing_template(offer)
+        self.assertIs(eff, ShowcaseMarketingTemplateId.PER_SEAT_STANDARD)
+        self.assertIn("last_seats_urgent_requires_positive_verified_live_seats_remaining", notes)
 
     def test_packaging_merge_adds_v1_block(self) -> None:
         sup = self.create_supplier()

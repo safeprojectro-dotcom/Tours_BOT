@@ -331,7 +331,7 @@ class AdminSupplierOfferOperatorWorkflowActionRead(BaseModel):
     enabled: bool
     danger_level: OperatorWorkflowDangerLevel
     requires_confirmation: bool
-    method: Literal["GET", "POST"]
+    method: Literal["GET", "POST", "PATCH"]
     endpoint: str
     disabled_reason: str | None = None
 
@@ -370,6 +370,30 @@ class AdminSupplierOfferConversionStatusPanelRead(BaseModel):
     customer_action: AdminSupplierOfferConversionStatusPanelLayerRead
 
 
+class AdminSupplierOfferShowcaseTemplateChoiceRead(BaseModel):
+    """Single selectable marketing template id (B12B metadata; channel publish unchanged)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    template_id: str
+    requires_verified_live_seats: bool
+
+
+class AdminSupplierOfferShowcaseTemplatePreviewRead(BaseModel):
+    """Read-only B12B ops preview derived from ``packaging_draft_json`` + inference (no publish path changes)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    inferred_template_id: str
+    selected_template_id: str | None
+    effective_template_id: str
+    selection_overrides_inference: bool
+    preview_fact_lines_ro_html: list[str]
+    channel_publish_unchanged: Literal[True] = True
+    notes: list[str] = Field(default_factory=list)
+    template_choices: list[AdminSupplierOfferShowcaseTemplateChoiceRead]
+
+
 class AdminSupplierOfferReviewPackageRead(BaseModel):
     """Read-only aggregated admin review surface (no mutations)."""
 
@@ -388,6 +412,7 @@ class AdminSupplierOfferReviewPackageRead(BaseModel):
     content_quality_review: AdminSupplierOfferContentQualityReviewRead
     cover_media_quality_review: AdminSupplierOfferCoverMediaQualityReviewRead
     operator_workflow: AdminSupplierOfferOperatorWorkflowRead
+    showcase_template_preview: AdminSupplierOfferShowcaseTemplatePreviewRead
     warnings: list[str]
     recommended_next_actions: list[str]
 
@@ -642,6 +667,23 @@ class AdminPackagingTelegramDraftPatch(BaseModel):
     @classmethod
     def strip_tg(cls, v: str) -> str:
         return v.rstrip() if v else v
+
+
+class AdminPackagingShowcaseTemplatePatch(BaseModel):
+    """B12B: set or clear ``showcase_marketing_template_library_v1`` admin selection (JSON only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    template_id: str | None = None
+    live_seats_remaining: int | None = None
+
+    @field_validator("template_id")
+    @classmethod
+    def strip_template_id(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s or None
 
 
 class AdminMediaReviewApproveBody(BaseModel):

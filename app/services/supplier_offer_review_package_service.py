@@ -22,6 +22,7 @@ from app.schemas.supplier_admin import (
     AdminSupplierOfferRead,
     AdminSupplierOfferReviewPackageRead,
     AdminSupplierOfferShowcasePreviewRead,
+    AdminSupplierOfferShowcaseTemplatePreviewRead,
     AdminSupplierOfferTourBridgeRead,
     SupplierOfferExecutionLinkRead,
 )
@@ -35,6 +36,7 @@ from app.services.supplier_offer_ai_public_copy_fact_lock import evaluate_ai_pub
 from app.services.supplier_offer_bot_start_routing import resolve_sup_offer_start_mini_app_routing
 from app.services.supplier_offer_content_quality_review import evaluate_content_quality_review
 from app.services.supplier_offer_conversion_status_panel import build_conversion_status_panel
+from app.services.showcase_marketing_template_library import build_showcase_template_preview_payload
 from app.services.supplier_offer_cover_media_quality_review import (
     approve_cover_for_card_operator_action_disabled_reasons,
     evaluate_cover_media_quality_review,
@@ -431,6 +433,10 @@ class SupplierOfferReviewPackageService:
             conversion_preview=conv,
         )
 
+        showcase_template_preview = AdminSupplierOfferShowcaseTemplatePreviewRead.model_validate(
+            build_showcase_template_preview_payload(row),
+        )
+
         return AdminSupplierOfferReviewPackageRead(
             offer=offer_read,
             showcase_preview=showcase,
@@ -445,6 +451,7 @@ class SupplierOfferReviewPackageService:
             content_quality_review=content_quality_review,
             cover_media_quality_review=cover_media_quality_review,
             operator_workflow=operator_workflow,
+            showcase_template_preview=showcase_template_preview,
             warnings=warnings,
             recommended_next_actions=actions,
         )

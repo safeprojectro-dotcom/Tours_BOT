@@ -104,6 +104,7 @@ from app.schemas.supplier_admin import (
     AdminSupplierOfferRead,
     AdminSupplierOfferReviewPackageRead,
     AdminSupplierOfferShowcasePreviewRead,
+    AdminSupplierOfferShowcaseTemplatePreviewRead,
 )
 from app.services.admin_read import AdminReadService
 from app.services.admin_tour_write import (
@@ -1064,6 +1065,41 @@ def _queue_text(language_code: str | None, *, offers: list[AdminSupplierOfferRea
     return "\n".join(lines)
 
 
+def _showcase_template_preview_telegram_compact(
+    language_code: str | None,
+    stp: AdminSupplierOfferShowcaseTemplatePreviewRead,
+) -> str:
+    lines = [
+        translate(language_code, "admin_offer_showcase_template_b12b_header"),
+        translate(
+            language_code,
+            "admin_offer_showcase_template_b12b_inference",
+            inferred=stp.inferred_template_id,
+            effective=stp.effective_template_id,
+        ),
+    ]
+    if stp.selected_template_id:
+        lines.append(
+            translate(
+                language_code,
+                "admin_offer_showcase_template_b12b_selected",
+                tid=stp.selected_template_id,
+            ),
+        )
+    if stp.selection_overrides_inference:
+        lines.append(translate(language_code, "admin_offer_showcase_template_b12b_override_note"))
+    if stp.notes:
+        lines.append(
+            translate(
+                language_code,
+                "admin_offer_showcase_template_b12b_notes",
+                notes=", ".join(stp.notes),
+            ),
+        )
+    lines.append(translate(language_code, "admin_offer_showcase_template_b12b_publish_unchanged"))
+    return "\n".join(lines)
+
+
 def _operator_workflow_telegram_append(session, language_code: str | None, *, offer_id: int) -> str | None:
     """Read-only projection from ``GET …/review-package`` — never performs admin mutations."""
     try:
@@ -1078,6 +1114,7 @@ def _operator_workflow_telegram_append(session, language_code: str | None, *, of
         language_code=language_code,
         translate_fn=translate,
     )
+    parts: list[str] = [ow]
     csp = getattr(pkg, "conversion_status_panel", None)
     if isinstance(csp, AdminSupplierOfferConversionStatusPanelRead):
         panel = format_conversion_status_panel_for_telegram(
@@ -1085,8 +1122,11 @@ def _operator_workflow_telegram_append(session, language_code: str | None, *, of
             language_code=language_code,
             translate_fn=translate,
         )
-        return ow + "\n\n" + panel
-    return ow
+        parts.append(panel)
+    stp = getattr(pkg, "showcase_template_preview", None)
+    if isinstance(stp, AdminSupplierOfferShowcaseTemplatePreviewRead):
+        parts.append(_showcase_template_preview_telegram_compact(language_code, stp))
+    return "\n\n".join(parts)
 
 
 def _offer_detail_text(session, language_code: str | None, *, offer: AdminSupplierOfferRead) -> str:

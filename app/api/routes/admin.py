@@ -154,6 +154,7 @@ from app.schemas.supplier_admin import (
     AdminSupplierOfferCoverPutBody,
     AdminPackagingApproveBody,
     AdminPackagingReasonBody,
+    AdminPackagingShowcaseTemplatePatch,
     AdminPackagingTelegramDraftPatch,
     AdminSupplierOfferExecutionLinkBody,
     AdminSupplierOfferExecutionLinkCloseBody,
@@ -1256,6 +1257,30 @@ def post_supplier_offer_packaging_request_clarification(
     except SupplierOfferPackagingReviewNotFoundError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+
+
+@router.patch("/supplier-offers/{offer_id}/packaging/showcase-template", response_model=AdminSupplierOfferRead)
+def patch_supplier_offer_packaging_showcase_template(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    body: AdminPackagingShowcaseTemplatePatch = Body(...),
+) -> AdminSupplierOfferRead:
+    """B12B: admin selects marketing template hint in packaging_draft_json (channel publish unchanged)."""
+    try:
+        out = SupplierOfferPackagingReviewService().patch_showcase_marketing_template(
+            db,
+            offer_id=offer_id,
+            template_id=body.template_id,
+            live_seats_remaining=body.live_seats_remaining,
+        )
+        db.commit()
+        return out
+    except SupplierOfferPackagingReviewNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    except SupplierOfferPackagingReviewStateError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
 
 
 @router.patch("/supplier-offers/{offer_id}/packaging/draft", response_model=AdminSupplierOfferRead)

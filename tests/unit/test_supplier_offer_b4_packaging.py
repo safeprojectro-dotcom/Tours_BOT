@@ -105,6 +105,38 @@ class B4PackagingAPITests(FoundationDBTestCase):
         self.assertIn(row.packaging_status, (SupplierOfferPackagingStatus.PACKAGING_GENERATED, SupplierOfferPackagingStatus.NEEDS_ADMIN_REVIEW))
         self.assertIsNotNone(row.packaging_draft_json)
 
+    def test_packaging_regenerate_preserves_showcase_template_admin_selection(self) -> None:
+        s = self.create_supplier()
+        dep = datetime(2026, 8, 15, 8, 0, tzinfo=UTC)
+        ret = dep + timedelta(hours=10)
+        o = self.create_supplier_offer(
+            s,
+            title="B12B regen",
+            program_text="P",
+            departure_datetime=dep,
+            return_datetime=ret,
+            base_price=Decimal("50.00"),
+            currency="EUR",
+            included_text="X",
+            excluded_text="Y",
+            packaging_status=SupplierOfferPackagingStatus.NONE,
+        )
+        self.session.commit()
+        oid = o.id
+        h = {"Authorization": "Bearer test-admin-b4"}
+        r0 = self.client.post(f"/admin/supplier-offers/{oid}/packaging/generate", headers=h)
+        self.assertEqual(r0.status_code, 200, r0.text)
+        rp = self.client.patch(
+            f"/admin/supplier-offers/{oid}/packaging/showcase-template",
+            headers=h,
+            json={"template_id": "brand_awareness_post"},
+        )
+        self.assertEqual(rp.status_code, 200, rp.text)
+        r1 = self.client.post(f"/admin/supplier-offers/{oid}/packaging/generate", headers=h)
+        self.assertEqual(r1.status_code, 200, r1.text)
+        lib = (r1.json().get("packaging_draft_json") or {}).get("showcase_marketing_template_library_v1") or {}
+        self.assertEqual(lib.get("admin_selected_template_id"), "brand_awareness_post")
+
     def test_missing_price_needs_admin_review_with_warnings(self) -> None:
         s = self.create_supplier()
         dep = datetime(2026, 8, 1, 8, 0, tzinfo=UTC)

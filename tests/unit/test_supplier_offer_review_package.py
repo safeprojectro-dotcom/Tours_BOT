@@ -118,6 +118,13 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
         self.assertIsInstance(body["content_quality_review"]["warnings"], list)
         self.assertEqual(body["offer"]["lifecycle_status"], "ready_for_moderation")
         self.assertNotEqual(body["offer"]["packaging_status"], "approved_for_publish")
+        stp = body["showcase_template_preview"]
+        self.assertIn("inferred_template_id", stp)
+        self.assertIn("effective_template_id", stp)
+        self.assertIn("preview_fact_lines_ro_html", stp)
+        self.assertTrue(stp["channel_publish_unchanged"])
+        self.assertIsInstance(stp["template_choices"], list)
+        self.assertGreater(len(stp["template_choices"]), 0)
         br = body["bridge_readiness"]
         self.assertIn("packaging_not_approved", br["blocking_codes"])
         self.assertFalse(br["can_attempt_bridge"])
