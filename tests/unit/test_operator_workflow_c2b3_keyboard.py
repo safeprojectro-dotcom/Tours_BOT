@@ -14,6 +14,7 @@ from app.bot.constants import (
     ADMIN_OPS_OW_PKG_APPROVE_PROPOSE_PREFIX,
     ADMIN_OPS_OW_PKG_GEN_PROPOSE_PREFIX,
     ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX,
+    ADMIN_OPS_OW_TOUR_BRIDGE_PROPOSE_PREFIX,
     ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX,
     ADMIN_OPS_OW_SHOWCASE_PREVIEW_PREFIX,
 )
@@ -132,6 +133,7 @@ class OperatorWorkflowC2b3KeyboardTests(unittest.TestCase):
                 _read_act("get_showcase_preview"),
                 _mut_act("generate_packaging_draft"),
                 _mut_act("approve_packaging_for_publish"),
+                _mut_act("create_tour_bridge"),
                 _public_act("publish_showcase_channel"),
             ],
             blocking_reasons=[],
@@ -144,9 +146,11 @@ class OperatorWorkflowC2b3KeyboardTests(unittest.TestCase):
         texts, callbacks = _flat_markup(_detail_keyboard("en", offer, session=MagicMock()).as_markup())
         ix = {t: n for n, t in enumerate(texts)}
         self.assertLess(ix["Prepare"], ix["Approve text"])
-        self.assertLess(ix["Approve text"], ix["Publish"])
+        self.assertLess(ix["Approve text"], ix["Link tour"])
+        self.assertLess(ix["Link tour"], ix["Publish"])
         legacy_publish = f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_PUBLISH}:12"
         self.assertNotIn(legacy_publish, callbacks)
+        self.assertTrue(any(str(c).startswith(ADMIN_OPS_OW_TOUR_BRIDGE_PROPOSE_PREFIX) for c in callbacks if c))
         self.assertTrue(any(str(c).startswith(ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX) for c in callbacks if c))
 
     @patch("app.bot.handlers.admin_moderation.SupplierOfferReviewPackageService")

@@ -25,6 +25,8 @@ from app.bot.constants import (
     ADMIN_OFFERS_ACTION_RETRACT,
     ADMIN_OPS_OW_PUBLISH_SHOWCASE_CONFIRM_PREFIX,
     ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX,
+    ADMIN_OPS_OW_TOUR_BRIDGE_CONFIRM_PREFIX,
+    ADMIN_OPS_OW_TOUR_BRIDGE_PROPOSE_PREFIX,
 )
 from app.bot.handlers import admin_moderation
 from app.core.config import get_settings
@@ -45,6 +47,10 @@ from app.models.supplier import SupplierOfferExecutionLink
 from app.schemas.supplier_admin import (
     AdminSupplierOfferOperatorWorkflowActionRead,
     AdminSupplierOfferOperatorWorkflowRead,
+)
+from app.services.supplier_offer_tour_bridge_service import (
+    SupplierOfferTourBridgeResult,
+    SupplierOfferTourBridgeService,
 )
 from tests.unit.base import FoundationDBTestCase
 
@@ -1968,6 +1974,81 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         assert row is not None
         self.assertEqual(row.lifecycle_status, SupplierOfferLifecycle.PUBLISHED)
         self.assertIn("published", text)
+
+    def test_workflow_tour_bridge_confirm_calls_service_when_gate_enabled(self) -> None:
+        valid_offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.APPROVED)
+        ow = AdminSupplierOfferOperatorWorkflowRead(
+            state="ready_to_create_tour_bridge",
+            primary_next_action="create_tour_bridge",
+            actions=[
+                AdminSupplierOfferOperatorWorkflowActionRead(
+                    code="create_tour_bridge",
+                    label="x",
+                    enabled=True,
+                    danger_level="safe_mutation",
+                    requires_confirmation=False,
+                    method="POST",
+                    endpoint="/admin/supplier-offers/{offer_id}/tour-bridge",
+                ),
+            ],
+            blocking_reasons=[],
+            warnings=[],
+        )
+        mock_pkg = MagicMock()
+        mock_pkg.operator_workflow = ow
+        mock_result = SupplierOfferTourBridgeResult(
+            id=1,
+            supplier_offer_id=valid_offer_id,
+            tour_id=555,
+            bridge_status="active",
+            bridge_kind="created_new_tour",
+            tour_status="draft",
+            created_at=datetime.now(UTC),
+            idempotent_replay=False,
+            warnings=[],
+            notes=None,
+            source_packaging_status="approved_for_publish",
+            source_lifecycle_status="approved",
+        )
+
+        async def body():
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            propose_cb = _callback(
+                telegram_user_id=990001,
+                data=f"{ADMIN_OPS_OW_TOUR_BRIDGE_PROPOSE_PREFIX}{valid_offer_id}",
+                message=message,
+            )
+            confirm_cb = _callback(
+                telegram_user_id=990001,
+                data=f"{ADMIN_OPS_OW_TOUR_BRIDGE_CONFIRM_PREFIX}{valid_offer_id}",
+                message=message,
+            )
+            with (
+                patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)),
+                patch.object(
+                    admin_moderation.SupplierOfferReviewPackageService,
+                    "review_package",
+                    return_value=mock_pkg,
+                ),
+                patch.object(
+                    SupplierOfferTourBridgeService,
+                    "create_or_replay_bridge",
+                    return_value=mock_result,
+                ) as mock_bridge,
+            ):
+                await admin_moderation.admin_ops_operator_workflow_c2b10ta_tour_bridge(propose_cb, state)
+                await admin_moderation.admin_ops_operator_workflow_c2b10ta_tour_bridge(confirm_cb, state)
+            text = "\n".join(c.args[0].lower() for c in message.answer.call_args_list if c.args)
+            return text, mock_bridge
+
+        text, mock_bridge = asyncio.run(body())
+        mock_bridge.assert_called_once()
+        call_kw = mock_bridge.call_args.kwargs
+        self.assertEqual(call_kw.get("supplier_offer_id"), valid_offer_id)
+        self.assertEqual(call_kw.get("created_by"), "telegram:990001")
+        self.assertIn("tour bridge ready", text)
+        self.assertIn("555", text)
 
     def test_admin_can_retract_only_from_valid_state(self) -> None:
         invalid_offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.APPROVED)

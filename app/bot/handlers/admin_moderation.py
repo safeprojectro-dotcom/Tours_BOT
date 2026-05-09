@@ -62,6 +62,9 @@ from app.bot.constants import (
     ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX,
     ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX,
     ADMIN_OPS_OW_SHOWCASE_PREVIEW_PREFIX,
+    ADMIN_OPS_OW_TOUR_BRIDGE_CANCEL_PREFIX,
+    ADMIN_OPS_OW_TOUR_BRIDGE_CONFIRM_PREFIX,
+    ADMIN_OPS_OW_TOUR_BRIDGE_PROPOSE_PREFIX,
     ADMIN_OPS_ORDERS_PAGE_PREFIX,
     ADMIN_OPS_REQUEST_ASSIGN_ME_PREFIX,
     ADMIN_OPS_REQUEST_DETAIL_PREFIX,
@@ -133,6 +136,14 @@ from app.services.supplier_offer_review_package_service import (
     SupplierOfferReviewPackageService,
 )
 from app.services.supplier_offer_supplier_notification_service import SupplierOfferSupplierNotificationService
+from app.services.supplier_offer_tour_bridge_service import (
+    SupplierOfferTourBridgeExistingTourError,
+    SupplierOfferTourBridgeNotFoundError,
+    SupplierOfferTourBridgeService,
+    SupplierOfferTourBridgeStateError,
+    SupplierOfferTourBridgeTourNotFoundError,
+    SupplierOfferTourBridgeValidationError,
+)
 
 logger = logging.getLogger(__name__)
 router = Router(name="admin-moderation")
@@ -170,6 +181,7 @@ OPERATOR_WORKFLOW_C2B2_GENERATE_CODE = "generate_packaging_draft"
 OPERATOR_WORKFLOW_C2B6_REQUEST_PHOTO_CODE = "request_cover_photo_replacement"
 OPERATOR_WORKFLOW_C2B7_2_APPROVE_COVER_CODE = "approve_cover_for_card"
 OPERATOR_WORKFLOW_C2B8B_PUBLISH_SHOWCASE_CODE = "publish_showcase_channel"
+OPERATOR_WORKFLOW_C2B10TA_CREATE_TOUR_BRIDGE_CODE = "create_tour_bridge"
 _SHOWCASE_PREVIEW_BODY_MAX = 3200
 
 
@@ -386,6 +398,44 @@ def _publish_showcase_confirmation_keyboard(language_code: str | None, *, offer_
     return kb
 
 
+def _operator_workflow_c2b10ta_tour_bridge_propose_callback(
+    offer_id: int,
+    ow: AdminSupplierOfferOperatorWorkflowRead,
+) -> str | None:
+    """Slice C2B10T-A: propose when create_tour_bridge workflow action is enabled."""
+    for act in ow.actions:
+        if act.code == OPERATOR_WORKFLOW_C2B10TA_CREATE_TOUR_BRIDGE_CODE and act.enabled:
+            return f"{ADMIN_OPS_OW_TOUR_BRIDGE_PROPOSE_PREFIX}{offer_id}"
+    return None
+
+
+def _tour_bridge_confirm_prompt_text(language_code: str | None, *, offer_id: int) -> str:
+    oid = str(offer_id)
+    return _telegram_plain_trim(
+        "\n".join(
+            [
+                translate(language_code, "admin_offer_ow_bridge_confirm_title", offer_id=oid),
+                translate(language_code, "admin_offer_ow_bridge_hint_short"),
+                translate(language_code, "admin_offer_ow_bridge_confirm_question"),
+            ],
+        ),
+    )
+
+
+def _tour_bridge_confirmation_keyboard(language_code: str | None, *, offer_id: int) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    kb.button(
+        text=translate(language_code, "admin_offer_ow_bridge_confirm_ok"),
+        callback_data=f"{ADMIN_OPS_OW_TOUR_BRIDGE_CONFIRM_PREFIX}{offer_id}",
+    )
+    kb.button(
+        text=translate(language_code, "admin_offer_ow_pkg_confirm_cancel"),
+        callback_data=f"{ADMIN_OPS_OW_TOUR_BRIDGE_CANCEL_PREFIX}{offer_id}",
+    )
+    kb.adjust(2)
+    return kb
+
+
 def _operator_workflow_c2a_callback_specs(
     offer_id: int,
     ow: AdminSupplierOfferOperatorWorkflowRead,
@@ -547,6 +597,9 @@ def _detail_keyboard(language_code: str | None, offer: AdminSupplierOfferRead, s
         propose_cb = _operator_workflow_c2b1_packaging_propose_callback(offer.id, ow)
         if propose_cb:
             workflow_buttons.append((translate(language_code, "admin_offer_ow_pkg_btn_propose"), propose_cb))
+        bridge_cb = _operator_workflow_c2b10ta_tour_bridge_propose_callback(offer.id, ow)
+        if bridge_cb:
+            workflow_buttons.append((translate(language_code, "admin_offer_ow_bridge_btn_propose"), bridge_cb))
         pub_cb = _operator_workflow_c2b8b_publish_propose_callback(offer.id, ow)
         if pub_cb:
             workflow_buttons.append((translate(language_code, "admin_offer_ow_publish_btn_propose"), pub_cb))
@@ -2536,6 +2589,150 @@ async def admin_ops_operator_workflow_c2b8b_publish_showcase(query: CallbackQuer
             await query.message.answer(translate(lg, "admin_offer_action_done_publish", offer_id=str(offer_id)))
             body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=updated))
             await query.message.answer(body, reply_markup=_detail_keyboard(lg, updated, session).as_markup())
+            await query.answer()
+    except SupplierOfferReviewPackageNotFoundError:
+        await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+
+
+@router.callback_query(
+    F.data.startswith(ADMIN_OPS_OW_TOUR_BRIDGE_PROPOSE_PREFIX)
+    | F.data.startswith(ADMIN_OPS_OW_TOUR_BRIDGE_CONFIRM_PREFIX)
+    | F.data.startswith(ADMIN_OPS_OW_TOUR_BRIDGE_CANCEL_PREFIX)
+)
+async def admin_ops_operator_workflow_c2b10ta_tour_bridge(query: CallbackQuery, state: FSMContext) -> None:
+    """Slice C2B10T-A: create_tour_bridge → SupplierOfferTourBridgeService (confirmation + re-read required)."""
+    if query.from_user is None or query.data is None or query.message is None:
+        return
+    with SessionLocal() as session:
+        lg = _user_service().resolve_language(
+            session,
+            telegram_user_id=query.from_user.id,
+            telegram_language_code=query.from_user.language_code,
+        )
+    if await _deny_if_not_allowed(query, language_code=lg):
+        await state.clear()
+        return
+
+    data = query.data
+
+    if data.startswith(ADMIN_OPS_OW_TOUR_BRIDGE_CANCEL_PREFIX):
+        raw_id = data.removeprefix(ADMIN_OPS_OW_TOUR_BRIDGE_CANCEL_PREFIX)
+        offer_id = int(raw_id) if raw_id.isdigit() else 0
+        if offer_id <= 0:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        try:
+            await query.message.edit_text(translate(lg, "admin_offer_ow_pkg_confirm_cancelled"))
+        except TelegramBadRequest:
+            await query.message.answer(translate(lg, "admin_offer_ow_pkg_confirm_cancelled"))
+        await query.answer()
+        return
+
+    if data.startswith(ADMIN_OPS_OW_TOUR_BRIDGE_PROPOSE_PREFIX):
+        raw_id = data.removeprefix(ADMIN_OPS_OW_TOUR_BRIDGE_PROPOSE_PREFIX)
+        offer_id = int(raw_id) if raw_id.isdigit() else 0
+        if offer_id <= 0:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        try:
+            with SessionLocal() as session:
+                pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+                bridge_ok = any(
+                    a.code == OPERATOR_WORKFLOW_C2B10TA_CREATE_TOUR_BRIDGE_CODE and a.enabled
+                    for a in pkg.operator_workflow.actions
+                )
+                if not bridge_ok:
+                    await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                    return
+                prompt = _tour_bridge_confirm_prompt_text(lg, offer_id=offer_id)
+                markup = _tour_bridge_confirmation_keyboard(lg, offer_id=offer_id).as_markup()
+            await query.message.answer(prompt, reply_markup=markup)
+            await query.answer()
+        except SupplierOfferReviewPackageNotFoundError:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+        return
+
+    raw_id = data.removeprefix(ADMIN_OPS_OW_TOUR_BRIDGE_CONFIRM_PREFIX)
+    offer_id = int(raw_id) if raw_id.isdigit() else 0
+    if offer_id <= 0:
+        await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+        return
+
+    try:
+        with SessionLocal() as session:
+            pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+            bridge_ok = any(
+                a.code == OPERATOR_WORKFLOW_C2B10TA_CREATE_TOUR_BRIDGE_CODE and a.enabled
+                for a in pkg.operator_workflow.actions
+            )
+            if not bridge_ok:
+                await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                return
+            created_by = f"telegram:{query.from_user.id}"
+            bridge_svc = SupplierOfferTourBridgeService()
+            try:
+                res = bridge_svc.create_or_replay_bridge(
+                    session,
+                    supplier_offer_id=offer_id,
+                    created_by=created_by,
+                    notes=None,
+                    existing_tour_id=None,
+                )
+                session.commit()
+            except SupplierOfferTourBridgeNotFoundError:
+                session.rollback()
+                await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+                return
+            except SupplierOfferTourBridgeValidationError as exc:
+                session.rollback()
+                detail = ", ".join(exc.missing_fields) if exc.missing_fields else str(exc)
+                await query.message.answer(translate(lg, "admin_offer_ow_bridge_failed", detail=detail))
+                await query.answer()
+                return
+            except SupplierOfferTourBridgeStateError as exc:
+                session.rollback()
+                await query.message.answer(
+                    translate(lg, "admin_offer_ow_bridge_failed", detail=exc.message),
+                )
+                await query.answer()
+                return
+            except SupplierOfferTourBridgeTourNotFoundError:
+                session.rollback()
+                await query.message.answer(
+                    translate(lg, "admin_offer_ow_bridge_failed", detail="tour not found"),
+                )
+                await query.answer()
+                return
+            except SupplierOfferTourBridgeExistingTourError as exc:
+                session.rollback()
+                await query.message.answer(
+                    translate(lg, "admin_offer_ow_bridge_failed", detail=str(exc.message)),
+                )
+                await query.answer()
+                return
+            except Exception as exc:
+                logger.warning("tour bridge telegram failed offer_id=%s: %s", offer_id, exc)
+                session.rollback()
+                await query.message.answer(translate(lg, "admin_offer_ow_bridge_failed", detail=str(exc)))
+                await query.answer()
+                return
+
+            row = SupplierOfferModerationService()._offers.get_any(session, offer_id=offer_id)
+            if row is None:
+                await query.message.answer(translate(lg, "admin_offer_no_current"))
+                await query.answer()
+                return
+            offer_read = SupplierOfferModerationService()._to_read(row)
+            await query.message.answer(
+                translate(
+                    lg,
+                    "admin_offer_ow_bridge_done",
+                    offer_id=str(offer_id),
+                    tour_id=str(res.tour_id),
+                ),
+            )
+            body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=offer_read))
+            await query.message.answer(body, reply_markup=_detail_keyboard(lg, offer_read, session).as_markup())
             await query.answer()
     except SupplierOfferReviewPackageNotFoundError:
         await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
