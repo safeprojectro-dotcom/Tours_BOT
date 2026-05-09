@@ -34,6 +34,7 @@ from app.services.mini_app_supplier_offer_landing import (
 from app.services.supplier_offer_ai_public_copy_fact_lock import evaluate_ai_public_copy_fact_lock
 from app.services.supplier_offer_bot_start_routing import resolve_sup_offer_start_mini_app_routing
 from app.services.supplier_offer_content_quality_review import evaluate_content_quality_review
+from app.services.supplier_offer_conversion_status_panel import build_conversion_status_panel
 from app.services.supplier_offer_cover_media_quality_review import (
     approve_cover_for_card_operator_action_disabled_reasons,
     evaluate_cover_media_quality_review,
@@ -418,6 +419,18 @@ class SupplierOfferReviewPackageService:
             approve_cover_for_card_disabled_reasons=approve_cover_for_card_operator_action_disabled_reasons(row),
         )
 
+        conversion_status_panel = build_conversion_status_panel(
+            offer=offer_read,
+            showcase=showcase,
+            bridge_readiness=bridge_readiness_read,
+            linked_tour_catalog=linked_catalog,
+            execution_links_review=execution_links_read,
+            mini_app_conversion_preview=mini_app,
+            conversion_closure=closure,
+            operator_workflow=operator_workflow,
+            conversion_preview=conv,
+        )
+
         return AdminSupplierOfferReviewPackageRead(
             offer=offer_read,
             showcase_preview=showcase,
@@ -427,6 +440,7 @@ class SupplierOfferReviewPackageService:
             execution_links_review=execution_links_read,
             mini_app_conversion_preview=mini_app,
             conversion_closure=closure,
+            conversion_status_panel=conversion_status_panel,
             ai_public_copy_review=ai_public_copy_review,
             content_quality_review=content_quality_review,
             cover_media_quality_review=cover_media_quality_review,

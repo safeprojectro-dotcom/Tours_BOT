@@ -132,6 +132,13 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
         self.assertFalse(cc["has_tour_bridge"])
         self.assertFalse(cc["has_active_execution_link"])
         self.assertEqual(cc["next_missing_step"], "approve_packaging")
+        self.assertIn("conversion_status_panel", body)
+        csp = body["conversion_status_panel"]
+        self.assertEqual(csp["showcase"]["status"], "not_published")
+        self.assertEqual(csp["tour_bridge"]["status"], "missing")
+        self.assertEqual(csp["catalog"]["status"], "not_listed")
+        self.assertEqual(csp["booking_link"]["status"], "missing")
+        self.assertEqual(csp["customer_action"]["status"], "not_bookable_yet")
         ow = body["operator_workflow"]
         self.assertEqual(ow["state"], "awaiting_packaging_approval")
         self.assertEqual(ow["primary_next_action"], "generate_packaging_draft")

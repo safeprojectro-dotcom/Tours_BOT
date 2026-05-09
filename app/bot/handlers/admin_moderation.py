@@ -80,6 +80,9 @@ from app.bot.constants import (
     ADMIN_OPS_REQUESTS_PAGE_PREFIX,
 )
 from app.bot.messages import translate
+from app.bot.supplier_offer_conversion_status_panel_telegram import (
+    format_conversion_status_panel_for_telegram,
+)
 from app.bot.supplier_offer_operator_workflow_telegram import format_operator_workflow_for_telegram
 from app.bot.services import TelegramUserContextService
 from app.bot.state import AdminModerationState
@@ -96,6 +99,7 @@ from app.repositories.user import UserRepository
 from app.models.supplier import Supplier
 from app.models.tour import Tour
 from app.schemas.supplier_admin import (
+    AdminSupplierOfferConversionStatusPanelRead,
     AdminSupplierOfferOperatorWorkflowRead,
     AdminSupplierOfferRead,
     AdminSupplierOfferReviewPackageRead,
@@ -1069,11 +1073,20 @@ def _operator_workflow_telegram_append(session, language_code: str | None, *, of
     except Exception as exc:
         logger.warning("operator_workflow telegram block skipped for offer_id=%s: %s", offer_id, exc)
         return None
-    return format_operator_workflow_for_telegram(
+    ow = format_operator_workflow_for_telegram(
         pkg.operator_workflow,
         language_code=language_code,
         translate_fn=translate,
     )
+    csp = getattr(pkg, "conversion_status_panel", None)
+    if isinstance(csp, AdminSupplierOfferConversionStatusPanelRead):
+        panel = format_conversion_status_panel_for_telegram(
+            csp,
+            language_code=language_code,
+            translate_fn=translate,
+        )
+        return ow + "\n\n" + panel
+    return ow
 
 
 def _offer_detail_text(session, language_code: str | None, *, offer: AdminSupplierOfferRead) -> str:

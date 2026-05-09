@@ -348,6 +348,28 @@ class AdminSupplierOfferOperatorWorkflowRead(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class AdminSupplierOfferConversionStatusPanelLayerRead(BaseModel):
+    """Single row of the C2B11A ops conversion panel (plain-language summary, no raw DB enums)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: str
+    summary: str
+    detail: str | None = None
+
+
+class AdminSupplierOfferConversionStatusPanelRead(BaseModel):
+    """Five-layer conversion visibility for admin/OPS (derived read-only from review-package inputs)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    showcase: AdminSupplierOfferConversionStatusPanelLayerRead
+    tour_bridge: AdminSupplierOfferConversionStatusPanelLayerRead
+    catalog: AdminSupplierOfferConversionStatusPanelLayerRead
+    booking_link: AdminSupplierOfferConversionStatusPanelLayerRead
+    customer_action: AdminSupplierOfferConversionStatusPanelLayerRead
+
+
 class AdminSupplierOfferReviewPackageRead(BaseModel):
     """Read-only aggregated admin review surface (no mutations)."""
 
@@ -361,6 +383,7 @@ class AdminSupplierOfferReviewPackageRead(BaseModel):
     execution_links_review: AdminSupplierOfferExecutionLinksReviewRead
     mini_app_conversion_preview: AdminSupplierOfferMiniAppConversionPreviewRead
     conversion_closure: AdminSupplierOfferConversionClosureRead
+    conversion_status_panel: AdminSupplierOfferConversionStatusPanelRead
     ai_public_copy_review: AdminSupplierOfferAiPublicCopyReviewRead
     content_quality_review: AdminSupplierOfferContentQualityReviewRead
     cover_media_quality_review: AdminSupplierOfferCoverMediaQualityReviewRead
