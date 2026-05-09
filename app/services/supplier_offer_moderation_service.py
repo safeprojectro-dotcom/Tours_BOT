@@ -12,8 +12,12 @@ from app.models.supplier import SupplierOffer
 from app.repositories.supplier import SupplierOfferRepository
 from app.schemas.supplier_admin import AdminSupplierOfferRead, AdminSupplierOfferShowcasePreviewRead
 from app.services.supplier_offer_deep_link import mini_app_supplier_offer_url, private_bot_deeplink
+from app.services.showcase_channel_adapter import (
+    ShowcaseChannelPublishRequest,
+    TelegramShowcaseChannelAdapter,
+)
 from app.services.supplier_offer_showcase_message import build_showcase_publication
-from app.services.telegram_showcase_client import TelegramShowcaseSendError, delete_channel_message, send_showcase_publication
+from app.services.telegram_showcase_client import TelegramShowcaseSendError, delete_channel_message
 
 
 class SupplierOfferModerationNotFoundError(Exception):
@@ -157,15 +161,20 @@ class SupplierOfferModerationService:
                 "Set TELEGRAM_OFFER_SHOWCASE_CHANNEL_ID and TELEGRAM_BOT_TOKEN to publish.",
             )
         pub = build_showcase_publication(row, cfg)
+        adapter = TelegramShowcaseChannelAdapter(settings=cfg)
         try:
-            message_id = send_showcase_publication(
-                bot_token=token,
-                chat_id=channel_id,
-                caption_html=pub.caption_html,
-                photo_url=pub.photo_url,
+            result = adapter.publish(
+                ShowcaseChannelPublishRequest(
+                    offer_id=offer_id,
+                    publication=pub,
+                    channel_ref=channel_id,
+                ),
             )
         except TelegramShowcaseSendError as exc:
             raise SupplierOfferModerationStateError(f"Telegram publish failed: {exc}") from exc
+        message_id = int(result.message_id) if result.message_id is not None else None
+        if message_id is None:
+            raise SupplierOfferModerationStateError("Telegram publish returned no message_id.")
 
         row.lifecycle_status = SupplierOfferLifecycle.PUBLISHED
         row.published_at = datetime.now(UTC)

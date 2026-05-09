@@ -1969,7 +1969,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
                     side_effect=review_package_side_effect,
                 ),
                 patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
-                patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=501),
+                patch("app.services.telegram_showcase_client.send_showcase_publication", return_value=501),
             ):
                 await admin_moderation.admin_ops_operator_workflow_c2b8b_publish_showcase(propose_cb, state)
                 await admin_moderation.admin_ops_operator_workflow_c2b8b_publish_showcase(confirm_cb, state)

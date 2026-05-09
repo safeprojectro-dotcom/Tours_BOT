@@ -416,7 +416,7 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
                 return_value=mock_cfg,
             ),
             patch(
-                "app.services.supplier_offer_moderation_service.send_showcase_publication",
+                "app.services.telegram_showcase_client.send_showcase_publication",
                 return_value=42,
             ),
         ):

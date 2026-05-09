@@ -113,7 +113,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         with (
             patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
             patch(
-                "app.services.supplier_offer_moderation_service.send_showcase_publication",
+                "app.services.telegram_showcase_client.send_showcase_publication",
                 return_value=42,
             ),
         ):
@@ -147,7 +147,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         )
         with (
             patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
-            patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=77),
+            patch("app.services.telegram_showcase_client.send_showcase_publication", return_value=77),
             patch("app.services.supplier_offer_moderation_service.delete_channel_message", return_value=True),
         ):
             p = self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
@@ -181,7 +181,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         )
         with (
             patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
-            patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=90),
+            patch("app.services.telegram_showcase_client.send_showcase_publication", return_value=90),
             patch("app.services.supplier_offer_moderation_service.delete_channel_message", return_value=True),
             patch("app.services.supplier_offer_supplier_notification_service.get_settings", return_value=mock_cfg),
             patch("app.services.supplier_offer_supplier_notification_service.send_private_text_message", return_value=123) as notify_send,
@@ -256,7 +256,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.session.commit()
         with (
             patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
-            patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=120),
+            patch("app.services.telegram_showcase_client.send_showcase_publication", return_value=120),
         ):
             self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
             self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
@@ -315,7 +315,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.session.commit()
         with (
             patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
-            patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=121),
+            patch("app.services.telegram_showcase_client.send_showcase_publication", return_value=121),
         ):
             self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
             self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
@@ -365,7 +365,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         )
         with (
             patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
-            patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=122),
+            patch("app.services.telegram_showcase_client.send_showcase_publication", return_value=122),
         ):
             self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
             self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
@@ -393,7 +393,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.session.commit()
         with (
             patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
-            patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=123),
+            patch("app.services.telegram_showcase_client.send_showcase_publication", return_value=123),
         ):
             self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
             self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
@@ -433,7 +433,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.session.commit()
         with (
             patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
-            patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=124),
+            patch("app.services.telegram_showcase_client.send_showcase_publication", return_value=124),
         ):
             self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
             self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)

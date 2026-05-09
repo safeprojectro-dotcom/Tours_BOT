@@ -147,7 +147,7 @@ class SupplierOfferCatalogConversionClosureE2ETests(FoundationDBTestCase):
         mock_cfg = self._publish_mock_cfg()
         with (
             patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
-            patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=77),
+            patch("app.services.telegram_showcase_client.send_showcase_publication", return_value=77),
         ):
             pub = self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=self._headers())
         self.assertEqual(pub.status_code, 200, pub.text)

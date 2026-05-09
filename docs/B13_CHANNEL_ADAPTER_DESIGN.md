@@ -1,8 +1,8 @@
-# B13A — Channel adapter design (showcase publishing)
+# B13 — Channel adapter design & implementation (showcase publishing)
 
-**Project:** Tours_BOT. **Status:** design only — **no** implementation in this slice.
+**Project:** Tours_BOT. **B13A:** design-only. **B13B:** behavior-preserving adapter + Telegram wrapper (**implemented**).
 
-**Related:** [`docs/B12_SHOWCASE_MARKETING_TEMPLATE_LIBRARY.md`](B12_SHOWCASE_MARKETING_TEMPLATE_LIBRARY.md) · [`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md) · [`docs/ADMIN_OPERATOR_WORKFLOW.md`](ADMIN_OPERATOR_WORKFLOW.md) · [`docs/B7_4A_MEDIA_STORAGE_PIPELINE_READINESS_AUDIT.md`](B7_4A_MEDIA_STORAGE_PIPELINE_READINESS_AUDIT.md) · [`docs/B7_4B_MEDIA_STORAGE_INGESTION_CONTRACT.md`](B7_4B_MEDIA_STORAGE_INGESTION_CONTRACT.md) · [`docs/HANDOFF_B13A_CHANNEL_ADAPTER_DESIGN_TO_NEXT_STEP.md`](HANDOFF_B13A_CHANNEL_ADAPTER_DESIGN_TO_NEXT_STEP.md).
+**Related:** [`docs/B12_SHOWCASE_MARKETING_TEMPLATE_LIBRARY.md`](B12_SHOWCASE_MARKETING_TEMPLATE_LIBRARY.md) · [`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md) · [`docs/ADMIN_OPERATOR_WORKFLOW.md`](ADMIN_OPERATOR_WORKFLOW.md) · [`docs/B7_4A_MEDIA_STORAGE_PIPELINE_READINESS_AUDIT.md`](B7_4A_MEDIA_STORAGE_PIPELINE_READINESS_AUDIT.md) · [`docs/B7_4B_MEDIA_STORAGE_INGESTION_CONTRACT.md`](B7_4B_MEDIA_STORAGE_INGESTION_CONTRACT.md) · [`docs/HANDOFF_B13A_CHANNEL_ADAPTER_DESIGN_TO_NEXT_STEP.md`](HANDOFF_B13A_CHANNEL_ADAPTER_DESIGN_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md`](HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md).
 
 ---
 
@@ -14,7 +14,7 @@ Showcase publishing must stay **safe** as more surfaces appear. A **channel adap
 
 Without this boundary, teams tend to merge **content generation**, **approval**, **media rendering**, **network I/O**, **retries**, **conversion links**, and **analytics** into one fragile path—raising the risk of duplicate posts, truth drift, or bypassing moderation.
 
-**Future channel examples** (B13A does **not** implement them):
+**Future channel examples** (not all shipped; **B13B** delivers **Telegram channel** adapter only — see **§9**):
 
 - Telegram channel (today’s baseline).
 - Telegram group.
@@ -49,7 +49,8 @@ Without this boundary, teams tend to merge **content generation**, **approval**,
 ```text
 SupplierOfferModerationService.publish
   → build_showcase_publication(row, settings)
-  → send_showcase_publication(bot_token, chat_id, caption_html, photo_url)
+  → TelegramShowcaseChannelAdapter.publish(ShowcaseChannelPublishRequest(...))
+       → send_showcase_publication(bot_token, chat_id, caption_html, photo_url)
   → persist lifecycle PUBLISHED + showcase_chat_id + showcase_message_id
 ```
 
@@ -97,24 +98,38 @@ Conceptual types (names illustrative):
 - **Input:** offer id + immutable snapshot references + settings + **already-validated** “publish allowed” decision from orchestration.
 - **Output:** success with **opaque channel ids** or **terminal failure** (retryable vs non-retryable classification).
 
-B13B should introduce a **Telegram wrapper** that wraps today’s **`send_showcase_publication`** with **no** behavior change.
+B13B **implemented** a **Telegram-only** wrapper with regression tests; see **§9**. Further channels, outbox, and publish-attempt storage remain **future**.
 
 ---
 
-## 6. Media (B7.4D)
+## 9. B13B (implemented) — adapter interface + Telegram wrapper
+
+- **Module:** **`app/services/showcase_channel_adapter.py`**
+- **DTOs:** **`ShowcaseChannelPublishRequest`** (`offer_id`, **`ShowcasePublication`**, optional `channel_ref` / `idempotency_key`); **`ShowcaseChannelPublishResult`** (`provider`, `chat_id`, `message_id` string, optional `raw_reference`).
+- **Contract:** **`ShowcaseChannelAdapter`** — sync **`publish(request) -> result`** (matches existing synchronous moderation path).
+- **Telegram:** **`TelegramShowcaseChannelAdapter`** delegates to **`send_showcase_publication`** with the same arguments as before B13B.
+- **Orchestration:** **`SupplierOfferModerationService.publish`** builds **`ShowcasePublication`** via **`build_showcase_publication`**, calls the adapter with **`channel_ref`** = configured channel id, then persists **`showcase_chat_id`**, **`showcase_message_id`**, lifecycle **`published`** as before.
+- **Unchanged:** **`build_showcase_publication`**; **`operator_workflow`** / review-package gates; admin C2B8B flow; **no** publish readiness or caption/photo behavior change; **no** outbox or publish-attempt persistence; **no** additional channels shipped.
+- **Tests:** regression on moderation publish + Telegram admin publish + adapter unit test (see **[`docs/HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md`](HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md)**).
+
+---
+
+## 10. Media (B7.4D)
 
 Pipeline is **paused** before durable rendered card integration. Adapters must accept **today’s** **`photo_url`** shapes (`telegram_photo:…`, HTTPS URL) and future **stable asset** URLs without weakening B7.x review rules—see [`docs/B7_4A_MEDIA_STORAGE_PIPELINE_READINESS_AUDIT.md`](B7_4A_MEDIA_STORAGE_PIPELINE_READINESS_AUDIT.md).
 
 ---
 
-## 7. Conversion and Layer A
+## 11. Conversion and Layer A
 
 Deep links in captions (**bot** + **Mini App** base URL) are **assembled in the content step**; adapters **emit** them only. No booking/payment calls from adapters. Conversion ordering stays as documented in ops runbooks and conversion smoke docs.
 
 ---
 
-## 8. Explicit non-goals (B13A)
+## 12. Explicit non-goals (cumulative)
 
-- No new HTTP routes, no migrations, no new channels shipped.
-- No change to **`POST …/publish`** behavior until a follow-up (e.g. **B13B**) explicitly implements a refactor **with regression tests**.
-- No Mini App, booking, payment, or order semantics changes.
+**B13A (design):** No speculative multi-channel product in the design doc alone.
+
+**B13B (implemented refactor):** **No** change to publish **readiness**, **output**, or **external** **`POST …/publish`** contract beyond delegating the send through **`TelegramShowcaseChannelAdapter`**; **no** outbox, **no** publish-attempt table, **no** migrations, **no** new non-Telegram channels, **no** Mini App / booking / payment / order changes.
+
+**Still future / explicit product gates:** optional **idempotency / audit / outbox** (e.g. **B13C**), additional channel adapters, **B12** effective template in **`build_showcase_publication`**, B7.4+ durable rendered assets.
