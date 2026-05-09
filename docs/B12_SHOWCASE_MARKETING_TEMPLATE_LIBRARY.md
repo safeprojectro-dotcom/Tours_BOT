@@ -2,7 +2,7 @@
 
 **Project:** Tours_BOT. **Scope:** supplier-offer **Telegram showcase** copy — template **classification** and **safe** metadata (B12A foundation).
 
-**Related:** [`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md) · [`docs/AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md`](AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md) · [`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md) (B12/B13 + B12A–C) · [`docs/HANDOFF_B12A_SHOWCASE_MARKETING_TEMPLATE_LIBRARY_TO_NEXT_STEP.md`](HANDOFF_B12A_SHOWCASE_MARKETING_TEMPLATE_LIBRARY_TO_NEXT_STEP.md) · [`docs/HANDOFF_B12B_ADMIN_TEMPLATE_PREVIEW_SELECT_TO_NEXT_STEP.md`](HANDOFF_B12B_ADMIN_TEMPLATE_PREVIEW_SELECT_TO_NEXT_STEP.md) · [`docs/HANDOFF_B12C_TELEGRAM_TEMPLATE_SELECTION_UI_TO_NEXT_STEP.md`](HANDOFF_B12C_TELEGRAM_TEMPLATE_SELECTION_UI_TO_NEXT_STEP.md).
+**Related:** [`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md) · [`docs/AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md`](AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md) · [`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md) (B12/B13 + B12A–C + **B13A**) · [`docs/B13_CHANNEL_ADAPTER_DESIGN.md`](B13_CHANNEL_ADAPTER_DESIGN.md) · [`docs/HANDOFF_B12A_SHOWCASE_MARKETING_TEMPLATE_LIBRARY_TO_NEXT_STEP.md`](HANDOFF_B12A_SHOWCASE_MARKETING_TEMPLATE_LIBRARY_TO_NEXT_STEP.md) · [`docs/HANDOFF_B12B_ADMIN_TEMPLATE_PREVIEW_SELECT_TO_NEXT_STEP.md`](HANDOFF_B12B_ADMIN_TEMPLATE_PREVIEW_SELECT_TO_NEXT_STEP.md) · [`docs/HANDOFF_B12C_TELEGRAM_TEMPLATE_SELECTION_UI_TO_NEXT_STEP.md`](HANDOFF_B12C_TELEGRAM_TEMPLATE_SELECTION_UI_TO_NEXT_STEP.md).
 
 ---
 
@@ -196,7 +196,7 @@ This block is **read-only** for consumers of **`GET …/review-package`**: it re
 
 ## Next likely steps
 
-1. **B13** — **Channel adapter** design: map selected / effective template id to **`build_showcase_publication`** (or sibling builders) with full regression tests; keep fact-lock and disable_web_page_preview behavior as today unless product specifies otherwise.
+1. **B13B** — **Channel adapter interface + Telegram wrapper** (behavior-preserving refactor only; **no** publish readiness or output change). Design baseline: **[`docs/B13_CHANNEL_ADAPTER_DESIGN.md`](B13_CHANNEL_ADAPTER_DESIGN.md)**; then optional wiring of **effective** template into **`build_showcase_publication`** (or sibling builders) with full regression tests when product scopes it.
 
 2. **Production content QA** — operator review of real offers (Mode A/B smoke, copy tone, bilingual needs).
 
