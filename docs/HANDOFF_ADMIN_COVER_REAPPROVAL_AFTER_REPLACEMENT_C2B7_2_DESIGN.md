@@ -48,6 +48,7 @@ Telegram **`OK poză` / `OK photo`** when **`operator_workflow`** exposes **`app
 
 - non-empty **`cover_media_reference`** that is Telegram-sendable for showcase (**`telegram_photo:{file_id}`** or **`https`** — same gate as C2B5-style preview);
 - **not** already **`approved_for_card`** with **`media_review.cover_media_reference`** equal to current row cover;
+- **C2B7.2a:** **`disabled`** when **`media_review.status`** ∈ **`replacement_requested`**, **`rejected_irrelevant`**, **`rejected_bad_quality`**, **`fallback_card_required`** **and** snapshot **`media_review.cover_media_reference`** equals current **`cover_media_reference`** (same bad hero — admin must **`PUT …/cover`** first)**;** **`enabled`** when snapshot **≠** current cover so operator can approve the new hero after replacement;
 - propose → confirm → **re-read `review-package`** → execute only if action still **`enabled`**;
 - **`approve_for_card`** only — no **`cover`** mutation, no lifecycle/publish/channel changes.
 

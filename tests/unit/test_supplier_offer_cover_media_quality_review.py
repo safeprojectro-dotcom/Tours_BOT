@@ -124,7 +124,7 @@ class ApproveCoverForCardOperatorActionTests(unittest.TestCase):
         dr = approve_cover_for_card_operator_action_disabled_reasons(_row(cover=ref, packaging_draft_json=draft))
         self.assertTrue(dr)
 
-    def test_enabled_when_replacement_requested_https(self) -> None:
+    def test_disabled_when_replacement_requested_snapshot_matches_cover(self) -> None:
         ref = "https://cdn.example/x.jpg"
         draft = {
             MEDIA_REVIEW_KEY: {
@@ -133,4 +133,28 @@ class ApproveCoverForCardOperatorActionTests(unittest.TestCase):
             },
         }
         dr = approve_cover_for_card_operator_action_disabled_reasons(_row(cover=ref, packaging_draft_json=draft))
+        self.assertTrue(dr)
+        self.assertTrue(any("replacement" in x.lower() or "unsuitable" in x.lower() for x in dr))
+
+    def test_enabled_when_replacement_requested_snapshot_differs_from_cover(self) -> None:
+        cur = "https://cdn.example/new.jpg"
+        snap = "https://cdn.example/old.jpg"
+        draft = {
+            MEDIA_REVIEW_KEY: {
+                "status": SupplierOfferMediaReviewStatus.REPLACEMENT_REQUESTED.value,
+                "cover_media_reference": snap,
+            },
+        }
+        dr = approve_cover_for_card_operator_action_disabled_reasons(_row(cover=cur, packaging_draft_json=draft))
         self.assertEqual(dr, [])
+
+    def test_disabled_when_rejected_bad_quality_snapshot_matches_cover(self) -> None:
+        ref = "https://cdn.example/x.jpg"
+        draft = {
+            MEDIA_REVIEW_KEY: {
+                "status": SupplierOfferMediaReviewStatus.REJECTED_BAD_QUALITY.value,
+                "cover_media_reference": ref,
+            },
+        }
+        dr = approve_cover_for_card_operator_action_disabled_reasons(_row(cover=ref, packaging_draft_json=draft))
+        self.assertTrue(dr)
