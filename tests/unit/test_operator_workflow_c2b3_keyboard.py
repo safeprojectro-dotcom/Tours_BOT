@@ -9,6 +9,7 @@ from app.bot.constants import (
     ADMIN_OFFERS_ACTION_APPROVE,
     ADMIN_OFFERS_ACTION_CALLBACK_PREFIX,
     ADMIN_OFFERS_ACTION_PUBLISH,
+    ADMIN_OPS_OW_ACTIVATE_CATALOG_PROPOSE_PREFIX,
     ADMIN_OPS_OW_MEDIA_OK_PROPOSE_PREFIX,
     ADMIN_OPS_OW_MEDIA_REQ_PROPOSE_PREFIX,
     ADMIN_OPS_OW_PKG_APPROVE_PROPOSE_PREFIX,
@@ -59,6 +60,18 @@ def _public_act(code: str) -> AdminSupplierOfferOperatorWorkflowActionRead:
         requires_confirmation=True,
         method="POST",
         endpoint="/admin/publish",
+    )
+
+
+def _conversion_act(code: str) -> AdminSupplierOfferOperatorWorkflowActionRead:
+    return AdminSupplierOfferOperatorWorkflowActionRead(
+        code=code,
+        label=code,
+        enabled=True,
+        danger_level="conversion_enabling",
+        requires_confirmation=True,
+        method="POST",
+        endpoint="/admin/tours/{tour_id}/activate-for-catalog",
     )
 
 
@@ -134,6 +147,7 @@ class OperatorWorkflowC2b3KeyboardTests(unittest.TestCase):
                 _mut_act("generate_packaging_draft"),
                 _mut_act("approve_packaging_for_publish"),
                 _mut_act("create_tour_bridge"),
+                _conversion_act("activate_tour_for_catalog"),
                 _public_act("publish_showcase_channel"),
             ],
             blocking_reasons=[],
@@ -147,10 +161,12 @@ class OperatorWorkflowC2b3KeyboardTests(unittest.TestCase):
         ix = {t: n for n, t in enumerate(texts)}
         self.assertLess(ix["Prepare"], ix["Approve text"])
         self.assertLess(ix["Approve text"], ix["Link tour"])
-        self.assertLess(ix["Link tour"], ix["Publish"])
+        self.assertLess(ix["Link tour"], ix["List for sale"])
+        self.assertLess(ix["List for sale"], ix["Publish"])
         legacy_publish = f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_PUBLISH}:12"
         self.assertNotIn(legacy_publish, callbacks)
         self.assertTrue(any(str(c).startswith(ADMIN_OPS_OW_TOUR_BRIDGE_PROPOSE_PREFIX) for c in callbacks if c))
+        self.assertTrue(any(str(c).startswith(ADMIN_OPS_OW_ACTIVATE_CATALOG_PROPOSE_PREFIX) for c in callbacks if c))
         self.assertTrue(any(str(c).startswith(ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX) for c in callbacks if c))
 
     @patch("app.bot.handlers.admin_moderation.SupplierOfferReviewPackageService")

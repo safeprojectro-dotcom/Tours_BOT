@@ -65,6 +65,9 @@ from app.bot.constants import (
     ADMIN_OPS_OW_TOUR_BRIDGE_CANCEL_PREFIX,
     ADMIN_OPS_OW_TOUR_BRIDGE_CONFIRM_PREFIX,
     ADMIN_OPS_OW_TOUR_BRIDGE_PROPOSE_PREFIX,
+    ADMIN_OPS_OW_ACTIVATE_CATALOG_CANCEL_PREFIX,
+    ADMIN_OPS_OW_ACTIVATE_CATALOG_CONFIRM_PREFIX,
+    ADMIN_OPS_OW_ACTIVATE_CATALOG_PROPOSE_PREFIX,
     ADMIN_OPS_ORDERS_PAGE_PREFIX,
     ADMIN_OPS_REQUEST_ASSIGN_ME_PREFIX,
     ADMIN_OPS_REQUEST_DETAIL_PREFIX,
@@ -96,6 +99,12 @@ from app.schemas.supplier_admin import (
     AdminSupplierOfferShowcasePreviewRead,
 )
 from app.services.admin_read import AdminReadService
+from app.services.admin_tour_write import (
+    AdminTourCatalogActivationStateError,
+    AdminTourCatalogActivationValidationError,
+    AdminTourNotFoundError,
+    AdminTourWriteService,
+)
 from app.services.custom_marketplace_request_service import (
     CustomMarketplaceRequestAssignConflictError,
     CustomMarketplaceRequestMarkUnderReviewNotAllowedError,
@@ -182,6 +191,7 @@ OPERATOR_WORKFLOW_C2B6_REQUEST_PHOTO_CODE = "request_cover_photo_replacement"
 OPERATOR_WORKFLOW_C2B7_2_APPROVE_COVER_CODE = "approve_cover_for_card"
 OPERATOR_WORKFLOW_C2B8B_PUBLISH_SHOWCASE_CODE = "publish_showcase_channel"
 OPERATOR_WORKFLOW_C2B10TA_CREATE_TOUR_BRIDGE_CODE = "create_tour_bridge"
+OPERATOR_WORKFLOW_C2B10TB_ACTIVATE_CATALOG_CODE = "activate_tour_for_catalog"
 _SHOWCASE_PREVIEW_BODY_MAX = 3200
 
 
@@ -436,6 +446,44 @@ def _tour_bridge_confirmation_keyboard(language_code: str | None, *, offer_id: i
     return kb
 
 
+def _operator_workflow_c2b10tb_activate_catalog_propose_callback(
+    offer_id: int,
+    ow: AdminSupplierOfferOperatorWorkflowRead,
+) -> str | None:
+    """Slice C2B10T-B: propose when activate_tour_for_catalog workflow action is enabled."""
+    for act in ow.actions:
+        if act.code == OPERATOR_WORKFLOW_C2B10TB_ACTIVATE_CATALOG_CODE and act.enabled:
+            return f"{ADMIN_OPS_OW_ACTIVATE_CATALOG_PROPOSE_PREFIX}{offer_id}"
+    return None
+
+
+def _activate_catalog_confirm_prompt_text(language_code: str | None, *, offer_id: int) -> str:
+    oid = str(offer_id)
+    return _telegram_plain_trim(
+        "\n".join(
+            [
+                translate(language_code, "admin_offer_ow_activate_catalog_confirm_title", offer_id=oid),
+                translate(language_code, "admin_offer_ow_activate_catalog_hint_short"),
+                translate(language_code, "admin_offer_ow_activate_catalog_confirm_question"),
+            ],
+        ),
+    )
+
+
+def _activate_catalog_confirmation_keyboard(language_code: str | None, *, offer_id: int) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    kb.button(
+        text=translate(language_code, "admin_offer_ow_activate_catalog_confirm_ok"),
+        callback_data=f"{ADMIN_OPS_OW_ACTIVATE_CATALOG_CONFIRM_PREFIX}{offer_id}",
+    )
+    kb.button(
+        text=translate(language_code, "admin_offer_ow_pkg_confirm_cancel"),
+        callback_data=f"{ADMIN_OPS_OW_ACTIVATE_CATALOG_CANCEL_PREFIX}{offer_id}",
+    )
+    kb.adjust(2)
+    return kb
+
+
 def _operator_workflow_c2a_callback_specs(
     offer_id: int,
     ow: AdminSupplierOfferOperatorWorkflowRead,
@@ -600,6 +648,9 @@ def _detail_keyboard(language_code: str | None, offer: AdminSupplierOfferRead, s
         bridge_cb = _operator_workflow_c2b10ta_tour_bridge_propose_callback(offer.id, ow)
         if bridge_cb:
             workflow_buttons.append((translate(language_code, "admin_offer_ow_bridge_btn_propose"), bridge_cb))
+        activate_cb = _operator_workflow_c2b10tb_activate_catalog_propose_callback(offer.id, ow)
+        if activate_cb:
+            workflow_buttons.append((translate(language_code, "admin_offer_ow_activate_catalog_btn_propose"), activate_cb))
         pub_cb = _operator_workflow_c2b8b_publish_propose_callback(offer.id, ow)
         if pub_cb:
             workflow_buttons.append((translate(language_code, "admin_offer_ow_publish_btn_propose"), pub_cb))
@@ -2729,6 +2780,140 @@ async def admin_ops_operator_workflow_c2b10ta_tour_bridge(query: CallbackQuery, 
                     "admin_offer_ow_bridge_done",
                     offer_id=str(offer_id),
                     tour_id=str(res.tour_id),
+                ),
+            )
+            body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=offer_read))
+            await query.message.answer(body, reply_markup=_detail_keyboard(lg, offer_read, session).as_markup())
+            await query.answer()
+    except SupplierOfferReviewPackageNotFoundError:
+        await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+
+
+@router.callback_query(
+    F.data.startswith(ADMIN_OPS_OW_ACTIVATE_CATALOG_PROPOSE_PREFIX)
+    | F.data.startswith(ADMIN_OPS_OW_ACTIVATE_CATALOG_CONFIRM_PREFIX)
+    | F.data.startswith(ADMIN_OPS_OW_ACTIVATE_CATALOG_CANCEL_PREFIX)
+)
+async def admin_ops_operator_workflow_c2b10tb_activate_catalog(query: CallbackQuery, state: FSMContext) -> None:
+    """Slice C2B10T-B: activate_tour_for_catalog → AdminTourWriteService.activate_tour_for_catalog (re-read required)."""
+    if query.from_user is None or query.data is None or query.message is None:
+        return
+    with SessionLocal() as session:
+        lg = _user_service().resolve_language(
+            session,
+            telegram_user_id=query.from_user.id,
+            telegram_language_code=query.from_user.language_code,
+        )
+    if await _deny_if_not_allowed(query, language_code=lg):
+        await state.clear()
+        return
+
+    data = query.data
+
+    if data.startswith(ADMIN_OPS_OW_ACTIVATE_CATALOG_CANCEL_PREFIX):
+        raw_id = data.removeprefix(ADMIN_OPS_OW_ACTIVATE_CATALOG_CANCEL_PREFIX)
+        offer_id = int(raw_id) if raw_id.isdigit() else 0
+        if offer_id <= 0:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        try:
+            await query.message.edit_text(translate(lg, "admin_offer_ow_pkg_confirm_cancelled"))
+        except TelegramBadRequest:
+            await query.message.answer(translate(lg, "admin_offer_ow_pkg_confirm_cancelled"))
+        await query.answer()
+        return
+
+    if data.startswith(ADMIN_OPS_OW_ACTIVATE_CATALOG_PROPOSE_PREFIX):
+        raw_id = data.removeprefix(ADMIN_OPS_OW_ACTIVATE_CATALOG_PROPOSE_PREFIX)
+        offer_id = int(raw_id) if raw_id.isdigit() else 0
+        if offer_id <= 0:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        try:
+            with SessionLocal() as session:
+                pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+                act_ok = any(
+                    a.code == OPERATOR_WORKFLOW_C2B10TB_ACTIVATE_CATALOG_CODE and a.enabled
+                    for a in pkg.operator_workflow.actions
+                )
+                if not act_ok:
+                    await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                    return
+                prompt = _activate_catalog_confirm_prompt_text(lg, offer_id=offer_id)
+                markup = _activate_catalog_confirmation_keyboard(lg, offer_id=offer_id).as_markup()
+            await query.message.answer(prompt, reply_markup=markup)
+            await query.answer()
+        except SupplierOfferReviewPackageNotFoundError:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+        return
+
+    raw_id = data.removeprefix(ADMIN_OPS_OW_ACTIVATE_CATALOG_CONFIRM_PREFIX)
+    offer_id = int(raw_id) if raw_id.isdigit() else 0
+    if offer_id <= 0:
+        await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+        return
+
+    try:
+        with SessionLocal() as session:
+            pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+            act_ok = any(
+                a.code == OPERATOR_WORKFLOW_C2B10TB_ACTIVATE_CATALOG_CODE and a.enabled
+                for a in pkg.operator_workflow.actions
+            )
+            if not act_ok:
+                await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                return
+            linked = pkg.linked_tour_catalog
+            if linked is None:
+                await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                return
+            tour_id = linked.tour_id
+            activated_by = f"telegram:{query.from_user.id}"
+            tour_write = AdminTourWriteService()
+            try:
+                tour_write.activate_tour_for_catalog(
+                    session,
+                    tour_id=tour_id,
+                    activated_by=activated_by,
+                    notes=None,
+                )
+                session.commit()
+            except AdminTourNotFoundError:
+                session.rollback()
+                await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+                return
+            except AdminTourCatalogActivationValidationError as exc:
+                session.rollback()
+                detail = ", ".join(exc.missing_fields) if exc.missing_fields else str(exc)
+                await query.message.answer(translate(lg, "admin_offer_ow_activate_catalog_failed", detail=detail))
+                await query.answer()
+                return
+            except AdminTourCatalogActivationStateError as exc:
+                session.rollback()
+                await query.message.answer(
+                    translate(lg, "admin_offer_ow_activate_catalog_failed", detail=exc.message),
+                )
+                await query.answer()
+                return
+            except Exception as exc:
+                logger.warning("activate catalog telegram failed offer_id=%s tour_id=%s: %s", offer_id, tour_id, exc)
+                session.rollback()
+                await query.message.answer(translate(lg, "admin_offer_ow_activate_catalog_failed", detail=str(exc)))
+                await query.answer()
+                return
+
+            row = SupplierOfferModerationService()._offers.get_any(session, offer_id=offer_id)
+            if row is None:
+                await query.message.answer(translate(lg, "admin_offer_no_current"))
+                await query.answer()
+                return
+            offer_read = SupplierOfferModerationService()._to_read(row)
+            await query.message.answer(
+                translate(
+                    lg,
+                    "admin_offer_ow_activate_catalog_done",
+                    offer_id=str(offer_id),
+                    tour_id=str(tour_id),
                 ),
             )
             body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=offer_read))

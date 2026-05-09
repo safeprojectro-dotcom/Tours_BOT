@@ -27,6 +27,8 @@ from app.bot.constants import (
     ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX,
     ADMIN_OPS_OW_TOUR_BRIDGE_CONFIRM_PREFIX,
     ADMIN_OPS_OW_TOUR_BRIDGE_PROPOSE_PREFIX,
+    ADMIN_OPS_OW_ACTIVATE_CATALOG_CONFIRM_PREFIX,
+    ADMIN_OPS_OW_ACTIVATE_CATALOG_PROPOSE_PREFIX,
 )
 from app.bot.handlers import admin_moderation
 from app.core.config import get_settings
@@ -45,6 +47,7 @@ from app.models.enums import (
 )
 from app.models.supplier import SupplierOfferExecutionLink
 from app.schemas.supplier_admin import (
+    AdminSupplierOfferLinkedTourCatalogRead,
     AdminSupplierOfferOperatorWorkflowActionRead,
     AdminSupplierOfferOperatorWorkflowRead,
 )
@@ -52,6 +55,7 @@ from app.services.supplier_offer_tour_bridge_service import (
     SupplierOfferTourBridgeResult,
     SupplierOfferTourBridgeService,
 )
+from app.services.admin_tour_write import AdminTourWriteService
 from tests.unit.base import FoundationDBTestCase
 
 
@@ -2049,6 +2053,79 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         self.assertEqual(call_kw.get("created_by"), "telegram:990001")
         self.assertIn("tour bridge ready", text)
         self.assertIn("555", text)
+
+    def test_workflow_activate_catalog_confirm_calls_service_when_gate_enabled(self) -> None:
+        valid_offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.APPROVED)
+        ow = AdminSupplierOfferOperatorWorkflowRead(
+            state="ready_to_activate_catalog",
+            primary_next_action="activate_tour_for_catalog",
+            actions=[
+                AdminSupplierOfferOperatorWorkflowActionRead(
+                    code="activate_tour_for_catalog",
+                    label="x",
+                    enabled=True,
+                    danger_level="conversion_enabling",
+                    requires_confirmation=True,
+                    method="POST",
+                    endpoint="/admin/tours/{tour_id}/activate-for-catalog",
+                ),
+            ],
+            blocking_reasons=[],
+            warnings=[],
+        )
+        linked = AdminSupplierOfferLinkedTourCatalogRead(
+            tour_id=777,
+            tour_code="T-X",
+            tour_status="draft",
+            sales_mode=TourSalesMode.PER_SEAT,
+            seats_available=10,
+            catalog_activation_missing_fields=[],
+            catalog_listed_for_mini_app=False,
+            can_activate_for_catalog=True,
+            b8_same_offer_date_conflict=False,
+        )
+        mock_pkg = MagicMock()
+        mock_pkg.operator_workflow = ow
+        mock_pkg.linked_tour_catalog = linked
+
+        async def body():
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            propose_cb = _callback(
+                telegram_user_id=990001,
+                data=f"{ADMIN_OPS_OW_ACTIVATE_CATALOG_PROPOSE_PREFIX}{valid_offer_id}",
+                message=message,
+            )
+            confirm_cb = _callback(
+                telegram_user_id=990001,
+                data=f"{ADMIN_OPS_OW_ACTIVATE_CATALOG_CONFIRM_PREFIX}{valid_offer_id}",
+                message=message,
+            )
+            with (
+                patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)),
+                patch.object(
+                    admin_moderation.SupplierOfferReviewPackageService,
+                    "review_package",
+                    return_value=mock_pkg,
+                ),
+                patch.object(
+                    AdminTourWriteService,
+                    "activate_tour_for_catalog",
+                    return_value=None,
+                ) as mock_activate,
+            ):
+                await admin_moderation.admin_ops_operator_workflow_c2b10tb_activate_catalog(propose_cb, state)
+                await admin_moderation.admin_ops_operator_workflow_c2b10tb_activate_catalog(confirm_cb, state)
+            text = "\n".join(c.args[0].lower() for c in message.answer.call_args_list if c.args)
+            return text, mock_activate
+
+        text, mock_activate = asyncio.run(body())
+        mock_activate.assert_called_once()
+        call_kw = mock_activate.call_args.kwargs
+        self.assertEqual(call_kw.get("tour_id"), 777)
+        self.assertEqual(call_kw.get("activated_by"), "telegram:990001")
+        self.assertIn("listed for sale", text)
+        self.assertIn("777", text)
 
     def test_admin_can_retract_only_from_valid_state(self) -> None:
         invalid_offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.APPROVED)

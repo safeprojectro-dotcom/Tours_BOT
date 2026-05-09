@@ -77,7 +77,7 @@ Docs-only updates are allowed if needed.
 
 **Finding:** The **explicit** offer→Tour conversion path (**B10**) is **already implemented** in the backend: `supplier_offer_tour_bridges`, `SupplierOfferTourBridgeService`, admin `POST/GET …/tour-bridge`, execution-link HTTP, `POST …/tours/{tour_id}/activate-for-catalog`, `review-package` (`bridge_readiness`, `conversion_closure`, `operator_workflow`), and **`/start supoffer_<id>`** routing via `resolve_sup_offer_start_mini_app_routing` when an active execution link + `OPEN_FOR_SALE` + catalog visibility allow it.
 
-**Main gaps are not “missing bridge”** but: **(1)** Telegram admin card still **postpones** `create_tour_bridge` / `activate_tour_for_catalog` (packaging + showcase publish + link wizard for **`published`** are elsewhere), **(2)** **~~docs drift~~** **cleared by C2B9B** (**2026-05-09**), **(3)** product follow-ups: B7.3 media bytes, B10.6 bot-as-router, optional B11 polish.
+**Main gaps are not “missing bridge”** but: **(1)** **`create_execution_link`** still **mostly** HTTP + published-offer wizard (**optional** **C2B10T-C**), **(2)** **~~docs drift~~** **cleared by C2B9B** (**2026-05-09**) **+** **C2B10T-*** in **`CHAT_HANDOFF`**, **(3)** product follow-ups: B7.3 media bytes, B10.6 bot-as-router, optional B11 polish.
 
 Continuity: [`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md) (C2B9A planning line).
 
@@ -86,7 +86,7 @@ Continuity: [`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md) (C2B9A planning line).
 Order follows current repo — **do not** treat “implement bridge HTTP” as greenfield.
 
 1. ~~**C2B9B (docs-only, recommended first):** Sync `SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md` / `ADMIN_OPERATOR_WORKFLOW.md`; add a short **conversion checklist** (bridge → activate-for-catalog → execution link → verify `conversion_closure` + optional `supoffer_` smoke). Suggested prompt: `CURSOR_PROMPT_SUPPLIER_OFFER_CONVERSION_DOCS_SYNC_C2B9B`.~~ **Done (2026-05-09):** BUSINESS plan + `ADMIN_OPERATOR_WORKFLOW.md` + `ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md` + `CHAT_HANDOFF.md` + C2B9A doc updates.
-2. **C2B10T-*** **(optional, narrow):** Telegram workflow buttons for **one** conversion action at a time (e.g. `create_tour_bridge` only), **same** propose/confirm/double **review-package** pattern as C2B8B; requires product sign-off.
+2. ~~**C2B10T-A / C2B10T-B (optional):** Telegram **Link tour** / **List for sale** with propose/confirm + double **`review-package`**.~~ **Done** — see **`docs/CHAT_HANDOFF.md`** **`;`** **optional** **C2B10T-C** — Telegram entry for **`create_execution_link`** / execution-link activation (same pattern) **or** OPS smoke per **`docs/PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md`**.
 3. **B7.3B / B10.6 / B11** — per [`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`](OPEN_QUESTIONS_AND_TECH_DEBT.md); not assumed here.
 
 **Obsolete placeholders** (if an older plan assumed no B10 — **not** current repo):
