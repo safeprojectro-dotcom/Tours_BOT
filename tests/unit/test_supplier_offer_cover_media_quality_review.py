@@ -7,7 +7,10 @@ from types import SimpleNamespace
 
 from app.bot.constants import SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX
 from app.models.enums import SupplierOfferMediaReviewStatus
-from app.services.supplier_offer_cover_media_quality_review import evaluate_cover_media_quality_review
+from app.services.supplier_offer_cover_media_quality_review import (
+    approve_cover_for_card_operator_action_disabled_reasons,
+    evaluate_cover_media_quality_review,
+)
 from app.services.supplier_offer_media_review_service import MEDIA_REVIEW_KEY
 
 
@@ -99,3 +102,35 @@ class CoverMediaQualityReviewTests(unittest.TestCase):
         )
         codes = [w.code for w in r.warnings]
         self.assertIn("showcase_photo_url_differs_from_cover_media_reference", codes)
+
+
+class ApproveCoverForCardOperatorActionTests(unittest.TestCase):
+    def test_disabled_when_no_cover(self) -> None:
+        dr = approve_cover_for_card_operator_action_disabled_reasons(_row(cover=None))
+        self.assertTrue(dr)
+
+    def test_disabled_when_not_sendable(self) -> None:
+        dr = approve_cover_for_card_operator_action_disabled_reasons(_row(cover="s3://bucket/o"))
+        self.assertTrue(dr)
+
+    def test_disabled_when_already_aligned_approved(self) -> None:
+        ref = "https://cdn.example/x.jpg"
+        draft = {
+            MEDIA_REVIEW_KEY: {
+                "status": SupplierOfferMediaReviewStatus.APPROVED_FOR_CARD.value,
+                "cover_media_reference": ref,
+            },
+        }
+        dr = approve_cover_for_card_operator_action_disabled_reasons(_row(cover=ref, packaging_draft_json=draft))
+        self.assertTrue(dr)
+
+    def test_enabled_when_replacement_requested_https(self) -> None:
+        ref = "https://cdn.example/x.jpg"
+        draft = {
+            MEDIA_REVIEW_KEY: {
+                "status": SupplierOfferMediaReviewStatus.REPLACEMENT_REQUESTED.value,
+                "cover_media_reference": ref,
+            },
+        }
+        dr = approve_cover_for_card_operator_action_disabled_reasons(_row(cover=ref, packaging_draft_json=draft))
+        self.assertEqual(dr, [])

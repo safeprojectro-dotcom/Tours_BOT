@@ -29,6 +29,27 @@ def _media_review_dict(row: SupplierOffer) -> dict | None:
     return mr if isinstance(mr, dict) else None
 
 
+def approve_cover_for_card_operator_action_disabled_reasons(row: SupplierOffer) -> list[str]:
+    """C2B7.2: disabled_reason fragments when ``approve_cover_for_card`` must stay hidden/disabled."""
+
+    dr: list[str] = []
+    cur = _norm_ref(row.cover_media_reference)
+    if not cur:
+        dr.append("No cover_media_reference — nothing to approve.")
+        return dr
+    if showcase_photo_send_argument_from_offer(row) is None:
+        dr.append(
+            "Cover reference is not sendable as Telegram photo (telegram_photo:{file_id} or https URL required).",
+        )
+        return dr
+    mr = _media_review_dict(row)
+    mr_status = ((mr.get("status") or "").strip()) if mr else ""
+    snap = _norm_ref(mr.get("cover_media_reference")) if mr else None
+    if mr_status == SupplierOfferMediaReviewStatus.APPROVED_FOR_CARD.value and snap == cur:
+        dr.append("media_review already approved_for_card for this cover reference.")
+    return dr
+
+
 _NEGATIVE_MEDIA_REVIEW: frozenset[str] = frozenset(
     {
         SupplierOfferMediaReviewStatus.REJECTED_BAD_QUALITY.value,

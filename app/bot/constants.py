@@ -124,6 +124,10 @@ ADMIN_OPS_OW_PKG_GEN_CANCEL_PREFIX = "ao:ow:qx:"
 ADMIN_OPS_OW_MEDIA_REQ_PROPOSE_PREFIX = "ao:ow:mr:"
 ADMIN_OPS_OW_MEDIA_REQ_CONFIRM_PREFIX = "ao:ow:mrc:"
 ADMIN_OPS_OW_MEDIA_REQ_CANCEL_PREFIX = "ao:ow:mrx:"
+# Slice C2B7.2: approve current cover (media_review approved_for_card) propose / confirm / cancel
+ADMIN_OPS_OW_MEDIA_OK_PROPOSE_PREFIX = "ao:ow:mok:"
+ADMIN_OPS_OW_MEDIA_OK_CONFIRM_PREFIX = "ao:ow:mokc:"
+ADMIN_OPS_OW_MEDIA_OK_CANCEL_PREFIX = "ao:ow:mokx:"
 
 ADMIN_SUPPLIERS_ACTION_CALLBACK_PREFIX = "admin:suppliers:action:"
 ADMIN_SUPPLIERS_NAV_CALLBACK_PREFIX = "admin:suppliers:nav:"

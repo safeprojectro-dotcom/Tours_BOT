@@ -41,6 +41,8 @@ Tours_BOT
 
 **Slice C2B7.1 (implemented):** **`PUT /admin/supplier-offers/{offer_id}/cover`** (central admin **`ADMIN_API_TOKEN`**) sets only **`cover_media_reference`** (string or **`null`**)**;** no Telegram upload**,** no **`publish`**, no automatic **`media_review`** update — use **`POST …/media/approve-for-card`** when B7.1 snapshot should match the new hero ref **.**
 
+**Slice C2B7.2 (implemented):** After **`PUT …/cover`**, re-approve hero for card via **`POST …/media/approve-for-card`** **or** Telegram **`OK poză` / `OK photo`** when **`operator_workflow`** exposes **`approve_cover_for_card`** **`enabled`** **`;`** propose → confirm → re-read **`review-package`** **`;`** **`SupplierOfferMediaReviewService.approve_for_card`** only **`;`** **`reviewed_by = telegram:{admin_id}`** **`;`** no publish **`/`** lifecycle **`/`** cover mutation from this action **.** Detail **`:`** **[`docs/HANDOFF_ADMIN_COVER_REAPPROVAL_AFTER_REPLACEMENT_C2B7_2_DESIGN.md`](HANDOFF_ADMIN_COVER_REAPPROVAL_AFTER_REPLACEMENT_C2B7_2_DESIGN.md)** **.**
+
 ---
 
 

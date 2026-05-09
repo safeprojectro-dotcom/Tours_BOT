@@ -111,6 +111,7 @@ def build_operator_workflow(
     cover_media_quality_review: AdminSupplierOfferCoverMediaQualityReviewRead,
     offer_has_cover_media_reference: bool = False,
     media_review_status_for_cover_photo_request: str | None = None,
+    approve_cover_for_card_disabled_reasons: list[str] | None = None,
 ) -> AdminSupplierOfferOperatorWorkflowRead:
     """Derive read-only operator hints from existing review-package slices only.
 
@@ -282,6 +283,21 @@ def build_operator_workflow(
             method="POST",
             endpoint="/admin/supplier-offers/{offer_id}/media/request-replacement",
             disabled_reason=_disabled_note(req_photo_dr),
+        ),
+    )
+
+    afc_dr = list(approve_cover_for_card_disabled_reasons or [])
+    afc_ok = not afc_dr
+    actions.append(
+        AdminSupplierOfferOperatorWorkflowActionRead(
+            code="approve_cover_for_card",
+            label="Approve cover for showcase card",
+            enabled=afc_ok,
+            danger_level="safe_mutation",
+            requires_confirmation=True,
+            method="POST",
+            endpoint="/admin/supplier-offers/{offer_id}/media/approve-for-card",
+            disabled_reason=_disabled_note(afc_dr),
         ),
     )
 

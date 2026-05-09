@@ -51,6 +51,9 @@ from app.bot.constants import (
     ADMIN_OPS_OW_PKG_GEN_CANCEL_PREFIX,
     ADMIN_OPS_OW_PKG_GEN_CONFIRM_PREFIX,
     ADMIN_OPS_OW_PKG_GEN_PROPOSE_PREFIX,
+    ADMIN_OPS_OW_MEDIA_OK_CANCEL_PREFIX,
+    ADMIN_OPS_OW_MEDIA_OK_CONFIRM_PREFIX,
+    ADMIN_OPS_OW_MEDIA_OK_PROPOSE_PREFIX,
     ADMIN_OPS_OW_MEDIA_REQ_CANCEL_PREFIX,
     ADMIN_OPS_OW_MEDIA_REQ_CONFIRM_PREFIX,
     ADMIN_OPS_OW_MEDIA_REQ_PROPOSE_PREFIX,
@@ -111,6 +114,7 @@ from app.services.supplier_offer_media_review_service import (
     DEFAULT_TELEGRAM_PREVIEW_COVER_REPLACEMENT_REASON,
     SupplierOfferMediaReviewNotFoundError,
     SupplierOfferMediaReviewService,
+    SupplierOfferMediaReviewStateError,
 )
 from app.services.supplier_offer_packaging_review_service import (
     SupplierOfferPackagingReviewNotFoundError,
@@ -161,6 +165,7 @@ OPERATOR_WORKFLOW_C2A_ACTION_CODES = frozenset({"review_package_refresh", "get_s
 OPERATOR_WORKFLOW_C2B1_PACKAGING_APPROVE_CODE = "approve_packaging_for_publish"
 OPERATOR_WORKFLOW_C2B2_GENERATE_CODE = "generate_packaging_draft"
 OPERATOR_WORKFLOW_C2B6_REQUEST_PHOTO_CODE = "request_cover_photo_replacement"
+OPERATOR_WORKFLOW_C2B7_2_APPROVE_COVER_CODE = "approve_cover_for_card"
 _SHOWCASE_PREVIEW_BODY_MAX = 3200
 
 
@@ -297,6 +302,43 @@ def _media_req_confirmation_keyboard(language_code: str | None, *, offer_id: int
     kb.button(
         text=translate(language_code, "admin_offer_ow_pkg_confirm_cancel"),
         callback_data=f"{ADMIN_OPS_OW_MEDIA_REQ_CANCEL_PREFIX}{offer_id}",
+    )
+    kb.adjust(2)
+    return kb
+
+
+def _operator_workflow_c2b7_2_ok_photo_propose_callback(
+    offer_id: int,
+    ow: AdminSupplierOfferOperatorWorkflowRead,
+) -> str | None:
+    """Slice C2B7.2: propose callback when approve_cover_for_card is enabled."""
+    for act in ow.actions:
+        if act.code == OPERATOR_WORKFLOW_C2B7_2_APPROVE_COVER_CODE and act.enabled:
+            return f"{ADMIN_OPS_OW_MEDIA_OK_PROPOSE_PREFIX}{offer_id}"
+    return None
+
+
+def _media_ok_confirm_prompt_text(language_code: str | None, *, offer_id: int) -> str:
+    oid = str(offer_id)
+    return _telegram_plain_trim(
+        "\n".join(
+            [
+                translate(language_code, "admin_offer_ow_media_ok_confirm_title", offer_id=oid),
+                translate(language_code, "admin_offer_ow_media_ok_confirm_question"),
+            ],
+        ),
+    )
+
+
+def _media_ok_confirmation_keyboard(language_code: str | None, *, offer_id: int) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    kb.button(
+        text=translate(language_code, "admin_offer_ow_media_ok_confirm_ok"),
+        callback_data=f"{ADMIN_OPS_OW_MEDIA_OK_CONFIRM_PREFIX}{offer_id}",
+    )
+    kb.button(
+        text=translate(language_code, "admin_offer_ow_pkg_confirm_cancel"),
+        callback_data=f"{ADMIN_OPS_OW_MEDIA_OK_CANCEL_PREFIX}{offer_id}",
     )
     kb.adjust(2)
     return kb
@@ -446,6 +488,9 @@ def _detail_keyboard(language_code: str | None, offer: AdminSupplierOfferRead, s
         ow = pkg.operator_workflow
         for cb_data, label_key in _operator_workflow_c2a_callback_specs(offer.id, ow):
             workflow_buttons.append((translate(language_code, label_key), cb_data))
+        ok_photo_cb = _operator_workflow_c2b7_2_ok_photo_propose_callback(offer.id, ow)
+        if ok_photo_cb:
+            workflow_buttons.append((translate(language_code, "admin_offer_ow_media_ok_btn_propose"), ok_photo_cb))
         media_req_cb = _operator_workflow_c2b6_media_req_propose_callback(offer.id, ow)
         if media_req_cb:
             workflow_buttons.append((translate(language_code, "admin_offer_ow_media_req_btn_propose"), media_req_cb))
@@ -2228,6 +2273,113 @@ async def admin_ops_operator_workflow_c2b6_media_request_photo(query: CallbackQu
                 return
 
             await query.message.answer(translate(lg, "admin_offer_ow_media_req_done", offer_id=str(offer_id)))
+            body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=updated))
+            await query.message.answer(body, reply_markup=_detail_keyboard(lg, updated, session).as_markup())
+            await query.answer()
+    except SupplierOfferReviewPackageNotFoundError:
+        await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+
+
+@router.callback_query(
+    F.data.startswith(ADMIN_OPS_OW_MEDIA_OK_PROPOSE_PREFIX)
+    | F.data.startswith(ADMIN_OPS_OW_MEDIA_OK_CONFIRM_PREFIX)
+    | F.data.startswith(ADMIN_OPS_OW_MEDIA_OK_CANCEL_PREFIX)
+)
+async def admin_ops_operator_workflow_c2b7_2_ok_photo(query: CallbackQuery, state: FSMContext) -> None:
+    """Slice C2B7.2: approve_cover_for_card → media_review approved_for_card (confirmation required)."""
+    if query.from_user is None or query.data is None or query.message is None:
+        return
+    with SessionLocal() as session:
+        lg = _user_service().resolve_language(
+            session,
+            telegram_user_id=query.from_user.id,
+            telegram_language_code=query.from_user.language_code,
+        )
+    if await _deny_if_not_allowed(query, language_code=lg):
+        await state.clear()
+        return
+
+    data = query.data
+
+    if data.startswith(ADMIN_OPS_OW_MEDIA_OK_CANCEL_PREFIX):
+        raw_id = data.removeprefix(ADMIN_OPS_OW_MEDIA_OK_CANCEL_PREFIX)
+        offer_id = int(raw_id) if raw_id.isdigit() else 0
+        if offer_id <= 0:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        try:
+            await query.message.edit_text(translate(lg, "admin_offer_ow_pkg_confirm_cancelled"))
+        except TelegramBadRequest:
+            await query.message.answer(translate(lg, "admin_offer_ow_pkg_confirm_cancelled"))
+        await query.answer()
+        return
+
+    if data.startswith(ADMIN_OPS_OW_MEDIA_OK_PROPOSE_PREFIX):
+        raw_id = data.removeprefix(ADMIN_OPS_OW_MEDIA_OK_PROPOSE_PREFIX)
+        offer_id = int(raw_id) if raw_id.isdigit() else 0
+        if offer_id <= 0:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        try:
+            with SessionLocal() as session:
+                pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+                ok_act = any(
+                    a.code == OPERATOR_WORKFLOW_C2B7_2_APPROVE_COVER_CODE and a.enabled
+                    for a in pkg.operator_workflow.actions
+                )
+                if not ok_act:
+                    await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                    return
+                prompt = _media_ok_confirm_prompt_text(lg, offer_id=offer_id)
+                markup = _media_ok_confirmation_keyboard(lg, offer_id=offer_id).as_markup()
+            await query.message.answer(prompt, reply_markup=markup)
+            await query.answer()
+        except SupplierOfferReviewPackageNotFoundError:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+        return
+
+    raw_id = data.removeprefix(ADMIN_OPS_OW_MEDIA_OK_CONFIRM_PREFIX)
+    offer_id = int(raw_id) if raw_id.isdigit() else 0
+    if offer_id <= 0:
+        await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+        return
+
+    try:
+        with SessionLocal() as session:
+            pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+            ok_act = any(
+                a.code == OPERATOR_WORKFLOW_C2B7_2_APPROVE_COVER_CODE and a.enabled
+                for a in pkg.operator_workflow.actions
+            )
+            if not ok_act:
+                await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                return
+            reviewed_by = f"telegram:{query.from_user.id}"
+            msvc = SupplierOfferMediaReviewService()
+            try:
+                updated = msvc.approve_for_card(session, offer_id=offer_id, reviewed_by=reviewed_by)
+                session.commit()
+            except SupplierOfferMediaReviewNotFoundError:
+                session.rollback()
+                await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+                return
+            except SupplierOfferMediaReviewStateError as exc:
+                session.rollback()
+                await query.message.answer(
+                    translate(lg, "admin_offer_ow_media_ok_failed", detail=str(exc.message)),
+                )
+                await query.answer()
+                return
+            except Exception as exc:
+                logger.warning("media approve_for_card telegram failed offer_id=%s: %s", offer_id, exc)
+                session.rollback()
+                await query.message.answer(
+                    translate(lg, "admin_offer_ow_media_ok_failed", detail=str(exc)),
+                )
+                await query.answer()
+                return
+
+            await query.message.answer(translate(lg, "admin_offer_ow_media_ok_done", offer_id=str(offer_id)))
             body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=updated))
             await query.message.answer(body, reply_markup=_detail_keyboard(lg, updated, session).as_markup())
             await query.answer()

@@ -34,7 +34,10 @@ from app.services.mini_app_supplier_offer_landing import (
 from app.services.supplier_offer_ai_public_copy_fact_lock import evaluate_ai_public_copy_fact_lock
 from app.services.supplier_offer_bot_start_routing import resolve_sup_offer_start_mini_app_routing
 from app.services.supplier_offer_content_quality_review import evaluate_content_quality_review
-from app.services.supplier_offer_cover_media_quality_review import evaluate_cover_media_quality_review
+from app.services.supplier_offer_cover_media_quality_review import (
+    approve_cover_for_card_operator_action_disabled_reasons,
+    evaluate_cover_media_quality_review,
+)
 from app.services.supplier_offer_media_review_service import media_review_status_value
 from app.services.supplier_offer_operator_workflow import build_operator_workflow
 from app.services.supplier_offer_moderation_service import SupplierOfferModerationService
@@ -412,6 +415,7 @@ class SupplierOfferReviewPackageService:
             cover_media_quality_review=cover_media_quality_review,
             offer_has_cover_media_reference=bool((row.cover_media_reference or "").strip()),
             media_review_status_for_cover_photo_request=media_review_status_value(row),
+            approve_cover_for_card_disabled_reasons=approve_cover_for_card_operator_action_disabled_reasons(row),
         )
 
         return AdminSupplierOfferReviewPackageRead(
