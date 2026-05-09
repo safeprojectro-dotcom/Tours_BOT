@@ -42,8 +42,8 @@ Showcase publication should be understood as **three** conceptual layers. They a
    - CTA line present: **Detalii** and **Rezervă** (or equivalent branded line from the template).
    - **`can_publish_now`:** **`true`** when lifecycle + Telegram config allow **`POST .../publish`** to succeed technically.
    - **`warnings`:** empty, or consciously accepted (see policy below).
-4. **Cover/media signals (C2B5):** On **`GET …/review-package`**, check **`cover_media_quality_review`** (and aggregated **`warnings`**) for deterministic hints: missing or non-sendable showcase photo reference, **`showcase_photo_url`** vs **`cover_media_reference`**, B7.1 **`media_review`** drift or negative status, reminder to **`POST …/media/approve-for-card`** after visual Preview when appropriate. **Does not** block publish in code.
-
+   - **`operator_workflow.publish_showcase_channel`:** **`enabled`** only when lifecycle **`approved`**, **`showcase_preview.can_publish_now`**, **`approved_for_publish`** packaging, **and** **no** C2B8A hard **`cover_media_quality_review`** codes (**HTTP `POST …/publish`** remains callable **`—`** operators **`/`** automation should **`prefer`** honoring **`review-package`** **`/`** preview checklist **).**
+4. **Cover/media signals (C2B5 / C2B8A):** On **`GET …/review-package`**, check **`cover_media_quality_review`** (and aggregated **`warnings`**) for deterministic hints: missing or non-sendable showcase photo reference, **`showcase_photo_url`** vs **`cover_media_reference`**, B7.1 **`media_review`** drift or negative status, reminder to **`POST …/media/approve-for-card`** after visual Preview when appropriate. Hard subset **blocks** **`publish_showcase_channel`** in **`operator_workflow`** **`;`** **`cover_media_missing_showcase_photo`** alone **never** blocks **`publish_showcase_channel`** **`(`** text-only posts **)** **`;`** **`POST …/publish`** handler unchanged **`—`** treat **`review-package`** **`/`** checklist as authority **before** calling **`publish`** **.**
 5. **Telegram admin (C2B6):** Optional **Request photo / Cere poză** on the offer card records **`media_review`** **`replacement_requested`** after confirmation — **does not** overwrite **`cover_media_reference`** **`;`** replace the showcase hero via **`PUT /admin/supplier-offers/{offer_id}/cover`** (C2B7.1) **`;`** then **`POST …/media/approve-for-card`** if you want B7.1 snapshot aligned with the new ref **`;`** align with supplier **`/`** HTTP workflows when the supplier can still edit **`.**
 
 6. **Publish:**  
@@ -58,7 +58,7 @@ Showcase publication should be understood as **three** conceptual layers. They a
 | Topic | MVP rule |
 |--------|-----------|
 | Preview before publish | **Recommended**, **not** enforced by code — **`publish`** does not require prior **`showcase-preview`**. |
-| **`can_publish_now === true`** | **Technical / lifecycle readiness** for successful **`POST .../publish`** (e.g. approved + showcase channel config). **Not** “marketing/copy approved”. |
+| **`can_publish_now === true`** | **Technical / lifecycle readiness** for successful **`POST .../publish`** (e.g. approved + showcase channel config). **`operator_workflow.publish_showcase_channel`** additionally requires **`approved_for_publish`** packaging and passing **C2B8A** **`cover_media_quality_review`** hard gates (**HTTP POST unchanged**). |
 | Copy quality | **Admin responsibility** — the system **does not** auto-translate or rewrite text at publish time. AI-drafted marketing copy (**when** introduced into the pipeline) is **not** trusted until explicitly reviewed and wired as publish source. |
 | Raw input | Bad or test input appears in preview **and** in the channel post unless corrected upstream — see **Three layers** above. |
 | **`preview_hash`**, **`preview_seen_at`**, **`preview_seen_by`** | **Not** in MVP — **no** migration for preview tracking. Future **only** if product or audit explicitly requires it. |

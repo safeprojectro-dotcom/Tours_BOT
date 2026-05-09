@@ -12,7 +12,7 @@ from sqlalchemy import event
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
-from app.models.enums import SupplierOfferPackagingStatus
+from app.models.enums import SupplierOfferLifecycle, SupplierOfferPackagingStatus
 from app.models.supplier import SupplierOffer
 from tests.unit.base import FoundationDBTestCase
 
@@ -341,6 +341,42 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
         afc = next(a for a in r.json()["operator_workflow"]["actions"] if a["code"] == "approve_cover_for_card")
         self.assertFalse(afc["enabled"])
         self.assertIsNotNone(afc.get("disabled_reason"))
+
+    def test_review_package_publish_showcase_disabled_when_cover_media_hard_warning(self) -> None:
+        """C2B8A: publish_showcase_channel gated on C2B5 hard media warnings."""
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        ref = "https://cdn.example/hero.jpg"
+        u = self.client.put(
+            f"/supplier-admin/offers/{oid}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"cover_media_reference": ref},
+        )
+        self.assertEqual(u.status_code, 200, u.text)
+        row = self.session.get(SupplierOffer, oid)
+        self.assertIsNotNone(row)
+        row.packaging_status = SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH
+        row.lifecycle_status = SupplierOfferLifecycle.APPROVED
+        row.packaging_draft_json = {"media_review": {"status": "replacement_requested", "cover_media_reference": ref}}
+        self.session.commit()
+
+        mock_cfg = SimpleNamespace(
+            telegram_bot_username="testbot",
+            telegram_mini_app_url="https://example.com/mini",
+            telegram_offer_showcase_channel_id="-100123",
+            telegram_bot_token="tok",
+        )
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        with patch(
+            "app.services.supplier_offer_moderation_service.get_settings",
+            return_value=mock_cfg,
+        ):
+            r = self.client.get(f"/admin/supplier-offers/{oid}/review-package", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        pub = next(a for a in r.json()["operator_workflow"]["actions"] if a["code"] == "publish_showcase_channel")
+        self.assertFalse(pub["enabled"])
+        self.assertIsNotNone(pub.get("disabled_reason"))
+        self.assertIn("media_review_replacement_requested", pub["disabled_reason"])
 
     def test_review_package_execution_link_precheck_when_published_without_link(self) -> None:
         _, token = self._bootstrap_supplier_token()

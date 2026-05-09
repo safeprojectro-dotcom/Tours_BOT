@@ -15,6 +15,63 @@ from app.schemas.supplier_admin import (
 from app.services.supplier_offer_media_review_service import MEDIA_REVIEW_KEY
 from app.services.supplier_offer_showcase_message import showcase_photo_send_argument_from_offer
 
+PHOTO_WITH_CAPTION_MODE = "photo_with_caption"
+TEXT_ONLY_PUBLICATION_MODE = "text_only"
+
+# Blocking codes for publish_showcase_channel (C2B8A): subset of evaluate_cover_media_quality_review codes.
+
+COVER_MEDIA_PUBLISH_BLOCK_CODES_ALWAYS: frozenset[str] = frozenset(
+    {
+        "media_review_replacement_requested",
+        "media_review_rejected_bad_quality",
+        "media_review_rejected_irrelevant",
+        "media_review_fallback_card_required",
+        "media_review_cover_snapshot_mismatch",
+        "showcase_photo_url_without_cover_media_reference",
+        "showcase_photo_url_differs_from_cover_media_reference",
+    }
+)
+
+COVER_MEDIA_PUBLISH_BLOCK_CODES_PHOTO_PUBLICATION_ONLY: frozenset[str] = frozenset(
+    {
+        "cover_media_not_sendable_for_showcase",
+        "cover_media_not_explicitly_approved_for_card",
+    }
+)
+
+COVER_MEDIA_PUBLISH_NEVER_BLOCK_CODES: frozenset[str] = frozenset(
+    {
+        # Text-only channel posts intentionally omit hero photo; do not gate publish on missing cover alone.
+        "cover_media_missing_showcase_photo",
+    }
+)
+
+
+def cover_media_publish_blocking_reasons(
+    *,
+    cover_media_quality_review: AdminSupplierOfferCoverMediaQualityReviewRead,
+    publication_mode: str,
+) -> list[str]:
+    """Deterministic reasons to keep ``publish_showcase_channel`` disabled (read-model gate only).
+
+    ``publication_mode`` matches ``AdminSupplierOfferShowcasePreviewRead.publication_mode``.
+    """
+    is_photo = (publication_mode or "").strip() == PHOTO_WITH_CAPTION_MODE
+    out: list[str] = []
+    for w in cover_media_quality_review.warnings:
+        code = w.code
+        if code in COVER_MEDIA_PUBLISH_NEVER_BLOCK_CODES:
+            continue
+        if code in COVER_MEDIA_PUBLISH_BLOCK_CODES_PHOTO_PUBLICATION_ONLY:
+            if not is_photo:
+                continue
+            out.append(f"Cover/media gate: [{code}] {w.message}")
+            continue
+        if code in COVER_MEDIA_PUBLISH_BLOCK_CODES_ALWAYS:
+            out.append(f"Cover/media gate: [{code}] {w.message}")
+            continue
+    return out
+
 
 def _norm_ref(value: str | None) -> str | None:
     s = (value or "").strip()

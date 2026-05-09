@@ -16,6 +16,8 @@ from app.schemas.supplier_admin import (
     AdminSupplierOfferShowcasePreviewRead,
 )
 
+from app.services.supplier_offer_cover_media_quality_review import cover_media_publish_blocking_reasons
+
 _DISPLAY_STATE_FROM_STEP: dict[str, str] = {
     "approve_packaging": "awaiting_packaging_approval",
     "address_moderation_rejection": "moderation_rejected",
@@ -301,12 +303,24 @@ def build_operator_workflow(
         ),
     )
 
-    pub_ok = lc is SupplierOfferLifecycle.APPROVED and showcase_preview.can_publish_now
+    media_blocking = cover_media_publish_blocking_reasons(
+        cover_media_quality_review=cover_media_quality_review,
+        publication_mode=showcase_preview.publication_mode,
+    )
+    pub_ok = (
+        lc is SupplierOfferLifecycle.APPROVED
+        and showcase_preview.can_publish_now
+        and pk is SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH
+        and not media_blocking
+    )
     pub_dr: list[str] = []
     if lc is not SupplierOfferLifecycle.APPROVED:
         pub_dr.append("Lifecycle must be moderation-approved before publish.")
     if not showcase_preview.can_publish_now:
         pub_dr.append("Showcase publish configuration or lifecycle blocks publish_now.")
+    if pk is not SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH:
+        pub_dr.append("Packaging must be approved for publish before showcase publish.")
+    pub_dr.extend(media_blocking)
     actions.append(
         AdminSupplierOfferOperatorWorkflowActionRead(
             code="publish_showcase_channel",

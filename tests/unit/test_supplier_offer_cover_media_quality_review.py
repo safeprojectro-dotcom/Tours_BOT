@@ -7,8 +7,11 @@ from types import SimpleNamespace
 
 from app.bot.constants import SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX
 from app.models.enums import SupplierOfferMediaReviewStatus
+from app.schemas.supplier_admin import AdminSupplierOfferCoverMediaQualityReviewRead, CoverMediaWarningItemRead
 from app.services.supplier_offer_cover_media_quality_review import (
+    TEXT_ONLY_PUBLICATION_MODE,
     approve_cover_for_card_operator_action_disabled_reasons,
+    cover_media_publish_blocking_reasons,
     evaluate_cover_media_quality_review,
 )
 from app.services.supplier_offer_media_review_service import MEDIA_REVIEW_KEY
@@ -102,6 +105,55 @@ class CoverMediaQualityReviewTests(unittest.TestCase):
         )
         codes = [w.code for w in r.warnings]
         self.assertIn("showcase_photo_url_differs_from_cover_media_reference", codes)
+
+
+class CoverMediaPublishBlockingReasonsTests(unittest.TestCase):
+    def test_photo_mode_blocks_on_replacement_requested_warning(self) -> None:
+        cm = AdminSupplierOfferCoverMediaQualityReviewRead(
+            warnings=[
+                CoverMediaWarningItemRead(code="media_review_replacement_requested", message="replace hero."),
+            ],
+            has_warnings=True,
+        )
+        dr = cover_media_publish_blocking_reasons(
+            cover_media_quality_review=cm,
+            publication_mode="photo_with_caption",
+        )
+        self.assertEqual(len(dr), 1)
+        self.assertIn("media_review_replacement_requested", dr[0])
+
+    def test_text_only_ignores_photo_only_codes(self) -> None:
+        cm = AdminSupplierOfferCoverMediaQualityReviewRead(
+            warnings=[
+                CoverMediaWarningItemRead(
+                    code="cover_media_not_explicitly_approved_for_card",
+                    message="approve card",
+                ),
+                CoverMediaWarningItemRead(
+                    code="cover_media_not_sendable_for_showcase",
+                    message="bad scheme",
+                ),
+            ],
+            has_warnings=True,
+        )
+        dr = cover_media_publish_blocking_reasons(
+            cover_media_quality_review=cm,
+            publication_mode=TEXT_ONLY_PUBLICATION_MODE,
+        )
+        self.assertEqual(dr, [])
+
+    def test_never_blocks_cover_media_missing_for_text_only_stack(self) -> None:
+        cm = AdminSupplierOfferCoverMediaQualityReviewRead(
+            warnings=[
+                CoverMediaWarningItemRead(code="cover_media_missing_showcase_photo", message="text-only OK"),
+            ],
+            has_warnings=True,
+        )
+        dr = cover_media_publish_blocking_reasons(
+            cover_media_quality_review=cm,
+            publication_mode=TEXT_ONLY_PUBLICATION_MODE,
+        )
+        self.assertEqual(dr, [])
 
 
 class ApproveCoverForCardOperatorActionTests(unittest.TestCase):
