@@ -29,6 +29,8 @@ Showcase publication should be understood as **three** conceptual layers. They a
 
 **Not implemented as product truth here:** AI as final publisher; automatic AI rewrite at publish time; mandatory AI-copy approval workflow; **`preview_hash`** enforcement; new DB fields for “approved public RO copy” unless a future ticket implements them.
 
+**B12A (template library metadata):** **`POST …/packaging/generate`** also writes **`packaging_draft_json.showcase_marketing_template_library_v1`** — deterministic **template id** inference from **`SupplierOffer`** facts (e.g. early-bird only when discount value **and** **`discount_valid_until`** are set; no auto “last seats” without verified inventory). **Advisory only** for **`review-package` / ops**; **`GET …/showcase-preview`** and **`POST …/publish`** still use **`build_showcase_publication`** unchanged until a future slice wires template choice into the channel builder.
+
 ---
 
 ## Checklist: preview → verify → publish

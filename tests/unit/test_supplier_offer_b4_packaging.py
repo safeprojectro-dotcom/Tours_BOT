@@ -87,6 +87,10 @@ class B4PackagingAPITests(FoundationDBTestCase):
         d = j["packaging_draft_json"]
         self.assertIn("telegram_post_draft", d)
         self.assertIn("mini_app_full_description", d)
+        lib = d.get("showcase_marketing_template_library_v1")
+        self.assertIsInstance(lib, dict)
+        self.assertEqual(lib.get("schema_version"), 1)
+        self.assertIn("inferred_template_id", lib)
         self.assertIn("199", j["marketing_summary"] or "")
         self.assertIn("EUR", j["marketing_summary"] or "")
         self.assertIn("2026", j["marketing_summary"] or "")

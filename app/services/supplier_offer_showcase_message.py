@@ -310,6 +310,11 @@ def _footer_lines_html() -> list[str]:
     ]
 
 
+def build_showcase_fact_lines_html(offer: SupplierOffer) -> list[str]:
+    """Romanian HTML lines for the branded fact block (same as channel template body minus CTA/footer)."""
+    return _template_fact_lines_html(offer)
+
+
 def _assemble_showcase_html(
     *,
     facts: list[str],

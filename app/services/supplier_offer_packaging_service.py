@@ -24,6 +24,7 @@ from app.services.packaging_formatting import (
     polish_program_text_for_telegram_block,
     strip_iso_timestamps_for_display,
 )
+from app.services.showcase_marketing_template_library import merge_showcase_marketing_template_library_v1
 
 
 class SupplierOfferPackagingNotFoundError(Exception):
@@ -396,7 +397,8 @@ class SupplierOfferPackagingService:
         if "polished_excluded" in draft:
             v = draft.get("polished_excluded")
             row.excluded_text = (str(v)[:10000] if v is not None and str(v).strip() else None)
-        extras = draft.get("packaging_draft_extras") or {}
+        extras = dict(draft.get("packaging_draft_extras") or {})
+        merge_showcase_marketing_template_library_v1(extras, row)
         row.packaging_draft_json = extras
         m_codes: list[str] = list(draft.get("missing_field_codes", missing))
         w_raw = draft.get("quality_warning_items")

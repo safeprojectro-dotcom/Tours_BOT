@@ -96,6 +96,20 @@ class SupplierOfferPackagingStatus(StrEnum):
     CLARIFICATION_REQUESTED = "clarification_requested"
 
 
+class ShowcaseMarketingTemplateId(StrEnum):
+    """B12A: showcase marketing copy template identifiers (library + inference; not all are auto-selected)."""
+
+    PER_SEAT_STANDARD = "per_seat_standard"
+    FULL_BUS_PRIVATE_GROUP = "full_bus_private_group"
+    CUSTOM_REQUEST_CTA = "custom_request_cta"
+    EARLY_BIRD_DISCOUNT = "early_bird_discount"
+    LAST_SEATS_URGENT = "last_seats_urgent"
+    SUPPLIER_SERVICE_PROMO = "supplier_service_promo"
+    SHORT_ANNOUNCEMENT = "short_announcement"
+    IMAGE_ONLY_TEASER = "image_only_teaser"
+    BRAND_AWARENESS_POST = "brand_awareness_post"
+
+
 class SupplierOfferTourBridgeStatus(StrEnum):
     """B10: one active bridge per offer; superseded/cancelled for audit."""
 
