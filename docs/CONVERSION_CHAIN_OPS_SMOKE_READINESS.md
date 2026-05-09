@@ -49,9 +49,12 @@ $r.linked_tour_catalog | Format-List
 - **`conversion_closure`:** Aggregated booleans (**`has_tour_bridge`**, **`has_catalog_visible_tour`**, **`has_active_execution_link`**, routing flags, **`next_missing_step`**) — same helper as the unit E2E-style proof in **`test_supplier_offer_catalog_conversion_closure`**. **`next_missing_step: null`** with all trues means the modeled chain is complete for that offer snapshot.
 - **`linked_tour_catalog`:** Bridged **`tour_id`**, **`tour_code`**, **`tour_status`**, **`catalog_listed_for_mini_app`**, **`can_activate_for_catalog`**, etc. Present only when a bridge links an offer to a **`Tour`**.
 
+**C2B11A panel:** [`docs/C2B11A_READ_ONLY_SMOKE_LOG.md`](C2B11A_READ_ONLY_SMOKE_LOG.md) — **`conversion_status_panel`** JSON + operator actions table; operator run log template.
+
 **Optional extra read-only probes** (same session):
 
 ```powershell
+$r.conversion_status_panel | ConvertTo-Json -Depth 5
 $r.operator_workflow | Select-Object state, primary_next_action, blocking_reasons, warnings | Format-List
 $r.execution_links_review | Format-List
 $r.warnings

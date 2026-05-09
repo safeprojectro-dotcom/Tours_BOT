@@ -77,7 +77,7 @@ Example layer values:
 
 ## Next steps
 
-1. **Production/OPS smoke** — [`docs/PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md`](PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md); include **`conversion_status_panel`** in **`GET …/review-package`** checks — [`docs/CONVERSION_CHAIN_OPS_SMOKE_READINESS.md`](CONVERSION_CHAIN_OPS_SMOKE_READINESS.md).
+1. **Production/OPS smoke** — [`docs/PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md`](PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md); include **`conversion_status_panel`** in **`GET …/review-package`** checks — [`docs/CONVERSION_CHAIN_OPS_SMOKE_READINESS.md`](CONVERSION_CHAIN_OPS_SMOKE_READINESS.md) · read-only panel log template [`docs/C2B11A_READ_ONLY_SMOKE_LOG.md`](C2B11A_READ_ONLY_SMOKE_LOG.md).
 2. **B10.6 Bot-as-router** (when product prioritizes) — [`docs/B10_6_BOT_AS_ROUTER_DESIGN_GATE.md`](B10_6_BOT_AS_ROUTER_DESIGN_GATE.md).
 3. **Optional visibility polish** — tighter copy, extra **`detail`** rules, or admin-only web view; still **read-only** and derived from **`review-package`**.
 
@@ -87,3 +87,4 @@ Example layer values:
 - Prompt: [`docs/CURSOR_PROMPT_ADMIN_OPS_CONVERSION_STATUS_PANEL_C2B11A.md`](CURSOR_PROMPT_ADMIN_OPS_CONVERSION_STATUS_PANEL_C2B11A.md)
 - Closeout ordering: [`docs/NEXT_BLOCK_RECOMMENDATION_AFTER_CONVERSION_CLOSEOUT.md`](NEXT_BLOCK_RECOMMENDATION_AFTER_CONVERSION_CLOSEOUT.md)
 - Continuity: [`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md) — **Slice C2B11A**
+
