@@ -469,7 +469,7 @@ class CatalogScreen:
         )
         return ft.Container(
             bgcolor=ft.Colors.SURFACE_CONTAINER_LOW,
-            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+            border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
             border_radius=16,
             padding=16,
             content=ft.Column(
@@ -999,7 +999,7 @@ class TourDetailScreen:
         notes = boarding_point.notes or shell(lg, "boarding_notes_fallback")
         return ft.Container(
             bgcolor=ft.Colors.SURFACE_CONTAINER_LOW,
-            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+            border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
             border_radius=16,
             padding=16,
             content=ft.Column(
