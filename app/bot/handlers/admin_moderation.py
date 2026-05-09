@@ -57,6 +57,9 @@ from app.bot.constants import (
     ADMIN_OPS_OW_MEDIA_REQ_CANCEL_PREFIX,
     ADMIN_OPS_OW_MEDIA_REQ_CONFIRM_PREFIX,
     ADMIN_OPS_OW_MEDIA_REQ_PROPOSE_PREFIX,
+    ADMIN_OPS_OW_PUBLISH_SHOWCASE_CANCEL_PREFIX,
+    ADMIN_OPS_OW_PUBLISH_SHOWCASE_CONFIRM_PREFIX,
+    ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX,
     ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX,
     ADMIN_OPS_OW_SHOWCASE_PREVIEW_PREFIX,
     ADMIN_OPS_ORDERS_PAGE_PREFIX,
@@ -166,6 +169,7 @@ OPERATOR_WORKFLOW_C2B1_PACKAGING_APPROVE_CODE = "approve_packaging_for_publish"
 OPERATOR_WORKFLOW_C2B2_GENERATE_CODE = "generate_packaging_draft"
 OPERATOR_WORKFLOW_C2B6_REQUEST_PHOTO_CODE = "request_cover_photo_replacement"
 OPERATOR_WORKFLOW_C2B7_2_APPROVE_COVER_CODE = "approve_cover_for_card"
+OPERATOR_WORKFLOW_C2B8B_PUBLISH_SHOWCASE_CODE = "publish_showcase_channel"
 _SHOWCASE_PREVIEW_BODY_MAX = 3200
 
 
@@ -344,6 +348,44 @@ def _media_ok_confirmation_keyboard(language_code: str | None, *, offer_id: int)
     return kb
 
 
+def _operator_workflow_c2b8b_publish_propose_callback(
+    offer_id: int,
+    ow: AdminSupplierOfferOperatorWorkflowRead,
+) -> str | None:
+    """Slice C2B8B: propose when publish_showcase_channel workflow action is enabled."""
+    for act in ow.actions:
+        if act.code == OPERATOR_WORKFLOW_C2B8B_PUBLISH_SHOWCASE_CODE and act.enabled:
+            return f"{ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX}{offer_id}"
+    return None
+
+
+def _publish_showcase_confirm_prompt_text(language_code: str | None, *, offer_id: int) -> str:
+    oid = str(offer_id)
+    return _telegram_plain_trim(
+        "\n".join(
+            [
+                translate(language_code, "admin_offer_ow_publish_confirm_title", offer_id=oid),
+                translate(language_code, "admin_offer_operator_workflow_public_hint_short"),
+                translate(language_code, "admin_offer_ow_publish_confirm_question"),
+            ],
+        ),
+    )
+
+
+def _publish_showcase_confirmation_keyboard(language_code: str | None, *, offer_id: int) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    kb.button(
+        text=translate(language_code, "admin_offer_ow_publish_confirm_ok"),
+        callback_data=f"{ADMIN_OPS_OW_PUBLISH_SHOWCASE_CONFIRM_PREFIX}{offer_id}",
+    )
+    kb.button(
+        text=translate(language_code, "admin_offer_ow_pkg_confirm_cancel"),
+        callback_data=f"{ADMIN_OPS_OW_PUBLISH_SHOWCASE_CANCEL_PREFIX}{offer_id}",
+    )
+    kb.adjust(2)
+    return kb
+
+
 def _operator_workflow_c2a_callback_specs(
     offer_id: int,
     ow: AdminSupplierOfferOperatorWorkflowRead,
@@ -461,12 +503,17 @@ def _status_key(status: SupplierOfferLifecycle) -> str:
     return f"supplier_offers_status_{status.value}"
 
 
-def _action_button_rows(language_code: str | None, offer: AdminSupplierOfferRead) -> list[tuple[str, str]]:
+def _action_button_rows(
+    language_code: str | None,
+    offer: AdminSupplierOfferRead,
+    *,
+    include_legacy_one_step_publish: bool = True,
+) -> list[tuple[str, str]]:
     rows: list[tuple[str, str]] = []
     if offer.lifecycle_status == SupplierOfferLifecycle.READY_FOR_MODERATION:
         rows.append((translate(language_code, "admin_offer_action_approve"), f"{ADMIN_OFFERS_ACTION_APPROVE}:{offer.id}"))
         rows.append((translate(language_code, "admin_offer_action_reject"), f"{ADMIN_OFFERS_ACTION_REJECT}:{offer.id}"))
-    if offer.lifecycle_status == SupplierOfferLifecycle.APPROVED:
+    if offer.lifecycle_status == SupplierOfferLifecycle.APPROVED and include_legacy_one_step_publish:
         rows.append((translate(language_code, "admin_offer_action_publish"), f"{ADMIN_OFFERS_ACTION_PUBLISH}:{offer.id}"))
     if offer.lifecycle_status == SupplierOfferLifecycle.PUBLISHED:
         rows.append((translate(language_code, "admin_offer_action_retract"), f"{ADMIN_OFFERS_ACTION_RETRACT}:{offer.id}"))
@@ -500,13 +547,20 @@ def _detail_keyboard(language_code: str | None, offer: AdminSupplierOfferRead, s
         propose_cb = _operator_workflow_c2b1_packaging_propose_callback(offer.id, ow)
         if propose_cb:
             workflow_buttons.append((translate(language_code, "admin_offer_ow_pkg_btn_propose"), propose_cb))
+        pub_cb = _operator_workflow_c2b8b_publish_propose_callback(offer.id, ow)
+        if pub_cb:
+            workflow_buttons.append((translate(language_code, "admin_offer_ow_publish_btn_propose"), pub_cb))
     except SupplierOfferReviewPackageNotFoundError:
         pass
     except Exception as exc:
         logger.warning("operator_workflow C2A keyboard skipped for offer_id=%s: %s", offer.id, exc)
 
     legacy_buttons: list[tuple[str, str]] = []
-    for title, action_payload in _action_button_rows(language_code, offer):
+    for title, action_payload in _action_button_rows(
+        language_code,
+        offer,
+        include_legacy_one_step_publish=False,
+    ):
         legacy_buttons.append((title, f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{action_payload}"))
 
     for text, cb_data in workflow_buttons:
@@ -2387,6 +2441,106 @@ async def admin_ops_operator_workflow_c2b7_2_ok_photo(query: CallbackQuery, stat
         await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
 
 
+@router.callback_query(
+    F.data.startswith(ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX)
+    | F.data.startswith(ADMIN_OPS_OW_PUBLISH_SHOWCASE_CONFIRM_PREFIX)
+    | F.data.startswith(ADMIN_OPS_OW_PUBLISH_SHOWCASE_CANCEL_PREFIX)
+)
+async def admin_ops_operator_workflow_c2b8b_publish_showcase(query: CallbackQuery, state: FSMContext) -> None:
+    """Slice C2B8B: publish_showcase_channel → moderation.publish (confirmation + re-read required)."""
+    if query.from_user is None or query.data is None or query.message is None:
+        return
+    with SessionLocal() as session:
+        lg = _user_service().resolve_language(
+            session,
+            telegram_user_id=query.from_user.id,
+            telegram_language_code=query.from_user.language_code,
+        )
+    if await _deny_if_not_allowed(query, language_code=lg):
+        await state.clear()
+        return
+
+    data = query.data
+
+    if data.startswith(ADMIN_OPS_OW_PUBLISH_SHOWCASE_CANCEL_PREFIX):
+        raw_id = data.removeprefix(ADMIN_OPS_OW_PUBLISH_SHOWCASE_CANCEL_PREFIX)
+        offer_id = int(raw_id) if raw_id.isdigit() else 0
+        if offer_id <= 0:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        try:
+            await query.message.edit_text(translate(lg, "admin_offer_ow_pkg_confirm_cancelled"))
+        except TelegramBadRequest:
+            await query.message.answer(translate(lg, "admin_offer_ow_pkg_confirm_cancelled"))
+        await query.answer()
+        return
+
+    if data.startswith(ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX):
+        raw_id = data.removeprefix(ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX)
+        offer_id = int(raw_id) if raw_id.isdigit() else 0
+        if offer_id <= 0:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        try:
+            with SessionLocal() as session:
+                pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+                pub_ok = any(
+                    a.code == OPERATOR_WORKFLOW_C2B8B_PUBLISH_SHOWCASE_CODE and a.enabled
+                    for a in pkg.operator_workflow.actions
+                )
+                if not pub_ok:
+                    await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                    return
+                prompt = _publish_showcase_confirm_prompt_text(lg, offer_id=offer_id)
+                markup = _publish_showcase_confirmation_keyboard(lg, offer_id=offer_id).as_markup()
+            await query.message.answer(prompt, reply_markup=markup)
+            await query.answer()
+        except SupplierOfferReviewPackageNotFoundError:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+        return
+
+    raw_id = data.removeprefix(ADMIN_OPS_OW_PUBLISH_SHOWCASE_CONFIRM_PREFIX)
+    offer_id = int(raw_id) if raw_id.isdigit() else 0
+    if offer_id <= 0:
+        await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+        return
+
+    try:
+        with SessionLocal() as session:
+            pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+            pub_ok = any(
+                a.code == OPERATOR_WORKFLOW_C2B8B_PUBLISH_SHOWCASE_CODE and a.enabled
+                for a in pkg.operator_workflow.actions
+            )
+            if not pub_ok:
+                await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                return
+            moderation = SupplierOfferModerationService()
+            try:
+                updated, _msg_id = moderation.publish(session, offer_id=offer_id)
+                session.commit()
+            except (
+                SupplierOfferModerationNotFoundError,
+                SupplierOfferModerationStateError,
+                SupplierOfferPublicationConfigError,
+            ) as exc:
+                session.rollback()
+                detail = getattr(exc, "message", str(exc))
+                await query.message.answer(translate(lg, "admin_offer_action_unavailable", detail=detail))
+                await query.answer()
+                return
+            try:
+                SupplierOfferSupplierNotificationService().notify_published(session, offer_id=offer_id)
+            except Exception:
+                pass
+            await query.message.answer(translate(lg, "admin_offer_action_done_publish", offer_id=str(offer_id)))
+            body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=updated))
+            await query.message.answer(body, reply_markup=_detail_keyboard(lg, updated, session).as_markup())
+            await query.answer()
+    except SupplierOfferReviewPackageNotFoundError:
+        await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+
+
 @router.callback_query(F.data.in_({ADMIN_OFFERS_NAV_HOME, ADMIN_OFFERS_NAV_BACK, ADMIN_OFFERS_NAV_NEXT, ADMIN_OFFERS_NAV_PREV}))
 async def admin_queue_navigation(query: CallbackQuery, state: FSMContext) -> None:
     if query.from_user is None or query.data is None or query.message is None:
@@ -2803,13 +2957,9 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                     pass
                 done_key = "admin_offer_action_done_approve"
             elif action_name == ADMIN_OFFERS_ACTION_PUBLISH:
-                moderation.publish(session, offer_id=offer_id)
-                session.commit()
-                try:
-                    SupplierOfferSupplierNotificationService().notify_published(session, offer_id=offer_id)
-                except Exception:
-                    pass
-                done_key = "admin_offer_action_done_publish"
+                await query.message.answer(translate(lg, "admin_offer_legacy_publish_retired"))
+                await query.answer()
+                return
             elif action_name == ADMIN_OFFERS_ACTION_RETRACT:
                 moderation.retract_published(session, offer_id=offer_id)
                 SupplierOfferExecutionLinkService().close_active_link(

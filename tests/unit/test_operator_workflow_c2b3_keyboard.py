@@ -8,10 +8,12 @@ from unittest.mock import MagicMock, patch
 from app.bot.constants import (
     ADMIN_OFFERS_ACTION_APPROVE,
     ADMIN_OFFERS_ACTION_CALLBACK_PREFIX,
+    ADMIN_OFFERS_ACTION_PUBLISH,
     ADMIN_OPS_OW_MEDIA_OK_PROPOSE_PREFIX,
     ADMIN_OPS_OW_MEDIA_REQ_PROPOSE_PREFIX,
     ADMIN_OPS_OW_PKG_APPROVE_PROPOSE_PREFIX,
     ADMIN_OPS_OW_PKG_GEN_PROPOSE_PREFIX,
+    ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX,
     ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX,
     ADMIN_OPS_OW_SHOWCASE_PREVIEW_PREFIX,
 )
@@ -44,6 +46,18 @@ def _mut_act(code: str) -> AdminSupplierOfferOperatorWorkflowActionRead:
         requires_confirmation=True,
         method="POST",
         endpoint="/admin/y",
+    )
+
+
+def _public_act(code: str) -> AdminSupplierOfferOperatorWorkflowActionRead:
+    return AdminSupplierOfferOperatorWorkflowActionRead(
+        code=code,
+        label=code,
+        enabled=True,
+        danger_level="public_dangerous",
+        requires_confirmation=True,
+        method="POST",
+        endpoint="/admin/publish",
     )
 
 
@@ -105,6 +119,35 @@ class OperatorWorkflowC2b3KeyboardTests(unittest.TestCase):
         self.assertTrue(any(str(c).startswith(ADMIN_OPS_OW_PKG_APPROVE_PROPOSE_PREFIX) for c in callbacks if c))
         approve_legacy = f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_APPROVE}:99"
         self.assertIn(approve_legacy, callbacks)
+
+    @patch("app.bot.handlers.admin_moderation.SupplierOfferReviewPackageService")
+    def test_en_approved_publish_workflow_without_legacy_publish_callback(
+        self, mock_review_svc: MagicMock
+    ) -> None:
+        ow = AdminSupplierOfferOperatorWorkflowRead(
+            state="s",
+            primary_next_action=None,
+            actions=[
+                _read_act("review_package_refresh"),
+                _read_act("get_showcase_preview"),
+                _mut_act("generate_packaging_draft"),
+                _mut_act("approve_packaging_for_publish"),
+                _public_act("publish_showcase_channel"),
+            ],
+            blocking_reasons=[],
+            warnings=[],
+        )
+        mock_review_svc.return_value.review_package.return_value = MagicMock(operator_workflow=ow)
+        offer = MagicMock()
+        offer.id = 12
+        offer.lifecycle_status = SupplierOfferLifecycle.APPROVED
+        texts, callbacks = _flat_markup(_detail_keyboard("en", offer, session=MagicMock()).as_markup())
+        ix = {t: n for n, t in enumerate(texts)}
+        self.assertLess(ix["Prepare"], ix["Approve text"])
+        self.assertLess(ix["Approve text"], ix["Publish"])
+        legacy_publish = f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_PUBLISH}:12"
+        self.assertNotIn(legacy_publish, callbacks)
+        self.assertTrue(any(str(c).startswith(ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX) for c in callbacks if c))
 
     @patch("app.bot.handlers.admin_moderation.SupplierOfferReviewPackageService")
     def test_en_packaging_before_legacy(self, mock_review_svc: MagicMock) -> None:

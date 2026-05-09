@@ -23,6 +23,8 @@ from app.bot.constants import (
     ADMIN_OFFERS_ACTION_REJECT,
     ADMIN_OFFERS_ACTION_REPLACE_LINK,
     ADMIN_OFFERS_ACTION_RETRACT,
+    ADMIN_OPS_OW_PUBLISH_SHOWCASE_CONFIRM_PREFIX,
+    ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX,
 )
 from app.bot.handlers import admin_moderation
 from app.core.config import get_settings
@@ -40,6 +42,10 @@ from app.models.enums import (
     TourStatus,
 )
 from app.models.supplier import SupplierOfferExecutionLink
+from app.schemas.supplier_admin import (
+    AdminSupplierOfferOperatorWorkflowActionRead,
+    AdminSupplierOfferOperatorWorkflowRead,
+)
 from tests.unit.base import FoundationDBTestCase
 
 
@@ -736,11 +742,43 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
     def test_publish_action_available_only_in_approved_unpublished_view(self) -> None:
         approved_id = self._create_offer(lifecycle=SupplierOfferLifecycle.APPROVED)
         published_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        ow_publish = AdminSupplierOfferOperatorWorkflowRead(
+            state="ready_to_publish_showcase",
+            primary_next_action="publish_showcase_channel",
+            actions=[
+                AdminSupplierOfferOperatorWorkflowActionRead(
+                    code="publish_showcase_channel",
+                    label="x",
+                    enabled=True,
+                    danger_level="public_dangerous",
+                    requires_confirmation=True,
+                    method="POST",
+                    endpoint="/admin/supplier-offers/{offer_id}/publish",
+                ),
+            ],
+            blocking_reasons=[],
+            warnings=[],
+        )
+        mock_pkg = MagicMock()
+        mock_pkg.operator_workflow = ow_publish
+        real_svc = admin_moderation.SupplierOfferReviewPackageService()
+
+        def rp_approved(session, *, offer_id: int):
+            if offer_id == approved_id:
+                return mock_pkg
+            return real_svc.review_package(session, offer_id=offer_id)
 
         async def body_approved() -> list[str]:
             state = _DictFSMState()
             message = _private_message(telegram_user_id=990001)
-            with patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)):
+            with (
+                patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)),
+                patch.object(
+                    admin_moderation.SupplierOfferReviewPackageService,
+                    "review_package",
+                    side_effect=rp_approved,
+                ),
+            ):
                 await admin_moderation.cmd_admin_approved(message, state)
             return self._inline_button_texts(message)
 
@@ -1833,9 +1871,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         text = asyncio.run(body())
         self.assertIn("rejected", text)
 
-    def test_admin_can_publish_only_from_valid_state(self) -> None:
-        invalid_offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.READY_FOR_MODERATION)
-        valid_offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.APPROVED)
+    def test_legacy_one_step_publish_callback_retired(self) -> None:
         mock_cfg = SimpleNamespace(
             telegram_bot_token="dummy-token",
             telegram_offer_showcase_channel_id="-10012345",
@@ -1843,7 +1879,8 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             telegram_mini_app_url="https://example.com/mini",
         )
 
-        async def body(offer_id: int) -> str:
+        async def body(lifecycle: SupplierOfferLifecycle) -> str:
+            offer_id = self._create_offer(lifecycle=lifecycle)
             state = _DictFSMState()
             message = _private_message(telegram_user_id=990001)
             cb = _callback(
@@ -1854,23 +1891,83 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             with (
                 patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)),
                 patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
-                patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=501),
             ):
                 await admin_moderation.admin_offer_action(cb, state)
             return "\n".join(c.args[0].lower() for c in message.answer.call_args_list if c.args)
 
-        invalid_text = asyncio.run(body(invalid_offer_id))
-        valid_text = asyncio.run(body(valid_offer_id))
-        invalid_row = admin_moderation.SupplierOfferModerationService()._offers.get_any(self.session, offer_id=invalid_offer_id)
-        valid_row = admin_moderation.SupplierOfferModerationService()._offers.get_any(self.session, offer_id=valid_offer_id)
-        self.assertIsNotNone(invalid_row)
-        self.assertIsNotNone(valid_row)
-        assert invalid_row is not None
-        assert valid_row is not None
-        self.assertEqual(invalid_row.lifecycle_status, SupplierOfferLifecycle.READY_FOR_MODERATION)
-        self.assertEqual(valid_row.lifecycle_status, SupplierOfferLifecycle.PUBLISHED)
-        self.assertIn("unavailable", invalid_text)
-        self.assertIn("published", valid_text)
+        for lifecycle in (SupplierOfferLifecycle.READY_FOR_MODERATION, SupplierOfferLifecycle.APPROVED):
+            text = asyncio.run(body(lifecycle))
+            self.assertIn("retired", text)
+
+    def test_workflow_publish_confirm_publishes_when_gate_enabled(self) -> None:
+        valid_offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.APPROVED)
+        mock_cfg = SimpleNamespace(
+            telegram_bot_token="dummy-token",
+            telegram_offer_showcase_channel_id="-10012345",
+            telegram_bot_username="testbot",
+            telegram_mini_app_url="https://example.com/mini",
+        )
+        ow = AdminSupplierOfferOperatorWorkflowRead(
+            state="ready_to_publish_showcase",
+            primary_next_action="publish_showcase_channel",
+            actions=[
+                AdminSupplierOfferOperatorWorkflowActionRead(
+                    code="publish_showcase_channel",
+                    label="x",
+                    enabled=True,
+                    danger_level="public_dangerous",
+                    requires_confirmation=True,
+                    method="POST",
+                    endpoint="/admin/supplier-offers/{offer_id}/publish",
+                ),
+            ],
+            blocking_reasons=[],
+            warnings=[],
+        )
+        mock_pkg = MagicMock()
+        mock_pkg.operator_workflow = ow
+        real_svc = admin_moderation.SupplierOfferReviewPackageService()
+        gate_reads = {"n": 0}
+
+        def review_package_side_effect(session, *, offer_id: int):
+            if offer_id == valid_offer_id and gate_reads["n"] < 2:
+                gate_reads["n"] += 1
+                return mock_pkg
+            return real_svc.review_package(session, offer_id=offer_id)
+
+        async def body() -> str:
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            propose_cb = _callback(
+                telegram_user_id=990001,
+                data=f"{ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX}{valid_offer_id}",
+                message=message,
+            )
+            confirm_cb = _callback(
+                telegram_user_id=990001,
+                data=f"{ADMIN_OPS_OW_PUBLISH_SHOWCASE_CONFIRM_PREFIX}{valid_offer_id}",
+                message=message,
+            )
+            with (
+                patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)),
+                patch.object(
+                    admin_moderation.SupplierOfferReviewPackageService,
+                    "review_package",
+                    side_effect=review_package_side_effect,
+                ),
+                patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
+                patch("app.services.supplier_offer_moderation_service.send_showcase_publication", return_value=501),
+            ):
+                await admin_moderation.admin_ops_operator_workflow_c2b8b_publish_showcase(propose_cb, state)
+                await admin_moderation.admin_ops_operator_workflow_c2b8b_publish_showcase(confirm_cb, state)
+            return "\n".join(c.args[0].lower() for c in message.answer.call_args_list if c.args)
+
+        text = asyncio.run(body())
+        row = admin_moderation.SupplierOfferModerationService()._offers.get_any(self.session, offer_id=valid_offer_id)
+        self.assertIsNotNone(row)
+        assert row is not None
+        self.assertEqual(row.lifecycle_status, SupplierOfferLifecycle.PUBLISHED)
+        self.assertIn("published", text)
 
     def test_admin_can_retract_only_from_valid_state(self) -> None:
         invalid_offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.APPROVED)

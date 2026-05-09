@@ -128,6 +128,10 @@ ADMIN_OPS_OW_MEDIA_REQ_CANCEL_PREFIX = "ao:ow:mrx:"
 ADMIN_OPS_OW_MEDIA_OK_PROPOSE_PREFIX = "ao:ow:mok:"
 ADMIN_OPS_OW_MEDIA_OK_CONFIRM_PREFIX = "ao:ow:mokc:"
 ADMIN_OPS_OW_MEDIA_OK_CANCEL_PREFIX = "ao:ow:mokx:"
+# Slice C2B8B: showcase publish (operator_workflow publish_showcase_channel) propose / confirm / cancel
+ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX = "ao:ow:psp:"
+ADMIN_OPS_OW_PUBLISH_SHOWCASE_CONFIRM_PREFIX = "ao:ow:psc:"
+ADMIN_OPS_OW_PUBLISH_SHOWCASE_CANCEL_PREFIX = "ao:ow:psx:"
 
 ADMIN_SUPPLIERS_ACTION_CALLBACK_PREFIX = "admin:suppliers:action:"
 ADMIN_SUPPLIERS_NAV_CALLBACK_PREFIX = "admin:suppliers:nav:"
