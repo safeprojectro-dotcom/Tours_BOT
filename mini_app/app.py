@@ -552,7 +552,7 @@ class CatalogScreen:
         return ft.Container(
             bgcolor=background,
             border_radius=999,
-            padding=ft.padding.symmetric(horizontal=10, vertical=6),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=6),
             content=ft.Text(text, color=foreground, size=12),
         )
 
@@ -837,7 +837,7 @@ class TourDetailScreen:
                     alignment=ft.MainAxisAlignment.START,
                 )
             return ft.Container(
-                padding=ft.padding.only(top=4),
+                padding=ft.Padding.only(top=4),
                 content=ft.Column(
                     [
                         ft.Text(shell(lg, "detail_assisted_booking_title"), weight=ft.FontWeight.W_600),
@@ -876,7 +876,7 @@ class TourDetailScreen:
         if ws is not None and ws.on_waitlist:
             if st == "active":
                 return ft.Container(
-                    padding=ft.padding.only(top=4),
+                    padding=ft.Padding.only(top=4),
                     content=ft.Column(
                         [
                             ft.Text(shell(lg, "waitlist_active_title"), weight=ft.FontWeight.W_600),
@@ -888,7 +888,7 @@ class TourDetailScreen:
                 )
             if st == "in_review":
                 return ft.Container(
-                    padding=ft.padding.only(top=4),
+                    padding=ft.Padding.only(top=4),
                     content=ft.Column(
                         [
                             ft.Text(shell(lg, "waitlist_in_review_title"), weight=ft.FontWeight.W_600),
@@ -899,7 +899,7 @@ class TourDetailScreen:
                     ),
                 )
             return ft.Container(
-                padding=ft.padding.only(top=4),
+                padding=ft.Padding.only(top=4),
                 content=ft.Column(
                     [
                         ft.Text(
@@ -1267,7 +1267,7 @@ class ReservationPreparationScreen:
                 header_rows
                 + [
                     ft.Container(
-                        padding=ft.padding.only(top=8),
+                        padding=ft.Padding.only(top=8),
                         content=ft.Column(
                             prep_assisted_children,
                             spacing=6,
@@ -1886,7 +1886,7 @@ class RfqBridgeExecutionScreen:
                 header_rows
                 + [
                     ft.Container(
-                        padding=ft.padding.only(top=8),
+                        padding=ft.Padding.only(top=8),
                         content=ft.Column(
                             [
                                 ft.Text(shell(lg, "preparation_assisted_title"), weight=ft.FontWeight.W_600),
@@ -3261,7 +3261,7 @@ class MyRequestsListScreen:
                                 weight=ft.FontWeight.W_700,
                             ),
                             ft.Container(
-                                padding=ft.padding.symmetric(horizontal=10, vertical=4),
+                                padding=ft.Padding.symmetric(horizontal=10, vertical=4),
                                 border_radius=999,
                                 bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
                                 content=ft.Text(st_label, size=11, weight=ft.FontWeight.W_600),
@@ -3555,7 +3555,7 @@ class MyRequestDetailScreen:
             )
         lines.append(
             ft.Container(
-                padding=ft.padding.only(top=8),
+                padding=ft.Padding.only(top=8),
                 content=ft.Text(
                     shell(lg, "my_requests_section_what_you_asked"),
                     weight=ft.FontWeight.W_600,
@@ -3572,7 +3572,7 @@ class MyRequestDetailScreen:
         )
         lines.append(
             ft.Container(
-                padding=ft.padding.only(top=10),
+                padding=ft.Padding.only(top=10),
                 content=ft.Text(
                     shell(lg, "my_requests_section_current_status"),
                     weight=ft.FontWeight.W_600,
@@ -3583,7 +3583,7 @@ class MyRequestDetailScreen:
         lines.append(ft.Text(status_label, size=14, color=ft.Colors.ON_SURFACE_VARIANT))
         lines.append(
             ft.Container(
-                padding=ft.padding.only(top=10),
+                padding=ft.Padding.only(top=10),
                 content=ft.Text(
                     shell(lg, "my_requests_section_current_update"),
                     weight=ft.FontWeight.W_600,
@@ -3606,7 +3606,7 @@ class MyRequestDetailScreen:
                     ap_children.append(ft.Text(disc_s, size=11, color=ft.Colors.ON_SURFACE_VARIANT))
                 lines.append(
                     ft.Container(
-                        padding=ft.padding.only(top=10),
+                        padding=ft.Padding.only(top=10),
                         content=ft.Column(ap_children, spacing=6),
                     )
                 )
@@ -3614,7 +3614,7 @@ class MyRequestDetailScreen:
             sos = detail.selected_offer_summary
             lines.append(
                 ft.Container(
-                    padding=ft.padding.only(top=10),
+                    padding=ft.Padding.only(top=10),
                     content=ft.Column(
                         [
                             ft.Text(
@@ -3682,7 +3682,7 @@ class MyRequestDetailScreen:
             if bm:
                 lines.append(
                     ft.Container(
-                        padding=ft.padding.only(top=4),
+                        padding=ft.Padding.only(top=4),
                         content=ft.Text(bm, size=13, color=ft.Colors.ON_SURFACE_VARIANT),
                     )
                 )
@@ -3701,7 +3701,7 @@ class MyRequestDetailScreen:
         next_body = (shell(lg, next_key) or "").strip() or shell(lg, "my_requests_detail_next_generic")
         lines.append(
             ft.Container(
-                padding=ft.padding.only(top=10),
+                padding=ft.Padding.only(top=10),
                 content=ft.Column(
                     [
                         ft.Text(
