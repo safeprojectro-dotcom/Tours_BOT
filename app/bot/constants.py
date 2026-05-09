@@ -144,6 +144,12 @@ ADMIN_OPS_OW_ACTIVATE_CATALOG_CANCEL_PREFIX = "ao:ow:acx:"
 ADMIN_OPS_OW_EXEC_LINK_PROPOSE_PREFIX = "ao:ow:elp:"
 ADMIN_OPS_OW_EXEC_LINK_CONFIRM_PREFIX = "ao:ow:elc:"
 ADMIN_OPS_OW_EXEC_LINK_CANCEL_PREFIX = "ao:ow:elx:"
+# B12C: showcase marketing template selection (open list / apply / clear / last-seats prompt / back)
+ADMIN_OPS_OW_TEMPLATE_OPEN_PREFIX = "ao:ow:tm:"
+ADMIN_OPS_OW_TEMPLATE_APPLY_PREFIX = "ao:ow:ta:"
+ADMIN_OPS_OW_TEMPLATE_CLEAR_PREFIX = "ao:ow:tcx:"
+ADMIN_OPS_OW_TEMPLATE_LASTSEATS_PROMPT_PREFIX = "ao:ow:tmls:"
+ADMIN_OPS_OW_TEMPLATE_BACK_PREFIX = "ao:ow:tmback:"
 
 ADMIN_SUPPLIERS_ACTION_CALLBACK_PREFIX = "admin:suppliers:action:"
 ADMIN_SUPPLIERS_NAV_CALLBACK_PREFIX = "admin:suppliers:nav:"

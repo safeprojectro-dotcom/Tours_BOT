@@ -2,7 +2,7 @@
 
 **Project:** Tours_BOT. **Scope:** supplier-offer **Telegram showcase** copy — template **classification** and **safe** metadata (B12A foundation).
 
-**Related:** [`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md) · [`docs/AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md`](AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md) · [`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md) (B12/B13 + B12A + B12B) · [`docs/HANDOFF_B12A_SHOWCASE_MARKETING_TEMPLATE_LIBRARY_TO_NEXT_STEP.md`](HANDOFF_B12A_SHOWCASE_MARKETING_TEMPLATE_LIBRARY_TO_NEXT_STEP.md) · [`docs/HANDOFF_B12B_ADMIN_TEMPLATE_PREVIEW_SELECT_TO_NEXT_STEP.md`](HANDOFF_B12B_ADMIN_TEMPLATE_PREVIEW_SELECT_TO_NEXT_STEP.md).
+**Related:** [`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md) · [`docs/AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md`](AI_PUBLIC_COPY_FACT_LOCK_CONTRACT.md) · [`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md) (B12/B13 + B12A–C) · [`docs/HANDOFF_B12A_SHOWCASE_MARKETING_TEMPLATE_LIBRARY_TO_NEXT_STEP.md`](HANDOFF_B12A_SHOWCASE_MARKETING_TEMPLATE_LIBRARY_TO_NEXT_STEP.md) · [`docs/HANDOFF_B12B_ADMIN_TEMPLATE_PREVIEW_SELECT_TO_NEXT_STEP.md`](HANDOFF_B12B_ADMIN_TEMPLATE_PREVIEW_SELECT_TO_NEXT_STEP.md) · [`docs/HANDOFF_B12C_TELEGRAM_TEMPLATE_SELECTION_UI_TO_NEXT_STEP.md`](HANDOFF_B12C_TELEGRAM_TEMPLATE_SELECTION_UI_TO_NEXT_STEP.md).
 
 ---
 
@@ -119,13 +119,52 @@ This block is **read-only** for consumers of **`GET …/review-package`**: it re
 - **Regenerate packaging:** **`merge_showcase_marketing_template_library_v1`** preserves admin keys from the existing row when refreshing inferred fields.
 - **JSONB persistence:** after mutating nested keys, **`flag_modified(row, "packaging_draft_json")`** ensures the ORM persists the update.
 
-### Telegram (read-only)
+### Telegram (read-only in B12B)
 
-- Private admin offer detail may append a **short B12B summary** (inferred / effective / selection / notes snippet / “channel unchanged”) when the review-package model includes a real **`showcase_template_preview`**. **No** callback mutations for template pick in B12B (optional **B12C**).
+- Private admin offer detail may still append a **short B12B summary** when **`showcase_template_preview`** exists. **B12B** did not add template callbacks; **B12C** adds the interactive picker (below).
 
-### Publish path (still unchanged in B12B)
+### Publish path (still unchanged in B12B / B12C)
 
 - **`build_showcase_publication`**, **`GET …/showcase-preview`**, and **`POST …/publish`** do **not** read admin template selection yet. **`B13`** may wire **effective** template into the channel builder.
+
+---
+
+## B12C (implemented) — Telegram admin template selection UI
+
+**Purpose:** Let operators pick or clear the showcase marketing template from **Telegram** admin workflow, using the **same** persistence path as B12B (**`SupplierOfferPackagingReviewService.patch_showcase_marketing_template`** + approved-packaging lock + **`flag_modified`** on JSONB).
+
+### Placement and gating
+
+- **Template** / **Șablon** appears on the private admin **offer detail** when **`operator_workflow.patch_showcase_marketing_template`** is **enabled** (same action as HTTP PATCH).
+- **Order:** after **Approve text** / **Aprobă text** (`approve_packaging_for_publish`), **before** bridge / publish workflow actions.
+
+### Picker content (from review-package)
+
+- **Inferred** template, **effective** template, **selected** template or none.
+- **`notes`** from review-package when the stored selection is invalid or blocked.
+- **Blocked / one-tap** messaging when **`LAST_SEATS_URGENT`** (or any choice with **`requires_verified_live_seats`**) cannot be applied without a verified seat count — **no** fake last-seats copy from inference; inventory remains explicit.
+
+### Safe direct apply
+
+- Inline buttons apply **only** templates that are **allowed for one-tap apply** (not seat-gated per **`template_choices`**).
+- Handler **re-reads** **`GET …/review-package`**, checks workflow action still enabled, and **`_template_id_allowed_for_telegram_direct_apply`** before calling **`patch_showcase_marketing_template`**.
+
+### Last seats (`LAST_SEATS_URGENT`)
+
+- Dedicated callback opens FSM **`AdminModerationState.awaiting_showcase_template_last_seats`**.
+- Operator must send a **positive integer**; then PATCH includes **`last_seats_urgent`** and **`live_seats_remaining`** (same validation as B12B).
+- Back / cancel returns to a **fresh** offer detail.
+
+### Clear selection
+
+- **Clear** uses **`template_id: null`** via the same service (clears admin selection / seat override fields per B12B rules).
+
+### Honesty / non-goals (B12C)
+
+- **No** publish output or **publish readiness** changes — channel HTML and gates unchanged.
+- **No** auto-publish, packaging **approval**, lifecycle or **media_review** changes beyond **selected template metadata** in packaging JSON.
+- **No** Mini App, booking, payment, orders, or migrations.
+- **No fake urgency, discount, or availability** — templates **classify** posture; inference never invents last seats; early bird and discounts stay tied to real **`SupplierOffer`** fields and B12A/B12B rules.
 
 ---
 
@@ -157,15 +196,15 @@ This block is **read-only** for consumers of **`GET …/review-package`**: it re
 
 ## Next likely steps
 
-1. **B12C (optional)** — Telegram **interactive** template selection (callbacks → PATCH or shared service), if ops need in-chat picks beyond HTTP + read-only summary.
+1. **B13** — **Channel adapter** design: map selected / effective template id to **`build_showcase_publication`** (or sibling builders) with full regression tests; keep fact-lock and disable_web_page_preview behavior as today unless product specifies otherwise.
 
-2. **B13** — **Channel adapter** design: map selected / effective template id to **`build_showcase_publication`** (or sibling builders) with full regression tests; keep fact-lock and disable_web_page_preview behavior as today unless product specifies otherwise.
+2. **Production content QA** — operator review of real offers (Mode A/B smoke, copy tone, bilingual needs).
 
-3. **Production content QA** — operator review of real offers (Mode A/B smoke, copy tone, bilingual needs).
+3. **Optional** — Template picker / library copy polish; extra locales beyond EN/RO for B12C strings if needed. Handoff: **[`HANDOFF_B12C_TELEGRAM_TEMPLATE_SELECTION_UI_TO_NEXT_STEP.md`](HANDOFF_B12C_TELEGRAM_TEMPLATE_SELECTION_UI_TO_NEXT_STEP.md)**.
 
 ---
 
-## Code map (B12A + B12B)
+## Code map (B12A + B12B + B12C)
 
 | Piece | Location |
 |-------|----------|
@@ -178,5 +217,5 @@ This block is **read-only** for consumers of **`GET …/review-package`**: it re
 | Admin DTOs / body | `app/schemas/supplier_admin.py` |
 | HTTP | `app/api/routes/admin.py` — `PATCH …/packaging/showcase-template` |
 | Operator workflow | `app/services/supplier_offer_operator_workflow.py` — `patch_showcase_marketing_template` |
-| Telegram append | `app/bot/handlers/admin_moderation.py`, `app/bot/messages.py` |
-| Tests | `tests/unit/test_showcase_marketing_template_library.py`, `tests/unit/test_supplier_offer_b4_packaging.py`, `tests/unit/test_supplier_offer_review_package.py`, `tests/unit/test_supplier_offer_b5_packaging_review.py` |
+| Telegram B12B summary + **B12C picker** | `app/bot/handlers/admin_moderation.py`, `app/bot/messages.py`; B12C callbacks in `app/bot/constants.py`; FSM `awaiting_showcase_template_last_seats` in `app/bot/state.py` |
+| Tests | `tests/unit/test_showcase_marketing_template_library.py`, `tests/unit/test_supplier_offer_b4_packaging.py`, `tests/unit/test_supplier_offer_review_package.py`, `tests/unit/test_supplier_offer_b5_packaging_review.py`; B12C: `tests/unit/test_operator_workflow_b12c_specs.py`, `test_operator_workflow_c2b3_keyboard.py`, `test_telegram_admin_moderation_y281.py` |

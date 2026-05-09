@@ -33,6 +33,8 @@ Showcase publication should be understood as **three** conceptual layers. They a
 
 **B12B (template preview + selection metadata):** **`GET …/review-package`** includes **`showcase_template_preview`** (inferred / effective template, ops-only HTML lines, choices, **`channel_publish_unchanged: true`**). **`PATCH …/packaging/showcase-template`** persists **`admin_selected_*`** (and **`admin_live_seats_remaining`** when **`last_seats_urgent`**) into the same JSON block — **packaging metadata only**. **Selecting a template does not publish** and **does not approve packaging**; **`POST …/publish`** and showcase preview HTML **remain** the existing path until **B13** (or later) explicitly wires template into **`build_showcase_publication`**. Regenerate packaging preserves admin selection keys; PATCH is blocked when packaging is **`approved_for_publish`**.
 
+**B12C (Telegram operator note):** **Template** / **Șablon** on the Telegram admin offer card changes **packaging metadata only** (same service as **`PATCH …/packaging/showcase-template`**). It **does not publish** the showcase and **does not approve** packaging / “text” (`approve_packaging_for_publish` remains separate). **Last seats** (**`LAST_SEATS_URGENT`**) requires a **verified positive** seat count via the bot prompt before it can apply. **Final public publish** still follows the existing **preview → verify → publish** gate and **`can_publish_now`** / **`operator_workflow`** rules above.
+
 ---
 
 ## Checklist: preview → verify → publish

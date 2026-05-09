@@ -68,6 +68,7 @@ class AdminModerationState(StatesGroup):
     awaiting_reject_reason = State()
     awaiting_execution_link_tour = State()
     awaiting_execution_link_tour_code_search = State()
+    awaiting_showcase_template_last_seats = State()
 
 
 class AdminSupplierModerationState(StatesGroup):

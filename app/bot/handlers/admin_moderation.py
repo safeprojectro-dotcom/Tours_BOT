@@ -62,6 +62,11 @@ from app.bot.constants import (
     ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX,
     ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX,
     ADMIN_OPS_OW_SHOWCASE_PREVIEW_PREFIX,
+    ADMIN_OPS_OW_TEMPLATE_APPLY_PREFIX,
+    ADMIN_OPS_OW_TEMPLATE_BACK_PREFIX,
+    ADMIN_OPS_OW_TEMPLATE_CLEAR_PREFIX,
+    ADMIN_OPS_OW_TEMPLATE_LASTSEATS_PROMPT_PREFIX,
+    ADMIN_OPS_OW_TEMPLATE_OPEN_PREFIX,
     ADMIN_OPS_OW_TOUR_BRIDGE_CANCEL_PREFIX,
     ADMIN_OPS_OW_TOUR_BRIDGE_CONFIRM_PREFIX,
     ADMIN_OPS_OW_TOUR_BRIDGE_PROPOSE_PREFIX,
@@ -91,6 +96,7 @@ from app.db.session import SessionLocal
 from app.models.enums import (
     CustomMarketplaceRequestStatus,
     OperatorWorkflowIntent,
+    ShowcaseMarketingTemplateId,
     SupplierOfferLifecycle,
     SupplierOfferPackagingStatus,
     TourStatus,
@@ -201,6 +207,7 @@ OPERATOR_WORKFLOW_C2B8B_PUBLISH_SHOWCASE_CODE = "publish_showcase_channel"
 OPERATOR_WORKFLOW_C2B10TA_CREATE_TOUR_BRIDGE_CODE = "create_tour_bridge"
 OPERATOR_WORKFLOW_C2B10TB_ACTIVATE_CATALOG_CODE = "activate_tour_for_catalog"
 OPERATOR_WORKFLOW_C2B10TC_CREATE_EXECUTION_LINK_CODE = "create_execution_link"
+OPERATOR_WORKFLOW_B12C_TEMPLATE_PATCH_CODE = "patch_showcase_marketing_template"
 _SHOWCASE_PREVIEW_BODY_MAX = 3200
 
 
@@ -300,6 +307,135 @@ def _generate_packaging_draft_confirmation_keyboard(language_code: str | None, *
     kb.button(
         text=translate(language_code, "admin_offer_ow_pkg_confirm_cancel"),
         callback_data=f"{ADMIN_OPS_OW_PKG_GEN_CANCEL_PREFIX}{offer_id}",
+    )
+    kb.adjust(2)
+    return kb
+
+
+def _showcase_template_label(language_code: str | None, template_id: str) -> str:
+    return translate(language_code, f"admin_offer_showcase_tpl_{template_id}")
+
+
+def _operator_workflow_b12c_template_open_callback(
+    offer_id: int,
+    ow: AdminSupplierOfferOperatorWorkflowRead,
+) -> str | None:
+    """B12C: open template picker when HTTP PATCH template action is enabled."""
+    for act in ow.actions:
+        if act.code == OPERATOR_WORKFLOW_B12C_TEMPLATE_PATCH_CODE and act.enabled:
+            return f"{ADMIN_OPS_OW_TEMPLATE_OPEN_PREFIX}{offer_id}"
+    return None
+
+
+def _b12c_patch_workflow_enabled(ow: AdminSupplierOfferOperatorWorkflowRead) -> bool:
+    return any(
+        act.code == OPERATOR_WORKFLOW_B12C_TEMPLATE_PATCH_CODE and act.enabled for act in ow.actions
+    )
+
+
+def _template_apply_callback_data(*, offer_id: int, template_id: str) -> str:
+    return f"{ADMIN_OPS_OW_TEMPLATE_APPLY_PREFIX}{offer_id}:{template_id}"
+
+
+def _parse_template_apply_callback(data: str) -> tuple[int, str] | None:
+    if not data.startswith(ADMIN_OPS_OW_TEMPLATE_APPLY_PREFIX):
+        return None
+    rest = data.removeprefix(ADMIN_OPS_OW_TEMPLATE_APPLY_PREFIX)
+    if ":" not in rest:
+        return None
+    oid_s, tid = rest.split(":", 1)
+    if not oid_s.isdigit():
+        return None
+    oid = int(oid_s)
+    tid = tid.strip()
+    if oid <= 0 or not tid:
+        return None
+    return oid, tid
+
+
+def _template_id_allowed_for_telegram_direct_apply(
+    stp: AdminSupplierOfferShowcaseTemplatePreviewRead,
+    template_id: str,
+) -> bool:
+    for c in stp.template_choices:
+        if c.template_id == template_id:
+            return not c.requires_verified_live_seats
+    return False
+
+
+def _showcase_template_pick_screen_text(
+    language_code: str | None,
+    stp: AdminSupplierOfferShowcaseTemplatePreviewRead,
+) -> str:
+    if stp.selected_template_id:
+        sel_line = translate(
+            language_code,
+            "admin_offer_showcase_tpl_selected",
+            value=_showcase_template_label(language_code, stp.selected_template_id),
+        )
+    else:
+        sel_line = translate(language_code, "admin_offer_showcase_tpl_selected_none")
+    lines = [
+        translate(language_code, "admin_offer_showcase_tpl_screen_title"),
+        "",
+        translate(
+            language_code,
+            "admin_offer_showcase_tpl_inferred",
+            value=_showcase_template_label(language_code, stp.inferred_template_id),
+        ),
+        translate(
+            language_code,
+            "admin_offer_showcase_tpl_effective",
+            value=_showcase_template_label(language_code, stp.effective_template_id),
+        ),
+        sel_line,
+        "",
+        translate(language_code, "admin_offer_showcase_tpl_intro"),
+    ]
+    if stp.notes:
+        lines.append("")
+        lines.append(
+            translate(
+                language_code,
+                "admin_offer_showcase_template_b12b_notes",
+                notes=", ".join(stp.notes),
+            ),
+        )
+    blocked = [c for c in stp.template_choices if c.requires_verified_live_seats]
+    if blocked:
+        lines.append("")
+        lines.append(translate(language_code, "admin_offer_showcase_tpl_blocked_header"))
+        for c in blocked:
+            lines.append("• " + _showcase_template_label(language_code, c.template_id))
+    return _telegram_plain_trim("\n".join(lines))
+
+
+def _showcase_template_pick_keyboard(
+    language_code: str | None,
+    *,
+    offer_id: int,
+    stp: AdminSupplierOfferShowcaseTemplatePreviewRead,
+) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    for c in stp.template_choices:
+        if not c.requires_verified_live_seats:
+            kb.button(
+                text=_showcase_template_label(language_code, c.template_id),
+                callback_data=_template_apply_callback_data(offer_id=offer_id, template_id=c.template_id),
+            )
+    if any(c.requires_verified_live_seats for c in stp.template_choices):
+        kb.button(
+            text=translate(language_code, "admin_offer_showcase_tpl_lastseats_btn"),
+            callback_data=f"{ADMIN_OPS_OW_TEMPLATE_LASTSEATS_PROMPT_PREFIX}{offer_id}",
+        )
+    if stp.selected_template_id:
+        kb.button(
+            text=translate(language_code, "admin_offer_showcase_tpl_clear_btn"),
+            callback_data=f"{ADMIN_OPS_OW_TEMPLATE_CLEAR_PREFIX}{offer_id}",
+        )
+    kb.button(
+        text=translate(language_code, "admin_offer_showcase_tpl_back_btn"),
+        callback_data=f"{ADMIN_OPS_OW_TEMPLATE_BACK_PREFIX}{offer_id}",
     )
     kb.adjust(2)
     return kb
@@ -692,6 +828,9 @@ def _detail_keyboard(language_code: str | None, offer: AdminSupplierOfferRead, s
         propose_cb = _operator_workflow_c2b1_packaging_propose_callback(offer.id, ow)
         if propose_cb:
             workflow_buttons.append((translate(language_code, "admin_offer_ow_pkg_btn_propose"), propose_cb))
+        tmpl_cb = _operator_workflow_b12c_template_open_callback(offer.id, ow)
+        if tmpl_cb:
+            workflow_buttons.append((translate(language_code, "admin_offer_ow_template_btn"), tmpl_cb))
         bridge_cb = _operator_workflow_c2b10ta_tour_bridge_propose_callback(offer.id, ow)
         if bridge_cb:
             workflow_buttons.append((translate(language_code, "admin_offer_ow_bridge_btn_propose"), bridge_cb))
@@ -2229,6 +2368,186 @@ async def admin_ops_operator_workflow_c2a(query: CallbackQuery, state: FSMContex
         await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
 
 
+async def _b12c_send_offer_detail_answer(chat_message: Message, *, lg: str | None, offer_id: int) -> None:
+    with SessionLocal() as session:
+        row = SupplierOfferModerationService()._offers.get_any(session, offer_id=offer_id)
+        if row is None:
+            await chat_message.answer(translate(lg, "admin_offer_no_current"))
+            return
+        offer = SupplierOfferModerationService()._to_read(row)
+        body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=offer))
+        await chat_message.answer(body, reply_markup=_detail_keyboard(lg, offer, session).as_markup())
+
+
+@router.callback_query(
+    F.data.startswith(ADMIN_OPS_OW_TEMPLATE_OPEN_PREFIX)
+    | F.data.startswith(ADMIN_OPS_OW_TEMPLATE_APPLY_PREFIX)
+    | F.data.startswith(ADMIN_OPS_OW_TEMPLATE_CLEAR_PREFIX)
+    | F.data.startswith(ADMIN_OPS_OW_TEMPLATE_LASTSEATS_PROMPT_PREFIX)
+    | F.data.startswith(ADMIN_OPS_OW_TEMPLATE_BACK_PREFIX)
+)
+async def admin_ops_operator_workflow_b12c_showcase_template(query: CallbackQuery, state: FSMContext) -> None:
+    """B12C: template picker / apply / clear / last-seats prompt — same service as HTTP PATCH."""
+    if query.from_user is None or query.data is None or query.message is None:
+        return
+    with SessionLocal() as session:
+        lg = _user_service().resolve_language(
+            session,
+            telegram_user_id=query.from_user.id,
+            telegram_language_code=query.from_user.language_code,
+        )
+    if await _deny_if_not_allowed(query, language_code=lg):
+        await state.clear()
+        return
+
+    msg = query.message
+    data = query.data
+
+    if data.startswith(ADMIN_OPS_OW_TEMPLATE_BACK_PREFIX):
+        await state.clear()
+        raw_id = data.removeprefix(ADMIN_OPS_OW_TEMPLATE_BACK_PREFIX)
+        offer_id = int(raw_id) if raw_id.isdigit() else 0
+        if offer_id <= 0:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        await _b12c_send_offer_detail_answer(msg, lg=lg, offer_id=offer_id)
+        await query.answer()
+        return
+
+    if data.startswith(ADMIN_OPS_OW_TEMPLATE_OPEN_PREFIX):
+        raw_id = data.removeprefix(ADMIN_OPS_OW_TEMPLATE_OPEN_PREFIX)
+        offer_id = int(raw_id) if raw_id.isdigit() else 0
+        if offer_id <= 0:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        try:
+            with SessionLocal() as session:
+                pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+                if not _b12c_patch_workflow_enabled(pkg.operator_workflow):
+                    await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                    return
+                stp = pkg.showcase_template_preview
+                text = _showcase_template_pick_screen_text(lg, stp)
+                markup = _showcase_template_pick_keyboard(lg, offer_id=offer_id, stp=stp).as_markup()
+            await state.clear()
+            await msg.answer(text, reply_markup=markup)
+            await query.answer()
+        except SupplierOfferReviewPackageNotFoundError:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+        return
+
+    if data.startswith(ADMIN_OPS_OW_TEMPLATE_LASTSEATS_PROMPT_PREFIX):
+        raw_id = data.removeprefix(ADMIN_OPS_OW_TEMPLATE_LASTSEATS_PROMPT_PREFIX)
+        offer_id = int(raw_id) if raw_id.isdigit() else 0
+        if offer_id <= 0:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        try:
+            with SessionLocal() as session:
+                pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+                if not _b12c_patch_workflow_enabled(pkg.operator_workflow):
+                    await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                    return
+                has_last = any(
+                    c.template_id == ShowcaseMarketingTemplateId.LAST_SEATS_URGENT.value
+                    for c in pkg.showcase_template_preview.template_choices
+                )
+                if not has_last:
+                    await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                    return
+        except SupplierOfferReviewPackageNotFoundError:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        kb = InlineKeyboardBuilder()
+        kb.button(
+            text=translate(lg, "admin_offer_showcase_tpl_back_btn"),
+            callback_data=f"{ADMIN_OPS_OW_TEMPLATE_BACK_PREFIX}{offer_id}",
+        )
+        await msg.answer(translate(lg, "admin_offer_showcase_tpl_lastseats_prompt"), reply_markup=kb.as_markup())
+        await state.set_state(AdminModerationState.awaiting_showcase_template_last_seats)
+        await state.update_data(pending_template_offer_id=offer_id)
+        await query.answer()
+        return
+
+    if data.startswith(ADMIN_OPS_OW_TEMPLATE_CLEAR_PREFIX):
+        raw_id = data.removeprefix(ADMIN_OPS_OW_TEMPLATE_CLEAR_PREFIX)
+        offer_id = int(raw_id) if raw_id.isdigit() else 0
+        if offer_id <= 0:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+            return
+        try:
+            with SessionLocal() as session:
+                pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+                if not _b12c_patch_workflow_enabled(pkg.operator_workflow):
+                    await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                    return
+                svc = SupplierOfferPackagingReviewService()
+                try:
+                    svc.patch_showcase_marketing_template(
+                        session,
+                        offer_id=offer_id,
+                        template_id=None,
+                        live_seats_remaining=None,
+                    )
+                    session.commit()
+                except SupplierOfferPackagingReviewNotFoundError:
+                    session.rollback()
+                    await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+                    return
+                except SupplierOfferPackagingReviewStateError as exc:
+                    session.rollback()
+                    await msg.answer(translate(lg, "admin_offer_showcase_tpl_failed", detail=exc.message))
+                    await query.answer()
+                    return
+            await state.clear()
+            await msg.answer(translate(lg, "admin_offer_showcase_tpl_cleared"))
+            await _b12c_send_offer_detail_answer(msg, lg=lg, offer_id=offer_id)
+            await query.answer()
+        except SupplierOfferReviewPackageNotFoundError:
+            await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+        return
+
+    parsed = _parse_template_apply_callback(data)
+    if parsed is None:
+        await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+        return
+    offer_id, template_id = parsed
+    try:
+        with SessionLocal() as session:
+            pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+            if not _b12c_patch_workflow_enabled(pkg.operator_workflow):
+                await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                return
+            stp = pkg.showcase_template_preview
+            if not _template_id_allowed_for_telegram_direct_apply(stp, template_id):
+                await query.answer(translate(lg, "admin_offer_ow_action_unavailable"), show_alert=True)
+                return
+            svc = SupplierOfferPackagingReviewService()
+            try:
+                svc.patch_showcase_marketing_template(
+                    session,
+                    offer_id=offer_id,
+                    template_id=template_id,
+                    live_seats_remaining=None,
+                )
+                session.commit()
+            except SupplierOfferPackagingReviewNotFoundError:
+                session.rollback()
+                await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+                return
+            except SupplierOfferPackagingReviewStateError as exc:
+                session.rollback()
+                await msg.answer(translate(lg, "admin_offer_showcase_tpl_failed", detail=exc.message))
+                await query.answer()
+                return
+        await state.clear()
+        await msg.answer(translate(lg, "admin_offer_showcase_tpl_applied"))
+        await _b12c_send_offer_detail_answer(msg, lg=lg, offer_id=offer_id)
+        await query.answer()
+    except SupplierOfferReviewPackageNotFoundError:
+        await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+
+
 @router.callback_query(
     F.data.startswith(ADMIN_OPS_OW_PKG_APPROVE_PROPOSE_PREFIX)
     | F.data.startswith(ADMIN_OPS_OW_PKG_APPROVE_CONFIRM_PREFIX)
@@ -3623,6 +3942,82 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
         detail = getattr(exc, "message", str(exc))
         await query.message.answer(translate(lg, "admin_offer_action_unavailable", detail=detail))
     await query.answer()
+
+
+@router.message(AdminModerationState.awaiting_showcase_template_last_seats)
+async def admin_showcase_template_last_seats_input(message: Message, state: FSMContext) -> None:
+    """B12C: integer reply sets LAST_SEATS_URGENT with live_seats_remaining (PATCH parity)."""
+    if message.from_user is None or not message.text:
+        return
+    with SessionLocal() as session:
+        lg = _user_service().resolve_language(
+            session,
+            telegram_user_id=message.from_user.id,
+            telegram_language_code=message.from_user.language_code,
+        )
+    if await _deny_if_not_allowed(message, language_code=lg):
+        await state.clear()
+        return
+    text = message.text.strip()
+    folded = text.casefold()
+    data = await state.get_data()
+    offer_id_raw = data.get("pending_template_offer_id")
+    offer_id = int(offer_id_raw) if isinstance(offer_id_raw, int) else 0
+    if offer_id <= 0:
+        await message.answer(translate(lg, "admin_offer_no_current"))
+        await state.clear()
+        return
+    if folded in {"back", "inapoi", "înapoi", "cancel"}:
+        await state.clear()
+        await _b12c_send_offer_detail_answer(message, lg=lg, offer_id=offer_id)
+        return
+    try:
+        n = int(text)
+    except ValueError:
+        await message.answer(translate(lg, "admin_offer_showcase_tpl_invalid_seats"))
+        return
+    if n < 1:
+        await message.answer(translate(lg, "admin_offer_showcase_tpl_invalid_seats"))
+        return
+    try:
+        with SessionLocal() as session:
+            pkg = SupplierOfferReviewPackageService().review_package(session, offer_id=offer_id)
+            if not _b12c_patch_workflow_enabled(pkg.operator_workflow):
+                await message.answer(translate(lg, "admin_offer_ow_action_unavailable"))
+                await state.clear()
+                return
+            if not any(
+                c.template_id == ShowcaseMarketingTemplateId.LAST_SEATS_URGENT.value
+                for c in pkg.showcase_template_preview.template_choices
+            ):
+                await message.answer(translate(lg, "admin_offer_ow_action_unavailable"))
+                await state.clear()
+                return
+            svc = SupplierOfferPackagingReviewService()
+            try:
+                svc.patch_showcase_marketing_template(
+                    session,
+                    offer_id=offer_id,
+                    template_id=ShowcaseMarketingTemplateId.LAST_SEATS_URGENT.value,
+                    live_seats_remaining=n,
+                )
+                session.commit()
+            except SupplierOfferPackagingReviewNotFoundError:
+                session.rollback()
+                await message.answer(translate(lg, "admin_offer_no_current"))
+                await state.clear()
+                return
+            except SupplierOfferPackagingReviewStateError as exc:
+                session.rollback()
+                await message.answer(translate(lg, "admin_offer_showcase_tpl_failed", detail=exc.message))
+                return
+    except SupplierOfferReviewPackageNotFoundError:
+        await message.answer(translate(lg, "admin_offer_no_current"))
+        await state.clear()
+        return
+    await state.clear()
+    await message.answer(translate(lg, "admin_offer_showcase_tpl_applied"))
+    await _b12c_send_offer_detail_answer(message, lg=lg, offer_id=offer_id)
 
 
 @router.message(AdminModerationState.awaiting_execution_link_tour)
