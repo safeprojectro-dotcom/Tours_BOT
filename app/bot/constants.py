@@ -140,6 +140,10 @@ ADMIN_OPS_OW_TOUR_BRIDGE_CANCEL_PREFIX = "ao:ow:tbx:"
 ADMIN_OPS_OW_ACTIVATE_CATALOG_PROPOSE_PREFIX = "ao:ow:acp:"
 ADMIN_OPS_OW_ACTIVATE_CATALOG_CONFIRM_PREFIX = "ao:ow:acc:"
 ADMIN_OPS_OW_ACTIVATE_CATALOG_CANCEL_PREFIX = "ao:ow:acx:"
+# Slice C2B10T-C: create_execution_link (operator_workflow) propose / confirm / cancel
+ADMIN_OPS_OW_EXEC_LINK_PROPOSE_PREFIX = "ao:ow:elp:"
+ADMIN_OPS_OW_EXEC_LINK_CONFIRM_PREFIX = "ao:ow:elc:"
+ADMIN_OPS_OW_EXEC_LINK_CANCEL_PREFIX = "ao:ow:elx:"
 
 ADMIN_SUPPLIERS_ACTION_CALLBACK_PREFIX = "admin:suppliers:action:"
 ADMIN_SUPPLIERS_NAV_CALLBACK_PREFIX = "admin:suppliers:nav:"

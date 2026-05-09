@@ -10,7 +10,7 @@
 
 The **explicit offer→Tour bridge** is **already implemented** in the backend: **`supplier_offer_tour_bridges`**, **`SupplierOfferTourBridgeService`**, admin **`POST/GET …/tour-bridge`**, **`POST …/execution-link`**, **`POST …/tours/{tour_id}/activate-for-catalog`**, **`review-package`** aggregates (**bridge readiness**, **conversion_closure**, **operator_workflow** hints), and **B11**-style **`/start supoffer_<id>`** routing via **`resolve_sup_offer_start_mini_app_routing`** (active execution link + **`OPEN_FOR_SALE`** + catalog visibility).
 
-**C2B9A finding:** the main **gap** is **not** “missing bridge code” but **(a)** **operator UX / Telegram** (**`create_execution_link`** still only via HTTP **or** published-offer link wizard — **optional** **C2B10T-C**; **`create_tour_bridge`** / **`activate_tour_for_catalog`** **shipped** on the admin card as **C2B10T-A** / **C2B10T-B** when **`operator_workflow`** enables each), **(b)** **documentation drift** (partially cleared by **C2B9B** docs sync **2026-05-09**; **C2B10T-*** handoffs **`docs/CHAT_HANDOFF.md`**), **(c)** **product-prioritized follow-ups** (**B7.3** media bytes, **B10.6** bot-as-router, **B11** polish / edge cases).
+**C2B9A finding:** the main **gap** is **not** “missing bridge code” but **(a)** **operator UX / Telegram** (**`create_tour_bridge`** **/** **`activate_tour_for_catalog`** **/** **`create_execution_link`** **shipped** on the admin card as **C2B10T-A** / **C2B10T-B** / **C2B10T-C** when **`operator_workflow`** enables each **;** published-offer link wizard **/** **HTTP** remain for manual tour input), **(b)** **documentation drift** (cleared incrementally by **C2B9B** **+** **C2B10T-*** handoffs **`docs/CHAT_HANDOFF.md`**), **(c)** **product-prioritized follow-ups** (**B7.3** media bytes, **B10.6** bot-as-router, **B11** polish / edge cases).
 
 ---
 
@@ -76,7 +76,7 @@ Disabled reasons / blocking reasons are derived from existing review slices (bri
 
 | Category | Gap |
 |----------|-----|
-| **Telegram operator UX** | **`create_tour_bridge`** / **`activate_tour_for_catalog`** on the admin card when **`enabled`** (**C2B10T-A** / **C2B10T-B**) **`;`** **`create_execution_link`** **—** HTTP **or** Telegram link wizard for **`published`** offers only (**optional** **C2B10T-C** for card entry). |
+| **Telegram operator UX** | **`create_tour_bridge`** **/** **`activate_tour_for_catalog`** **/** **`create_execution_link`** on the admin card when **`enabled`** (**C2B10T-A** / **C2B10T-B** / **C2B10T-C**) **`;`** **HTTP** **/** published-offer link wizard remain for flows that need explicit **`tour_id`** entry **.**
 | **Single “readiness” narrative** | **C2B9B:** end-to-end chain documented in **BUSINESS** plan, **`ADMIN_OPERATOR_WORKFLOW`**, showcase runbook **`;`** **`GET …/review-package`** remains the single **read** surface before mutations. |
 | **Docs sync** | **C2B9B (2026-05-09):** **`SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`**, **`ADMIN_OPERATOR_WORKFLOW.md`**, **`ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`**, **`CHAT_HANDOFF.md`** aligned with bridge + C2B8B showcase publish + B11 chain (**this** file §4 **C2B9B** row **done**). |
 | **B7.3 media bytes** | Policy **B7.3A** accepted; **storage / download / render** not done — affects polish of showcase vs catalog hero parity (**not** a bridge blocker for core path). |
@@ -109,7 +109,7 @@ Naming is **suggestive**; adjust to project ticket scheme.
 | **C2B9B (docs-only)** | **Done (2026-05-09):** BUSINESS plan + operator playbook + showcase runbook + handoff — conversion chain packaging → readiness → showcase (**HTTP** / **Telegram C2B8B**) → **`tour-bridge`** → **`activate-for-catalog`** → execution link → **B11** → **Layer A**. |
 | **C2B10T-A (Telegram, narrow)** | Optional: **one** conversion action on admin card (e.g. **`create_tour_bridge`** only) with **same** pattern как **C2B8B** (propose, confirm, double **review-package** read). **Scope gate:** product approval; **do not** ship all three mutations at once without UX review. |
 | **C2B10T-B** | **`activate_tour_for_catalog`** from Telegram ( **`conversion_enabling`**, confirmation), only if **C2B10T-A** stable. |
-| **C2B10T-C** | **`create_execution_link`** from Telegram **already partially** covered by published-offer link UI; align with **`operator_workflow`** **`enabled`** flags if needed. |
+| **C2B10T-C** | **`create_execution_link`** from Telegram — **C2B10T-C** (**Booking link / Link rezervări**), **`operator_workflow`**-gated **`;`** published-offer link UI **/** **HTTP** remain for manual **`tour_id`**. **Done:** **`docs/HANDOFF_TELEGRAM_EXECUTION_LINK_BUTTON_C2B10T_C_TO_NEXT_STEP.md`**. |
 | **B7.3B** (parallel track) | Media storage stub / pipeline when product prioritizes hero parity. |
 | **B10.6** | Bot-as-router / duplicate-catalog avoidance — **design gate** before code. |
 
@@ -117,7 +117,7 @@ Naming is **suggestive**; adjust to project ticket scheme.
 
 ## 5. Recommended immediate next Cursor prompt
 
-**After C2B9B:** optional **C2B10T-*** Telegram conversion buttons ( **`create_tour_bridge`** first, then **`activate_tour_for_catalog`**) **—** **product** **approval** **only** **;** **or** **B7.3B** **/** **B11** **polish** **per** **`OPEN_QUESTIONS_AND_TECH_DEBT.md`**.
+**After C2B9B:** **C2B10T-A/B/C** Telegram conversion actions shipped **(** **`docs/CHAT_HANDOFF.md`** **)** **`;`** **next** **B7.3B** **/** **B11** **polish** **per** **`OPEN_QUESTIONS_AND_TECH_DEBT.md`**.
 
 **Reference (completed):** **`CURSOR_PROMPT_SUPPLIER_OFFER_CONVERSION_DOCS_SYNC_C2B9B`** — **[`docs/CURSOR_PROMPT_SUPPLIER_OFFER_CONVERSION_DOCS_SYNC_C2B9B.md`](CURSOR_PROMPT_SUPPLIER_OFFER_CONVERSION_DOCS_SYNC_C2B9B.md)**.
 

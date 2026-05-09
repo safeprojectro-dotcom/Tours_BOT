@@ -29,6 +29,8 @@ from app.bot.constants import (
     ADMIN_OPS_OW_TOUR_BRIDGE_PROPOSE_PREFIX,
     ADMIN_OPS_OW_ACTIVATE_CATALOG_CONFIRM_PREFIX,
     ADMIN_OPS_OW_ACTIVATE_CATALOG_PROPOSE_PREFIX,
+    ADMIN_OPS_OW_EXEC_LINK_CONFIRM_PREFIX,
+    ADMIN_OPS_OW_EXEC_LINK_PROPOSE_PREFIX,
 )
 from app.bot.handlers import admin_moderation
 from app.core.config import get_settings
@@ -51,6 +53,7 @@ from app.schemas.supplier_admin import (
     AdminSupplierOfferOperatorWorkflowActionRead,
     AdminSupplierOfferOperatorWorkflowRead,
 )
+from app.services.supplier_offer_execution_link_service import SupplierOfferExecutionLinkService
 from app.services.supplier_offer_tour_bridge_service import (
     SupplierOfferTourBridgeResult,
     SupplierOfferTourBridgeService,
@@ -2126,6 +2129,82 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         self.assertEqual(call_kw.get("activated_by"), "telegram:990001")
         self.assertIn("listed for sale", text)
         self.assertIn("777", text)
+
+    def test_workflow_execution_link_confirm_calls_service_when_gate_enabled(self) -> None:
+        valid_offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
+        tour = self.create_tour(code="TG-EXEC-OW", sales_mode=TourSalesMode.PER_SEAT)
+        self.session.commit()
+        ow = AdminSupplierOfferOperatorWorkflowRead(
+            state="ready_to_create_execution_link",
+            primary_next_action="create_execution_link",
+            actions=[
+                AdminSupplierOfferOperatorWorkflowActionRead(
+                    code="create_execution_link",
+                    label="x",
+                    enabled=True,
+                    danger_level="conversion_enabling",
+                    requires_confirmation=True,
+                    method="POST",
+                    endpoint="/admin/supplier-offers/{offer_id}/execution-link",
+                ),
+            ],
+            blocking_reasons=[],
+            warnings=[],
+        )
+        linked = AdminSupplierOfferLinkedTourCatalogRead(
+            tour_id=tour.id,
+            tour_code="TG-EXEC-OW",
+            tour_status=TourStatus.OPEN_FOR_SALE.value,
+            sales_mode=TourSalesMode.PER_SEAT,
+            seats_available=10,
+            catalog_activation_missing_fields=[],
+            catalog_listed_for_mini_app=True,
+            can_activate_for_catalog=False,
+            b8_same_offer_date_conflict=False,
+        )
+        mock_pkg = MagicMock()
+        mock_pkg.operator_workflow = ow
+        mock_pkg.linked_tour_catalog = linked
+
+        async def body():
+            state = _DictFSMState()
+            message = _private_message(telegram_user_id=990001)
+            propose_cb = _callback(
+                telegram_user_id=990001,
+                data=f"{ADMIN_OPS_OW_EXEC_LINK_PROPOSE_PREFIX}{valid_offer_id}",
+                message=message,
+            )
+            confirm_cb = _callback(
+                telegram_user_id=990001,
+                data=f"{ADMIN_OPS_OW_EXEC_LINK_CONFIRM_PREFIX}{valid_offer_id}",
+                message=message,
+            )
+            with (
+                patch.object(admin_moderation, "SessionLocal", _SessionLocalBinder(self.session)),
+                patch.object(
+                    admin_moderation.SupplierOfferReviewPackageService,
+                    "review_package",
+                    return_value=mock_pkg,
+                ),
+                patch.object(
+                    SupplierOfferExecutionLinkService,
+                    "link_offer_to_tour",
+                    return_value=MagicMock(),
+                ) as mock_link,
+            ):
+                await admin_moderation.admin_ops_operator_workflow_c2b10tc_execution_link(propose_cb, state)
+                await admin_moderation.admin_ops_operator_workflow_c2b10tc_execution_link(confirm_cb, state)
+            text = "\n".join(c.args[0].lower() for c in message.answer.call_args_list if c.args)
+            return text, mock_link
+
+        text, mock_link = asyncio.run(body())
+        mock_link.assert_called_once()
+        call_kw = mock_link.call_args.kwargs
+        self.assertEqual(call_kw.get("offer_id"), valid_offer_id)
+        self.assertEqual(call_kw.get("tour_id"), tour.id)
+        self.assertIsNone(call_kw.get("link_note"))
+        self.assertIn("execution link set", text)
+        self.assertIn(str(tour.id), text)
 
     def test_admin_can_retract_only_from_valid_state(self) -> None:
         invalid_offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.APPROVED)

@@ -10,6 +10,7 @@ from app.bot.constants import (
     ADMIN_OFFERS_ACTION_CALLBACK_PREFIX,
     ADMIN_OFFERS_ACTION_PUBLISH,
     ADMIN_OPS_OW_ACTIVATE_CATALOG_PROPOSE_PREFIX,
+    ADMIN_OPS_OW_EXEC_LINK_PROPOSE_PREFIX,
     ADMIN_OPS_OW_MEDIA_OK_PROPOSE_PREFIX,
     ADMIN_OPS_OW_MEDIA_REQ_PROPOSE_PREFIX,
     ADMIN_OPS_OW_PKG_APPROVE_PROPOSE_PREFIX,
@@ -72,6 +73,18 @@ def _conversion_act(code: str) -> AdminSupplierOfferOperatorWorkflowActionRead:
         requires_confirmation=True,
         method="POST",
         endpoint="/admin/tours/{tour_id}/activate-for-catalog",
+    )
+
+
+def _exec_link_workflow_act() -> AdminSupplierOfferOperatorWorkflowActionRead:
+    return AdminSupplierOfferOperatorWorkflowActionRead(
+        code="create_execution_link",
+        label="create_execution_link",
+        enabled=True,
+        danger_level="conversion_enabling",
+        requires_confirmation=True,
+        method="POST",
+        endpoint="/admin/supplier-offers/{offer_id}/execution-link",
     )
 
 
@@ -149,6 +162,7 @@ class OperatorWorkflowC2b3KeyboardTests(unittest.TestCase):
                 _mut_act("create_tour_bridge"),
                 _conversion_act("activate_tour_for_catalog"),
                 _public_act("publish_showcase_channel"),
+                _exec_link_workflow_act(),
             ],
             blocking_reasons=[],
             warnings=[],
@@ -163,11 +177,13 @@ class OperatorWorkflowC2b3KeyboardTests(unittest.TestCase):
         self.assertLess(ix["Approve text"], ix["Link tour"])
         self.assertLess(ix["Link tour"], ix["List for sale"])
         self.assertLess(ix["List for sale"], ix["Publish"])
+        self.assertLess(ix["Publish"], ix["Booking link"])
         legacy_publish = f"{ADMIN_OFFERS_ACTION_CALLBACK_PREFIX}{ADMIN_OFFERS_ACTION_PUBLISH}:12"
         self.assertNotIn(legacy_publish, callbacks)
         self.assertTrue(any(str(c).startswith(ADMIN_OPS_OW_TOUR_BRIDGE_PROPOSE_PREFIX) for c in callbacks if c))
         self.assertTrue(any(str(c).startswith(ADMIN_OPS_OW_ACTIVATE_CATALOG_PROPOSE_PREFIX) for c in callbacks if c))
         self.assertTrue(any(str(c).startswith(ADMIN_OPS_OW_PUBLISH_SHOWCASE_PROPOSE_PREFIX) for c in callbacks if c))
+        self.assertTrue(any(str(c).startswith(ADMIN_OPS_OW_EXEC_LINK_PROPOSE_PREFIX) for c in callbacks if c))
 
     @patch("app.bot.handlers.admin_moderation.SupplierOfferReviewPackageService")
     def test_en_packaging_before_legacy(self, mock_review_svc: MagicMock) -> None:
