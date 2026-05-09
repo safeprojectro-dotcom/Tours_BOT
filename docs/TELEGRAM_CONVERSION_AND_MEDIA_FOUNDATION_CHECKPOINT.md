@@ -75,6 +75,7 @@ Until a **new charter** (ticket + stakeholder agreement):
 
 ## 6. Safe OPS smoke recommendation
 
+- **Closeout OPS hub:** [`docs/CONVERSION_CHAIN_OPS_SMOKE_READINESS.md`](CONVERSION_CHAIN_OPS_SMOKE_READINESS.md) — safe **`review-package`** PowerShell checks + B10.6 gate + media pause + recommended next block.
 - **Primary procedure:** [`docs/PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md`](PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md) — use **dry-run / Mode A** where possible; **Mode B** (live mutating) only with confirmed **staging**, **test channel**, and safe **`OFFER_ID`** / tenant rules.
 - **Telegram parity:** Exercise **C2B10T-A → B → C2B8B → C** (or product-approved order) and compare to **HTTP** equivalents; **C2B10T-D** documents expectations.
 - **Automated regression (examples):** `test_supplier_offer_catalog_conversion_closure`, `test_operator_workflow_c2b3_keyboard`, `test_operator_workflow_c2b10t*_specs`, `test_telegram_admin_moderation_y281` — run in CI before release; **live** Telegram smoke remains **operator-owned**.
@@ -82,6 +83,8 @@ Until a **new charter** (ticket + stakeholder agreement):
 ---
 
 ## 7. Recommended next larger project blocks
+
+**Closeout ordering (explicit 1–4):** [`docs/NEXT_BLOCK_RECOMMENDATION_AFTER_CONVERSION_CLOSEOUT.md`](NEXT_BLOCK_RECOMMENDATION_AFTER_CONVERSION_CLOSEOUT.md) — **`C2B11A_ADMIN_OPS_CONVERSION_STATUS_PANEL`** → production/OPS smoke → **B10.6** → media pipeline (charter only). The bullets below remain **examples** for stakeholder choice if **not** following that ordering.
 
 Choose **one** direction explicitly (examples, not an implied roadmap):
 

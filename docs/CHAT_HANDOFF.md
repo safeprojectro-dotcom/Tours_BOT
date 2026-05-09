@@ -3,6 +3,21 @@
 ## Project
 Tours_BOT
 
+## Closeout: conversion chain completed; next block gate
+
+Completed closeout docs:
+
+- [`docs/CONVERSION_CHAIN_OPS_SMOKE_READINESS.md`](CONVERSION_CHAIN_OPS_SMOKE_READINESS.md)
+- [`docs/B10_6_BOT_AS_ROUTER_DESIGN_GATE.md`](B10_6_BOT_AS_ROUTER_DESIGN_GATE.md)
+- [`docs/ADMIN_OPS_CONVERSION_VISIBILITY_POLISH_DESIGN.md`](ADMIN_OPS_CONVERSION_VISIBILITY_POLISH_DESIGN.md)
+- [`docs/NEXT_BLOCK_RECOMMENDATION_AFTER_CONVERSION_CLOSEOUT.md`](NEXT_BLOCK_RECOMMENDATION_AFTER_CONVERSION_CLOSEOUT.md)
+
+**Recommended next implementation block:** `C2B11A_ADMIN_OPS_CONVERSION_STATUS_PANEL` (see [`docs/ADMIN_OPS_CONVERSION_VISIBILITY_POLISH_DESIGN.md`](ADMIN_OPS_CONVERSION_VISIBILITY_POLISH_DESIGN.md)).
+
+**Media pipeline** remains **paused** at **B7.4D** until an explicit charter — [`docs/TELEGRAM_CONVERSION_AND_MEDIA_FOUNDATION_CHECKPOINT.md`](TELEGRAM_CONVERSION_AND_MEDIA_FOUNDATION_CHECKPOINT.md).
+
+---
+
 ## Continuity Sync — Admin Offer Review & Approval Gate — Slice 1 (2026-04-27)
 
 **Read-only endpoint:** **`GET /admin/supplier-offers/{offer_id}/review-package`** aggregates offer snapshot, packaging axis, moderation/showcase axis, showcase preview, bridge readiness, active bridge / linked Tour, catalog activation readiness, execution-link readiness, Mini App conversion preview, warnings, and `recommended_next_actions`.
@@ -37,7 +52,7 @@ Tours_BOT
 
 **Slice C2B10T-C (implemented):** Telegram offer detail adds **Booking link / Link rezervări** when **`operator_workflow.actions.create_execution_link.enabled`** **`;`** propose **`+`** confirm each **re-read** **`review-package`** **`;`** confirm calls **`SupplierOfferExecutionLinkService.link_offer_to_tour`** with **`tour_id`** from **`linked_tour_catalog.tour_id`**, **`link_note=None`** (same semantics as HTTP **`POST …/execution-link`** — create/replace active link only)**;** missing **`linked_tour_catalog`** **→** **`admin_offer_ow_action_unavailable`** **`;`** **no** B11 routing code changes **,** **no** catalog activation **,** **no** publish semantics changes **,** **no** Mini App **/** booking **/** orders **,** **no** migrations **.** Workflow keyboard order when conversion actions enabled: **Link tour → List for sale → Publish → Booking link**. Handoff: **`docs/HANDOFF_TELEGRAM_EXECUTION_LINK_BUTTON_C2B10T_C_TO_NEXT_STEP.md`**.
 
-**Slice C2B10T-D (verification, docs):** Runbook validation for the Telegram supplier-offer conversion chain **—** **`docs/PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md`** § «Telegram admin card parity» (**C2B8B** **+** **C2B10T-A/B/C** vs HTTP **+** keyboard order **Link tour → List for sale → Publish → Booking link**). Automated checks **:** **`test_supplier_offer_catalog_conversion_closure`**, **`test_operator_workflow_c2b3_keyboard`**, **`test_operator_workflow_c2b10ta_specs`**, **`test_operator_workflow_c2b10tb_specs`**, **`test_operator_workflow_c2b10tc_specs`**, **`test_telegram_admin_moderation_y281`** **—** **68** passed **(**2026-05-09**)**. Staging **/** production Telegram smoke remains operator-owned **(** walkthrough run log**)**. Prompt: **`docs/CURSOR_PROMPT_TELEGRAM_CONVERSION_CHAIN_OPS_SMOKE_C2B10T_D.md`**.
+**Slice C2B10T-D (verification, docs):** Runbook validation for the Telegram supplier-offer conversion chain **—** **`docs/PRODUCTION_E2E_SUPPLIER_OFFER_WALKTHROUGH.md`** § «Telegram admin card parity» (**C2B8B** **+** **C2B10T-A/B/C** vs HTTP **+** keyboard order **Link tour → List for sale → Publish → Booking link**). Consolidated OPS closeout **:** **`docs/CONVERSION_CHAIN_OPS_SMOKE_READINESS.md`** (safe **`review-package`** checks, B10.6 gate, media pause, next block). Automated checks **:** **`test_supplier_offer_catalog_conversion_closure`**, **`test_operator_workflow_c2b3_keyboard`**, **`test_operator_workflow_c2b10ta_specs`**, **`test_operator_workflow_c2b10tb_specs`**, **`test_operator_workflow_c2b10tc_specs`**, **`test_telegram_admin_moderation_y281`** **—** **68** passed **(**2026-05-09**)**. Staging **/** production Telegram smoke remains operator-owned **(** walkthrough run log**)**. Prompt: **`docs/CURSOR_PROMPT_TELEGRAM_CONVERSION_CHAIN_OPS_SMOKE_C2B10T_D.md`**.
 
 **C2B9A (docs):** Supplier offer → Tour / Mini App **bridge readiness audit** — **[`docs/SUPPLIER_OFFER_TO_TOUR_BRIDGE_READINESS_C2B9A.md`](SUPPLIER_OFFER_TO_TOUR_BRIDGE_READINESS_C2B9A.md)** (**read-only** review: B10 bridge + execution link + B11 routing **already in code** **`;`** **C2B10T-A/B/C** Telegram **`create_tour_bridge`** **`/`** **`activate_tour_for_catalog`** **`/`** **`create_execution_link`** **`;`** published-offer link wizard **/** HTTP remain for flows that need manual tour input).
 
