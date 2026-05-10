@@ -183,6 +183,8 @@ So **read/detail** and **preparation/hold** intentionally diverge: **Layer A pre
 
 **Does not:** backfill **Tour #6** or any existing production row; **does not** weaken **`get_preparable_tour`** guards.
 
+**Operator follow-up for existing Tour #6:** **[`docs/B14D_TOUR6_BOARDING_REMEDIATION_AND_PREP_SMOKE_RUNBOOK.md`](B14D_TOUR6_BOARDING_REMEDIATION_AND_PREP_SMOKE_RUNBOOK.md)** (B14D).
+
 ---
 
 ## 7. Explicit non-goals (B14A)
