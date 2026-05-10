@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 from sqlalchemy import event
@@ -805,11 +805,12 @@ class MiniAppCatalogRouteTests(FoundationDBTestCase):
         )
 
     def test_create_reservation_and_payment_entry_routes(self) -> None:
+        dep = datetime.now(UTC) + timedelta(days=30)
         tour = self.create_tour(
             code="MINI-API-RESERVE",
             title_default="Mini API Reserve",
-            departure_datetime=datetime(2026, 5, 10, 8, 0, tzinfo=UTC),
-            return_datetime=datetime(2026, 5, 11, 20, 0, tzinfo=UTC),
+            departure_datetime=dep,
+            return_datetime=dep + timedelta(days=2),
             status=TourStatus.OPEN_FOR_SALE,
             seats_available=4,
             base_price="80.00",

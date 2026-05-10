@@ -101,3 +101,23 @@ def lazy_expire_due_reservations(
     Safe to invoke on common read/write paths when no background worker runs: idempotent and bounded by ``limit``.
     """
     return ReservationExpiryService().expire_due_reservations(session, now=now, limit=limit)
+
+
+def lazy_expire_due_reservations_commit_if_any(
+    session: Session,
+    *,
+    now: datetime | None = None,
+    limit: int = LAZY_EXPIRY_DEFAULT_LIMIT,
+) -> int:
+    """
+    Run :func:`lazy_expire_due_reservations` and ``commit()`` when at least one order was expired.
+
+    Use on **read-only** Mini App (and similar) handlers whose session would otherwise roll back
+    on close without persisting seat release. Callers that already commit a wider transaction
+    (e.g. hold creation, payment entry) should keep using :func:`lazy_expire_due_reservations`
+    only so expiry stays in the same transaction as the rest of the flow.
+    """
+    n = lazy_expire_due_reservations(session, now=now, limit=limit)
+    if n:
+        session.commit()
+    return n

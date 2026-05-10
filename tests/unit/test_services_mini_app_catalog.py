@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
-from app.models.enums import TourStatus
+from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourStatus
+from app.models.order import Order
 from app.schemas.mini_app import MiniAppCatalogFiltersRead
+from app.services.admin_order_lifecycle import AdminOrderLifecycleKind, describe_order_admin_lifecycle
 from app.services.mini_app_catalog import MiniAppCatalogService
 from tests.unit.base import FoundationDBTestCase
 
@@ -73,3 +75,79 @@ class MiniAppCatalogServiceTests(FoundationDBTestCase):
                     departure_date_to=date(2026, 4, 5),
                 ),
             )
+
+    def test_list_catalog_persists_lazy_expiry_and_restores_seats(self) -> None:
+        user = self.create_user()
+        tour = self.create_tour(
+            code="CAT-EXP-LAZY",
+            title_default="Catalog Expiry Lazy",
+            departure_datetime=datetime(2027, 8, 10, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 8, 12, 20, 0, tzinfo=UTC),
+            base_price="99.00",
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=10,
+            seats_available=7,
+        )
+        self.create_translation(tour, language_code="ro", title="Cat Exp")
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            seats_count=3,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=datetime(2026, 4, 1, 7, 0, tzinfo=UTC),
+        )
+        self.session.commit()
+
+        MiniAppCatalogService().list_catalog(
+            self.session,
+            language_code="ro",
+            filters=MiniAppCatalogFiltersRead(),
+        )
+
+        self.session.expire_all()
+        refreshed_tour = self.session.get(type(tour), tour.id)
+        refreshed_order = self.session.get(Order, order.id)
+        assert refreshed_tour is not None and refreshed_order is not None
+        self.assertEqual(refreshed_tour.seats_available, 10)
+        kind, _ = describe_order_admin_lifecycle(refreshed_order)
+        self.assertEqual(kind, AdminOrderLifecycleKind.EXPIRED_UNPAID_HOLD)
+
+    def test_list_catalog_does_not_change_future_hold(self) -> None:
+        user = self.create_user()
+        tour = self.create_tour(
+            code="CAT-FUTURE-HOLD",
+            title_default="Future hold",
+            departure_datetime=datetime(2027, 9, 1, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2027, 9, 3, 20, 0, tzinfo=UTC),
+            base_price="80.00",
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=10,
+            seats_available=7,
+        )
+        self.create_translation(tour, language_code="ro", title="Fut")
+        point = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            seats_count=3,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=datetime(2030, 1, 1, 12, 0, tzinfo=UTC),
+        )
+        self.session.commit()
+
+        MiniAppCatalogService().list_catalog(self.session, language_code="ro", filters=MiniAppCatalogFiltersRead())
+
+        self.session.expire_all()
+        refreshed_tour = self.session.get(type(tour), tour.id)
+        refreshed_order = self.session.get(Order, order.id)
+        assert refreshed_tour is not None and refreshed_order is not None
+        self.assertEqual(refreshed_tour.seats_available, 7)
+        kind, _ = describe_order_admin_lifecycle(refreshed_order)
+        self.assertEqual(kind, AdminOrderLifecycleKind.ACTIVE_TEMPORARY_HOLD)

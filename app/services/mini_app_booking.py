@@ -11,7 +11,10 @@ from app.services.order_read import OrderReadService
 from app.services.order_summary import OrderSummaryService
 from app.services.payment_entry import PaymentEntryService
 from app.services.reservation_creation import TemporaryReservationService
-from app.services.reservation_expiry import lazy_expire_due_reservations
+from app.services.reservation_expiry import (
+    lazy_expire_due_reservations,
+    lazy_expire_due_reservations_commit_if_any,
+)
 from app.services.tour_sales_mode_policy import TourSalesModePolicyService
 
 MINI_APP_SOURCE_CHANNEL = "mini_app"
@@ -117,7 +120,7 @@ class MiniAppBookingService:
         order_id: int,
         telegram_user_id: int,
     ) -> PaymentEntryRead | None:
-        lazy_expire_due_reservations(session)
+        lazy_expire_due_reservations_commit_if_any(session)
         user = self._user_sync().sync_private_user(
             session,
             telegram_user_id=telegram_user_id,
@@ -144,7 +147,7 @@ class MiniAppBookingService:
         language_code: str | None = None,
     ) -> OrderSummaryRead | None:
         """Read-only overview for Mini App reservation-success screen; ownership and state from persisted order."""
-        lazy_expire_due_reservations(session)
+        lazy_expire_due_reservations_commit_if_any(session)
         user = self._user_sync().sync_private_user(
             session,
             telegram_user_id=telegram_user_id,

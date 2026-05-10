@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from app.models.enums import PaymentStatus, TourSalesMode, TourStatus
+from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourSalesMode, TourStatus
+from app.models.order import Order
+from app.services.admin_order_lifecycle import AdminOrderLifecycleKind, describe_order_admin_lifecycle
 from app.services.mini_app_booking import (
     MINI_APP_SOURCE_CHANNEL,
     MiniAppBookingService,
@@ -187,6 +189,90 @@ class MiniAppBookingServiceTests(FoundationDBTestCase):
             language_code="en",
         )
         self.assertIsNone(overview)
+
+    def test_get_reservation_overview_persists_lazy_expiry_when_hold_past_deadline(self) -> None:
+        user = self.create_user(telegram_user_id=77_007)
+        tour = self.create_tour(
+            code="MINI-OVERVIEW-EXP",
+            departure_datetime=datetime.now(UTC) + timedelta(days=10),
+            return_datetime=datetime.now(UTC) + timedelta(days=12),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=10,
+            seats_available=9,
+            base_price="30.00",
+        )
+        self.create_translation(tour, language_code="en", title="Overview Exp")
+        point = self.create_boarding_point(tour)
+        expired_at = datetime.now(UTC) - timedelta(hours=2)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            seats_count=1,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=expired_at,
+        )
+        self.session.commit()
+
+        svc = MiniAppBookingService()
+        overview = svc.get_reservation_overview_for_user(
+            self.session,
+            order_id=order.id,
+            telegram_user_id=user.telegram_user_id,
+            language_code="en",
+        )
+        self.assertIsNone(overview)
+
+        self.session.expire_all()
+        row = self.session.get(Order, order.id)
+        refreshed_tour = self.session.get(type(tour), tour.id)
+        assert row is not None and refreshed_tour is not None
+        kind, _ = describe_order_admin_lifecycle(row)
+        self.assertEqual(kind, AdminOrderLifecycleKind.EXPIRED_UNPAID_HOLD)
+        self.assertEqual(refreshed_tour.seats_available, 10)
+
+    def test_start_payment_entry_commits_expiry_when_order_past_deadline(self) -> None:
+        user = self.create_user(telegram_user_id=77_008)
+        tour = self.create_tour(
+            code="MINI-PAY-EXP",
+            departure_datetime=datetime(2026, 4, 20, 8, 0, tzinfo=UTC),
+            return_datetime=datetime(2026, 4, 22, 8, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_total=10,
+            seats_available=7,
+            sales_deadline=datetime(2026, 4, 19, 8, 0, tzinfo=UTC),
+        )
+        point = self.create_boarding_point(tour)
+        expired_at = datetime.now(UTC) - timedelta(hours=2)
+        order = self.create_order(
+            user,
+            tour,
+            point,
+            seats_count=3,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=expired_at,
+        )
+        self.session.commit()
+
+        svc = MiniAppBookingService()
+        entry = svc.start_payment_entry(
+            self.session,
+            order_id=order.id,
+            telegram_user_id=user.telegram_user_id,
+        )
+        self.assertIsNone(entry)
+
+        self.session.expire_all()
+        row = self.session.get(Order, order.id)
+        refreshed_tour = self.session.get(type(tour), tour.id)
+        assert row is not None and refreshed_tour is not None
+        kind, _ = describe_order_admin_lifecycle(row)
+        self.assertEqual(kind, AdminOrderLifecycleKind.EXPIRED_UNPAID_HOLD)
+        self.assertEqual(refreshed_tour.seats_available, 10)
 
     def test_mode2_virgin_charter_payment_entry_reuses_pending_session(self) -> None:
         user = self.create_user(telegram_user_id=77_310)

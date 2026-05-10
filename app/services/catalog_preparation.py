@@ -10,7 +10,7 @@ from app.schemas.prepared import CatalogBrowseFiltersRead, CatalogTourCardRead
 from app.services.catalog import CatalogLookupService
 from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
 from app.services.language_aware_tour import LanguageAwareTourReadService
-from app.services.reservation_expiry import lazy_expire_due_reservations
+from app.services.reservation_expiry import lazy_expire_due_reservations_commit_if_any
 from app.services.tour_sales_mode_policy import TourSalesModePolicyService
 
 
@@ -32,7 +32,7 @@ class CatalogPreparationService:
         limit: int = 100,
         offset: int = 0,
     ) -> list[CatalogTourCardRead]:
-        lazy_expire_due_reservations(session)
+        lazy_expire_due_reservations_commit_if_any(session)
         now_ref = datetime.now(UTC)
         if status is None:
             tours = self.catalog_lookup_service.list_tours(

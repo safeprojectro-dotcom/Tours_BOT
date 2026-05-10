@@ -8,7 +8,7 @@ from app.services.catalog import CatalogLookupService
 from app.services.customer_commercial_mode_read import commercial_mode_for_catalog_tour_sales_mode
 from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
 from app.services.language_aware_tour import LanguageAwareTourReadService
-from app.services.reservation_expiry import lazy_expire_due_reservations
+from app.services.reservation_expiry import lazy_expire_due_reservations_commit_if_any
 from app.services.tour_sales_mode_policy import TourSalesModePolicyService
 
 
@@ -31,7 +31,7 @@ class MiniAppTourDetailService:
         code: str,
         language_code: str | None = None,
     ) -> MiniAppTourDetailRead | None:
-        lazy_expire_due_reservations(session)
+        lazy_expire_due_reservations_commit_if_any(session)
         tour = self.catalog_lookup_service.get_tour_by_code(session, code=code)
         if tour is None or tour.status not in self.STATUS_SCOPE:
             return None

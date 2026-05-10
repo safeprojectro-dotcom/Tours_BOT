@@ -108,7 +108,7 @@ This is **both** a possible **production scheduling gap** (worker not running) *
 
 ## 8. Recommendations (next tracks; not executed here)
 
-- **B14F (implementation / fix):** (1) Add **`session.commit()`** (or equivalent) to Mini App GET routes that call **`lazy_expire`**, **or** move lazy expiry to middleware / dependency that commits safely; (2) optionally **`lazy_expire` on admin order/tour read** or dedicated **`POST /admin/…/expire-hold`**; (3) optionally extend **`describe_order_admin_lifecycle`** to label **clock-expired** holds when **`reservation_expires_at <= now`** for **read clarity** (still distinct from persisted expiry).  
+- **B14F (implementation / fix):** ~~(1) Add **`session.commit()`** (or equivalent) to Mini App GET routes that call **`lazy_expire`**, **or** move lazy expiry to middleware / dependency that commits safely~~ **Done** — see **§10** and **`docs/HANDOFF_B14F_TEMP_HOLD_EXPIRY_PERSISTENCE_FIX_TO_NEXT_STEP.md`**. Remaining optional: **`lazy_expire` on admin order/tour read** or dedicated **`POST /admin/…/expire-hold`**; extend **`describe_order_admin_lifecycle`** for clock-expired read clarity.  
 - **B14G (production cleanup):** Confirm whether **`run_reservation_expiry_once`** is scheduled; remediate smoke **#52/#53** via **worker**, **committing lazy path**, or **admin mark-cancel** after product accepts semantics; handle **handoff #86**.
 
 ---
@@ -126,6 +126,12 @@ This is **both** a possible **production scheduling gap** (worker not running) *
 | Payment entry gate (no lazy — eligibility only) | `app/services/payment_entry.py` — `_is_order_valid_for_payment_entry` rejects `reservation_expires_at <= now` |
 | Mini App facade (clock vs persisted) | `app/services/mini_app_booking_facade.py` |
 | Lazy + commit vs not | `app/api/routes/mini_app.py` (compare routes with/without `session.commit()`) |
+
+---
+
+## 10. B14F implementation follow-up (2026)
+
+**Shipped in code:** `lazy_expire_due_reservations_commit_if_any` in **`app/services/reservation_expiry.py`** — runs **`ReservationExpiryService.expire_due_reservations`** and **`session.commit()`** only when the expired count is **> 0**. Used on read-heavy / rollback-prone paths: **`CatalogPreparationService`**, **`MiniAppTourDetailService`**, **`MiniAppBookingsService`** (list + detail), **`MiniAppBookingService`** (**`get_reservation_overview_for_user`**, **`start_payment_entry`**), **`PrivateReservationPreparationService.get_preparable_tour`**. **`create_temporary_reservation`** still uses non-committing **`lazy_expire_due_reservations`** so expiry + new hold stay one transaction until the route **`commit()`**. **Admin reads** remain non-executors of expiry. **Scheduler/worker** still recommended for backlog/off-HTTP cleanup — see **[`docs/HANDOFF_B14F_TEMP_HOLD_EXPIRY_PERSISTENCE_FIX_TO_NEXT_STEP.md`](HANDOFF_B14F_TEMP_HOLD_EXPIRY_PERSISTENCE_FIX_TO_NEXT_STEP.md)**.
 
 ---
 

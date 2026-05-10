@@ -4,7 +4,11 @@ from datetime import UTC, datetime
 from unittest.mock import patch
 
 from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, TourStatus
-from app.services.reservation_expiry import ReservationExpiryService, lazy_expire_due_reservations
+from app.services.reservation_expiry import (
+    ReservationExpiryService,
+    lazy_expire_due_reservations,
+    lazy_expire_due_reservations_commit_if_any,
+)
 from app.workers.reservation_expiry import run_once
 from tests.unit.base import FoundationDBTestCase
 
@@ -76,6 +80,67 @@ class ReservationExpiryServiceTests(FoundationDBTestCase):
         refreshed_tour = self.session.get(type(tour), tour.id)
         assert refreshed_tour is not None
         self.assertEqual(refreshed_tour.seats_available, 11)
+
+    def test_lazy_expire_due_reservations_commit_if_any_persists(self) -> None:
+        user = self.create_user()
+        tour = self.create_tour(
+            code="LAZY-COMMIT",
+            seats_total=40,
+            seats_available=8,
+            status=TourStatus.OPEN_FOR_SALE,
+        )
+        point = self.create_boarding_point(tour)
+        self.create_order(
+            user,
+            tour,
+            point,
+            seats_count=3,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=datetime(2026, 4, 1, 7, 0, tzinfo=UTC),
+        )
+        self.session.commit()
+
+        n = lazy_expire_due_reservations_commit_if_any(
+            self.session,
+            now=datetime(2026, 4, 1, 8, 0, tzinfo=UTC),
+        )
+        self.assertEqual(n, 1)
+
+        self.session.expire_all()
+        refreshed_tour = self.session.get(type(tour), tour.id)
+        assert refreshed_tour is not None
+        self.assertEqual(refreshed_tour.seats_available, 11)
+
+    def test_lazy_expire_due_reservations_commit_if_any_skips_commit_when_none(self) -> None:
+        user = self.create_user()
+        tour = self.create_tour(
+            code="LAZY-NONE",
+            seats_total=40,
+            seats_available=8,
+            status=TourStatus.OPEN_FOR_SALE,
+        )
+        point = self.create_boarding_point(tour)
+        self.create_order(
+            user,
+            tour,
+            point,
+            seats_count=2,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=datetime(2026, 4, 1, 12, 0, tzinfo=UTC),
+        )
+        self.session.commit()
+
+        with patch.object(self.session, "commit", wraps=self.session.commit) as commit_mock:
+            n = lazy_expire_due_reservations_commit_if_any(
+                self.session,
+                now=datetime(2026, 4, 1, 8, 0, tzinfo=UTC),
+            )
+        self.assertEqual(n, 0)
+        commit_mock.assert_not_called()
 
     def test_expire_due_reservations_skips_non_eligible_orders(self) -> None:
         user = self.create_user()
