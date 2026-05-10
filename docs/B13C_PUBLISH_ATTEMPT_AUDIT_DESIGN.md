@@ -1,8 +1,8 @@
 # B13C — Publish attempt / audit design
 
-**Project:** Tours_BOT. **B13C slice:** design documentation. **Update:** **B13D** supplies the attempt table; **B13E** wires **`publish`** to create/update attempt rows (**§11**); **B13F** exposes read-only attempt history via **`review-package`** and Telegram admin detail (**§12**). **No** automatic retry or **`idempotency_key`** enforcement yet.
+**Project:** Tours_BOT. **B13C slice:** design documentation. **Update:** **B13D** supplies the attempt table; **B13E** wires **`publish`** to create/update attempt rows (**§11**); **B13F** exposes read-only attempt history via **`review-package`** and Telegram admin detail (**§12**); **B13G** (**[`docs/B13G_PRODUCTION_PUBLISH_AUDIT_SMOKE_RUNBOOK.md`](B13G_PRODUCTION_PUBLISH_AUDIT_SMOKE_RUNBOOK.md)**) documents **production/ops** migration + read-only + optional publish smoke verification — **no** retry/resend and **no** new channel adapter behavior. **No** automatic retry or **`idempotency_key`** enforcement yet.
 
-**Related:** [`docs/B13_CHANNEL_ADAPTER_DESIGN.md`](B13_CHANNEL_ADAPTER_DESIGN.md) · [`docs/HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md`](HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md) · [`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md) · [`docs/HANDOFF_B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN_TO_NEXT_STEP.md`](HANDOFF_B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md`](HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13D_PUBLISH_ATTEMPT_TABLE_SKELETON_TO_NEXT_STEP.md`](HANDOFF_B13D_PUBLISH_ATTEMPT_TABLE_SKELETON_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13E_WIRE_PUBLISH_ATTEMPT_AUDIT_TO_NEXT_STEP.md`](HANDOFF_B13E_WIRE_PUBLISH_ATTEMPT_AUDIT_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13F_ADMIN_PUBLISH_ATTEMPT_HISTORY_READ_SURFACE_TO_NEXT_STEP.md`](HANDOFF_B13F_ADMIN_PUBLISH_ATTEMPT_HISTORY_READ_SURFACE_TO_NEXT_STEP.md).
+**Related:** [`docs/B13_CHANNEL_ADAPTER_DESIGN.md`](B13_CHANNEL_ADAPTER_DESIGN.md) · [`docs/HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md`](HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md) · [`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md) · **[`docs/B13G_PRODUCTION_PUBLISH_AUDIT_SMOKE_RUNBOOK.md`](B13G_PRODUCTION_PUBLISH_AUDIT_SMOKE_RUNBOOK.md)** (ops smoke / audit verification — **no** new product behavior) · [`docs/HANDOFF_B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN_TO_NEXT_STEP.md`](HANDOFF_B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md`](HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13D_PUBLISH_ATTEMPT_TABLE_SKELETON_TO_NEXT_STEP.md`](HANDOFF_B13D_PUBLISH_ATTEMPT_TABLE_SKELETON_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13E_WIRE_PUBLISH_ATTEMPT_AUDIT_TO_NEXT_STEP.md`](HANDOFF_B13E_WIRE_PUBLISH_ATTEMPT_AUDIT_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13F_ADMIN_PUBLISH_ATTEMPT_HISTORY_READ_SURFACE_TO_NEXT_STEP.md`](HANDOFF_B13F_ADMIN_PUBLISH_ATTEMPT_HISTORY_READ_SURFACE_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13G_PRODUCTION_PUBLISH_AUDIT_SMOKE_RUNBOOK_TO_NEXT_STEP.md`](HANDOFF_B13G_PRODUCTION_PUBLISH_AUDIT_SMOKE_RUNBOOK_TO_NEXT_STEP.md).
 
 ---
 
@@ -108,6 +108,7 @@ Audit must **not** replace **`operator_workflow`** or **`review-package`** as re
 - **B13D (implemented):** table + repository + **`SupplierOfferShowcasePublishAttemptService`** — **§10**.
 - **B13E (implemented):** **`publish`** writes attempt rows — **§11**; **no** idempotency enforcement; manual-copy / **exported**-without-**`message_id`** adapters remain a separate product track.
 - **B13F (implemented):** read-only **attempt history** for operators — **§12**; **no** dedicated list-only HTTP route in MVP ( **`review-package`** is the main admin read model ) ; **no** retry/resend.
+- **B13G (docs / ops):** **[`docs/B13G_PRODUCTION_PUBLISH_AUDIT_SMOKE_RUNBOOK.md`](B13G_PRODUCTION_PUBLISH_AUDIT_SMOKE_RUNBOOK.md)** — production smoke + audit verification **checklist**; **no** retry/resend or new channel **behavior**.
 
 ---
 
@@ -151,10 +152,12 @@ Handoff: **[`docs/HANDOFF_B13E_WIRE_PUBLISH_ATTEMPT_AUDIT_TO_NEXT_STEP.md`](HAND
 
 Handoff: **[`docs/HANDOFF_B13F_ADMIN_PUBLISH_ATTEMPT_HISTORY_READ_SURFACE_TO_NEXT_STEP.md`](HANDOFF_B13F_ADMIN_PUBLISH_ATTEMPT_HISTORY_READ_SURFACE_TO_NEXT_STEP.md)**.
 
+**B13G (docs / ops):** For **staging or production** verification after deploy — migration **`alembic current`** includes **`20260531_29`**, **`GET …/review-package`** shows **`showcase_publish_attempts_review`**, optional controlled publish smoke — see **[`docs/B13G_PRODUCTION_PUBLISH_AUDIT_SMOKE_RUNBOOK.md`](B13G_PRODUCTION_PUBLISH_AUDIT_SMOKE_RUNBOOK.md)**. **Does not** add retry/resend, idempotency, or new channel **send** behavior.
+
 ---
 
 ## 13. Non-goals (B13C document)
 
 
-- **No** code **in the B13C authoring slice**, **no** migrations **from that slice**, **no** new routes **from that slice**, **no** retry logic, **no** publish readiness or output change, **no** Mini App / booking / payment / orders, **no** new channels **in that design-only deliverable**. **Note:** **B13D-alt**, **B13D**, **B13E**, and **B13F** are **separate** implementation slices — see §2, **§10**, **§11**, **§12**.
+- **No** code **in the B13C authoring slice**, **no** migrations **from that slice**, **no** new routes **from that slice**, **no** retry logic, **no** publish readiness or output change, **no** Mini App / booking / payment / orders, **no** new channels **in that design-only deliverable**. **Note:** **B13D-alt**, **B13D**, **B13E**, and **B13F** are **separate** implementation slices — see §2, **§10**, **§11**, **§12**. **B13G** is an **ops runbook** (§12 prose above) — **no** product code.
 
