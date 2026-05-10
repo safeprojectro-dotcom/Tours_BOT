@@ -167,7 +167,21 @@ So **read/detail** and **preparation/hold** intentionally diverge: **Layer A pre
 | Track | Suggestion |
 |-------|------------|
 | **B14B** (channel CTA / sequencing) | If product wants **Rezervă** → **`/tours/{code}`** when link exists: extend **showcase assembly** (or post-publish **edit** flow) with **read-model inputs** (`tour_code`, link active) and use **`mini_app_tour_detail_url`**; or keep landing-only and document. Optional: **soft gate** “warn if publishing without execution link” — **product** decision (today **not** enforced). |
-| **B14C** (reservation readiness) | For **Tour #6**: **verify/add `BoardingPoint` rows** for **`per_seat`** (or re-run bridge/tour activation checklist that creates them). If boarding exists and prep still **404**, re-check **`seats_available`**, **`PrivateTourBrowseService`** visibility vs catalog detail path, and **`LanguageAwareTourRead`** / **`TourDetailService`** consistency. |
+| **~~B14C~~** (reservation readiness) | **Implemented (bridge materialization):** see **§9**. **Remaining:** production **Tour #6** may still need **manual `BoardingPoint` rows** or safe ops remediation — bridge replay does not mutate existing tours. |
+
+---
+
+## 9. B14C implementation note (narrow bridge fix)
+
+**Shipped in app code (not a data migration):** when the supplier-offer tour bridge **creates a new** **`Tour`** (`SupplierOfferTourBridgeKind.CREATED_NEW_TOUR`), **`SupplierOfferTourBridgeService._materialize_boarding_points_for_new_tour`** runs after the default translation:
+
+- Parses **`supplier_offers.boarding_places_text`** with **`parse_boarding_places`** (same rules as showcase / `|` / `•` / newlines).
+- Creates up to **25** **`boarding_points`** rows: **`city`** = place label, **`address`** = *As published in the tour / program*, **`time`** = tour **`departure_datetime`** (time only), **`notes`** indicate B14C materialization.
+- **Idempotent:** if the tour already has any boarding point, **skips** (safe for hypothetical replays that touch the same tour row).
+- **`create_draft_tour_from_offer_dates`** (B8 recurrence draft tours) uses the same **`_insert_draft_tour_from_offer_dates`** path → recurrence-generated drafts get the same behavior when **`boarding_places_text`** is set.
+- **`_link_existing`** does **not** call materialization — pre-existing tours are unchanged.
+
+**Does not:** backfill **Tour #6** or any existing production row; **does not** weaken **`get_preparable_tour`** guards.
 
 ---
 
@@ -188,4 +202,4 @@ So **read/detail** and **preparation/hold** intentionally diverge: **Layer A pre
 
 **Docs:** [`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md), [`docs/B13_CHANNEL_ADAPTER_DESIGN.md`](B13_CHANNEL_ADAPTER_DESIGN.md), [`docs/B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN.md`](B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN.md), [`docs/B13G_PRODUCTION_PUBLISH_AUDIT_SMOKE_RUNBOOK.md`](B13G_PRODUCTION_PUBLISH_AUDIT_SMOKE_RUNBOOK.md), [`docs/HANDOFF_B13G_FULL_CONVERSION_SMOKE_RESULT_TO_NEXT_STEP.md`](HANDOFF_B13G_FULL_CONVERSION_SMOKE_RESULT_TO_NEXT_STEP.md), [`docs/OPEN_QUESTIONS_AND_TECH_DEBT.md`](OPEN_QUESTIONS_AND_TECH_DEBT.md), [`docs/MINI_APP_UX.md`](MINI_APP_UX.md), [`docs/TECH_SPEC_TOURS_BOT_v1.1.md`](TECH_SPEC_TOURS_BOT_v1.1.md), [`docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md`](IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md) — B14A used them for cross-checking **operator sequencing** and UX intent where cited above; primary evidence is **source code**.
 
-**Code paths:** `supplier_offer_showcase_message.py`, `supplier_offer_deep_link.py`, `supplier_offer_moderation_service.py`, `supplier_offer_operator_workflow.py`, `supplier_offer_conversion_status_panel.py`, `mini_app.py` (preparation route), `mini_app_reservation_preparation.py`, `mini_app_tour_detail.py`, `app/bot/services.py` (`PrivateReservationPreparationService`).
+**Code paths:** `supplier_offer_showcase_message.py`, `supplier_offer_deep_link.py`, `supplier_offer_moderation_service.py`, `supplier_offer_operator_workflow.py`, `supplier_offer_conversion_status_panel.py`, `mini_app.py` (preparation route), `mini_app_reservation_preparation.py`, `mini_app_tour_detail.py`, `app/bot/services.py` (`PrivateReservationPreparationService`), **`supplier_offer_tour_bridge_service.py`** (B14C boarding materialization for **new** bridged tours).

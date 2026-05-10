@@ -20,6 +20,8 @@ from app.models.enums import (
 from app.models.order import Order
 from app.models.supplier import SupplierOffer
 from app.models.tour import Tour, TourTranslation
+from app.repositories.tour import BoardingPointRepository
+from app.services.mini_app_reservation_preparation import MiniAppReservationPreparationService
 from tests.unit.base import FoundationDBTestCase
 
 
@@ -277,3 +279,87 @@ class B10SupplierOfferTourBridgeAPITests(FoundationDBTestCase):
             headers=self._headers(),
         )
         self.assertEqual(r2.status_code, 404, r2.text)
+
+    def test_post_materializes_boarding_points_from_offer_boarding_text(self) -> None:
+        o = self._approved_offer(boarding_places_text="Timișoara | Oradea")
+        self.session.commit()
+        r = self.client.post(
+            f"/admin/supplier-offers/{o.id}/tour-bridge",
+            headers=self._headers(),
+            json={},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        tid = r.json()["tour_id"]
+        repo = BoardingPointRepository()
+        bps = repo.list_by_tour(self.session, tour_id=tid)
+        self.assertEqual(len(bps), 2)
+        self.assertEqual(bps[0].city, "Timișoara")
+        self.assertEqual(bps[1].city, "Oradea")
+
+    def test_post_idempotent_replay_does_not_duplicate_boarding_points(self) -> None:
+        o = self._approved_offer(boarding_places_text="Stop A | Stop B")
+        self.session.commit()
+        h = self._headers()
+        r1 = self.client.post(f"/admin/supplier-offers/{o.id}/tour-bridge", headers=h, json={})
+        self.assertEqual(r1.status_code, 200, r1.text)
+        tid = r1.json()["tour_id"]
+        repo = BoardingPointRepository()
+        n_after_first = len(repo.list_by_tour(self.session, tour_id=tid))
+        r2 = self.client.post(f"/admin/supplier-offers/{o.id}/tour-bridge", headers=h, json={})
+        self.assertEqual(r2.status_code, 200, r2.text)
+        self.assertTrue(r2.json()["idempotent_replay"])
+        n_after_second = len(repo.list_by_tour(self.session, tour_id=tid))
+        self.assertEqual(n_after_first, n_after_second)
+        self.assertEqual(n_after_first, 2)
+
+    def test_post_without_boarding_text_creates_no_boarding_points(self) -> None:
+        o = self._approved_offer()
+        self.session.commit()
+        r = self.client.post(
+            f"/admin/supplier-offers/{o.id}/tour-bridge",
+            headers=self._headers(),
+            json={},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        bps = BoardingPointRepository().list_by_tour(self.session, tour_id=r.json()["tour_id"])
+        self.assertEqual(len(bps), 0)
+
+    def test_per_seat_bridged_tour_open_for_sale_is_preparable_when_boarding_materialized(self) -> None:
+        o = self._approved_offer(boarding_places_text="Timișoara Centru")
+        self.session.commit()
+        br = self.client.post(f"/admin/supplier-offers/{o.id}/tour-bridge", headers=self._headers(), json={})
+        self.assertEqual(br.status_code, 200, br.text)
+        tour_id = br.json()["tour_id"]
+        act = self.client.post(
+            f"/admin/tours/{tour_id}/activate-for-catalog",
+            headers=self._headers(),
+            json={},
+        )
+        self.assertEqual(act.status_code, 200, act.text)
+        tour = self.session.get(Tour, tour_id)
+        assert tour is not None
+        lang = get_settings().telegram_supported_language_codes[0]
+        prep = MiniAppReservationPreparationService().get_preparation(
+            self.session,
+            code=tour.code,
+            language_code=lang,
+        )
+        self.assertIsNotNone(prep)
+
+    def test_link_existing_tour_does_not_materialize_boarding_from_offer(self) -> None:
+        o = self._approved_offer(boarding_places_text="Should not copy onto linked tour")
+        existing = self.create_tour(
+            code="PRELINK-1",
+            status=TourStatus.DRAFT,
+            sales_mode=TourSalesMode.PER_SEAT,
+        )
+        self.create_translation(existing, language_code="en", title="Linked tour")
+        self.session.commit()
+        r = self.client.post(
+            f"/admin/supplier-offers/{o.id}/tour-bridge",
+            headers=self._headers(),
+            json={"existing_tour_id": existing.id},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        bps = BoardingPointRepository().list_by_tour(self.session, tour_id=existing.id)
+        self.assertEqual(len(bps), 0)

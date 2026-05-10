@@ -21,7 +21,8 @@ from app.models.supplier import SupplierOffer
 from app.models.supplier_offer_tour_bridge import SupplierOfferTourBridge
 from app.models.tour import Tour
 from app.repositories.supplier_offer_tour_bridge import SupplierOfferTourBridgeRepository
-from app.repositories.tour import TourRepository, TourTranslationRepository
+from app.repositories.tour import BoardingPointRepository, TourRepository, TourTranslationRepository
+from app.services.supplier_offer_showcase_message import parse_boarding_places
 
 
 class SupplierOfferTourBridgeNotFoundError(Exception):
@@ -173,6 +174,10 @@ def _tour_seats_available(offer: SupplierOffer) -> int:
     return int(offer.seats_total)
 
 
+_MAX_BOARDING_POINTS_FROM_OFFER = 25
+_BOARDING_ADDRESS_FROM_SUPPLIER_OFFER = "As published in the tour / program"
+
+
 class SupplierOfferTourBridgeService:
     def __init__(
         self,
@@ -180,10 +185,12 @@ class SupplierOfferTourBridgeService:
         bridge_repo: SupplierOfferTourBridgeRepository | None = None,
         tour_repo: TourRepository | None = None,
         trans_repo: TourTranslationRepository | None = None,
+        boarding_repo: BoardingPointRepository | None = None,
     ) -> None:
         self._bridges = bridge_repo or SupplierOfferTourBridgeRepository()
         self._tours = tour_repo or TourRepository()
         self._translations = trans_repo or TourTranslationRepository()
+        self._boarding = boarding_repo or BoardingPointRepository()
 
     def _assert_eligible_for_materialization(self, offer: SupplierOffer) -> None:
         if offer.packaging_status is not SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH:
@@ -256,6 +263,7 @@ class SupplierOfferTourBridgeService:
         }
         tour = self._tours.create(session, data=data)
         self._ensure_default_translation(session, tour_id=tour.id, offer=offer, title=title_default[:255])
+        self._materialize_boarding_points_for_new_tour(session, tour=tour, offer=offer)
         return tour
 
     def create_draft_tour_from_offer_dates(
@@ -455,6 +463,42 @@ class SupplierOfferTourBridgeService:
         row = session.execute(stmt).one_or_none()
         if row is None:
             raise SupplierOfferTourBridgeNotFoundError()
+
+    def _materialize_boarding_points_for_new_tour(
+        self,
+        session: Session,
+        *,
+        tour: Tour,
+        offer: SupplierOffer,
+    ) -> None:
+        """B14C: map supplier ``boarding_places_text`` onto new ``Tour`` rows for Layer A preparation.
+
+        Idempotent per tour: skips if the tour already has boarding points (no duplicates on replay).
+        Does not run for ``_link_existing`` — only for newly inserted tours.
+        """
+        if self._boarding.list_by_tour(session, tour_id=tour.id):
+            return
+        places = parse_boarding_places(getattr(offer, "boarding_places_text", None))
+        if not places:
+            return
+        boarding_time = tour.departure_datetime.time()
+        address = _BOARDING_ADDRESS_FROM_SUPPLIER_OFFER
+        if len(address) > 255:
+            address = address[:255]
+        for place in places[:_MAX_BOARDING_POINTS_FROM_OFFER]:
+            city = place.strip()
+            if not city:
+                continue
+            city = city[:255]
+            self._boarding.create_for_tour(
+                session,
+                tour_id=tour.id,
+                city=city,
+                address=address,
+                boarding_time=boarding_time,
+                notes="Materialized from supplier offer boarding_places_text (B14C).",
+            )
+        session.flush()
 
     def _ensure_default_translation(
         self,
