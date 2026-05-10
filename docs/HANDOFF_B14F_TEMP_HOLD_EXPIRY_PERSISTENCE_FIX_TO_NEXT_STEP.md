@@ -76,6 +76,8 @@ After **deploy**:
 
 ## Production follow-up (incl. smoke #52 / #53)
 
+**B14G — PASS:** Handoff **[`docs/HANDOFF_B14G_TEMP_HOLD_EXPIRY_FIX_PRODUCTION_VERIFICATION_TO_NEXT_STEP.md`](HANDOFF_B14G_TEMP_HOLD_EXPIRY_FIX_PRODUCTION_VERIFICATION_TO_NEXT_STEP.md)**; metrics **[`docs/B14G_RECORD_TEMP_HOLD_EXPIRY_FIX_PRODUCTION_RESULT.md`](B14G_RECORD_TEMP_HOLD_EXPIRY_FIX_PRODUCTION_RESULT.md)**.
+
 After deploy:
 
 1. **Hit a committing path** (e.g. **`GET /mini-app/catalog`**, **`GET …/preparation`**, **`GET /mini-app/bookings`**, or run **`run_reservation_expiry_once`** in production job) so any clock-expired holds persist **`cancelled_no_payment`** and **seats** restore.
