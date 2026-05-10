@@ -12,6 +12,7 @@ from app.models.payment import Payment
 from app.models.tour import BoardingPoint, BoardingPointTranslation, Tour, TourTranslation
 from app.models.user import User
 from app.models.supplier import Supplier, SupplierApiCredential, SupplierOffer, SupplierOfferExecutionLink
+from app.models.supplier_offer_showcase_publish_attempt import SupplierOfferShowcasePublishAttempt
 from app.models.supplier_offer_tour_bridge import SupplierOfferTourBridge
 from app.models.supplier_offer_recurrence_generated_tour import SupplierOfferRecurrenceGeneratedTour
 from app.models.supplier_execution import (
@@ -41,6 +42,7 @@ __all__ = [
     "SupplierExecutionRequest",
     "SupplierOffer",
     "SupplierOfferExecutionLink",
+    "SupplierOfferShowcasePublishAttempt",
     "SupplierOfferTourBridge",
     "SupplierOfferRecurrenceGeneratedTour",
     "Tour",

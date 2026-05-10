@@ -110,6 +110,22 @@ class ShowcaseMarketingTemplateId(StrEnum):
     BRAND_AWARENESS_POST = "brand_awareness_post"
 
 
+class SupplierOfferShowcasePublishAttemptStatus(StrEnum):
+    """B13D: durable audit state for a showcase channel send (foundation slice — not wired to live publish yet)."""
+
+    REQUESTED = "requested"
+    PROVIDER_SENT = "provider_sent"
+    PERSISTED = "persisted"
+    FAILED = "failed"
+
+
+class SupplierOfferShowcasePublishActorSurface(StrEnum):
+    """B13D: where the publish action was triggered (audit only)."""
+
+    HTTP_ADMIN = "http_admin"
+    TELEGRAM_BOT = "telegram_bot"
+
+
 class SupplierOfferTourBridgeStatus(StrEnum):
     """B10: one active bridge per offer; superseded/cancelled for audit."""
 

@@ -189,6 +189,11 @@ class SupplierOffer(TimestampMixin, Base):
         back_populates="supplier_offer",
         cascade="all, delete-orphan",
     )
+    showcase_publish_attempts: Mapped[list["SupplierOfferShowcasePublishAttempt"]] = relationship(
+        "SupplierOfferShowcasePublishAttempt",
+        back_populates="supplier_offer",
+        passive_deletes=True,
+    )
 
 
 class SupplierOfferExecutionLink(TimestampMixin, Base):
