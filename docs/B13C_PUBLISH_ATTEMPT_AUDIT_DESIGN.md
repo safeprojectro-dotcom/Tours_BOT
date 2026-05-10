@@ -1,8 +1,8 @@
 # B13C — Publish attempt / audit design
 
-**Project:** Tours_BOT. **B13C slice:** design documentation. **Update:** **B13D** publish-attempt **table skeleton** is **implemented** in product code (see **§10**); **live `publish`** remains **unwired** to attempts.
+**Project:** Tours_BOT. **B13C slice:** design documentation. **Update:** **B13D** supplies the attempt table; **B13E** wires **`publish`** to create/update attempt rows (**§11**). **No** automatic retry or **`idempotency_key`** enforcement yet.
 
-**Related:** [`docs/B13_CHANNEL_ADAPTER_DESIGN.md`](B13_CHANNEL_ADAPTER_DESIGN.md) · [`docs/HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md`](HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md) · [`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md) · [`docs/HANDOFF_B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN_TO_NEXT_STEP.md`](HANDOFF_B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md`](HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13D_PUBLISH_ATTEMPT_TABLE_SKELETON_TO_NEXT_STEP.md`](HANDOFF_B13D_PUBLISH_ATTEMPT_TABLE_SKELETON_TO_NEXT_STEP.md).
+**Related:** [`docs/B13_CHANNEL_ADAPTER_DESIGN.md`](B13_CHANNEL_ADAPTER_DESIGN.md) · [`docs/HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md`](HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md) · [`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md) · [`docs/HANDOFF_B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN_TO_NEXT_STEP.md`](HANDOFF_B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md`](HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13D_PUBLISH_ATTEMPT_TABLE_SKELETON_TO_NEXT_STEP.md`](HANDOFF_B13D_PUBLISH_ATTEMPT_TABLE_SKELETON_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13E_WIRE_PUBLISH_ATTEMPT_AUDIT_TO_NEXT_STEP.md`](HANDOFF_B13E_WIRE_PUBLISH_ATTEMPT_AUDIT_TO_NEXT_STEP.md).
 
 ---
 
@@ -36,13 +36,14 @@ admin action / HTTP publish
 → on Telegram error: TelegramShowcaseSendError → HTTP/Telegram error; offer stays APPROVED
 ```
 
-**Gaps today (by design):**
+**Gaps today (by design or not yet implemented):**
 
-- **No** publish-attempt row or outbox; **no** cross-request idempotency key usage (**`ShowcaseChannelPublishRequest.idempotency_key`** exists but is unused).
+- **B13E (implemented):** durable **attempt rows** on **`publish`** — see **§11**.
+- **Still:** **no** cross-request **idempotency** usage on **`ShowcaseChannelPublishRequest.idempotency_key`**; **no** operator “safe resend” / dedupe automation.
 - **No** automatic retry of Telegram send.
-- **Edge risk:** process/Crash after provider accepts message but before ORM commit could orphan a channel post (rare; document only until implementation addresses it).
+- **Edge risk (unchanged):** Telegram may accept a message while the **DB commit** for **`SupplierOffer`** / attempt **`persisted`** **fails** — a channel post could exist while the offer stays **`approved`** and/or the attempt row stops at **`provider_sent`** (rare; orphan-post playbook remains a future ops/implementation concern). Same class of risk as pre-B13E; audit rows improve traceability but do not eliminate the boundary.
 
-**B13D-alt bridge (implemented in product code, after this design doc):** a **read-only** admin **`GET /admin/supplier-offers/{offer_id}/showcase-channel-payload`** exposes the same logical **`ShowcaseChannelPublishRequest`** shape as **`publish`** (from **`build_showcase_publication`** + **`telegram_showcase_channel_publish_request_preview`**), **without** Telegram I/O and **without** persisting rows in **`supplier_offer_showcase_publish_attempts`**. It gives operators a **stable preview/read model** and can **support** future **content fingerprinting** / correlation with audit rows (e.g. hash of caption + photo ref per §4). **No** idempotency enforcement from this endpoint alone. **B13D** skeleton (**§10**) adds the attempt table (**unwired** to **`publish`** in that slice).
+**B13D-alt bridge (implemented in product code, after this design doc):** a **read-only** admin **`GET /admin/supplier-offers/{offer_id}/showcase-channel-payload`** exposes the same logical **`ShowcaseChannelPublishRequest`** shape as **`publish`** (from **`build_showcase_publication`** + **`telegram_showcase_channel_publish_request_preview`**), **without** Telegram I/O and **without** persisting rows in **`supplier_offer_showcase_publish_attempts`**. It gives operators a **stable preview/read model** and can **support** future **content fingerprinting** / correlation with audit rows (e.g. hash of caption + photo ref per §4). **No** idempotency enforcement from this endpoint alone. **B13D** table (**§10**) + **B13E** wiring (**§11**).
 
 ---
 
@@ -88,23 +89,24 @@ Audit must **not** replace **`operator_workflow`** or **`review-package`** as re
 ## 7. Transaction and side-effect boundary
 
 - **Today:** Telegram I/O runs **before** lifecycle fields are updated in the same synchronous request; failure leaves offer **approved**.
-- **Future with attempt row:** document whether attempt is **inserted before** send (for single-flight) and how to reconcile **provider success + DB failure** (orphan post playbook). **Do not** flip lifecycle to **`published`** until the system has a consistent record (implementation detail for B13D+).
+- **With attempt rows (B13E):** an attempt is inserted after existing **readiness/config** guards and **`build_showcase_publication`**, then **`provider_sent`** after successful adapter I/O, then offer **`published`** + attempt **`persisted`** in the same request **if** commit succeeds. If the process fails **after** Telegram returns **`message_id`** but **before** commit, reconciliation may require matching provider state to a **`provider_sent`** or partial row — same **orphan-post** class as §2.
+- **Future:** single-flight / outbox / **do not** flip lifecycle to **`published`** until a consistent durable record — see B13C §4–5; **not** enforced by B13E.
 
 ---
 
 ## 8. Preserving current Telegram behavior until implementation
 
-- **Phase 0 (current):** no attempt storage; behavior unchanged.
-- **Phase 1 (optional):** append-only attempt logging / shadow table — **no** change to success/failure semantics of **`publish`**.
-- **Phase 2:** idempotent adapter or orchestration wrapping send — **requires** tests proving no duplicate posts.
+- **Phase 0 (pre–B13D):** no attempt storage.
+- **Phase 1 (B13D–B13E):** append-only attempt log on **`publish`** — **no** change to success/failure **semantics** or **readiness** vs pre-B13E product behavior; **no** idempotency / auto-retry.
+- **Phase 2 (forward):** idempotent adapter or orchestration wrapping send — **requires** tests proving no duplicate posts.
 
 ---
 
 ## 9. Forward: B13D / B13E
 
-- **B13D-alt (implemented):** read-only **channel payload** preview endpoint + read models — **no** DB attempt rows from that endpoint; see **§2 baseline** footnote and **[`docs/B13_CHANNEL_ADAPTER_DESIGN.md`](B13_CHANNEL_ADAPTER_DESIGN.md)** §9b.
-- **B13D (implemented, skeleton):** table **`supplier_offer_showcase_publish_attempts`**, **`SupplierOfferShowcasePublishAttemptService`**, repository — **see §10**; **live `publish` not wired** yet.
-- **B13E (forward):** wire attempt create/update into **`publish`** while preserving behavior; manual-copy / export adapters (**`exported`** without **`message_id`**) remain a separate track per product naming.
+- **B13D-alt (implemented):** read-only **channel payload** preview — **no** attempt rows from that endpoint; see **[`docs/B13_CHANNEL_ADAPTER_DESIGN.md`](B13_CHANNEL_ADAPTER_DESIGN.md)** §9b.
+- **B13D (implemented):** table + repository + **`SupplierOfferShowcasePublishAttemptService`** — **§10**.
+- **B13E (implemented):** **`publish`** writes attempt rows — **§11**; **no** idempotency enforcement; manual-copy / **exported**-without-**`message_id`** adapters remain a separate product track.
 
 ---
 
@@ -114,9 +116,9 @@ Audit must **not** replace **`operator_workflow`** or **`review-package`** as re
 
 **Statuses in use** (enum **`SupplierOfferShowcasePublishAttemptStatus`):** **`requested`**, **`provider_sent`**, **`persisted`**, **`failed`** — aligned with §4 “during / after” language; transitions are **service-level** today (`create_requested_attempt`, `mark_provider_sent`, `mark_persisted`, `mark_failed`).
 
-**Actor surfaces** (enum **`SupplierOfferShowcasePublishActorSurface`):** **`http_admin`**, **`telegram_bot`** — for future correlation with HTTP **`POST …/publish`** vs Telegram **C2B8B**.
+**Actor surfaces** (enum **`SupplierOfferShowcasePublishActorSurface`):** **`http_admin`**, **`telegram_bot`** — used on **§11** **`publish`** for HTTP vs Telegram **C2B8B**.
 
-**Live publish:** **`SupplierOfferModerationService.publish`** does **not** read or write attempt rows in this slice — **no** Telegram behavior change, **no** readiness change, **no** retries.
+**Live publish (B13D slice only):** table and service existed **without** **`SupplierOfferModerationService.publish`** integration — superseded by **§11(B13E)**.
 
 **Retention / delete policy:** FK **`supplier_offer_id` → `supplier_offers.id`** is **`ON DELETE RESTRICT`**. Operational children of **`supplier_offers`** (e.g. **`supplier_offer_tour_bridge`**, **`supplier_offer_execution_links`**) use **`CASCADE`** in this codebase; **publish attempts** are treated as **audit history** and **must not** disappear silently when an offer row is deleted. Deleting an offer while attempts exist **fails** until attempts are removed or a future archival/purge flow exists. ORM: **`SupplierOffer.showcase_publish_attempts`** uses **`passive_deletes=True`** (no **`delete-orphan`** cascade).
 
@@ -124,8 +126,22 @@ Handoff: **[`docs/HANDOFF_B13D_PUBLISH_ATTEMPT_TABLE_SKELETON_TO_NEXT_STEP.md`](
 
 ---
 
-## 11. Non-goals (B13C document)
+## 11. B13E implementation (publish path wiring)
+
+**Orchestration:** **`SupplierOfferModerationService.publish`** (after existing lifecycle/config guards and **`build_showcase_publication`**) creates a **`requested`** row, calls **`TelegramShowcaseChannelAdapter.publish`** (**unchanged**), then on success **`provider_sent`** → update **`SupplierOffer`** (**unchanged** semantics) → **`persisted`** with `showcase_chat_id` / `showcase_message_id` on the attempt. On **`TelegramShowcaseSendError`** or missing **`message_id`**, attempt **`failed`**; **same** domain/API/bot errors as pre-B13E.
+
+**Lifecycle mapping (DB enum values):** **`requested`** → **`provider_sent`** → **`persisted`**; **`requested`** → **`failed`** (Telegram error or missing id).
+
+**Actor / source:** **`SupplierOfferShowcasePublishActorSurface`** — HTTP **`POST …/publish`** uses **`http_admin`** + **`requested_by="http_admin"`**; Telegram **C2B8B** confirm uses **`telegram_bot`** + **`requested_by="telegram:{admin_telegram_user_id}"`**. **Payload fingerprint:** SHA-256 of caption + photo ref on the attempt row (correlates with §4).
+
+**Not in B13E:** automatic retry/resend; **`idempotency_key`** on **`ShowcaseChannelPublishRequest`** still **unused**; no new channels; **no** Mini App / booking / payment / orders.
+
+Handoff: **[`docs/HANDOFF_B13E_WIRE_PUBLISH_ATTEMPT_AUDIT_TO_NEXT_STEP.md`](HANDOFF_B13E_WIRE_PUBLISH_ATTEMPT_AUDIT_TO_NEXT_STEP.md)**.
+
+---
+
+## 12. Non-goals (B13C document)
 
 
-- **No** code **in the B13C authoring slice**, **no** migrations **from that slice**, **no** new routes **from that slice**, **no** retry logic, **no** publish readiness or output change, **no** Mini App / booking / payment / orders, **no** new channels **in that design-only deliverable**. **Note:** **B13D-alt** and **B13D** are **separate** implementation slices (read-only preview route; attempt table skeleton) — see §2 **B13D-alt bridge** and **§10**.
+- **No** code **in the B13C authoring slice**, **no** migrations **from that slice**, **no** new routes **from that slice**, **no** retry logic, **no** publish readiness or output change, **no** Mini App / booking / payment / orders, **no** new channels **in that design-only deliverable**. **Note:** **B13D-alt**, **B13D**, and **B13E** are **separate** implementation slices — see §2, **§10**, **§11**.
 

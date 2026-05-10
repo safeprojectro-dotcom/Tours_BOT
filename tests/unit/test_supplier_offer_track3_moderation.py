@@ -7,20 +7,27 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from sqlalchemy import event
+from sqlalchemy import event, select
 
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
-from app.models.enums import SupplierOfferLifecycle, TourSalesMode
+from app.models.enums import (
+    SupplierOfferLifecycle,
+    SupplierOfferShowcasePublishActorSurface,
+    SupplierOfferShowcasePublishAttemptStatus,
+    TourSalesMode,
+)
 from app.models.supplier import SupplierOfferExecutionLink
 from app.models.supplier import Supplier
+from app.models.supplier_offer_showcase_publish_attempt import SupplierOfferShowcasePublishAttempt
 from app.services.supplier_offer_deep_link import (
     parse_supplier_offer_start_arg,
     private_bot_deeplink,
     supplier_offer_start_payload,
 )
 from app.services.supplier_offer_showcase_message import format_supplier_offer_showcase_html
+from app.services.telegram_showcase_client import TelegramShowcaseSendError
 from tests.unit.base import FoundationDBTestCase
 
 
@@ -123,8 +130,54 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertEqual(pub["offer"]["lifecycle_status"], "published")
         self.assertEqual(pub["telegram_message_id"], 42)
 
+        attempt = self.session.scalar(
+            select(SupplierOfferShowcasePublishAttempt).where(
+                SupplierOfferShowcasePublishAttempt.supplier_offer_id == oid,
+            ),
+        )
+        self.assertIsNotNone(attempt)
+        assert attempt is not None
+        self.assertEqual(attempt.status, SupplierOfferShowcasePublishAttemptStatus.PERSISTED)
+        self.assertEqual(attempt.actor_surface, SupplierOfferShowcasePublishActorSurface.HTTP_ADMIN)
+        self.assertEqual(attempt.showcase_chat_id, "-10012345")
+        self.assertEqual(attempt.showcase_message_id, 42)
+        self.assertIsNotNone(attempt.payload_fingerprint)
+        self.assertEqual(attempt.requested_by, "http_admin")
+
         dup = self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
         self.assertEqual(dup.status_code, 400)
+
+    def test_publish_failed_audit_attempt_when_telegram_send_errors(self) -> None:
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
+        mock_cfg = SimpleNamespace(
+            telegram_bot_token="dummy-token",
+            telegram_offer_showcase_channel_id="-10012345",
+            telegram_bot_username="testbot",
+            telegram_mini_app_url="https://example.com/mini",
+        )
+        with (
+            patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
+            patch(
+                "app.services.telegram_showcase_client.send_showcase_publication",
+                side_effect=TelegramShowcaseSendError("bot blocked"),
+            ),
+        ):
+            p = self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
+        self.assertEqual(p.status_code, 400, p.text)
+        attempt = self.session.scalar(
+            select(SupplierOfferShowcasePublishAttempt).where(
+                SupplierOfferShowcasePublishAttempt.supplier_offer_id == oid,
+            ),
+        )
+        self.assertIsNotNone(attempt)
+        assert attempt is not None
+        self.assertEqual(attempt.status, SupplierOfferShowcasePublishAttemptStatus.FAILED)
+        self.assertEqual(attempt.actor_surface, SupplierOfferShowcasePublishActorSurface.HTTP_ADMIN)
+        self.assertEqual(attempt.error_code, "telegram_showcase_send")
+        self.assertEqual(attempt.requested_by, "http_admin")
 
     def test_approve_is_not_auto_publish_and_retract_is_separate_action(self) -> None:
         _, token = self._bootstrap_supplier_token()

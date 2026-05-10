@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.models.enums import SupplierOfferLifecycle
+from app.models.enums import SupplierOfferLifecycle, SupplierOfferShowcasePublishActorSurface
 from app.models.supplier import SupplierOffer
 from app.repositories.supplier import SupplierOfferRepository
 from app.schemas.supplier_admin import (
@@ -23,8 +24,14 @@ from app.services.showcase_channel_adapter import (
     TelegramShowcaseChannelAdapter,
     telegram_showcase_channel_publish_request_preview,
 )
-from app.services.supplier_offer_showcase_message import build_showcase_publication
+from app.services.supplier_offer_showcase_message import ShowcasePublication, build_showcase_publication
+from app.services.supplier_offer_showcase_publish_attempt_service import SupplierOfferShowcasePublishAttemptService
 from app.services.telegram_showcase_client import TelegramShowcaseSendError, delete_channel_message
+
+
+def _showcase_publish_payload_fingerprint(publication: ShowcasePublication) -> str:
+    raw = ((publication.caption_html or "") + "\0" + (publication.photo_url or "")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
 
 
 class SupplierOfferModerationNotFoundError(Exception):
@@ -46,6 +53,7 @@ class SupplierOfferPublicationConfigError(Exception):
 class SupplierOfferModerationService:
     def __init__(self) -> None:
         self._offers = SupplierOfferRepository()
+        self._showcase_publish_attempts = SupplierOfferShowcasePublishAttemptService()
 
     def _row(self, session: Session, offer_id: int) -> SupplierOffer:
         row = self._offers.get_any(session, offer_id=offer_id)
@@ -179,6 +187,8 @@ class SupplierOfferModerationService:
         *,
         offer_id: int,
         settings: Settings | None = None,
+        actor_surface: SupplierOfferShowcasePublishActorSurface | None = None,
+        requested_by: str | None = None,
     ) -> tuple[AdminSupplierOfferRead, int]:
         cfg = settings or get_settings()
         row = self._row(session, offer_id)
@@ -195,6 +205,16 @@ class SupplierOfferModerationService:
                 "Set TELEGRAM_OFFER_SHOWCASE_CHANNEL_ID and TELEGRAM_BOT_TOKEN to publish.",
             )
         pub = build_showcase_publication(row, cfg)
+        surface = actor_surface or SupplierOfferShowcasePublishActorSurface.HTTP_ADMIN
+        attempt = self._showcase_publish_attempts.create_requested_attempt(
+            session,
+            supplier_offer_id=offer_id,
+            provider=TELEGRAM_SHOWCASE_PROVIDER,
+            actor_surface=surface,
+            channel_ref=channel_id,
+            requested_by=requested_by,
+            payload_fingerprint=_showcase_publish_payload_fingerprint(pub),
+        )
         adapter = TelegramShowcaseChannelAdapter(settings=cfg)
         try:
             result = adapter.publish(
@@ -205,17 +225,38 @@ class SupplierOfferModerationService:
                 ),
             )
         except TelegramShowcaseSendError as exc:
+            self._showcase_publish_attempts.mark_failed(
+                session,
+                attempt_id=attempt.id,
+                error_code="telegram_showcase_send",
+                error_message=str(exc)[:4096],
+                retryable_failure=None,
+            )
             raise SupplierOfferModerationStateError(f"Telegram publish failed: {exc}") from exc
         message_id = int(result.message_id) if result.message_id is not None else None
         if message_id is None:
+            self._showcase_publish_attempts.mark_failed(
+                session,
+                attempt_id=attempt.id,
+                error_code="missing_message_id",
+                error_message="Telegram adapter returned no message_id.",
+                retryable_failure=False,
+            )
             raise SupplierOfferModerationStateError("Telegram publish returned no message_id.")
 
+        self._showcase_publish_attempts.mark_provider_sent(session, attempt_id=attempt.id)
         row.lifecycle_status = SupplierOfferLifecycle.PUBLISHED
         row.published_at = datetime.now(UTC)
         row.showcase_chat_id = channel_id
         row.showcase_message_id = message_id
         session.add(row)
         session.flush()
+        self._showcase_publish_attempts.mark_persisted(
+            session,
+            attempt_id=attempt.id,
+            showcase_chat_id=channel_id,
+            showcase_message_id=message_id,
+        )
         session.refresh(row)
         return self._to_read(row), message_id
 

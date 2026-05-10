@@ -1,4 +1,4 @@
-"""B13D: service skeleton for showcase publish attempts (persistence only — not called from live publish)."""
+"""Showcase publish attempt audit rows (B13D/B13E)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from app.repositories.supplier_offer_showcase_publish_attempt import SupplierOff
 
 
 class SupplierOfferShowcasePublishAttemptService:
-    """Create and transition attempt rows for future orchestration; no Telegram I/O here."""
+    """Persist attempt lifecycle for showcase channel publish (B13E: wired from ``ModerationService.publish``)."""
 
     def __init__(self, repository: SupplierOfferShowcasePublishAttemptRepository | None = None) -> None:
         self._repo = repository or SupplierOfferShowcasePublishAttemptRepository()

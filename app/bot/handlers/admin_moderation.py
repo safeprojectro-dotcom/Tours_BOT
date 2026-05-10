@@ -99,6 +99,7 @@ from app.models.enums import (
     ShowcaseMarketingTemplateId,
     SupplierOfferLifecycle,
     SupplierOfferPackagingStatus,
+    SupplierOfferShowcasePublishActorSurface,
     TourStatus,
 )
 from app.repositories.user import UserRepository
@@ -3038,7 +3039,13 @@ async def admin_ops_operator_workflow_c2b8b_publish_showcase(query: CallbackQuer
                 return
             moderation = SupplierOfferModerationService()
             try:
-                updated, _msg_id = moderation.publish(session, offer_id=offer_id)
+                assert query.from_user is not None
+                updated, _msg_id = moderation.publish(
+                    session,
+                    offer_id=offer_id,
+                    actor_surface=SupplierOfferShowcasePublishActorSurface.TELEGRAM_BOT,
+                    requested_by=f"telegram:{query.from_user.id}",
+                )
                 session.commit()
             except (
                 SupplierOfferModerationNotFoundError,

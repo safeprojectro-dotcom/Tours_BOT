@@ -1467,7 +1467,11 @@ def post_admin_supplier_offer_reject(
 @router.post("/supplier-offers/{offer_id}/publish", response_model=AdminSupplierOfferPublishResult)
 def post_admin_supplier_offer_publish(offer_id: int, db: Session = Depends(get_db)) -> AdminSupplierOfferPublishResult:
     try:
-        offer_read, message_id = SupplierOfferModerationService().publish(db, offer_id=offer_id)
+        offer_read, message_id = SupplierOfferModerationService().publish(
+            db,
+            offer_id=offer_id,
+            requested_by="http_admin",
+        )
     except SupplierOfferModerationNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
     except SupplierOfferPublicationConfigError as exc:
