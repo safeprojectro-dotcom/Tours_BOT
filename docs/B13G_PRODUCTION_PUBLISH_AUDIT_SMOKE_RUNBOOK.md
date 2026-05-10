@@ -4,7 +4,7 @@
 
 **Purpose:** Give operators a **repeatable checklist** to confirm that, after deploy, **showcase publish audit** (B13D–B13F) is **live**: migration applied, **`supplier_offer_showcase_publish_attempts`** in use, and **`review-package`** exposes **`showcase_publish_attempts_review`** so publishes can be traced (who, outcome, provider ids, errors).
 
-**Related:** **[`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md)** (preview → publish workflow); **[`docs/B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN.md`](B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN.md)** §11–§12; **[`docs/HANDOFF_B13F_ADMIN_PUBLISH_ATTEMPT_HISTORY_READ_SURFACE_TO_NEXT_STEP.md`](HANDOFF_B13F_ADMIN_PUBLISH_ATTEMPT_HISTORY_READ_SURFACE_TO_NEXT_STEP.md)**; **[`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md)** (B13D–B13F bullets).
+**Related:** **[`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md)** (preview → publish workflow); **[`docs/B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN.md`](B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN.md)** §11–§12; **[`docs/HANDOFF_B13F_ADMIN_PUBLISH_ATTEMPT_HISTORY_READ_SURFACE_TO_NEXT_STEP.md`](HANDOFF_B13F_ADMIN_PUBLISH_ATTEMPT_HISTORY_READ_SURFACE_TO_NEXT_STEP.md)**; **[`docs/HANDOFF_B13G_PRODUCTION_SMOKE_RESULT_TO_NEXT_STEP.md`](HANDOFF_B13G_PRODUCTION_SMOKE_RESULT_TO_NEXT_STEP.md)** (production smoke result — 2026-05-10); **[`docs/CHAT_HANDOFF.md`](CHAT_HANDOFF.md)** (B13D–B13F bullets).
 
 ---
 
@@ -122,6 +122,28 @@ Operators can rely on the **compact audit block** on the offer detail message (s
 - **No** **`idempotency_key`** enforcement checklist — key remains **unused** for dedupe in MVP.
 - **No** dedicated **`GET …/showcase-publish-attempts`** in MVP — use **`review-package`**.
 - **No** DB purge/archive of attempts here — **RESTRICT** FK means offer deletes fail while attempts exist; archival is a future ops topic.
+
+---
+
+## Run log — 2026-05-10 (Railway production)
+
+**Recorded ops result** — see also **[`docs/HANDOFF_B13G_PRODUCTION_SMOKE_RESULT_TO_NEXT_STEP.md`](HANDOFF_B13G_PRODUCTION_SMOKE_RESULT_TO_NEXT_STEP.md)**.
+
+| Aspect | Result |
+|--------|--------|
+| **Environment** | Railway **production** |
+| **Migration** | Applied via **Railway SSH**; **`python -m alembic current`** → **`20260531_29 (head)`** |
+| **Offer** | **`supplier_offer_id` 11** — title *Excursie Timisoara Cluj* |
+| **Pre-check (`GET …/review-package`)** | **`showcase_publish_attempts_review.total_returned`** = **0**; **`cover_media_quality_review.has_warnings`** = **false** (after approve-for-card); **`operator_workflow`**: **`publish_showcase_channel.enabled`** = **true**; **`showcase_preview.can_publish_now`** = **true**; **`publication_mode`** = **`photo_with_caption`** |
+| **Publish** | **Admin API** — **`POST /admin/supplier-offers/11/publish`** |
+| **Channel** | Telegram showcase post **created**; **no** duplicate post observed during smoke |
+| **Post-check** | **`showcase_publish_attempts_review.total_returned`** = **1** |
+| **Latest attempt (`items[0]`)** | **`id`** **1**; **`status`** **`persisted`**; **`provider`** **`telegram_showcase_channel`**; **`actor_surface`** **`http_admin`**; **`requested_by`** **`http_admin`**; **`showcase_chat_id`** **`-1003955096010`**; **`showcase_message_id`** **23**; **`error_code`** / **`error_message`** **null** |
+| **`conversion_status_panel` (snapshot)** | **`showcase`**: published · **`tour_bridge`**: linked · **`catalog`**: listed_for_sale · **`booking_link`**: **missing** · **`customer_action`**: not_bookable_yet, detail **view_only** |
+
+**Observation:** B13D / B13E / B13F / B13G **audit chain works** end-to-end. **Booking link** is still **missing** — **next functional step** is **creating / verifying an execution link** for Offer **11**, **not** retry or resend publish.
+
+**Security:** **`ADMIN_API_TOKEN`** may have appeared in **manual smoke** screenshots or chat — **rotate** the token in **Railway** environment/config after smoke **(do not paste secrets into docs)**.
 
 ---
 

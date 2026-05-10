@@ -111,7 +111,7 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 - **Telegram** **public** **channel** **post** **/** **“publish** **to** **Telegram”** **separate** **from** **Mini** **App** **catalog** **bookability** **(B10.2** **activation).**
 
 ### Postponed (tech debt)
-- **If** **`ADMIN_API_TOKEN`** **or** **other** **secrets** **were** **exposed** **in** **logs** **/** **chat** **during** **smoke,** **rotate** **after** **smoke.** 
+- **If** **`ADMIN_API_TOKEN`** **or** **other** **secrets** **were** **exposed** **in** **logs** **/** **chat** **during** **smoke,** **rotate** **after** **smoke.** **B13G production smoke (2026-05-10):** token may have appeared in **screenshots** **/** **chat** — **rotate** **Railway** **`ADMIN_API_TOKEN`** **and** **re-issue** **to** **operators** **as** **needed** **(see** **[`docs/B13G_PRODUCTION_PUBLISH_AUDIT_SMOKE_RUNBOOK.md`](B13G_PRODUCTION_PUBLISH_AUDIT_SMOKE_RUNBOOK.md)** **Run** **log** **—** **2026-05-10** **).** 
 
 #### B10.6 — Telegram private bot: router / consultant (postponed, non-blocking)
 
