@@ -145,9 +145,34 @@ Operators can rely on the **compact audit block** on the offer detail message (s
 
 **Security:** **`ADMIN_API_TOKEN`** may have appeared in **manual smoke** screenshots or chat — **rotate** the token in **Railway** environment/config after smoke **(do not paste secrets into docs)**.
 
+**Contrast — Offer #11 vs Offer #12:** **Offer #11** (first run log above) **closed the B13 publish-audit path** but **stopped before** an **active execution link** (operator context: **publish-audit-only / past tour** on that path). **Offer #12** (run log below) **extends through bridge, catalog listing, and execution link** — **full conversion smoke** for the supplier-offer → bookable tour chain.
+
+---
+
+## Run log — 2026-05-10 — full conversion (Offer #12, Railway production)
+
+**Recorded ops result** — **[`docs/HANDOFF_B13G_FULL_CONVERSION_SMOKE_RESULT_TO_NEXT_STEP.md`](HANDOFF_B13G_FULL_CONVERSION_SMOKE_RESULT_TO_NEXT_STEP.md)**.
+
+| Aspect | Result |
+|--------|--------|
+| **Environment** | Railway **production**; Admin API + Telegram admin UI + Mini App manual checks; migration **head** **`20260531_29`** (already applied) |
+| **Offer** | **`supplier_offer_id` 12** — *Excursie Timisoara Oradea* · **`lifecycle`** **`published`** |
+| **Publish** | **Admin API** · Telegram showcase post **visible** in channel · **`showcase_publish_attempts_review`**: **`total_returned`** **1** · attempt **`id`** **2** · **`persisted`**, **`provider`** **`telegram_showcase_channel`**, **`http_admin`** / **`requested_by`** **`http_admin`**, **`showcase_chat_id`** **`-1003955096010`**, **`showcase_message_id`** **25**, **errors** **null** |
+| **Bridge** | **`active_tour_bridge`**: offer **12** → **`tour_id`** **6**, **`bridge_status`** **`active`**, **`bridge_kind`** **`created_new_tour`** |
+| **Catalog** | **`linked_tour_catalog`**: **`tour_code`** **`B10-SO12-04fb1f`**, **`tour_status`** **`open_for_sale`**, **`per_seat`**, **`seats_available`** **10**, **`catalog_listed_for_mini_app`** **true** |
+| **Execution link** | **`execution_links_review`**: **`total_links_returned`** **1** · **`active_link.id`** **5** (offer **12**, tour **6**, **`link_status`** **`active`**) · **`can_create_execution_link`** **false** (active link exists) |
+| **`conversion_status_panel` (after link)** | **`showcase`**: published · **`tour_bridge`**: linked · **`catalog`**: listed_for_sale · **`booking_link`**: **active** · **`customer_action`**: **open_exact_mini_app_tour**, detail **`tour_code=B10-SO12-04fb1f`** |
+| **Mini App (manual)** | Catalog lists *Excursie Timisoara Oradea* · supplier landing **`/supplier-offers/12`**: published, availability/bookable copy, **Open linked trip** · exact tour route opens same title · tour detail shows seats/price |
+
+**Follow-up (not a B13 failure):** **Reservation preparation** in Mini App shows **tour is not available for reservation preparation** (or equivalent). **Treat as Layer A / reservation-preparation readiness diagnostic** — **separate ticket** from B13 audit, publish, bridge, or execution link (those **passed** for this smoke).
+
+**Security:** same **token rotation** reminder as other manual smokes — **`ADMIN_API_TOKEN`** in Railway if exposed in screenshots/chat.
+
 ---
 
 ## 7. Forward references
 
+- **Full conversion smoke record (Offer #12):** **[`docs/HANDOFF_B13G_FULL_CONVERSION_SMOKE_RESULT_TO_NEXT_STEP.md`](HANDOFF_B13G_FULL_CONVERSION_SMOKE_RESULT_TO_NEXT_STEP.md)**.
+- **Publish-audit-only smoke record (Offer #11):** **[`docs/HANDOFF_B13G_PRODUCTION_SMOKE_RESULT_TO_NEXT_STEP.md`](HANDOFF_B13G_PRODUCTION_SMOKE_RESULT_TO_NEXT_STEP.md)**.
 - **Design / retry:** **[`docs/B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN.md`](B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN.md)**.
 - **Manual retry/resend product design:** track as separate doc/ticket (often labeled B13H or similar) — **docs-first**, **no** behavior until idempotency/safety approved.
