@@ -2,7 +2,7 @@
 
 **Project:** Tours_BOT. **Status:** design documentation only (**no** implementation, **no** migrations, **no** behavior change in this slice).
 
-**Related:** [`docs/B13_CHANNEL_ADAPTER_DESIGN.md`](B13_CHANNEL_ADAPTER_DESIGN.md) · [`docs/HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md`](HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md) · [`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md) · [`docs/HANDOFF_B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN_TO_NEXT_STEP.md`](HANDOFF_B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN_TO_NEXT_STEP.md).
+**Related:** [`docs/B13_CHANNEL_ADAPTER_DESIGN.md`](B13_CHANNEL_ADAPTER_DESIGN.md) · [`docs/HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md`](HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md) · [`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md) · [`docs/HANDOFF_B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN_TO_NEXT_STEP.md`](HANDOFF_B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md`](HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md).
 
 ---
 
@@ -41,6 +41,8 @@ admin action / HTTP publish
 - **No** publish-attempt row or outbox; **no** cross-request idempotency key usage (**`ShowcaseChannelPublishRequest.idempotency_key`** exists but is unused).
 - **No** automatic retry of Telegram send.
 - **Edge risk:** process/Crash after provider accepts message but before ORM commit could orphan a channel post (rare; document only until implementation addresses it).
+
+**B13D-alt bridge (implemented in product code, after this design doc):** a **read-only** admin **`GET /admin/supplier-offers/{offer_id}/showcase-channel-payload`** exposes the same logical **`ShowcaseChannelPublishRequest`** shape as **`publish`** (from **`build_showcase_publication`** + **`telegram_showcase_channel_publish_request_preview`**), **without** Telegram I/O and **without** attempt-row persistence. It gives operators a **stable preview/read model** **before** a publish-attempt table exists and can **support** future **content fingerprinting** / audit rows (e.g. hash of caption + photo ref per §4) once migrations are approved. **No** migration, **no** idempotency enforcement, **no** duplicate-send protection from this endpoint alone.
 
 ---
 
@@ -100,11 +102,13 @@ Audit must **not** replace **`operator_workflow`** or **`review-package`** as re
 
 ## 9. Forward: B13D / B13E
 
-- **B13D (implementation options):** publish-attempt **repository / service** + optional migration — **only** with explicit approval; or **channel preview payload read model** without migration (alternate track).
+- **B13D-alt (implemented):** read-only **channel payload** preview endpoint + read models — **no** attempt table; see **§2 baseline** footnote and **[`docs/B13_CHANNEL_ADAPTER_DESIGN.md`](B13_CHANNEL_ADAPTER_DESIGN.md)** §9b.
+- **B13D (future, migration-gated):** publish-attempt **repository / service** + optional migration — **only** with explicit product approval.
 - **B13E:** manual-copy / export adapters — audit states like **`exported`** without **`message_id`**.
 
 ---
 
 ## 10. Non-goals (B13C document)
 
-- **No** code, **no** migrations, **no** new routes, **no** retry logic, **no** publish readiness or output change, **no** Mini App / booking / payment / orders, **no** new channels in this design slice.
+- **No** code, **no** migrations, **no** new routes, **no** retry logic, **no** publish readiness or output change, **no** Mini App / booking / payment / orders, **no** new channels **in this design-only slice** (authoring **B13C** did not add them). **Note:** **B13D-alt** is a **separate** implementation slice: it added a **read-only** route **without** attempt storage or idempotency — see §2 **B13D-alt bridge**.
+

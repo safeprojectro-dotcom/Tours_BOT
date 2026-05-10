@@ -2,9 +2,11 @@
 
 **Project:** Tours_BOT. **B13A:** design-only. **B13B:** behavior-preserving adapter + Telegram wrapper (**implemented**).
 
-**Related:** [`docs/B12_SHOWCASE_MARKETING_TEMPLATE_LIBRARY.md`](B12_SHOWCASE_MARKETING_TEMPLATE_LIBRARY.md) · [`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md) · [`docs/ADMIN_OPERATOR_WORKFLOW.md`](ADMIN_OPERATOR_WORKFLOW.md) · [`docs/B7_4A_MEDIA_STORAGE_PIPELINE_READINESS_AUDIT.md`](B7_4A_MEDIA_STORAGE_PIPELINE_READINESS_AUDIT.md) · [`docs/B7_4B_MEDIA_STORAGE_INGESTION_CONTRACT.md`](B7_4B_MEDIA_STORAGE_INGESTION_CONTRACT.md) · [`docs/HANDOFF_B13A_CHANNEL_ADAPTER_DESIGN_TO_NEXT_STEP.md`](HANDOFF_B13A_CHANNEL_ADAPTER_DESIGN_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md`](HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md) · **[`docs/B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN.md`](B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN.md)** (publish attempt / audit — **docs only**).
+**Related:** [`docs/B12_SHOWCASE_MARKETING_TEMPLATE_LIBRARY.md`](B12_SHOWCASE_MARKETING_TEMPLATE_LIBRARY.md) · [`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md) · [`docs/ADMIN_OPERATOR_WORKFLOW.md`](ADMIN_OPERATOR_WORKFLOW.md) · [`docs/B7_4A_MEDIA_STORAGE_PIPELINE_READINESS_AUDIT.md`](B7_4A_MEDIA_STORAGE_PIPELINE_READINESS_AUDIT.md) · [`docs/B7_4B_MEDIA_STORAGE_INGESTION_CONTRACT.md`](B7_4B_MEDIA_STORAGE_INGESTION_CONTRACT.md) · [`docs/HANDOFF_B13A_CHANNEL_ADAPTER_DESIGN_TO_NEXT_STEP.md`](HANDOFF_B13A_CHANNEL_ADAPTER_DESIGN_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md`](HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md) · **[`docs/B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN.md`](B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN.md)** (publish attempt / audit — **docs only**) · [`docs/HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md`](HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md).
 
 **B13C pointer:** **[`docs/B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN.md`](B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN.md)** records the **future** publish **attempt / idempotency / audit** model. **B13C is documentation only** — **no** publish-attempt table implemented, **no** behavior or readiness change. **Next coding or migrations** (**B13D** / **B13E** or similar) require an **explicit product decision**; **do not** auto-start implementation from this design alone.
+
+**B13D-alt pointer (implemented):** Read-only **`GET /admin/supplier-offers/{offer_id}/showcase-channel-payload`** exposes **`AdminSupplierOfferShowcaseChannelPayloadRead`** derived from **`build_showcase_publication`** and **`telegram_showcase_channel_publish_request_preview`** — same logical **`ShowcaseChannelPublishRequest`** as **`publish`**, **no** Telegram send, **no** publish behavior or readiness change, **no** attempt table / idempotency enforcement. See **§9b**.
 
 ---
 
@@ -116,6 +118,18 @@ B13B **implemented** a **Telegram-only** wrapper with regression tests; see **§
 
 ---
 
+## 9b. B13D-alt (implemented) — read-only channel payload preview
+
+- **HTTP:** **`GET /admin/supplier-offers/{offer_id}/showcase-channel-payload`** (same admin auth as **`/showcase-preview`**).
+- **Read models:** **`AdminShowcasePublicationPayloadRead`**, **`AdminSupplierOfferShowcaseChannelPayloadRead`** in **`app/schemas/supplier_admin.py`**.
+- **Service:** **`SupplierOfferModerationService.showcase_channel_payload_preview`** uses **`build_showcase_publication`** and **`telegram_showcase_channel_publish_request_preview`** — **no** Telegram I/O, **no** DB writes.
+- **Semantics:** Payload matches the logical **`ShowcaseChannelPublishRequest`** used on **`publish`** ( **`idempotency_key`** remains **`null`** until B13C+ implementation).
+- **Unchanged:** **`POST …/publish`**, **`send_showcase_publication`**, publish readiness, **no** migrations / attempt table / retries.
+
+Handoff: **[`docs/HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md`](HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md)**.
+
+---
+
 ## 10. Media (B7.4D)
 
 Pipeline is **paused** before durable rendered card integration. Adapters must accept **today’s** **`photo_url`** shapes (`telegram_photo:…`, HTTPS URL) and future **stable asset** URLs without weakening B7.x review rules—see [`docs/B7_4A_MEDIA_STORAGE_PIPELINE_READINESS_AUDIT.md`](B7_4A_MEDIA_STORAGE_PIPELINE_READINESS_AUDIT.md).
@@ -134,4 +148,4 @@ Deep links in captions (**bot** + **Mini App** base URL) are **assembled in the 
 
 **B13B (implemented refactor):** **No** change to publish **readiness**, **output**, or **external** **`POST …/publish`** contract beyond delegating the send through **`TelegramShowcaseChannelAdapter`**; **no** outbox, **no** publish-attempt table, **no** migrations, **no** new non-Telegram channels, **no** Mini App / booking / payment / order changes.
 
-**Still future / explicit product gates:** **B13C** design (**[`docs/B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN.md`](B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN.md)**) — **implementation** of attempt table / idempotency **not** started; additional channel adapters; **B12** effective template in **`build_showcase_publication`**, B7.4+ durable rendered assets.
+**Still future / explicit product gates:** **B13C** design — **implementation** of attempt table / idempotency **not** started; **B13D-alt** (**read-only channel payload** endpoint) **implemented** — does **not** replace audit storage; additional channel adapters; **B12** effective template in **`build_showcase_publication`**, B7.4+ durable rendered assets.

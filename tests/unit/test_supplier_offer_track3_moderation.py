@@ -554,6 +554,43 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         )
         self.assertEqual(r.status_code, 404)
 
+    def test_admin_showcase_channel_payload_read_only_matches_adapter_shape(self) -> None:
+        """B13D-alt: GET showcase-channel-payload mirrors ShowcaseChannelPublishRequest; no Telegram."""
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        mock_cfg = SimpleNamespace(
+            telegram_offer_showcase_channel_id="-100777",
+            telegram_bot_token="not-used",
+            telegram_bot_username="x",
+            telegram_mini_app_url="https://ex/m",
+        )
+        with (
+            patch(
+                "app.services.supplier_offer_moderation_service.get_settings",
+                return_value=mock_cfg,
+            ),
+            patch("app.services.telegram_showcase_client._post_telegram_api") as tg_send,
+        ):
+            r = self.client.get(f"/admin/supplier-offers/{oid}/showcase-channel-payload", headers=headers)
+        tg_send.assert_not_called()
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["supplier_offer_id"], oid)
+        self.assertEqual(body["provider"], "telegram_showcase_channel")
+        self.assertEqual(body["channel_ref"], "-100777")
+        self.assertIsNone(body["idempotency_key"])
+        self.assertIn("caption_html", body["publication"])
+        self.assertTrue(body["disable_web_page_preview"])
+        self.assertIn("nothing was sent", body["preview_notice"].lower())
+
+    def test_admin_showcase_channel_payload_404_unknown_offer(self) -> None:
+        r = self.client.get(
+            "/admin/supplier-offers/999999002/showcase-channel-payload",
+            headers={"Authorization": "Bearer test-admin-secret"},
+        )
+        self.assertEqual(r.status_code, 404)
+
     def test_showcase_html_contains_cta_links(self) -> None:
         supplier = self.create_supplier(code="HTML-S")
         offer = self.create_supplier_offer(

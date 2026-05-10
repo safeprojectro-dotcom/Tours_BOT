@@ -68,3 +68,19 @@ class TelegramShowcaseChannelAdapter:
 def default_telegram_showcase_adapter(settings: Settings) -> TelegramShowcaseChannelAdapter:
     """Factory for the sole shipped showcase adapter (Telegram channel)."""
     return TelegramShowcaseChannelAdapter(settings=settings)
+
+
+def telegram_showcase_channel_publish_request_preview(
+    offer_id: int,
+    publication: ShowcasePublication,
+    *,
+    settings: Settings,
+) -> ShowcaseChannelPublishRequest:
+    """Build the Telegram-channel ``ShowcaseChannelPublishRequest`` that publish would use (read-only / no I/O)."""
+    channel_id = (settings.telegram_offer_showcase_channel_id or "").strip() or None
+    return ShowcaseChannelPublishRequest(
+        offer_id=offer_id,
+        publication=publication,
+        channel_ref=channel_id,
+        idempotency_key=None,
+    )

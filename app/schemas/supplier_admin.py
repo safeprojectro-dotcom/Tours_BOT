@@ -198,6 +198,34 @@ class AdminSupplierOfferShowcasePreviewRead(BaseModel):
     )
 
 
+class AdminShowcasePublicationPayloadRead(BaseModel):
+    """Publication fields passed to the channel adapter (same as ``ShowcasePublication``)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    caption_html: str
+    photo_url: str | None
+
+
+class AdminSupplierOfferShowcaseChannelPayloadRead(BaseModel):
+    """B13D-alt: read-only ``ShowcaseChannelPublishRequest``-shaped payload for the Telegram showcase channel (no send)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    supplier_offer_id: int
+    provider: str
+    channel_ref: str | None
+    publication: AdminShowcasePublicationPayloadRead
+    idempotency_key: str | None = None
+    disable_web_page_preview: bool
+    preview_notice: str = Field(
+        default=(
+            "Channel adapter payload preview — nothing was sent to Telegram. "
+            "Previzualizare payload adaptor — nu a fost trimis nimic pe Telegram."
+        ),
+    )
+
+
 class AdminSupplierOfferBridgeReadinessRead(BaseModel):
     """Read-only: ``POST .../tour-bridge`` precursor checks (packaging + required fields)."""
 

@@ -10,11 +10,18 @@ from app.core.config import Settings, get_settings
 from app.models.enums import SupplierOfferLifecycle
 from app.models.supplier import SupplierOffer
 from app.repositories.supplier import SupplierOfferRepository
-from app.schemas.supplier_admin import AdminSupplierOfferRead, AdminSupplierOfferShowcasePreviewRead
+from app.schemas.supplier_admin import (
+    AdminShowcasePublicationPayloadRead,
+    AdminSupplierOfferRead,
+    AdminSupplierOfferShowcaseChannelPayloadRead,
+    AdminSupplierOfferShowcasePreviewRead,
+)
 from app.services.supplier_offer_deep_link import mini_app_supplier_offer_url, private_bot_deeplink
 from app.services.showcase_channel_adapter import (
+    TELEGRAM_SHOWCASE_PROVIDER,
     ShowcaseChannelPublishRequest,
     TelegramShowcaseChannelAdapter,
+    telegram_showcase_channel_publish_request_preview,
 )
 from app.services.supplier_offer_showcase_message import build_showcase_publication
 from app.services.telegram_showcase_client import TelegramShowcaseSendError, delete_channel_message
@@ -137,6 +144,33 @@ class SupplierOfferModerationService:
             cta_rezerva_href=rezerva_href,
             can_publish_now=can_publish,
             warnings=warnings,
+        )
+
+    def showcase_channel_payload_preview(
+        self,
+        session: Session,
+        *,
+        offer_id: int,
+        settings: Settings | None = None,
+    ) -> AdminSupplierOfferShowcaseChannelPayloadRead:
+        """B13D-alt: ``ShowcaseChannelPublishRequest`` shape for Telegram channel; **does not** call Telegram."""
+        row = self._row(session, offer_id=offer_id)
+        cfg = settings or get_settings()
+        pub = build_showcase_publication(row, cfg)
+        req = telegram_showcase_channel_publish_request_preview(offer_id, pub, settings=cfg)
+        photo = (pub.photo_url or "").strip()
+        is_photo = bool(photo)
+        disable_preview = not is_photo
+        return AdminSupplierOfferShowcaseChannelPayloadRead(
+            supplier_offer_id=offer_id,
+            provider=TELEGRAM_SHOWCASE_PROVIDER,
+            channel_ref=req.channel_ref,
+            publication=AdminShowcasePublicationPayloadRead(
+                caption_html=req.publication.caption_html,
+                photo_url=req.publication.photo_url,
+            ),
+            idempotency_key=req.idempotency_key,
+            disable_web_page_preview=disable_preview,
         )
 
     def publish(

@@ -10,6 +10,7 @@ from app.services.showcase_channel_adapter import (
     TELEGRAM_SHOWCASE_PROVIDER,
     ShowcaseChannelPublishRequest,
     TelegramShowcaseChannelAdapter,
+    telegram_showcase_channel_publish_request_preview,
 )
 from app.services.supplier_offer_showcase_message import ShowcasePublication
 
@@ -34,3 +35,13 @@ class TestShowcaseChannelAdapter(unittest.TestCase):
         self.assertEqual(res.provider, TELEGRAM_SHOWCASE_PROVIDER)
         self.assertEqual(res.chat_id, "-1001")
         self.assertEqual(res.message_id, "42")
+
+    def test_telegram_publish_request_preview_matches_configured_channel(self) -> None:
+        cfg = Settings(telegram_offer_showcase_channel_id="-10099")
+        pub = ShowcasePublication(caption_html="<i>y</i>", photo_url=None)
+        req = telegram_showcase_channel_publish_request_preview(7, pub, settings=cfg)
+        self.assertEqual(req.offer_id, 7)
+        self.assertEqual(req.channel_ref, "-10099")
+        self.assertIsNone(req.idempotency_key)
+        self.assertEqual(req.publication.caption_html, "<i>y</i>")
+        self.assertIsNone(req.publication.photo_url)

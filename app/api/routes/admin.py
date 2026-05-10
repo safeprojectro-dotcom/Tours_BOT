@@ -162,6 +162,7 @@ from app.schemas.supplier_admin import (
     AdminSupplierOfferPublishResult,
     AdminSupplierOfferRead,
     AdminSupplierOfferReviewPackageRead,
+    AdminSupplierOfferShowcaseChannelPayloadRead,
     AdminSupplierOfferShowcasePreviewRead,
     AdminSupplierOfferRejectBody,
     AdminSupplierOfferRecurrenceDraftToursBody,
@@ -1152,6 +1153,21 @@ def get_admin_supplier_offer_showcase_preview(
     """B12/B13.4: read-only preview of the exact Telegram HTML that ``publish`` would send (no Telegram I/O)."""
     try:
         return SupplierOfferModerationService().showcase_preview(db, offer_id=offer_id)
+    except SupplierOfferModerationNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+
+
+@router.get(
+    "/supplier-offers/{offer_id}/showcase-channel-payload",
+    response_model=AdminSupplierOfferShowcaseChannelPayloadRead,
+)
+def get_admin_supplier_offer_showcase_channel_payload(
+    offer_id: int,
+    db: Session = Depends(get_db),
+) -> AdminSupplierOfferShowcaseChannelPayloadRead:
+    """B13D-alt: read-only ``ShowcaseChannelPublishRequest``-shaped payload for Telegram (no Telegram I/O)."""
+    try:
+        return SupplierOfferModerationService().showcase_channel_payload_preview(db, offer_id=offer_id)
     except SupplierOfferModerationNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
 
