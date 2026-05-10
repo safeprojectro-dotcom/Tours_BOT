@@ -118,6 +118,11 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
         self.assertIsInstance(body["content_quality_review"]["warnings"], list)
         self.assertEqual(body["offer"]["lifecycle_status"], "ready_for_moderation")
         self.assertNotEqual(body["offer"]["packaging_status"], "approved_for_publish")
+        self.assertIn("showcase_publish_attempts_review", body)
+        spa = body["showcase_publish_attempts_review"]
+        self.assertEqual(spa["total_returned"], 0)
+        self.assertEqual(spa["items"], [])
+        self.assertIn("preview_notice", spa)
         stp = body["showcase_template_preview"]
         self.assertIn("inferred_template_id", stp)
         self.assertIn("effective_template_id", stp)
@@ -431,6 +436,12 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
         self.assertEqual(r.status_code, 200, r.text)
         body = r.json()
         self.assertEqual(body["offer"]["lifecycle_status"], "published")
+        spa = body["showcase_publish_attempts_review"]
+        self.assertEqual(spa["total_returned"], 1)
+        self.assertEqual(len(spa["items"]), 1)
+        self.assertEqual(spa["items"][0]["status"], "persisted")
+        self.assertEqual(spa["items"][0]["requested_by"], "http_admin")
+        self.assertEqual(spa["items"][0]["showcase_message_id"], 42)
         er = body["execution_links_review"]
         self.assertTrue(er["can_create_execution_link"])
         self.assertIsNone(er["execution_link_precheck_note"])

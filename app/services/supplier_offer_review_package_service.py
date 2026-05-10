@@ -44,6 +44,9 @@ from app.services.supplier_offer_cover_media_quality_review import (
 from app.services.supplier_offer_media_review_service import media_review_status_value
 from app.services.supplier_offer_operator_workflow import build_operator_workflow
 from app.services.supplier_offer_moderation_service import SupplierOfferModerationService
+from app.services.supplier_offer_showcase_publish_attempt_service import (
+    SupplierOfferShowcasePublishAttemptService,
+)
 from app.services.supplier_offer_tour_bridge_service import (
     SupplierOfferBridgeMaterializationReadiness,
     SupplierOfferTourBridgeResult,
@@ -293,6 +296,7 @@ class SupplierOfferReviewPackageService:
         moderation_svc: SupplierOfferModerationService | None = None,
         tour_write: AdminTourWriteService | None = None,
         landing_svc: MiniAppSupplierOfferLandingService | None = None,
+        publish_attempts_svc: SupplierOfferShowcasePublishAttemptService | None = None,
     ) -> None:
         self._offers = offers or SupplierOfferRepository()
         self._exec_links = exec_links or SupplierOfferExecutionLinkRepository()
@@ -300,6 +304,7 @@ class SupplierOfferReviewPackageService:
         self._moderation = moderation_svc or SupplierOfferModerationService()
         self._tour_write = tour_write or AdminTourWriteService()
         self._landing = landing_svc or MiniAppSupplierOfferLandingService()
+        self._publish_attempts = publish_attempts_svc or SupplierOfferShowcasePublishAttemptService()
 
     def review_package(self, session: Session, *, offer_id: int) -> AdminSupplierOfferReviewPackageRead:
         row = self._offers.get_any(session, offer_id=offer_id)
@@ -437,9 +442,15 @@ class SupplierOfferReviewPackageService:
             build_showcase_template_preview_payload(row),
         )
 
+        showcase_publish_attempts_review = self._publish_attempts.list_attempts_review_read(
+            session,
+            supplier_offer_id=offer_id,
+        )
+
         return AdminSupplierOfferReviewPackageRead(
             offer=offer_read,
             showcase_preview=showcase,
+            showcase_publish_attempts_review=showcase_publish_attempts_review,
             bridge_readiness=bridge_readiness_read,
             active_tour_bridge=_bridge_result_to_read(active_bridge_result) if active_bridge_result else None,
             linked_tour_catalog=linked_catalog,

@@ -111,6 +111,7 @@ from app.schemas.supplier_admin import (
     AdminSupplierOfferRead,
     AdminSupplierOfferReviewPackageRead,
     AdminSupplierOfferShowcasePreviewRead,
+    AdminSupplierOfferShowcasePublishAttemptsReviewRead,
     AdminSupplierOfferShowcaseTemplatePreviewRead,
 )
 from app.services.admin_read import AdminReadService
@@ -1240,6 +1241,48 @@ def _showcase_template_preview_telegram_compact(
     return "\n".join(lines)
 
 
+def _showcase_publish_attempts_telegram_compact(
+    language_code: str | None,
+    review: AdminSupplierOfferShowcasePublishAttemptsReviewRead,
+    *,
+    max_rows: int = 5,
+) -> str:
+    lines = [translate(language_code, "admin_offer_showcase_publish_attempts_header")]
+    if not review.items:
+        lines.append(translate(language_code, "admin_offer_showcase_publish_attempts_empty"))
+    else:
+        for item in review.items[:max_rows]:
+            err = (item.error_message or "").replace("\n", " ").strip()
+            if len(err) > 120:
+                err = err[:117] + "..."
+            lines.append(
+                translate(
+                    language_code,
+                    "admin_offer_showcase_publish_attempts_row",
+                    attempt_id=str(item.id),
+                    status=item.status,
+                    actor=item.actor_surface,
+                    requested_by=item.requested_by or "-",
+                    chat_id=item.showcase_chat_id or "-",
+                    message_id=str(item.showcase_message_id) if item.showcase_message_id is not None else "-",
+                    error_code=item.error_code or "-",
+                    error_msg=err or "-",
+                    created_at=item.created_at.isoformat(timespec="minutes").replace("T", " "),
+                ),
+            )
+        if review.total_returned > max_rows:
+            lines.append(
+                translate(
+                    language_code,
+                    "admin_offer_showcase_publish_attempts_truncated",
+                    shown=str(max_rows),
+                    total=str(review.total_returned),
+                ),
+            )
+    lines.append(translate(language_code, "admin_offer_showcase_publish_attempts_footer"))
+    return "\n".join(lines)
+
+
 def _operator_workflow_telegram_append(session, language_code: str | None, *, offer_id: int) -> str | None:
     """Read-only projection from ``GET …/review-package`` — never performs admin mutations."""
     try:
@@ -1266,6 +1309,9 @@ def _operator_workflow_telegram_append(session, language_code: str | None, *, of
     stp = getattr(pkg, "showcase_template_preview", None)
     if isinstance(stp, AdminSupplierOfferShowcaseTemplatePreviewRead):
         parts.append(_showcase_template_preview_telegram_compact(language_code, stp))
+    spr = getattr(pkg, "showcase_publish_attempts_review", None)
+    if isinstance(spr, AdminSupplierOfferShowcasePublishAttemptsReviewRead):
+        parts.append(_showcase_publish_attempts_telegram_compact(language_code, spr))
     return "\n\n".join(parts)
 
 

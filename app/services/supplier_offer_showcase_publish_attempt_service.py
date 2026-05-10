@@ -7,6 +7,10 @@ from sqlalchemy.orm import Session
 from app.models.enums import SupplierOfferShowcasePublishActorSurface, SupplierOfferShowcasePublishAttemptStatus
 from app.models.supplier_offer_showcase_publish_attempt import SupplierOfferShowcasePublishAttempt
 from app.repositories.supplier_offer_showcase_publish_attempt import SupplierOfferShowcasePublishAttemptRepository
+from app.schemas.supplier_admin import (
+    AdminSupplierOfferShowcasePublishAttemptRead,
+    AdminSupplierOfferShowcasePublishAttemptsReviewRead,
+)
 
 
 class SupplierOfferShowcasePublishAttemptService:
@@ -99,4 +103,39 @@ class SupplierOfferShowcasePublishAttemptService:
                 "error_message": error_message,
                 "retryable_failure": retryable_failure,
             },
+        )
+
+    def list_attempts_review_read(
+        self,
+        session: Session,
+        *,
+        supplier_offer_id: int,
+        limit: int = 50,
+    ) -> AdminSupplierOfferShowcasePublishAttemptsReviewRead:
+        """B13F: newest-first audit rows for admin review-package / Telegram ops (read-only)."""
+        rows = self._repo.list_for_offer(session, supplier_offer_id=supplier_offer_id, limit=limit)
+        items = [
+            AdminSupplierOfferShowcasePublishAttemptRead(
+                id=r.id,
+                supplier_offer_id=r.supplier_offer_id,
+                provider=r.provider,
+                channel_ref=r.channel_ref,
+                status=r.status.value,
+                actor_surface=r.actor_surface.value,
+                requested_by=r.requested_by,
+                idempotency_key=r.idempotency_key,
+                payload_fingerprint=r.payload_fingerprint,
+                showcase_chat_id=r.showcase_chat_id,
+                showcase_message_id=r.showcase_message_id,
+                error_code=r.error_code,
+                error_message=r.error_message,
+                retryable_failure=r.retryable_failure,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
+            )
+            for r in rows
+        ]
+        return AdminSupplierOfferShowcasePublishAttemptsReviewRead(
+            total_returned=len(items),
+            items=items,
         )

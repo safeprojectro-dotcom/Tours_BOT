@@ -88,6 +88,36 @@ class SupplierOfferShowcasePublishAttemptTests(FoundationDBTestCase):
         self.assertEqual(rows[0].id, a2.id)
         self.assertEqual(rows[1].id, a1.id)
 
+    def test_list_attempts_review_read_maps_rows(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(supplier)
+        a1 = self.service.create_requested_attempt(
+            self.session,
+            supplier_offer_id=offer.id,
+            provider=TELEGRAM_SHOWCASE_PROVIDER,
+            actor_surface=SupplierOfferShowcasePublishActorSurface.TELEGRAM_BOT,
+            requested_by="telegram:42",
+            channel_ref="-1001",
+        )
+        self.service.mark_failed(
+            self.session,
+            attempt_id=a1.id,
+            error_code="e_code",
+            error_message="oops",
+            retryable_failure=False,
+        )
+        self.session.flush()
+        read = self.service.list_attempts_review_read(self.session, supplier_offer_id=offer.id)
+        self.assertEqual(read.total_returned, 1)
+        self.assertEqual(len(read.items), 1)
+        item = read.items[0]
+        self.assertEqual(item.id, a1.id)
+        self.assertEqual(item.status, "failed")
+        self.assertEqual(item.actor_surface, "telegram_bot")
+        self.assertEqual(item.requested_by, "telegram:42")
+        self.assertEqual(item.error_code, "e_code")
+        self.assertEqual(item.error_message, "oops")
+
     def test_mark_by_id_missing_returns_none(self) -> None:
         self.assertIsNone(self.service.mark_provider_sent(self.session, attempt_id=999_999_999))
         self.assertIsNone(

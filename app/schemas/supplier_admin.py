@@ -226,6 +226,44 @@ class AdminSupplierOfferShowcaseChannelPayloadRead(BaseModel):
     )
 
 
+class AdminSupplierOfferShowcasePublishAttemptRead(BaseModel):
+    """B13F: single showcase publish audit row (read-only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    supplier_offer_id: int
+    provider: str
+    channel_ref: str | None = None
+    status: str
+    actor_surface: str
+    requested_by: str | None = None
+    idempotency_key: str | None = None
+    payload_fingerprint: str | None = None
+    showcase_chat_id: str | None = None
+    showcase_message_id: int | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+    retryable_failure: bool | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AdminSupplierOfferShowcasePublishAttemptsReviewRead(BaseModel):
+    """B13F: recent publish attempt timeline for admin/OPS (newest first)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total_returned: int
+    items: list[AdminSupplierOfferShowcasePublishAttemptRead]
+    preview_notice: str = Field(
+        default=(
+            "Read-only audit — no publish or retry from this view. "
+            "Audit only — publicare/reîncercare nu se fac din această vedere."
+        ),
+    )
+
+
 class AdminSupplierOfferBridgeReadinessRead(BaseModel):
     """Read-only: ``POST .../tour-bridge`` precursor checks (packaging + required fields)."""
 
@@ -429,6 +467,7 @@ class AdminSupplierOfferReviewPackageRead(BaseModel):
 
     offer: AdminSupplierOfferRead
     showcase_preview: AdminSupplierOfferShowcasePreviewRead
+    showcase_publish_attempts_review: AdminSupplierOfferShowcasePublishAttemptsReviewRead
     bridge_readiness: AdminSupplierOfferBridgeReadinessRead
     active_tour_bridge: AdminSupplierOfferTourBridgeRead | None
     linked_tour_catalog: AdminSupplierOfferLinkedTourCatalogRead | None

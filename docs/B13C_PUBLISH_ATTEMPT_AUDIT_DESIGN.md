@@ -1,8 +1,8 @@
 # B13C — Publish attempt / audit design
 
-**Project:** Tours_BOT. **B13C slice:** design documentation. **Update:** **B13D** supplies the attempt table; **B13E** wires **`publish`** to create/update attempt rows (**§11**). **No** automatic retry or **`idempotency_key`** enforcement yet.
+**Project:** Tours_BOT. **B13C slice:** design documentation. **Update:** **B13D** supplies the attempt table; **B13E** wires **`publish`** to create/update attempt rows (**§11**); **B13F** exposes read-only attempt history via **`review-package`** and Telegram admin detail (**§12**). **No** automatic retry or **`idempotency_key`** enforcement yet.
 
-**Related:** [`docs/B13_CHANNEL_ADAPTER_DESIGN.md`](B13_CHANNEL_ADAPTER_DESIGN.md) · [`docs/HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md`](HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md) · [`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md) · [`docs/HANDOFF_B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN_TO_NEXT_STEP.md`](HANDOFF_B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md`](HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13D_PUBLISH_ATTEMPT_TABLE_SKELETON_TO_NEXT_STEP.md`](HANDOFF_B13D_PUBLISH_ATTEMPT_TABLE_SKELETON_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13E_WIRE_PUBLISH_ATTEMPT_AUDIT_TO_NEXT_STEP.md`](HANDOFF_B13E_WIRE_PUBLISH_ATTEMPT_AUDIT_TO_NEXT_STEP.md).
+**Related:** [`docs/B13_CHANNEL_ADAPTER_DESIGN.md`](B13_CHANNEL_ADAPTER_DESIGN.md) · [`docs/HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md`](HANDOFF_B13B_CHANNEL_ADAPTER_INTERFACE_TELEGRAM_WRAPPER_TO_NEXT_STEP.md) · [`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md) · [`docs/HANDOFF_B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN_TO_NEXT_STEP.md`](HANDOFF_B13C_PUBLISH_ATTEMPT_AUDIT_DESIGN_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md`](HANDOFF_B13D_ALT_CHANNEL_PREVIEW_PAYLOAD_READ_MODEL_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13D_PUBLISH_ATTEMPT_TABLE_SKELETON_TO_NEXT_STEP.md`](HANDOFF_B13D_PUBLISH_ATTEMPT_TABLE_SKELETON_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13E_WIRE_PUBLISH_ATTEMPT_AUDIT_TO_NEXT_STEP.md`](HANDOFF_B13E_WIRE_PUBLISH_ATTEMPT_AUDIT_TO_NEXT_STEP.md) · [`docs/HANDOFF_B13F_ADMIN_PUBLISH_ATTEMPT_HISTORY_READ_SURFACE_TO_NEXT_STEP.md`](HANDOFF_B13F_ADMIN_PUBLISH_ATTEMPT_HISTORY_READ_SURFACE_TO_NEXT_STEP.md).
 
 ---
 
@@ -107,6 +107,7 @@ Audit must **not** replace **`operator_workflow`** or **`review-package`** as re
 - **B13D-alt (implemented):** read-only **channel payload** preview — **no** attempt rows from that endpoint; see **[`docs/B13_CHANNEL_ADAPTER_DESIGN.md`](B13_CHANNEL_ADAPTER_DESIGN.md)** §9b.
 - **B13D (implemented):** table + repository + **`SupplierOfferShowcasePublishAttemptService`** — **§10**.
 - **B13E (implemented):** **`publish`** writes attempt rows — **§11**; **no** idempotency enforcement; manual-copy / **exported**-without-**`message_id`** adapters remain a separate product track.
+- **B13F (implemented):** read-only **attempt history** for operators — **§12**; **no** dedicated list-only HTTP route in MVP ( **`review-package`** is the main admin read model ) ; **no** retry/resend.
 
 ---
 
@@ -140,8 +141,20 @@ Handoff: **[`docs/HANDOFF_B13E_WIRE_PUBLISH_ATTEMPT_AUDIT_TO_NEXT_STEP.md`](HAND
 
 ---
 
-## 12. Non-goals (B13C document)
+## 12. B13F implementation (read-only attempt history for admin/OPS)
+
+**HTTP:** **`GET /admin/supplier-offers/{offer_id}/review-package`** includes **`showcase_publish_attempts_review`** — nested **`AdminSupplierOfferShowcasePublishAttemptsReviewRead`** with **`items`** (**`AdminSupplierOfferShowcasePublishAttemptRead`**, newest first, service limit **50** via **`SupplierOfferShowcasePublishAttemptService.list_attempts_review_read`**). **No** new admin route in B13F MVP; a dedicated **`GET …/showcase-publish-attempts`** remains **optional** if clients want a slimmer payload than full review-package.
+
+**Telegram admin:** offer detail appends a **compact** publish-audit block (**`_showcase_publish_attempts_telegram_compact`**, up to **5** rows, error text trimmed) on the same read-only path as operator workflow / conversion panel / template preview — **no** channel send change.
+
+**Not in B13F:** retry/resend, attempt row creation from this surface, publish or readiness changes, **`idempotency_key`** enforcement, migrations, new channels, Mini App / booking / payment / orders.
+
+Handoff: **[`docs/HANDOFF_B13F_ADMIN_PUBLISH_ATTEMPT_HISTORY_READ_SURFACE_TO_NEXT_STEP.md`](HANDOFF_B13F_ADMIN_PUBLISH_ATTEMPT_HISTORY_READ_SURFACE_TO_NEXT_STEP.md)**.
+
+---
+
+## 13. Non-goals (B13C document)
 
 
-- **No** code **in the B13C authoring slice**, **no** migrations **from that slice**, **no** new routes **from that slice**, **no** retry logic, **no** publish readiness or output change, **no** Mini App / booking / payment / orders, **no** new channels **in that design-only deliverable**. **Note:** **B13D-alt**, **B13D**, and **B13E** are **separate** implementation slices — see §2, **§10**, **§11**.
+- **No** code **in the B13C authoring slice**, **no** migrations **from that slice**, **no** new routes **from that slice**, **no** retry logic, **no** publish readiness or output change, **no** Mini App / booking / payment / orders, **no** new channels **in that design-only deliverable**. **Note:** **B13D-alt**, **B13D**, **B13E**, and **B13F** are **separate** implementation slices — see §2, **§10**, **§11**, **§12**.
 
