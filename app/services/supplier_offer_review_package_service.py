@@ -37,10 +37,12 @@ from app.services.supplier_offer_bot_start_routing import resolve_sup_offer_star
 from app.services.supplier_offer_content_quality_review import evaluate_content_quality_review
 from app.services.supplier_offer_conversion_status_panel import build_conversion_status_panel
 from app.services.showcase_marketing_template_library import build_showcase_template_preview_payload
+from app.services.supplier_offer_channel_publish_gate import validate_execution_link_target_before_publish
 from app.services.supplier_offer_cover_media_quality_review import (
     approve_cover_for_card_operator_action_disabled_reasons,
     evaluate_cover_media_quality_review,
 )
+from app.services.supplier_offer_execution_link_service import SupplierOfferExecutionLinkValidationError
 from app.services.supplier_offer_media_review_service import media_review_status_value
 from app.services.supplier_offer_operator_workflow import build_operator_workflow
 from app.services.supplier_offer_moderation_service import SupplierOfferModerationService
@@ -124,7 +126,10 @@ def _recommended_next_actions(
     if offer.lifecycle_status is SupplierOfferLifecycle.READY_FOR_MODERATION:
         actions.append("moderation_approve")
     if offer.lifecycle_status is SupplierOfferLifecycle.APPROVED:
-        actions.append("publish_showcase_optional")
+        if not has_active_execution_link:
+            actions.append("create_execution_link")
+        else:
+            actions.append("publish_showcase_optional")
     if lifecycle_published and not has_active_execution_link:
         actions.append("create_execution_link")
     return actions[:12]
@@ -138,6 +143,7 @@ def _next_missing_conversion_step(
     catalog: TourCatalogActivationPreview | None,
     lifecycle_pub: bool,
     can_create_exec: bool,
+    has_active_execution_link: bool,
     tour_row: Tour | None,
     catalog_contains: bool,
     landing_ok: bool,
@@ -164,6 +170,8 @@ def _next_missing_conversion_step(
     if offer.lifecycle_status is SupplierOfferLifecycle.READY_FOR_MODERATION:
         return "moderation_approve"
     if offer.lifecycle_status is SupplierOfferLifecycle.APPROVED:
+        if not has_active_execution_link:
+            return "create_execution_link"
         return "publish_showcase_channel"
     if not lifecycle_pub:
         return "advance_offer_to_published_for_execution_link"
@@ -225,6 +233,7 @@ def _build_conversion_closure(
         catalog=catalog,
         lifecycle_pub=lifecycle_pub,
         can_create_exec=can_create_exec,
+        has_active_execution_link=has_exec,
         tour_row=tour_row,
         catalog_contains=catalog_contains,
         landing_ok=landing_ok,
@@ -334,12 +343,31 @@ class SupplierOfferReviewPackageService:
 
         exec_note: str | None = None
         can_create = False
-        if not lifecycle_pub:
-            exec_note = "Execution links can be created only when lifecycle_status is published."
-        elif active_exec is not None:
+        if active_exec is not None:
             exec_note = "An active execution link already exists; replace or close it before creating another."
+        elif row.lifecycle_status == SupplierOfferLifecycle.REJECTED:
+            exec_note = "Cannot create execution link for a rejected offer."
+        elif row.packaging_status is not SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH:
+            exec_note = "Packaging must be approved for publish before execution link."
+        elif row.lifecycle_status not in (
+            SupplierOfferLifecycle.APPROVED,
+            SupplierOfferLifecycle.PUBLISHED,
+        ):
+            exec_note = (
+                "Moderation must approve the offer (or it must already be published) before execution link."
+            )
+        elif active_bridge_result is None:
+            exec_note = "Create an active tour bridge before execution link."
         else:
-            can_create = True
+            try:
+                validate_execution_link_target_before_publish(
+                    session,
+                    offer_id=offer_id,
+                    tour_id=active_bridge_result.tour_id,
+                )
+                can_create = True
+            except SupplierOfferExecutionLinkValidationError as exc:
+                exec_note = exc.message
 
         conv = self._landing.read_conversion_preview_for_admin_review(session, offer=row)
         mini_app = AdminSupplierOfferMiniAppConversionPreviewRead(

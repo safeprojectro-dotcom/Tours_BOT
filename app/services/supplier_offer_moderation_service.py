@@ -17,7 +17,15 @@ from app.schemas.supplier_admin import (
     AdminSupplierOfferShowcaseChannelPayloadRead,
     AdminSupplierOfferShowcasePreviewRead,
 )
-from app.services.supplier_offer_deep_link import mini_app_supplier_offer_url, private_bot_deeplink
+from app.services.supplier_offer_deep_link import (
+    mini_app_supplier_offer_url,
+    mini_app_tour_detail_url,
+    private_bot_deeplink,
+)
+from app.services.supplier_offer_channel_publish_gate import (
+    channel_publish_exact_tour_ready,
+    tour_code_for_active_execution_link,
+)
 from app.services.showcase_channel_adapter import (
     TELEGRAM_SHOWCASE_PROVIDER,
     ShowcaseChannelPublishRequest,
@@ -90,6 +98,30 @@ class SupplierOfferModerationService:
         session.refresh(row)
         return self._to_read(row)
 
+    def _showcase_publication_and_rezerva_tour_code(
+        self,
+        session: Session,
+        *,
+        offer_id: int,
+        row: SupplierOffer,
+        cfg: Settings,
+    ) -> tuple[ShowcasePublication, str | None, bool, list[str]]:
+        """B15C: for approved/published offers, Rezervă uses exact tour when execution + catalog gates pass."""
+        lc = row.lifecycle_status
+        if lc in (SupplierOfferLifecycle.APPROVED, SupplierOfferLifecycle.PUBLISHED):
+            tc = tour_code_for_active_execution_link(session, offer_id=offer_id)
+            exact_ok, exact_reasons = channel_publish_exact_tour_ready(session, offer_id=offer_id)
+            display_code = tc if exact_ok else None
+            pub = build_showcase_publication(
+                row,
+                cfg,
+                rezerva_tour_code=display_code,
+                channel_rezerva_requires_exact_tour=True,
+            )
+            return pub, display_code, exact_ok, exact_reasons
+        pub = build_showcase_publication(row, cfg)
+        return pub, None, False, []
+
     def showcase_preview(
         self,
         session: Session,
@@ -100,7 +132,12 @@ class SupplierOfferModerationService:
         """Exact caption/CTA shape for channel publish; **does not** call Telegram (B12/B13.4)."""
         row = self._row(session, offer_id)
         cfg = settings or get_settings()
-        pub = build_showcase_publication(row, cfg)
+        pub, display_code, exact_ok, exact_reasons = self._showcase_publication_and_rezerva_tour_code(
+            session,
+            offer_id=offer_id,
+            row=row,
+            cfg=cfg,
+        )
         photo = (pub.photo_url or "").strip()
         is_photo = bool(photo)
         detalii_href: str | None = None
@@ -110,7 +147,12 @@ class SupplierOfferModerationService:
         if uname:
             detalii_href = private_bot_deeplink(bot_username=uname, offer_id=offer_id)
         if mini_base:
-            rezerva_href = mini_app_supplier_offer_url(mini_app_url=mini_base, offer_id=offer_id)
+            if display_code:
+                rezerva_href = mini_app_tour_detail_url(mini_app_url=mini_base, tour_code=display_code)
+            elif row.lifecycle_status is SupplierOfferLifecycle.APPROVED:
+                rezerva_href = None
+            else:
+                rezerva_href = mini_app_supplier_offer_url(mini_app_url=mini_base, offer_id=offer_id)
         disable_preview = not is_photo
         lc = row.lifecycle_status
         lifecycle_label = lc.value
@@ -123,6 +165,9 @@ class SupplierOfferModerationService:
             warnings.append("Offer is already published.")
         elif lc != SupplierOfferLifecycle.APPROVED:
             warnings.append("Only approved offers can be published to the showcase.")
+
+        if lc is SupplierOfferLifecycle.APPROVED and not exact_ok:
+            warnings.extend(exact_reasons)
 
         if not uname:
             warnings.append(
@@ -138,7 +183,7 @@ class SupplierOfferModerationService:
             )
 
         can_publish = (
-            lc == SupplierOfferLifecycle.APPROVED and channel_ok and token_ok
+            lc == SupplierOfferLifecycle.APPROVED and channel_ok and token_ok and exact_ok
         )
 
         return AdminSupplierOfferShowcasePreviewRead(
@@ -164,7 +209,12 @@ class SupplierOfferModerationService:
         """B13D-alt: ``ShowcaseChannelPublishRequest`` shape for Telegram channel; **does not** call Telegram."""
         row = self._row(session, offer_id=offer_id)
         cfg = settings or get_settings()
-        pub = build_showcase_publication(row, cfg)
+        pub, _, _, _ = self._showcase_publication_and_rezerva_tour_code(
+            session,
+            offer_id=offer_id,
+            row=row,
+            cfg=cfg,
+        )
         req = telegram_showcase_channel_publish_request_preview(offer_id, pub, settings=cfg)
         photo = (pub.photo_url or "").strip()
         is_photo = bool(photo)
@@ -204,7 +254,20 @@ class SupplierOfferModerationService:
             raise SupplierOfferPublicationConfigError(
                 "Set TELEGRAM_OFFER_SHOWCASE_CHANNEL_ID and TELEGRAM_BOT_TOKEN to publish.",
             )
-        pub = build_showcase_publication(row, cfg)
+        exact_ok, gate_reasons = channel_publish_exact_tour_ready(session, offer_id=offer_id)
+        if not exact_ok:
+            raise SupplierOfferModerationStateError("; ".join(gate_reasons[:5]))
+        tc = tour_code_for_active_execution_link(session, offer_id=offer_id)
+        if not tc:
+            raise SupplierOfferModerationStateError(
+                "Active execution link must provide tour_code for channel Rezervă URL.",
+            )
+        pub = build_showcase_publication(
+            row,
+            cfg,
+            rezerva_tour_code=tc,
+            channel_rezerva_requires_exact_tour=False,
+        )
         surface = actor_surface or SupplierOfferShowcasePublishActorSurface.HTTP_ADMIN
         attempt = self._showcase_publish_attempts.create_requested_attempt(
             session,

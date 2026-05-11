@@ -322,17 +322,23 @@ def build_operator_workflow(
         cover_media_quality_review=cover_media_quality_review,
         publication_mode=showcase_preview.publication_mode,
     )
+    has_active_exec_link = execution_links_review.active_link is not None
     pub_ok = (
         lc is SupplierOfferLifecycle.APPROVED
         and showcase_preview.can_publish_now
         and pk is SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH
         and not media_blocking
+        and has_active_exec_link
     )
     pub_dr: list[str] = []
     if lc is not SupplierOfferLifecycle.APPROVED:
         pub_dr.append("Lifecycle must be moderation-approved before publish.")
+    if lc is SupplierOfferLifecycle.APPROVED and not has_active_exec_link:
+        pub_dr.append(
+            "Execution link is required before channel publish because Rezervă must open the exact Mini App tour.",
+        )
     if not showcase_preview.can_publish_now:
-        pub_dr.append("Showcase publish configuration or lifecycle blocks publish_now.")
+        pub_dr.append("Showcase publish configuration, execution link, or lifecycle blocks publish_now.")
     if pk is not SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH:
         pub_dr.append("Packaging must be approved for publish before showcase publish.")
     pub_dr.extend(media_blocking)

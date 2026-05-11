@@ -178,7 +178,7 @@ This endpoint performs **SELECT-style ORM access** and **reuses read-only aggreg
 - **No** **Telegram send** or side effects outside normal HTTP read DB access.
 - **No** **execution-link** create/close/replace.
 - **No** **order** / **payment** / **reservation** mutations.
-- **No** change to **Rezervă** / **CTA** URLs or **`build_showcase_publication`** behavior (**B15C** owns exact-tour CTA gate).
+- **No** change to **`GET /admin/publishing-console`** **semantics** (**read-only**). **B15C:** supplier-offer cards still derive from **`review-package`**; **exact-tour readiness** (execution link before publish, **`cta_rezerva_href`** → **`/tours/{code}`**) is reflected in that model — expect **`can_publish_now`** / **`publish_showcase_channel`** to stay **disabled** until the B15C chain is green.
 
 ---
 
@@ -198,6 +198,6 @@ This endpoint performs **SELECT-style ORM access** and **reuses read-only aggreg
 
 ## Next step
 
-**B15C — Supplier-offer exact-tour CTA gate:** require a valid **exact tour** conversion target before channel publish where product mandates; align **Rezervă** with **`/tours/{tour_code}`** for new posts per **`CURSOR_PROMPT_B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md`** (when authored).
+**B15C** — implemented: **[`docs/B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md`](B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md)**. Forward: **B15D–G** (tour promotion drafts, scheduler, limited auto-publish, etc.) per **[`docs/B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md`](B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md)**.
 
 **Related handoff:** [`docs/HANDOFF_B15B_READ_ONLY_ADMIN_PUBLISHING_CONSOLE_TO_NEXT_STEP.md`](HANDOFF_B15B_READ_ONLY_ADMIN_PUBLISHING_CONSOLE_TO_NEXT_STEP.md).

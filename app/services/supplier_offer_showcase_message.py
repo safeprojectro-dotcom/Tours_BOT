@@ -4,7 +4,8 @@ B12/B13: deterministic **text-only** channel posts (photo URL not sent from this
 B13.1: branded RO layout; B13.2: marketing copy polish (period + times lines, ``program_text`` block,
 FULL_BUS firm ``Preț … / grup``, single-line ``Detalii | Rezervă`` CTAs, custom-request upsell).
 
-Channel CTA line: **Detalii** → bot ``supoffer_<id>`` (B11); **Rezervă** → Mini App supplier-offer landing — booking logic unchanged elsewhere.
+Channel CTA line: **Detalii** → bot ``supoffer_<id>`` (B11); **Rezervă** → Mini App ``/tours/{code}`` when
+``rezerva_tour_code`` is provided (B15C), else supplier-offer landing for legacy/tooling callers.
 """
 
 from __future__ import annotations
@@ -18,7 +19,11 @@ from app.bot.constants import SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX
 from app.core.config import Settings
 from app.models.enums import SupplierServiceComposition, TourSalesMode
 from app.models.supplier import SupplierOffer
-from app.services.supplier_offer_deep_link import mini_app_supplier_offer_url, private_bot_deeplink
+from app.services.supplier_offer_deep_link import (
+    mini_app_supplier_offer_url,
+    mini_app_tour_detail_url,
+    private_bot_deeplink,
+)
 
 _BUCHAREST = ZoneInfo("Europe/Bucharest")
 
@@ -285,8 +290,14 @@ def _template_fact_lines_html(offer: SupplierOffer) -> list[str]:
     return lines
 
 
-def _cta_block_html(*, offer_id: int, settings: Settings) -> str | None:
-    """One line: Detalii → bot ``supoffer_<id>`` | Rezervă → Mini App landing."""
+def _cta_block_html(
+    *,
+    offer_id: int,
+    settings: Settings,
+    rezerva_tour_code: str | None = None,
+    channel_rezerva_requires_exact_tour: bool = False,
+) -> str | None:
+    """One line: Detalii → bot ``supoffer_<id>`` | Rezervă → Mini App (tour or supplier-offer landing)."""
     uname = (settings.telegram_bot_username or "").strip().lstrip("@")
     mini_base = (settings.telegram_mini_app_url or "").strip().rstrip("/")
     segments: list[str] = []
@@ -294,9 +305,15 @@ def _cta_block_html(*, offer_id: int, settings: Settings) -> str | None:
     if uname:
         bot_url = html.escape(private_bot_deeplink(bot_username=uname, offer_id=offer_id))
         segments.append(f'ℹ️ <a href="{bot_url}">{html.escape(_CTA_DETAILS_LABEL)}</a>')
+
+    tc = (rezerva_tour_code or "").strip()
     if mini_base:
-        mini_url = html.escape(mini_app_supplier_offer_url(mini_app_url=mini_base, offer_id=offer_id))
-        segments.append(f'✅ <a href="{mini_url}">{html.escape(_CTA_RESERVE_LABEL)}</a>')
+        if tc:
+            mini_url = html.escape(mini_app_tour_detail_url(mini_app_url=mini_base, tour_code=tc))
+            segments.append(f'✅ <a href="{mini_url}">{html.escape(_CTA_RESERVE_LABEL)}</a>')
+        elif not channel_rezerva_requires_exact_tour:
+            mini_url = html.escape(mini_app_supplier_offer_url(mini_app_url=mini_base, offer_id=offer_id))
+            segments.append(f'✅ <a href="{mini_url}">{html.escape(_CTA_RESERVE_LABEL)}</a>')
 
     if not segments:
         return None
@@ -351,10 +368,25 @@ def showcase_photo_send_argument_from_offer(offer: SupplierOffer) -> str | None:
     return None
 
 
-def build_showcase_publication(offer: SupplierOffer, settings: Settings) -> ShowcasePublication:
-    """Romanian marketing caption + optional photo (Telegram ``file_id`` or HTTPS URL from cover reference)."""
+def build_showcase_publication(
+    offer: SupplierOffer,
+    settings: Settings,
+    *,
+    rezerva_tour_code: str | None = None,
+    channel_rezerva_requires_exact_tour: bool = False,
+) -> ShowcasePublication:
+    """Romanian marketing caption + optional photo (Telegram ``file_id`` or HTTPS URL from cover reference).
+
+    B15C: pass ``rezerva_tour_code`` so **Rezervă** targets ``/tours/{code}``. When
+    ``channel_rezerva_requires_exact_tour`` is True and no code is set, **Rezervă** is omitted (Detalii only).
+    """
     facts = _template_fact_lines_html(offer)
-    cta = _cta_block_html(offer_id=offer.id, settings=settings)
+    cta = _cta_block_html(
+        offer_id=offer.id,
+        settings=settings,
+        rezerva_tour_code=rezerva_tour_code,
+        channel_rezerva_requires_exact_tour=channel_rezerva_requires_exact_tour,
+    )
     footer = _footer_lines_html()
     caption_html = _assemble_showcase_html(facts=facts, cta_row=cta, footer=footer)
     photo_arg = showcase_photo_send_argument_from_offer(offer)

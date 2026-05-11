@@ -1,4 +1,4 @@
-"""E2E-style unit proof: supplier offer → bridge → catalog activation → publish → execution link → closure flags.
+"""E2E-style unit proof: supplier offer → bridge → catalog activation → execution link → publish → closure flags.
 
 Does not invoke booking, payment, orders, or reservations — only admin/catalog/landing/routing read paths.
 """
@@ -84,7 +84,7 @@ class SupplierOfferCatalogConversionClosureE2ETests(FoundationDBTestCase):
         )
 
     def test_explicit_admin_chain_closes_conversion_closure_per_seat(self) -> None:
-        """Bridge → activate catalog → catalog lists Tour without execution link → publish → link → closure green."""
+        """B15C: execution link before channel publish; then publish → closure green."""
         supplier = self.create_supplier()
         dep = datetime(2026, 12, 10, 8, 0, tzinfo=UTC)
         ret = datetime(2026, 12, 12, 18, 0, tzinfo=UTC)
@@ -142,7 +142,14 @@ class SupplierOfferCatalogConversionClosureE2ETests(FoundationDBTestCase):
         self.assertTrue(cc_mid["central_catalog_contains_tour"])
         self.assertTrue(cc_mid["has_catalog_visible_tour"])
         self.assertFalse(cc_mid["has_active_execution_link"])
-        self.assertIsNotNone(cc_mid["next_missing_step"])
+        self.assertEqual(cc_mid["next_missing_step"], "create_execution_link")
+
+        lk = self.client.post(
+            f"/admin/supplier-offers/{oid}/execution-link",
+            headers=self._headers(),
+            json={"tour_id": tour_id},
+        )
+        self.assertEqual(lk.status_code, 200, lk.text)
 
         mock_cfg = self._publish_mock_cfg()
         with (
@@ -151,13 +158,6 @@ class SupplierOfferCatalogConversionClosureE2ETests(FoundationDBTestCase):
         ):
             pub = self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=self._headers())
         self.assertEqual(pub.status_code, 200, pub.text)
-
-        lk = self.client.post(
-            f"/admin/supplier-offers/{oid}/execution-link",
-            headers=self._headers(),
-            json={"tour_id": tour_id},
-        )
-        self.assertEqual(lk.status_code, 200, lk.text)
 
         landing = MiniAppSupplierOfferLandingService().get_published_offer_landing(self.session, supplier_offer_id=oid)
         self.assertIsNotNone(landing)

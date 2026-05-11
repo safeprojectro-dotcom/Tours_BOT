@@ -19,8 +19,10 @@ from app.models.enums import (
     TourSalesMode,
 )
 from app.models.supplier import SupplierOfferExecutionLink
-from app.models.supplier import Supplier
+from app.models.supplier import Supplier, SupplierOffer
 from app.models.supplier_offer_showcase_publish_attempt import SupplierOfferShowcasePublishAttempt
+from app.models.supplier_offer_tour_bridge import SupplierOfferTourBridge
+from app.models.tour import Tour
 from app.services.supplier_offer_deep_link import (
     parse_supplier_offer_start_arg,
     private_bot_deeplink,
@@ -80,6 +82,8 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
                 "title": "Showcase Trip",
                 "description": "Nice trip",
                 "program_text": "Day 1 …",
+                "included_text": "Meals and transport",
+                "excluded_text": "Tips and personal expenses",
                 "departure_datetime": dep.isoformat(),
                 "return_datetime": ret.isoformat(),
                 "vehicle_label": "Coach",
@@ -99,6 +103,110 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertEqual(u.status_code, 200, u.text)
         return oid
 
+    def _approve_packaging_via_http(self, oid: int, headers: dict[str, str]) -> None:
+        """B15C helper: generate + approve packaging (accept warnings if needed)."""
+        g = self.client.post(f"/admin/supplier-offers/{oid}/packaging/generate", headers=headers)
+        self.assertEqual(g.status_code, 200, g.text)
+        a = self.client.post(
+            f"/admin/supplier-offers/{oid}/packaging/approve",
+            headers=headers,
+            json={"accept_warnings": True},
+        )
+        self.assertEqual(a.status_code, 200, a.text)
+
+    def _b15c_bridge_and_activate_catalog(
+        self,
+        oid: int,
+        headers: dict[str, str],
+        *,
+        existing_tour_id: int | None = None,
+    ) -> tuple[int, str]:
+        """After moderation approve: tour bridge + activate-for-catalog. No execution link."""
+        payload: dict[str, int] = {}
+        if existing_tour_id is not None:
+            payload["existing_tour_id"] = existing_tour_id
+        br = self.client.post(
+            f"/admin/supplier-offers/{oid}/tour-bridge",
+            headers=headers,
+            json=payload,
+        )
+        self.assertEqual(br.status_code, 200, br.text)
+        tour_id = int(br.json()["tour_id"])
+        tour_row = self.session.get(Tour, tour_id)
+        self.assertIsNotNone(tour_row)
+        assert tour_row is not None
+        tour_code = (tour_row.code or "").strip()
+        act = self.client.post(f"/admin/tours/{tour_id}/activate-for-catalog", headers=headers, json={})
+        self.assertEqual(act.status_code, 200, act.text)
+        return tour_id, tour_code
+
+    def _b15c_bridge_activate_and_execution_link(
+        self,
+        oid: int,
+        headers: dict[str, str],
+        *,
+        existing_tour_id: int | None = None,
+    ) -> tuple[int, str]:
+        """Approved offer → bridge → catalog activation → active execution link."""
+        tour_id, tour_code = self._b15c_bridge_and_activate_catalog(
+            oid,
+            headers,
+            existing_tour_id=existing_tour_id,
+        )
+        lk = self.client.post(
+            f"/admin/supplier-offers/{oid}/execution-link",
+            headers=headers,
+            json={"tour_id": tour_id},
+        )
+        self.assertEqual(lk.status_code, 200, lk.text)
+        return tour_id, tour_code
+
+    def _supersede_active_bridge_to_tour(self, offer_id: int, new_tour_id: int) -> None:
+        """Point the active supplier-offer bridge at another tour (no public API yet; DB-local test utility)."""
+        cur = (
+            self.session.query(SupplierOfferTourBridge)
+            .filter(
+                SupplierOfferTourBridge.supplier_offer_id == offer_id,
+                SupplierOfferTourBridge.status == "active",
+            )
+            .one()
+        )
+        cur.status = "superseded"
+        offer = self.session.get(SupplierOffer, offer_id)
+        self.assertIsNotNone(offer)
+        assert offer is not None
+        self.session.add(
+            SupplierOfferTourBridge(
+                supplier_offer_id=offer_id,
+                tour_id=new_tour_id,
+                status="active",
+                bridge_kind="linked_existing_tour",
+                created_by="unit-test",
+                source_packaging_status=offer.packaging_status.value,
+                source_lifecycle_status=offer.lifecycle_status.value,
+                packaging_snapshot_json={},
+                notes="unit-test bridge supersede",
+            ),
+        )
+        self.session.flush()
+
+    def _prepare_offer_for_channel_publish(
+        self,
+        oid: int,
+        headers: dict[str, str],
+        *,
+        existing_tour_id: int | None = None,
+    ) -> tuple[int, str]:
+        """B15C: packaging → moderation approve → bridge → catalog → execution link (still approved, not published)."""
+        self._approve_packaging_via_http(oid, headers)
+        a = self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
+        self.assertEqual(a.status_code, 200, a.text)
+        return self._b15c_bridge_activate_and_execution_link(
+            oid,
+            headers,
+            existing_tour_id=existing_tour_id,
+        )
+
     def test_moderation_approve_reject_publish_mock_telegram(self) -> None:
         _, token = self._bootstrap_supplier_token()
         oid = self._ready_offer(token)
@@ -107,9 +215,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         bad = self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
         self.assertEqual(bad.status_code, 400)
 
-        a = self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
-        self.assertEqual(a.status_code, 200, a.text)
-        self.assertEqual(a.json()["lifecycle_status"], "approved")
+        self._prepare_offer_for_channel_publish(oid, headers)
 
         mock_cfg = SimpleNamespace(
             telegram_bot_token="dummy-token",
@@ -151,7 +257,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         _, token = self._bootstrap_supplier_token()
         oid = self._ready_offer(token)
         headers = {"Authorization": "Bearer test-admin-secret"}
-        self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
+        self._prepare_offer_for_channel_publish(oid, headers)
         mock_cfg = SimpleNamespace(
             telegram_bot_token="dummy-token",
             telegram_offer_showcase_channel_id="-10012345",
@@ -184,6 +290,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         oid = self._ready_offer(token)
         headers = {"Authorization": "Bearer test-admin-secret"}
 
+        self._approve_packaging_via_http(oid, headers)
         a = self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
         self.assertEqual(a.status_code, 200, a.text)
         self.assertEqual(a.json()["lifecycle_status"], "approved")
@@ -191,6 +298,8 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
 
         bad_retract = self.client.post(f"/admin/supplier-offers/{oid}/retract", headers=headers)
         self.assertEqual(bad_retract.status_code, 400)
+
+        self._b15c_bridge_activate_and_execution_link(oid, headers)
 
         mock_cfg = SimpleNamespace(
             telegram_bot_token="dummy-token",
@@ -239,7 +348,9 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
             patch("app.services.supplier_offer_supplier_notification_service.get_settings", return_value=mock_cfg),
             patch("app.services.supplier_offer_supplier_notification_service.send_private_text_message", return_value=123) as notify_send,
         ):
+            self._approve_packaging_via_http(oid, headers)
             self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
+            self._b15c_bridge_activate_and_execution_link(oid, headers)
             self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
             self.client.post(f"/admin/supplier-offers/{oid}/retract", headers=headers)
 
@@ -295,6 +406,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertIn(oid, ids)
 
     def test_admin_can_link_published_offer_to_tour_and_replace_active(self) -> None:
+        """B15C: execution link must match active bridge; replacing target requires bridge + catalog to move first."""
         _, token = self._bootstrap_supplier_token()
         oid = self._ready_offer(token)
         headers = {"Authorization": "Bearer test-admin-secret"}
@@ -307,11 +419,18 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         tour_a = self.create_tour(code="LNK-A", sales_mode=TourSalesMode.PER_SEAT)
         tour_b = self.create_tour(code="LNK-B", sales_mode=TourSalesMode.PER_SEAT)
         self.session.commit()
+        self._approve_packaging_via_http(oid, headers)
+        self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
+        self._b15c_bridge_and_activate_catalog(oid, headers, existing_tour_id=tour_a.id)
+        self.client.post(
+            f"/admin/supplier-offers/{oid}/execution-link",
+            headers=headers,
+            json={"tour_id": tour_a.id},
+        )
         with (
             patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
             patch("app.services.telegram_showcase_client.send_showcase_publication", return_value=120),
         ):
-            self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
             self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
 
         r1 = self.client.post(
@@ -323,7 +442,6 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertEqual(r1.json()["link_status"], "active")
         self.assertEqual(r1.json()["tour_id"], tour_a.id)
 
-        # Re-linking same tour is idempotent and keeps one active link.
         r_same = self.client.post(
             f"/admin/supplier-offers/{oid}/execution-link",
             headers=headers,
@@ -332,6 +450,9 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertEqual(r_same.status_code, 200, r_same.text)
         self.assertEqual(r_same.json()["tour_id"], tour_a.id)
 
+        self._supersede_active_bridge_to_tour(oid, tour_b.id)
+        ab = self.client.post(f"/admin/tours/{tour_b.id}/activate-for-catalog", headers=headers, json={})
+        self.assertEqual(ab.status_code, 200, ab.text)
         r2 = self.client.post(
             f"/admin/supplier-offers/{oid}/execution-link",
             headers=headers,
@@ -366,17 +487,12 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         )
         tour = self.create_tour(code="LNK-CLOSE", sales_mode=TourSalesMode.PER_SEAT)
         self.session.commit()
+        self._prepare_offer_for_channel_publish(oid, headers, existing_tour_id=tour.id)
         with (
             patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
             patch("app.services.telegram_showcase_client.send_showcase_publication", return_value=121),
         ):
-            self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
             self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
-        self.client.post(
-            f"/admin/supplier-offers/{oid}/execution-link",
-            headers=headers,
-            json={"tour_id": tour.id},
-        )
 
         close = self.client.post(
             f"/admin/supplier-offers/{oid}/execution-link/close",
@@ -392,7 +508,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertEqual(links[0].link_status, "closed")
         self.assertEqual(links[0].close_reason, "unlinked")
 
-    def test_execution_link_requires_published_offer(self) -> None:
+    def test_execution_link_requires_packaging_and_bridge_before_publish(self) -> None:
         _, token = self._bootstrap_supplier_token()
         oid = self._ready_offer(token)
         headers = {"Authorization": "Bearer test-admin-secret"}
@@ -404,24 +520,17 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
             json={"tour_id": tour.id},
         )
         self.assertEqual(r.status_code, 400)
-        self.assertIn("Only published offers", r.text)
+        self.assertIn("Packaging must be approved for publish before execution link.", r.text)
 
     def test_execution_link_rejects_unknown_tour(self) -> None:
         _, token = self._bootstrap_supplier_token()
         oid = self._ready_offer(token)
         headers = {"Authorization": "Bearer test-admin-secret"}
-        mock_cfg = SimpleNamespace(
-            telegram_bot_token="dummy-token",
-            telegram_offer_showcase_channel_id="-10012345",
-            telegram_bot_username="testbot",
-            telegram_mini_app_url="https://example.com/mini",
-        )
-        with (
-            patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
-            patch("app.services.telegram_showcase_client.send_showcase_publication", return_value=122),
-        ):
-            self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
-            self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
+        tour_ok = self.create_tour(code="LNK-REAL", sales_mode=TourSalesMode.PER_SEAT)
+        self.session.commit()
+        self._approve_packaging_via_http(oid, headers)
+        self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
+        self._b15c_bridge_and_activate_catalog(oid, headers, existing_tour_id=tour_ok.id)
 
         r = self.client.post(
             f"/admin/supplier-offers/{oid}/execution-link",
@@ -429,7 +538,7 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
             json={"tour_id": 999999},
         )
         self.assertEqual(r.status_code, 400)
-        self.assertIn("Tour not found", r.text)
+        self.assertIn("active supplier-offer tour bridge", r.text)
 
     def test_admin_can_list_execution_links_history(self) -> None:
         _, token = self._bootstrap_supplier_token()
@@ -444,17 +553,22 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         tour_a = self.create_tour(code="LNK-HIST-A", sales_mode=TourSalesMode.PER_SEAT)
         tour_b = self.create_tour(code="LNK-HIST-B", sales_mode=TourSalesMode.PER_SEAT)
         self.session.commit()
-        with (
-            patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
-            patch("app.services.telegram_showcase_client.send_showcase_publication", return_value=123),
-        ):
-            self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
-            self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
+        self._approve_packaging_via_http(oid, headers)
+        self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
+        self._b15c_bridge_and_activate_catalog(oid, headers, existing_tour_id=tour_a.id)
         self.client.post(
             f"/admin/supplier-offers/{oid}/execution-link",
             headers=headers,
             json={"tour_id": tour_a.id, "link_note": "initial"},
         )
+        with (
+            patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
+            patch("app.services.telegram_showcase_client.send_showcase_publication", return_value=123),
+        ):
+            self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
+        self._supersede_active_bridge_to_tour(oid, tour_b.id)
+        acb = self.client.post(f"/admin/tours/{tour_b.id}/activate-for-catalog", headers=headers, json={})
+        self.assertEqual(acb.status_code, 200, acb.text)
         self.client.post(
             f"/admin/supplier-offers/{oid}/execution-link",
             headers=headers,
@@ -484,19 +598,21 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         tour_a = self.create_tour(code="LNK-WF-A", sales_mode=TourSalesMode.PER_SEAT)
         tour_b = self.create_tour(code="LNK-WF-B", sales_mode=TourSalesMode.PER_SEAT)
         self.session.commit()
+        self._approve_packaging_via_http(oid, headers)
+        self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
+        self._b15c_bridge_and_activate_catalog(oid, headers, existing_tour_id=tour_a.id)
         with (
             patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
             patch("app.services.telegram_showcase_client.send_showcase_publication", return_value=124),
         ):
-            self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
+            created = self.client.post(
+                f"/admin/supplier-offers/{oid}/link-tour",
+                headers=headers,
+                json={"tour_id": tour_a.id, "link_note": "initial"},
+            )
+            self.assertEqual(created.status_code, 200, created.text)
             self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
 
-        created = self.client.post(
-            f"/admin/supplier-offers/{oid}/link-tour",
-            headers=headers,
-            json={"tour_id": tour_a.id, "link_note": "initial"},
-        )
-        self.assertEqual(created.status_code, 200, created.text)
         self.assertEqual(created.json()["link_status"], "active")
         self.assertEqual(created.json()["tour_id"], tour_a.id)
 
@@ -508,6 +624,9 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertEqual(duplicate_create.status_code, 400)
         self.assertIn("Active execution link already exists", duplicate_create.text)
 
+        self._supersede_active_bridge_to_tour(oid, tour_b.id)
+        acb = self.client.post(f"/admin/tours/{tour_b.id}/activate-for-catalog", headers=headers, json={})
+        self.assertEqual(acb.status_code, 200, acb.text)
         replaced = self.client.post(
             f"/admin/supplier-offers/{oid}/replace-link",
             headers=headers,
@@ -577,12 +696,12 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertIn("Previzualizare", body["preview_notice"])
 
     def test_admin_showcase_preview_can_publish_when_approved_and_config_complete(self) -> None:
-        """B13.4A: can_publish_now when approved + channel/token; empty warnings if CTAs build."""
+        """B15C: can_publish_now when gates + active execution link; Rezervă preview is exact /tours/{code}."""
         _, token = self._bootstrap_supplier_token()
         oid = self._ready_offer(token)
         headers = {"Authorization": "Bearer test-admin-secret"}
-        apr = self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=headers)
-        self.assertEqual(apr.status_code, 200, apr.text)
+        tour_id, tour_code = self._prepare_offer_for_channel_publish(oid, headers)
+        self.assertGreater(tour_id, 0)
         mock_cfg = SimpleNamespace(
             telegram_bot_username="previewbot",
             telegram_mini_app_url="https://example.com/app",
@@ -599,6 +718,8 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertEqual(body["lifecycle_status"], "approved")
         self.assertTrue(body["can_publish_now"])
         self.assertEqual(body["warnings"], [])
+        href = body.get("cta_rezerva_href") or ""
+        self.assertIn(f"/tours/{tour_code}", href)
 
     def test_admin_showcase_preview_404_unknown_offer(self) -> None:
         r = self.client.get(

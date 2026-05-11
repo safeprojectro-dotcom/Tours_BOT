@@ -5,11 +5,10 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
-from app.models.enums import SupplierOfferLifecycle, TourStatus
 from app.models.supplier import SupplierOfferExecutionLink
-from app.models.tour import Tour
 from app.repositories.supplier import SupplierOfferRepository
 from app.repositories.supplier_offer_execution_link import SupplierOfferExecutionLinkRepository
+from app.services.supplier_offer_channel_publish_gate import validate_execution_link_target_before_publish
 from app.schemas.supplier_admin import SupplierOfferExecutionLinkRead
 
 
@@ -44,21 +43,7 @@ class SupplierOfferExecutionLinkService:
         return SupplierOfferExecutionLinkRead.model_validate(row, from_attributes=True)
 
     def _validate_link_target(self, session: Session, *, offer_id: int, tour_id: int) -> None:
-        offer = self._offers.get_any(session, offer_id=offer_id)
-        if offer is None:
-            raise SupplierOfferExecutionLinkNotFoundError
-        if offer.lifecycle_status != SupplierOfferLifecycle.PUBLISHED:
-            raise SupplierOfferExecutionLinkValidationError("Only published offers can be linked to execution tours.")
-
-        tour = session.get(Tour, tour_id)
-        if tour is None:
-            raise SupplierOfferExecutionLinkValidationError("Tour not found for execution linkage.")
-        if tour.sales_mode != offer.sales_mode:
-            raise SupplierOfferExecutionLinkValidationError("Tour sales_mode must match supplier offer sales_mode.")
-        if tour.status in (TourStatus.CANCELLED, TourStatus.COMPLETED):
-            raise SupplierOfferExecutionLinkValidationError("Tour status is not valid for operational linkage.")
-        if tour.departure_datetime <= datetime.now(UTC):
-            raise SupplierOfferExecutionLinkValidationError("Only future-departure tours can be linked.")
+        validate_execution_link_target_before_publish(session, offer_id=offer_id, tour_id=tour_id)
 
     def link_offer_to_tour(
         self,

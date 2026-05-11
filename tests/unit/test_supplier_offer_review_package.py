@@ -397,7 +397,8 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
         self.assertIsNotNone(pub.get("disabled_reason"))
         self.assertIn("media_review_replacement_requested", pub["disabled_reason"])
 
-    def test_review_package_execution_link_precheck_when_published_without_link(self) -> None:
+    def test_review_package_when_publish_blocked_without_execution_link(self) -> None:
+        """B15C: POST publish fails without exact-tour chain; review-package stays consistent (approved, no audit row)."""
         _, token = self._bootstrap_supplier_token()
         oid = self._ready_offer(token)
         headers = {"Authorization": "Bearer test-admin-secret"}
@@ -426,27 +427,27 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
             ),
         ):
             pub = self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
-        self.assertEqual(pub.status_code, 200, pub.text)
+        self.assertEqual(pub.status_code, 400, pub.text)
+        self.assertIn("Execution link is required", pub.text)
 
         with patch(
-            "app.services.supplier_offer_moderation_service.get_settings",
+            "app.services.supplier_offer_review_package_service.get_settings",
             return_value=mock_cfg,
         ):
             r = self.client.get(f"/admin/supplier-offers/{oid}/review-package", headers=headers)
         self.assertEqual(r.status_code, 200, r.text)
         body = r.json()
-        self.assertEqual(body["offer"]["lifecycle_status"], "published")
+        self.assertEqual(body["offer"]["lifecycle_status"], "approved")
         spa = body["showcase_publish_attempts_review"]
-        self.assertEqual(spa["total_returned"], 1)
-        self.assertEqual(len(spa["items"]), 1)
-        self.assertEqual(spa["items"][0]["status"], "persisted")
-        self.assertEqual(spa["items"][0]["requested_by"], "http_admin")
-        self.assertEqual(spa["items"][0]["showcase_message_id"], 42)
+        self.assertEqual(spa["total_returned"], 0)
+        self.assertEqual(len(spa["items"]), 0)
         er = body["execution_links_review"]
-        self.assertTrue(er["can_create_execution_link"])
-        self.assertIsNone(er["execution_link_precheck_note"])
+        self.assertFalse(er["can_create_execution_link"])
         actions = body["recommended_next_actions"]
-        self.assertIn("create_execution_link", actions)
+        self.assertTrue(
+            "create_tour_bridge" in actions or "create_execution_link" in actions,
+            msg=f"expected bridge or execution link action, got {actions}",
+        )
         cc = body["conversion_closure"]
         self.assertFalse(cc["has_tour_bridge"])
         self.assertFalse(cc["has_active_execution_link"])
