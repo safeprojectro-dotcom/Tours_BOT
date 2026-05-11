@@ -80,7 +80,9 @@ python -m pytest tests/unit/test_supplier_offer_track3_moderation.py tests/unit/
 
 ## Production smoke
 
-Use the checklist in **`docs/B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md`** § Production smoke checklist (operator-run only).
+**PASS (operator-recorded):** **[`docs/B15C_PRODUCTION_SMOKE_RESULT.md`](B15C_PRODUCTION_SMOKE_RESULT.md)** — commit **`37f213e`**; Offer **#13**, Tour **#7** / **`B10-SO13-e9f389`**, execution link **#6**, publish attempt **#3**, **`showcase_message_id` 26**; **`Rezervă`** → exact **`/tours/B10-SO13-e9f389`**; preparation UI usable until **Mini App identity/session** warning on user-scoped flows. **Follow-ups:** identity from channel entry (**B15C1**); admin stay-on-offer after **Leagă tur** (**B15C2**); post-B15C copy polish (**B15C3**) — see **[`docs/HANDOFF_B15C_PRODUCTION_SMOKE_RESULT_TO_NEXT_STEP.md`](HANDOFF_B15C_PRODUCTION_SMOKE_RESULT_TO_NEXT_STEP.md)**.
+
+Original checklist (pre-smoke): **`docs/B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md`** § Production smoke checklist.
 
 ## Known limitations
 
@@ -88,10 +90,6 @@ Use the checklist in **`docs/B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md`** § Pr
 
 ## Expected next step after B15C
 
-Manual production smoke after deploy using a new supplier offer, then record the result.
+Production smoke **recorded** — see **Production smoke** above. **Forward prompts:** **`CURSOR_PROMPT_B15C1_MINI_APP_IDENTITY_FROM_CHANNEL_EXACT_TOUR_ENTRY.md`**, **`CURSOR_PROMPT_B15C2_ADMIN_NAV_STAY_ON_OFFER_AFTER_BRIDGE.md`**, **`CURSOR_PROMPT_B15C3_POST_B15C_COPY_POLISH.md`** (names only until authored). Broader console: **`CURSOR_PROMPT_B15D_TOUR_PROMOTION_LAST_SEATS_DRAFTS.md`** or **B15D–G** per [`docs/B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md`](B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md) when product prioritizes.
 
-Possible next prompt (only after B15C is committed and smoke-tested):
-
-`CURSOR_PROMPT_B15D_TOUR_PROMOTION_LAST_SEATS_DRAFTS.md`
-
-Alternatively: tour promotion / **B15D** per [`docs/B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md`](B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md) when product prioritizes.
+**Smoke record task:** [`docs/CURSOR_PROMPT_B15C_RECORD_PRODUCTION_SMOKE_RESULT.md`](CURSOR_PROMPT_B15C_RECORD_PRODUCTION_SMOKE_RESULT.md).

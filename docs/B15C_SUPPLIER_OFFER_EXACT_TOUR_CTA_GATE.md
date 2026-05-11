@@ -70,6 +70,8 @@ If missing, operators see a bilingual reason (EN/RO), e.g. execution link requir
 6. Publish; open **Rezervă** from the new post → exact tour in Mini App.
 7. Spot-check booking/payment unchanged.
 
+**Recorded operator smoke (PASS, prod):** **[`docs/B15C_PRODUCTION_SMOKE_RESULT.md`](B15C_PRODUCTION_SMOKE_RESULT.md)** — Offer **#13**, **`B10-SO13-e9f389`**, with follow-ups noted there.
+
 ## Next steps
 
 - Optional: admin API to **replace tour bridge** without raw DB steps.

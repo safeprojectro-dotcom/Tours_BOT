@@ -178,7 +178,7 @@ This endpoint performs **SELECT-style ORM access** and **reuses read-only aggreg
 - **No** **Telegram send** or side effects outside normal HTTP read DB access.
 - **No** **execution-link** create/close/replace.
 - **No** **order** / **payment** / **reservation** mutations.
-- **No** change to **`GET /admin/publishing-console`** **semantics** (**read-only**). **B15C:** supplier-offer cards still derive from **`review-package`**; **exact-tour readiness** (execution link before publish, **`cta_rezerva_href`** → **`/tours/{code}`**) is reflected in that model — expect **`can_publish_now`** / **`publish_showcase_channel`** to stay **disabled** until the B15C chain is green.
+- **No** change to **`GET /admin/publishing-console`** **semantics** (**read-only**). **B15C:** supplier-offer cards still derive from **`review-package`**; **exact-tour readiness** (execution link before publish, **`cta_rezerva_href`** → **`/tours/{code}`**) is reflected in that model — expect **`can_publish_now`** / **`publish_showcase_channel`** to stay **disabled** until the B15C chain is green. **Production smoke PASS (operator):** **[`docs/B15C_PRODUCTION_SMOKE_RESULT.md`](B15C_PRODUCTION_SMOKE_RESULT.md)**.
 
 ---
 
