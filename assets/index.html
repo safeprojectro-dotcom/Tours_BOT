@@ -85,6 +85,30 @@
         document.head.appendChild(script);
       }
 
+      function applyStartParamTourRoute(webApp) {
+        if (!webApp || !webApp.initDataUnsafe) {
+          return;
+        }
+        var sp = webApp.initDataUnsafe.start_param;
+        if (typeof sp !== "string" || !sp) {
+          return;
+        }
+        if (sp.indexOf("tour_") !== 0) {
+          return;
+        }
+        var code = sp.substring(5);
+        if (!code || !/^[A-Za-z0-9_-]+$/.test(code)) {
+          return;
+        }
+        var targetPath = "/tours/" + code;
+        var currentUrl = new URL(window.location.href);
+        if (currentUrl.pathname === targetPath) {
+          return;
+        }
+        currentUrl.pathname = targetPath;
+        window.history.replaceState(window.history.state, "", currentUrl.toString());
+      }
+
       function parseUserIdFromInitData(initDataRaw) {
         if (typeof initDataRaw !== "string" || !initDataRaw) {
           return null;
@@ -188,6 +212,8 @@
           tg_bridge_user_id: null
         };
         try {
+          var bridgeWebApp = window.Telegram && window.Telegram.WebApp;
+          applyStartParamTourRoute(bridgeWebApp);
           snapshot = extractBridgeSnapshot();
           applyBridgeSnapshotToUrl(snapshot);
 

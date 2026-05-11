@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+import re
+
 START_PAYLOAD_SUP_OFFER_PREFIX = "supoffer_"
+STARTAPP_TOUR_PREFIX = "tour_"
+
+# Telegram ``startapp`` payload: letters, digits, ``_`` and ``-`` only (no raw ``/``).
+_STARTAPP_TAIL_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 def supplier_offer_start_payload(offer_id: int) -> str:
@@ -46,3 +52,21 @@ def mini_app_tour_detail_url(*, mini_app_url: str, tour_code: str) -> str:
     if not tc:
         raise ValueError("tour_code is required")
     return f"{base}/tours/{tc}"
+
+
+def mini_app_tour_channel_startapp_url(*, bot_username: str, tour_code: str) -> str:
+    """B15C1: open the Main Mini App in Telegram WebApp context with a ``startapp`` payload.
+
+    Channel HTML cannot use ``WebAppInfo``; a plain ``https`` Mini App URL opens outside Telegram and
+    loses ``initData``. ``https://t.me/{bot}?startapp=tour_{code}`` keeps the exact tour destination
+      while preserving identity bridge semantics (``assets/index.html`` maps ``start_param`` → ``/tours/{code}``).
+    """
+    uname = bot_username.strip().lstrip("@")
+    tc = (tour_code or "").strip()
+    if not uname:
+        raise ValueError("bot_username is required")
+    if not tc:
+        raise ValueError("tour_code is required")
+    if not _STARTAPP_TAIL_RE.fullmatch(tc):
+        raise ValueError("tour_code must match Telegram startapp charset (A-Z, a-z, 0-9, _, -)")
+    return f"https://t.me/{uname}?startapp={STARTAPP_TOUR_PREFIX}{tc}"

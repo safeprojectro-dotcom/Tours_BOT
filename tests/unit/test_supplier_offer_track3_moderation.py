@@ -719,7 +719,8 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertTrue(body["can_publish_now"])
         self.assertEqual(body["warnings"], [])
         href = body.get("cta_rezerva_href") or ""
-        self.assertIn(f"/tours/{tour_code}", href)
+        self.assertIn(f"tour_{tour_code}", href)
+        self.assertRegex(href, r"https://t\.me/previewbot\?startapp=tour_")
 
     def test_admin_showcase_preview_404_unknown_offer(self) -> None:
         r = self.client.get(

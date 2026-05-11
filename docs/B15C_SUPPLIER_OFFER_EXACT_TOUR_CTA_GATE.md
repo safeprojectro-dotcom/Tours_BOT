@@ -5,7 +5,7 @@
 
 ## Purpose
 
-For **new** supplier-offer **showcase channel** posts, the public **Rezervă** CTA must open the **exact** bookable tour in the Mini App: `{TELEGRAM_MINI_APP_URL}/tours/{tour_code}` — not the generic supplier-offer landing.
+For **new** supplier-offer **showcase channel** posts, the public **Rezervă** CTA must land users on the **exact** bookable tour in the Mini App (**client route** `{base}/tours/{tour_code}`). Because channel HTML cannot attach **`WebAppInfo`**, a plain HTTPS link to that path opens **outside** Telegram WebApp and loses **`initData`** (B15C1). **Rezervă** therefore prefers **`https://t.me/{bot}?startapp=tour_{tour_code}`** when **`TELEGRAM_BOT_USERNAME`** is set; the Mini App bootstrap maps **`start_param`** → **`/tours/{code}`** and keeps the existing **`tg_bridge_user_id`** bridge. Fallback: HTTPS **`{TELEGRAM_MINI_APP_URL}/tours/{tour_code}`** when only the Mini App base URL is configured.
 
 **Detalii** remains the bot deep link (`/start=supoffer_{offer_id}`) and **`/supplier-offers/{id}`** landing stays available for older posts, **Detalii**, and tooling.
 
@@ -14,7 +14,7 @@ For **new** supplier-offer **showcase channel** posts, the public **Rezervă** C
 | Phase | Before (risky) | After B15C (safe) |
 |--------|----------------|-------------------|
 | Conversion | Moderation → **channel publish** → execution link later | Packaging + media gates → moderation → **bridge** → **catalog** → **active execution link** → **then** channel publish |
-| Rezervă URL | Often **`/supplier-offers/{id}`** at publish time | **`/tours/{tour_code}`** from active execution link + bridged tour |
+| Rezervă URL | Often **`/supplier-offers/{id}`** at publish time | Exact tour; channel link **`t.me/{bot}?startapp=tour_{code}`** when bot username set (else HTTPS **`/tours/{tour_code}`**) |
 
 ## Execution link before publish (when safe)
 
@@ -39,7 +39,7 @@ If missing, operators see a bilingual reason (EN/RO), e.g. execution link requir
 ## Showcase builder
 
 - **`build_showcase_publication`** / **`_cta_block_html`**: **`rezerva_tour_code`** + **`channel_rezerva_requires_exact_tour`** for approved/preview paths.
-- **`mini_app_tour_detail_url`** used for **Rezervă** when **`tour_code`** is known; no silent fallback to supplier-offer URL for channel publish when exact tour is required.
+- **`mini_app_tour_channel_startapp_url`** (**`t.me/{bot}?startapp=tour_{code}`**) for **Rezervă** when **`tour_code`** and bot username are known (B15C1); **`mini_app_tour_detail_url`** as HTTPS fallback when startapp cannot be built; no silent fallback to supplier-offer URL for channel publish when exact tour is required.
 
 ## Backward compatibility
 

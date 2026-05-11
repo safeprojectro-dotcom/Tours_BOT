@@ -1260,7 +1260,7 @@ open
 
 | Topic | Where tracked |
 |-------|----------------|
-| Production Telegram Web App init-data / Mini App API auth | **Resolved in Y30.4x:** local pinned SDK `assets/telegram-web-app.js` + bridge identity injection (`tg_bridge_user_id`) validated on runtime path; keep as regression-watch item only (see `docs/CHAT_HANDOFF.md`) |
+| Production Telegram Web App init-data / Mini App API auth | **Resolved in Y30.4x** for **bot-opened WebApp** paths (local pinned SDK `assets/telegram-web-app.js` + `tg_bridge_user_id`); **B15C1** extends **channel Rezervă** to use **`t.me?startapp=tour_*`** so **Main Mini App** entry also provides **`initData`** (see `docs/B15C_PRODUCTION_SMOKE_RESULT.md` §8.1/§10, `docs/HANDOFF_B15C1_MINI_APP_IDENTITY_FROM_CHANNEL_EXACT_TOUR_ENTRY_TO_NEXT_STEP.md`) |
 | Real payment provider (mock/staging paths today) | Section 3 |
 | Bot `MemoryStorage` | Section 2 |
 | Expiry/booking status semantics for admin/analytics | Section 1 |

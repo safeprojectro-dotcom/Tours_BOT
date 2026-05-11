@@ -4,8 +4,9 @@ B12/B13: deterministic **text-only** channel posts (photo URL not sent from this
 B13.1: branded RO layout; B13.2: marketing copy polish (period + times lines, ``program_text`` block,
 FULL_BUS firm ``Preț … / grup``, single-line ``Detalii | Rezervă`` CTAs, custom-request upsell).
 
-Channel CTA line: **Detalii** → bot ``supoffer_<id>`` (B11); **Rezervă** → Mini App ``/tours/{code}`` when
-``rezerva_tour_code`` is provided (B15C), else supplier-offer landing for legacy/tooling callers.
+Channel CTA line: **Detalii** → bot ``supoffer_<id>`` (B11); **Rezervă** → ``t.me/{bot}?startapp=tour_{code}``
+(B15C1 WebApp entry) when ``rezerva_tour_code`` is set and bot username is configured, else HTTPS ``/tours/{code}``
+or supplier-offer landing for legacy/tooling callers.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from app.models.enums import SupplierServiceComposition, TourSalesMode
 from app.models.supplier import SupplierOffer
 from app.services.supplier_offer_deep_link import (
     mini_app_supplier_offer_url,
+    mini_app_tour_channel_startapp_url,
     mini_app_tour_detail_url,
     private_bot_deeplink,
 )
@@ -307,13 +309,25 @@ def _cta_block_html(
         segments.append(f'ℹ️ <a href="{bot_url}">{html.escape(_CTA_DETAILS_LABEL)}</a>')
 
     tc = (rezerva_tour_code or "").strip()
-    if mini_base:
-        if tc:
-            mini_url = html.escape(mini_app_tour_detail_url(mini_app_url=mini_base, tour_code=tc))
-            segments.append(f'✅ <a href="{mini_url}">{html.escape(_CTA_RESERVE_LABEL)}</a>')
-        elif not channel_rezerva_requires_exact_tour:
-            mini_url = html.escape(mini_app_supplier_offer_url(mini_app_url=mini_base, offer_id=offer_id))
-            segments.append(f'✅ <a href="{mini_url}">{html.escape(_CTA_RESERVE_LABEL)}</a>')
+    if tc:
+        reserve_href: str | None = None
+        if uname:
+            try:
+                reserve_href = mini_app_tour_channel_startapp_url(bot_username=uname, tour_code=tc)
+            except ValueError:
+                reserve_href = None
+        if reserve_href is None and mini_base:
+            try:
+                reserve_href = mini_app_tour_detail_url(mini_app_url=mini_base, tour_code=tc)
+            except ValueError:
+                reserve_href = None
+        if reserve_href:
+            segments.append(
+                f'✅ <a href="{html.escape(reserve_href)}">{html.escape(_CTA_RESERVE_LABEL)}</a>'
+            )
+    elif mini_base and not channel_rezerva_requires_exact_tour:
+        mini_url = html.escape(mini_app_supplier_offer_url(mini_app_url=mini_base, offer_id=offer_id))
+        segments.append(f'✅ <a href="{mini_url}">{html.escape(_CTA_RESERVE_LABEL)}</a>')
 
     if not segments:
         return None
@@ -377,8 +391,10 @@ def build_showcase_publication(
 ) -> ShowcasePublication:
     """Romanian marketing caption + optional photo (Telegram ``file_id`` or HTTPS URL from cover reference).
 
-    B15C: pass ``rezerva_tour_code`` so **Rezervă** targets ``/tours/{code}``. When
-    ``channel_rezerva_requires_exact_tour`` is True and no code is set, **Rezervă** is omitted (Detalii only).
+    B15C / B15C1: pass ``rezerva_tour_code`` so **Rezervă** opens the exact tour in Telegram WebApp context
+    via ``t.me/{bot}?startapp=tour_{code}`` when ``telegram_bot_username`` is configured (fallback: HTTPS
+    ``/tours/{code}`` only if ``telegram_mini_app_url`` is set). When ``channel_rezerva_requires_exact_tour``
+    is True and no code is set, **Rezervă** is omitted (Detalii only).
     """
     facts = _template_fact_lines_html(offer)
     cta = _cta_block_html(

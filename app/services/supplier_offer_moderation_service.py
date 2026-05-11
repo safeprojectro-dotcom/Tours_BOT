@@ -19,6 +19,7 @@ from app.schemas.supplier_admin import (
 )
 from app.services.supplier_offer_deep_link import (
     mini_app_supplier_offer_url,
+    mini_app_tour_channel_startapp_url,
     mini_app_tour_detail_url,
     private_bot_deeplink,
 )
@@ -146,13 +147,28 @@ class SupplierOfferModerationService:
         mini_base = (cfg.telegram_mini_app_url or "").strip().rstrip("/")
         if uname:
             detalii_href = private_bot_deeplink(bot_username=uname, offer_id=offer_id)
-        if mini_base:
-            if display_code:
-                rezerva_href = mini_app_tour_detail_url(mini_app_url=mini_base, tour_code=display_code)
-            elif row.lifecycle_status is SupplierOfferLifecycle.APPROVED:
+        if display_code:
+            rezerva_href = None
+            if uname:
+                try:
+                    rezerva_href = mini_app_tour_channel_startapp_url(
+                        bot_username=uname,
+                        tour_code=display_code,
+                    )
+                except ValueError:
+                    rezerva_href = None
+            if rezerva_href is None and mini_base:
+                rezerva_href = mini_app_tour_detail_url(
+                    mini_app_url=mini_base,
+                    tour_code=display_code,
+                )
+        elif mini_base:
+            if row.lifecycle_status is SupplierOfferLifecycle.APPROVED:
                 rezerva_href = None
             else:
                 rezerva_href = mini_app_supplier_offer_url(mini_app_url=mini_base, offer_id=offer_id)
+        else:
+            rezerva_href = None
         disable_preview = not is_photo
         lc = row.lifecycle_status
         lifecycle_label = lc.value

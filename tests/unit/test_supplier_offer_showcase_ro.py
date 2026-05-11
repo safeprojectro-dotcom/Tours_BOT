@@ -97,6 +97,32 @@ class SupplierOfferShowcaseRoTests(unittest.TestCase):
         self.assertRegex(cap, r'<a href="https://t\.me/mybot\?start=supoffer_7">Detalii</a>')
         self.assertRegex(cap, r'<a href="https://t\.me/mybot/miniapp/supplier-offers/7">Rezervă</a>')
 
+    def test_cta_rezerva_exact_tour_uses_startapp_b15c1(self) -> None:
+        pub = build_showcase_publication(
+            _offer(),
+            _cfg(),
+            rezerva_tour_code="B10-SO13-e9f389",
+            channel_rezerva_requires_exact_tour=True,
+        )
+        cap = pub.caption_html
+        self.assertRegex(
+            cap,
+            r'<a href="https://t\.me/mybot\?startapp=tour_B10-SO13-e9f389">Rezervă</a>',
+        )
+
+    def test_cta_rezerva_exact_tour_fallback_https_when_no_bot_username(self) -> None:
+        cfg = SimpleNamespace(telegram_bot_username=None, telegram_mini_app_url="https://app.example/root")
+        pub = build_showcase_publication(
+            _offer(),
+            cfg,  # type: ignore[arg-type]
+            rezerva_tour_code="ONLY-MINI-1",
+            channel_rezerva_requires_exact_tour=True,
+        )
+        self.assertIn(
+            '<a href="https://app.example/root/tours/ONLY-MINI-1">Rezervă</a>',
+            pub.caption_html,
+        )
+
     def test_full_bus_soft_phrase_not_raw_enum(self) -> None:
         pub = build_showcase_publication(_offer(sales_mode=TourSalesMode.FULL_BUS), _cfg())
         cap = pub.caption_html
