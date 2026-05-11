@@ -1413,6 +1413,30 @@ def post_supplier_offer_media_request_replacement(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
 
 
+@router.post("/supplier-offers/{offer_id}/media/clear-cover-for-text-only", response_model=AdminSupplierOfferRead)
+def post_supplier_offer_media_clear_cover_text_only(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    body: AdminMediaReviewFallbackBody = Body(...),
+) -> AdminSupplierOfferRead:
+    """B15C4: clear row cover and record audit so channel publish can run text-only without a bad hero URL."""
+    try:
+        out = SupplierOfferMediaReviewService().clear_cover_for_channel_text_only_publish(
+            db,
+            offer_id=offer_id,
+            reviewed_by=body.reviewed_by,
+            reason=body.reason,
+        )
+        db.commit()
+        return out
+    except SupplierOfferMediaReviewNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    except SupplierOfferMediaReviewStateError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from None
+
+
 @router.post("/supplier-offers/{offer_id}/media/use-fallback-card", response_model=AdminSupplierOfferRead)
 def post_supplier_offer_media_use_fallback_card(
     offer_id: int,

@@ -149,6 +149,7 @@ class SupplierOfferMediaReviewStatus(StrEnum):
     REJECTED_IRRELEVANT = "rejected_irrelevant"
     REPLACEMENT_REQUESTED = "replacement_requested"
     FALLBACK_CARD_REQUIRED = "fallback_card_required"
+    COVER_CLEARED_FOR_CHANNEL_TEXT_ONLY = "cover_cleared_for_channel_text_only"
 
 
 class SupplierLegalEntityType(StrEnum):

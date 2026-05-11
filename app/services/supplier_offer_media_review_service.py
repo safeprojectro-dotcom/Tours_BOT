@@ -11,6 +11,9 @@ from app.models.supplier import SupplierOffer
 from app.repositories.supplier import SupplierOfferRepository
 from app.schemas.supplier_admin import AdminSupplierOfferRead
 from app.services.supplier_offer_publish_safe_stub import merge_publish_safe_into_draft
+from app.services.supplier_offer_showcase_cover_sendability import (
+    is_raw_cover_reference_sendable_for_telegram_sendphoto,
+)
 
 MEDIA_REVIEW_KEY = "media_review"
 B7_1_VERSION = "b7_1"
@@ -94,6 +97,11 @@ class SupplierOfferMediaReviewService:
         cover = _current_cover_ref(row)
         if not cover:
             raise SupplierOfferMediaReviewStateError("Cannot approve: cover_media_reference is empty.")
+        if not is_raw_cover_reference_sendable_for_telegram_sendphoto(cover):
+            raise SupplierOfferMediaReviewStateError(
+                "Cannot approve: cover_media_reference is not sendable as a Telegram photo "
+                "(use telegram_photo:{file_id} or a direct image URL; not share/page links such as Google share).",
+            )
         _set_media_review(
             row,
             status=SupplierOfferMediaReviewStatus.APPROVED_FOR_CARD,
@@ -146,6 +154,36 @@ class SupplierOfferMediaReviewService:
             status=SupplierOfferMediaReviewStatus.REPLACEMENT_REQUESTED,
             cover_snapshot=cover,
             reason=reason,
+            reviewed_by=reviewed_by,
+        )
+        session.flush()
+        session.refresh(row)
+        return AdminSupplierOfferRead.model_validate(row, from_attributes=True)
+
+    def clear_cover_for_channel_text_only_publish(
+        self,
+        session: Session,
+        *,
+        offer_id: int,
+        reviewed_by: str | None,
+        reason: str | None = None,
+    ) -> AdminSupplierOfferRead:
+        """B15C4: remove showcase hero from the offer row and record audit state for text-only channel publish."""
+
+        row = self._repo.get_any(session, offer_id=offer_id)
+        if row is None:
+            raise SupplierOfferMediaReviewNotFoundError
+        cover = _current_cover_ref(row)
+        if not cover:
+            raise SupplierOfferMediaReviewStateError(
+                "cover_media_reference is already empty; nothing to clear for text-only publish.",
+            )
+        row.cover_media_reference = None
+        _set_media_review(
+            row,
+            status=SupplierOfferMediaReviewStatus.COVER_CLEARED_FOR_CHANNEL_TEXT_ONLY,
+            cover_snapshot=cover,
+            reason=reason or "Admin cleared showcase cover for text-only channel publish.",
             reviewed_by=reviewed_by,
         )
         session.flush()

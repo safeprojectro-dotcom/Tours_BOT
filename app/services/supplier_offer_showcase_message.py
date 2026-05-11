@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from app.bot.constants import SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX
 from app.core.config import Settings
 from app.models.enums import SupplierServiceComposition, TourSalesMode
 from app.models.supplier import SupplierOffer
@@ -25,6 +24,9 @@ from app.services.supplier_offer_deep_link import (
     mini_app_tour_channel_startapp_url,
     mini_app_tour_detail_url,
     private_bot_deeplink,
+)
+from app.services.supplier_offer_showcase_cover_sendability import (
+    raw_cover_to_telegram_photo_send_argument,
 )
 
 _BUCHAREST = ZoneInfo("Europe/Bucharest")
@@ -369,17 +371,9 @@ class ShowcasePublication:
 
 
 def showcase_photo_send_argument_from_offer(offer: SupplierOffer) -> str | None:
-    """Argument for Telegram ``sendPhoto`` ``photo``: stripped ``file_id`` or ``https`` URL. No bytes fetch."""
+    """Argument for Telegram ``sendPhoto`` ``photo``: ``file_id`` or sendable HTTPS URL (B15C4). No bytes fetch."""
     ref = (getattr(offer, "cover_media_reference", None) or "").strip()
-    if not ref:
-        return None
-    if ref.startswith(SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX):
-        fid = ref.removeprefix(SUPPLIER_OFFER_COVER_TELEGRAM_PHOTO_PREFIX).strip()
-        return fid or None
-    low = ref.lower()
-    if low.startswith(("http://", "https://")):
-        return ref
-    return None
+    return raw_cover_to_telegram_photo_send_argument(ref)
 
 
 def build_showcase_publication(

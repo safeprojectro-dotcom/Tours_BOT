@@ -33,7 +33,14 @@ from app.services.showcase_channel_adapter import (
     TelegramShowcaseChannelAdapter,
     telegram_showcase_channel_publish_request_preview,
 )
-from app.services.supplier_offer_showcase_message import ShowcasePublication, build_showcase_publication
+from app.services.supplier_offer_showcase_cover_sendability import (
+    is_raw_cover_reference_sendable_for_telegram_sendphoto,
+)
+from app.services.supplier_offer_showcase_message import (
+    ShowcasePublication,
+    build_showcase_publication,
+    showcase_photo_send_argument_from_offer,
+)
 from app.services.supplier_offer_showcase_publish_attempt_service import SupplierOfferShowcasePublishAttemptService
 from app.services.telegram_showcase_client import TelegramShowcaseSendError, delete_channel_message
 
@@ -294,6 +301,17 @@ class SupplierOfferModerationService:
             requested_by=requested_by,
             payload_fingerprint=_showcase_publish_payload_fingerprint(pub),
         )
+        if pub.photo_url is not None:
+            cover_ref = (row.cover_media_reference or "").strip()
+            if not is_raw_cover_reference_sendable_for_telegram_sendphoto(cover_ref):
+                raise SupplierOfferModerationStateError(
+                    "Cannot publish: showcase photo would not be sendable to Telegram sendPhoto "
+                    "(replace cover_media_reference, POST …/media/clear-cover-for-text-only, or fix media review).",
+                )
+            if showcase_photo_send_argument_from_offer(row) != pub.photo_url:
+                raise SupplierOfferModerationStateError(
+                    "Cannot publish: showcase publication photo is inconsistent with offer cover state.",
+                )
         adapter = TelegramShowcaseChannelAdapter(settings=cfg)
         try:
             result = adapter.publish(

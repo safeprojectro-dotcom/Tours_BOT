@@ -253,6 +253,39 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         dup = self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
         self.assertEqual(dup.status_code, 400)
 
+    def test_publish_sends_text_only_when_cover_is_google_share_link_b15c4(self) -> None:
+        """Non-sendable HTTPS cover must not be passed to sendPhoto; publish uses sendMessage."""
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour_id, _tour_code = self._prepare_offer_for_channel_publish(oid, headers)
+        self.assertGreater(tour_id, 0)
+
+        c = self.client.put(
+            f"/admin/supplier-offers/{oid}/cover",
+            headers=headers,
+            json={"cover_media_reference": "https://share.google/aslSRRhI6yMkRSuMV"},
+        )
+        self.assertEqual(c.status_code, 200, c.text)
+
+        mock_cfg = SimpleNamespace(
+            telegram_bot_token="dummy-token",
+            telegram_offer_showcase_channel_id="-10012345",
+            telegram_bot_username="testbot",
+            telegram_mini_app_url="https://example.com/mini",
+        )
+        with (
+            patch("app.services.supplier_offer_moderation_service.get_settings", return_value=mock_cfg),
+            patch(
+                "app.services.telegram_showcase_client.send_showcase_publication",
+                return_value=99,
+            ) as send_mock,
+        ):
+            p = self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
+        self.assertEqual(p.status_code, 200, p.text)
+        send_mock.assert_called_once()
+        self.assertIsNone(send_mock.call_args.kwargs.get("photo_url"))
+
     def test_publish_failed_audit_attempt_when_telegram_send_errors(self) -> None:
         _, token = self._bootstrap_supplier_token()
         oid = self._ready_offer(token)

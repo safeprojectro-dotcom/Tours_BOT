@@ -377,6 +377,9 @@ class AdminSupplierOfferCoverMediaQualityReviewRead(BaseModel):
 
     warnings: list[CoverMediaWarningItemRead] = Field(default_factory=list)
     has_warnings: bool = False
+    replacement_requested: bool = False
+    supplier_action_needed: str | None = None
+    supplier_notice_message_ro: str | None = None
 
 
 OperatorWorkflowDangerLevel = Literal[

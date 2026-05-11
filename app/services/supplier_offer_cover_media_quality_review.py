@@ -13,10 +13,19 @@ from app.schemas.supplier_admin import (
     CoverMediaWarningItemRead,
 )
 from app.services.supplier_offer_media_review_service import MEDIA_REVIEW_KEY
+from app.services.supplier_offer_showcase_cover_sendability import (
+    is_raw_cover_reference_sendable_for_telegram_sendphoto,
+)
 from app.services.supplier_offer_showcase_message import showcase_photo_send_argument_from_offer
 
 PHOTO_WITH_CAPTION_MODE = "photo_with_caption"
 TEXT_ONLY_PUBLICATION_MODE = "text_only"
+
+SUPPLIER_COVER_REPLACEMENT_NOTICE_RO = (
+    "Fotografia pentru oferta ta nu poate fi folosită pentru publicare. "
+    "Te rugăm să trimiți o fotografie nouă ca imagine în Telegram, nu ca link. "
+    "Imaginea trebuie să fie clară și relevantă pentru excursie."
+)
 
 # Blocking codes for publish_showcase_channel (C2B8A): subset of evaluate_cover_media_quality_review codes.
 
@@ -114,6 +123,10 @@ _NEGATIVE_MESSAGES: dict[str, tuple[str, str]] = {
         "media_review_fallback_card_required",
         "B7.1 media_review requires a fallback card treatment — verify cover intent before channel publish.",
     ),
+    SupplierOfferMediaReviewStatus.COVER_CLEARED_FOR_CHANNEL_TEXT_ONLY.value: (
+        "media_review_cover_cleared_text_only_channel",
+        "Admin cleared cover_media_reference for text-only channel showcase; snapshot records the prior hero.",
+    ),
 }
 
 
@@ -125,9 +138,10 @@ def approve_cover_for_card_operator_action_disabled_reasons(row: SupplierOffer) 
     if not cur:
         dr.append("No cover_media_reference — nothing to approve.")
         return dr
-    if showcase_photo_send_argument_from_offer(row) is None:
+    if not is_raw_cover_reference_sendable_for_telegram_sendphoto(cur):
         dr.append(
-            "Cover reference is not sendable as Telegram photo (telegram_photo:{file_id} or https URL required).",
+            "Cover reference is not sendable as Telegram sendPhoto "
+            "(telegram_photo:{file_id} or direct image URL only; not share/page links such as Google share).",
         )
         return dr
     mr = _media_review_dict(row)
@@ -193,15 +207,17 @@ def evaluate_cover_media_quality_review(row: SupplierOffer) -> AdminSupplierOffe
 
     if not usable_photo:
         if not cur_cover:
-            add(
-                "cover_media_missing_showcase_photo",
-                "No cover_media_reference — showcase preview/publish runs text-only (no hero photo).",
-            )
+            if mr_status != SupplierOfferMediaReviewStatus.COVER_CLEARED_FOR_CHANNEL_TEXT_ONLY.value:
+                add(
+                    "cover_media_missing_showcase_photo",
+                    "No cover_media_reference — showcase preview/publish runs text-only (no hero photo).",
+                )
         else:
             add(
                 "cover_media_not_sendable_for_showcase",
                 "cover_media_reference is set but is not sendable as Telegram photo "
-                "(use telegram_photo:{file_id} or https URL) — showcase preview/publish will be text-only.",
+                "(use telegram_photo:{file_id} or a direct image URL; not share/page links such as Google share) — "
+                "showcase preview/publish will be text-only.",
             )
 
     if usable_photo and mr_status not in _NEGATIVE_MEDIA_REVIEW:
@@ -218,7 +234,13 @@ def evaluate_cover_media_quality_review(row: SupplierOffer) -> AdminSupplierOffe
                 "approved_for_card for this reference — open Preview, then POST .../media/approve-for-card "
                 "if the image matches the offer.",
             )
+    replacement_requested = mr_status == SupplierOfferMediaReviewStatus.REPLACEMENT_REQUESTED.value
+    supplier_action_needed = "replace_cover_photo" if replacement_requested else None
+    supplier_notice_message_ro = SUPPLIER_COVER_REPLACEMENT_NOTICE_RO if replacement_requested else None
     return AdminSupplierOfferCoverMediaQualityReviewRead(
         warnings=items,
         has_warnings=bool(items),
+        replacement_requested=replacement_requested,
+        supplier_action_needed=supplier_action_needed,
+        supplier_notice_message_ro=supplier_notice_message_ro,
     )

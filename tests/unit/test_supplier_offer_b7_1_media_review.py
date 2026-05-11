@@ -124,6 +124,47 @@ class B71MediaReviewAPITests(FoundationDBTestCase):
         self.assertEqual(r.status_code, 400, r.text)
         self.assertIn("cover", (r.json().get("detail") or ""))
 
+    def test_approve_rejects_google_share_cover_as_non_sendable_b15c4(self) -> None:
+        o = self._offer(cover_media_reference="https://share.google/aslSRRhI6yMkRSuMV")
+        o.packaging_draft_json = {}
+        self.session.commit()
+        h = {"Authorization": "Bearer test-admin-b71"}
+        r = self.client.post(
+            f"/admin/supplier-offers/{o.id}/media/approve-for-card",
+            headers=h,
+            json={"reviewed_by": "admin1"},
+        )
+        self.assertEqual(r.status_code, 400, r.text)
+        self.assertIn("not sendable", (r.json().get("detail") or "").lower())
+
+    def test_clear_cover_for_text_only_channel_b15c4(self) -> None:
+        o = self._offer(cover_media_reference="https://share.google/x")
+        o.packaging_draft_json = {}
+        self.session.commit()
+        h = {"Authorization": "Bearer test-admin-b71"}
+        r = self.client.post(
+            f"/admin/supplier-offers/{o.id}/media/clear-cover-for-text-only",
+            headers=h,
+            json={"reason": "Operator cleared bad share link.", "reviewed_by": "ops1"},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        j = r.json()
+        self.assertIsNone(j.get("cover_media_reference"))
+        mr = (j.get("packaging_draft_json") or {}).get("media_review") or {}
+        self.assertEqual(mr.get("status"), "cover_cleared_for_channel_text_only")
+        self.assertIn("share.google", mr.get("cover_media_reference") or "")
+
+    def test_clear_cover_fails_when_already_empty(self) -> None:
+        o = self._offer(cover_media_reference=None)
+        self.session.commit()
+        h = {"Authorization": "Bearer test-admin-b71"}
+        r = self.client.post(
+            f"/admin/supplier-offers/{o.id}/media/clear-cover-for-text-only",
+            headers=h,
+            json={},
+        )
+        self.assertEqual(r.status_code, 400, r.text)
+
     def test_reject_requires_reason(self) -> None:
         o = self._offer(cover_media_reference="https://x/y.jpg")
         self.session.commit()

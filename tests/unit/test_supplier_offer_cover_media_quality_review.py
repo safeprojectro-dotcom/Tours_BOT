@@ -43,6 +43,25 @@ class CoverMediaQualityReviewTests(unittest.TestCase):
         self.assertIn("cover_media_not_sendable_for_showcase", codes)
         self.assertNotIn("cover_media_not_explicitly_approved_for_card", codes)
 
+    def test_google_share_warns_not_sendable_b15c4(self) -> None:
+        r = evaluate_cover_media_quality_review(_row(cover="https://share.google/abc"))
+        codes = [w.code for w in r.warnings]
+        self.assertIn("cover_media_not_sendable_for_showcase", codes)
+
+    def test_replacement_requested_sets_supplier_notice_b15c4(self) -> None:
+        ref = "https://cdn.example/h.jpg"
+        draft = {
+            MEDIA_REVIEW_KEY: {
+                "status": SupplierOfferMediaReviewStatus.REPLACEMENT_REQUESTED.value,
+                "cover_media_reference": ref,
+            },
+        }
+        r = evaluate_cover_media_quality_review(_row(cover=ref, packaging_draft_json=draft))
+        self.assertTrue(r.replacement_requested)
+        self.assertEqual(r.supplier_action_needed, "replace_cover_photo")
+        self.assertIsNotNone(r.supplier_notice_message_ro)
+        self.assertIn("Fotografia", r.supplier_notice_message_ro or "")
+
     def test_https_without_media_review_warns_approve(self) -> None:
         r = evaluate_cover_media_quality_review(_row(cover="https://cdn.example/hero.jpg"))
         codes = [w.code for w in r.warnings]
@@ -164,6 +183,13 @@ class ApproveCoverForCardOperatorActionTests(unittest.TestCase):
     def test_disabled_when_not_sendable(self) -> None:
         dr = approve_cover_for_card_operator_action_disabled_reasons(_row(cover="s3://bucket/o"))
         self.assertTrue(dr)
+
+    def test_disabled_when_google_share_link_b15c4(self) -> None:
+        dr = approve_cover_for_card_operator_action_disabled_reasons(
+            _row(cover="https://share.google/x"),
+        )
+        self.assertTrue(dr)
+        self.assertTrue(any("share" in x.lower() or "sendable" in x.lower() for x in dr))
 
     def test_disabled_when_already_aligned_approved(self) -> None:
         ref = "https://cdn.example/x.jpg"

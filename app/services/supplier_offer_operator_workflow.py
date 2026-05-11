@@ -318,6 +318,25 @@ def build_operator_workflow(
         ),
     )
 
+    clear_cover_dr: list[str] = []
+    if not offer_has_cover_media_reference:
+        clear_cover_dr.append(
+            "No cover_media_reference on offer — nothing to clear for text-only channel publish.",
+        )
+    clear_cover_ok = not clear_cover_dr
+    actions.append(
+        AdminSupplierOfferOperatorWorkflowActionRead(
+            code="clear_cover_for_text_only_channel",
+            label="Clear showcase cover (text-only channel publish)",
+            enabled=clear_cover_ok,
+            danger_level="safe_mutation",
+            requires_confirmation=True,
+            method="POST",
+            endpoint="/admin/supplier-offers/{offer_id}/media/clear-cover-for-text-only",
+            disabled_reason=_disabled_note(clear_cover_dr),
+        ),
+    )
+
     media_blocking = cover_media_publish_blocking_reasons(
         cover_media_quality_review=cover_media_quality_review,
         publication_mode=showcase_preview.publication_mode,
