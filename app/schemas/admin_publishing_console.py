@@ -1,0 +1,78 @@
+"""B15B: read-only Admin Publishing Console response DTOs (no publish / schedule / mutations)."""
+
+from __future__ import annotations
+
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+PublishingConsoleCandidateKind = Literal["supplier_offer_initial", "tour_promotion"]
+PublishingConsoleItemStatus = Literal["ready", "blocked", "needs_attention"]
+
+
+class AdminPublishingConsoleOfferDebugRead(BaseModel):
+    """Technical fields for diagnostics (B15A advanced mode parity)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    supplier_offer_id: int
+    lifecycle_status: str
+    packaging_status: str
+    can_publish_now: bool
+    next_missing_step: str | None = None
+    effective_showcase_template_id: str | None = None
+    primary_operator_action: str | None = None
+
+
+class AdminPublishingConsoleTourDebugRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tour_id: int
+    tour_code: str
+    tour_status: str
+    sales_mode: str
+    seats_available: int
+    seats_total: int
+    catalog_customer_visible: bool
+
+
+class AdminPublishingConsoleItemRead(BaseModel):
+    """Single publishing candidate card."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_key: str
+    kind: PublishingConsoleCandidateKind
+    console_status: PublishingConsoleItemStatus
+    title: str
+    subtitle: str | None = None
+    target_summary: str
+    next_best_action: str | None = None
+    blocked_reasons: list[str] = Field(default_factory=list)
+    human_summary: str
+    review_package_path: str | None = None
+    admin_tour_path: str | None = None
+    offer_debug: AdminPublishingConsoleOfferDebugRead | None = None
+    tour_debug: AdminPublishingConsoleTourDebugRead | None = None
+
+
+class AdminPublishingConsoleRead(BaseModel):
+    """GET /admin/publishing-console — read-only queue projection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[AdminPublishingConsoleItemRead]
+    total_returned: int
+    console_notice: str = Field(
+        default=(
+            "Read-only publishing console preview. No publish, schedule, skip, retry, or send "
+            "is executed from this view."
+        ),
+    )
+    debug_notice: str = Field(
+        default=("Technical fields are included under each item's offer_debug / tour_debug for diagnostics only."),
+    )
+    query_debug: dict[str, Any] | None = Field(
+        default=None,
+        description="Echo of normalized filters for support.",
+    )

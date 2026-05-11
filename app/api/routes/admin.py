@@ -17,6 +17,7 @@ from app.models.enums import (
     TourStatus,
 )
 from app.models.supplier import Supplier
+from app.schemas.admin_publishing_console import AdminPublishingConsoleRead
 from app.schemas.admin import (
     AdminBoardingPointCreate,
     AdminBoardingPointTranslationUpsert,
@@ -70,6 +71,10 @@ from app.services.admin_order_write import (
     AdminOrderWriteService,
 )
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
+from app.services.admin_publishing_console_service import (
+    AdminPublishingConsoleService,
+    PublishingConsoleKindQuery,
+)
 from app.services.admin_read import AdminReadService
 from app.services.supplier_offer_moderation_service import (
     SupplierOfferModerationNotFoundError,
@@ -213,6 +218,22 @@ def get_admin_overview(
     db: Session = Depends(get_db),
 ) -> AdminOverviewRead:
     return AdminReadService().overview(db)
+
+
+@router.get("/publishing-console", response_model=AdminPublishingConsoleRead)
+def get_admin_publishing_console(
+    db: Session = Depends(get_db),
+    limit: int = Query(default=20, ge=1, le=50),
+    kind: PublishingConsoleKindQuery | None = Query(
+        default=None,
+        description=(
+            "Narrow results: supplier_offer_initial | tour_promotion — or filter by "
+            "console_status: ready | blocked | needs_attention."
+        ),
+    ),
+) -> AdminPublishingConsoleRead:
+    """B15B: read-only queue of channel publication candidates (no publish / schedule / mutations)."""
+    return AdminPublishingConsoleService().read_console(db, limit=limit, kind=kind)
 
 
 @router.post("/tours", response_model=AdminTourDetailRead, status_code=status.HTTP_201_CREATED)
