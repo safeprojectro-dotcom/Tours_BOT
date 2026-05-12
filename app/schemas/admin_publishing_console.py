@@ -20,6 +20,32 @@ PublishingConsoleCtaSafetyStatusLiteral = Literal[
     "not_applicable",
 ]
 
+PublishingConsoleActionDangerLevel = Literal[
+    "safe_read",
+    "safe_mutation",
+    "conversion_enabling",
+    "public_dangerous",
+]
+PublishingConsoleActionSource = Literal["operator_workflow", "console_read_only", "future"]
+
+
+class AdminPublishingConsoleActionAffordanceRead(BaseModel):
+    """B15E: read-only action hints for a console row (no execution from this endpoint)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    label: str
+    kind: PublishingConsoleActionDangerLevel
+    enabled: bool
+    requires_confirmation: bool
+    danger_level: PublishingConsoleActionDangerLevel
+    admin_path: str
+    method: Literal["GET", "POST", "PATCH"]
+    implemented: bool
+    disabled_reason: str | None = None
+    source: PublishingConsoleActionSource
+
 
 class AdminPublishingConsoleOfferDebugRead(BaseModel):
     """Technical fields for diagnostics (B15A advanced mode parity)."""
@@ -79,6 +105,8 @@ class AdminPublishingConsoleItemRead(BaseModel):
     preview_path: str | None = None
     source_status_summary: str | None = None
     audit_hint: str | None = None
+    # B15E — action affordance metadata (read-only; mirrors operator_workflow / console hints).
+    actions: list[AdminPublishingConsoleActionAffordanceRead] = Field(default_factory=list)
 
 
 class AdminPublishingConsoleRead(BaseModel):

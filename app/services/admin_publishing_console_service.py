@@ -1,9 +1,9 @@
-"""B15B/B15D: read-only publishing console queue — aggregates review-package + tour reads + rich readiness; no I/O side effects."""
+"""B15B/B15D/B15E: read-only publishing console queue — aggregates review-package + tour reads + rich readiness + action affordances; no I/O side effects."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from sqlalchemy.orm import Session
 
@@ -12,10 +12,12 @@ from app.models.enums import SupplierOfferLifecycle, TourStatus
 from app.repositories.supplier import SupplierOfferRepository
 from app.repositories.tour import TourRepository
 from app.schemas.admin_publishing_console import (
+    AdminPublishingConsoleActionAffordanceRead,
     AdminPublishingConsoleItemRead,
     AdminPublishingConsoleOfferDebugRead,
     AdminPublishingConsoleRead,
     AdminPublishingConsoleTourDebugRead,
+    PublishingConsoleActionDangerLevel,
     PublishingConsoleCandidateKind,
     PublishingConsoleConversionTargetKind,
     PublishingConsoleCtaSafetyStatusLiteral,
@@ -405,6 +407,75 @@ def _b15d_tour_promotion(
     }
 
 
+def _affordances_from_operator_workflow(
+    rp: AdminSupplierOfferReviewPackageRead,
+    offer_id: int,
+) -> list[AdminPublishingConsoleActionAffordanceRead]:
+    out: list[AdminPublishingConsoleActionAffordanceRead] = []
+    for a in rp.operator_workflow.actions:
+        dl = cast(PublishingConsoleActionDangerLevel, a.danger_level)
+        out.append(
+            AdminPublishingConsoleActionAffordanceRead(
+                code=a.code,
+                label=a.label,
+                kind=dl,
+                enabled=a.enabled,
+                requires_confirmation=a.requires_confirmation,
+                danger_level=dl,
+                admin_path=a.endpoint.replace("{offer_id}", str(offer_id)),
+                method=a.method,
+                implemented=True,
+                disabled_reason=a.disabled_reason,
+                source="operator_workflow",
+            )
+        )
+    return out
+
+
+def _tour_promotion_action_affordances(*, tour_id: int) -> list[AdminPublishingConsoleActionAffordanceRead]:
+    return [
+        AdminPublishingConsoleActionAffordanceRead(
+            code="open_tour_admin",
+            label="Open tour in admin",
+            kind="safe_read",
+            enabled=True,
+            requires_confirmation=False,
+            danger_level="safe_read",
+            admin_path=f"/admin/tours/{tour_id}",
+            method="GET",
+            implemented=True,
+            disabled_reason=None,
+            source="console_read_only",
+        ),
+        AdminPublishingConsoleActionAffordanceRead(
+            code="verify_mini_app_catalog",
+            label="Verify Mini App catalog (customer)",
+            kind="safe_read",
+            enabled=True,
+            requires_confirmation=False,
+            danger_level="safe_read",
+            admin_path="/mini-app/catalog",
+            method="GET",
+            implemented=True,
+            disabled_reason=None,
+            source="console_read_only",
+        ),
+        AdminPublishingConsoleActionAffordanceRead(
+            code="compose_tour_promotion_draft",
+            label="Compose tour promotion draft",
+            kind="safe_read",
+            enabled=False,
+            requires_confirmation=False,
+            danger_level="safe_read",
+            admin_path="/admin/publishing-console",
+            method="GET",
+            implemented=False,
+            disabled_reason="Tour promotion drafts are not implemented yet (forward: B15F+).",
+            source="future",
+        ),
+    ]
+
+
 class AdminPublishingConsoleService:
     """Builds a merged, sorted candidate list for the publishing console (read-only)."""
 
@@ -487,6 +558,7 @@ class AdminPublishingConsoleService:
                 console_status=status,
                 blocked_reasons=br,
             )
+            actions = _affordances_from_operator_workflow(rp, row.id)
             item = AdminPublishingConsoleItemRead(
                 candidate_key=f"supplier_offer:{row.id}",
                 kind="supplier_offer_initial",
@@ -511,6 +583,7 @@ class AdminPublishingConsoleService:
                     primary_operator_action=rp.operator_workflow.primary_next_action,
                 ),
                 tour_debug=None,
+                actions=actions,
                 **b15d,
             )
             out.append(item)
@@ -568,6 +641,7 @@ class AdminPublishingConsoleService:
                 sales_mode=t.sales_mode.value,
                 seats_available=t.seats_available,
             )
+            t_actions = _tour_promotion_action_affordances(tour_id=t.id)
             enriched.append(
                 (
                     t.departure_datetime,
@@ -593,6 +667,7 @@ class AdminPublishingConsoleService:
                             seats_total=t.seats_total,
                             catalog_customer_visible=catalog_visible,
                         ),
+                        actions=t_actions,
                         **b15d,
                     ),
                 ),

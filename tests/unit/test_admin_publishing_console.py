@@ -1,4 +1,4 @@
-"""B15B/B15D: GET /admin/publishing-console read-only publishing queue + rich read-model."""
+"""B15B/B15D/B15E: GET /admin/publishing-console read-only publishing queue + rich read-model + action affordances."""
 
 from __future__ import annotations
 
@@ -188,6 +188,15 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
         self.assertTrue(match["readiness_summary"].endswith("b15c_exact_tour_ready=True"))
         self.assertIsNotNone(match.get("conversion_target_url"))
         self.assertIn("appshort", match["conversion_target_url"] or "")
+        self.assertGreater(len(match.get("actions") or []), 0)
+        ow_actions = [a for a in match["actions"] if a.get("source") == "operator_workflow"]
+        self.assertGreater(len(ow_actions), 0)
+        preview = next((a for a in ow_actions if a["code"] == "get_showcase_preview"), None)
+        self.assertIsNotNone(preview)
+        assert preview is not None
+        self.assertEqual(preview["kind"], "safe_read")
+        self.assertTrue(preview["implemented"])
+        self.assertIn(str(oid), preview["admin_path"])
 
     def test_b15d_supplier_offer_missing_execution_link(self) -> None:
         """Blocked bridge path: no execution link — CTA safety missing_execution_link, next action execution-link."""
@@ -271,6 +280,13 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
         self.assertNotIn("missing_execution_link", match["blocker_codes"])
         self.assertIn("not apply", (match.get("audit_hint") or "").lower())
         self.assertIsNone(match.get("next_action_code"))
+        codes = [a["code"] for a in match["actions"]]
+        self.assertIn("open_tour_admin", codes)
+        self.assertIn("compose_tour_promotion_draft", codes)
+        future = next(a for a in match["actions"] if a["code"] == "compose_tour_promotion_draft")
+        self.assertFalse(future["enabled"])
+        self.assertFalse(future["implemented"])
+        self.assertEqual(future["source"], "future")
 
     def test_b15b_response_shape_backward_compatible(self) -> None:
         """Original B15B top-level and per-item keys remain present (B15D is additive)."""
@@ -302,6 +318,20 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             "cta_safety_status",
             "blocker_codes",
             "admin_action_path",
+            "actions",
+        )
+        action_keys = (
+            "code",
+            "label",
+            "kind",
+            "enabled",
+            "requires_confirmation",
+            "danger_level",
+            "admin_path",
+            "method",
+            "implemented",
+            "disabled_reason",
+            "source",
         )
         for item in body["items"]:
             for key in (
@@ -315,3 +345,7 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
                 self.assertIn(key, item)
             for key in enrich_keys:
                 self.assertIn(key, item)
+            self.assertIsInstance(item["actions"], list)
+            for act in item["actions"]:
+                for ak in action_keys:
+                    self.assertIn(ak, act)

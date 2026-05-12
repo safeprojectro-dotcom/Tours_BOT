@@ -5,6 +5,8 @@
 **Code:** `app/schemas/admin_publishing_console.py` · `app/services/admin_publishing_console_service.py`.  
 **Handoff:** [`docs/HANDOFF_B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW_TO_NEXT_STEP.md`](HANDOFF_B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW_TO_NEXT_STEP.md).
 
+**B15E extends B15D:** **[`docs/B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md`](B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md)** adds additive per-item **`actions[]`** (read-only affordance metadata). All B15D readiness fields remain **unchanged** in meaning and **backward-compatible**.
+
 ---
 
 ## 1. Objective
@@ -81,7 +83,7 @@ The console **does not** own business rules. It **aggregates**:
 python -m pytest tests/unit/test_admin_publishing_console.py -q
 ```
 
-**Result:** `8 passed` (auth, shape, `kind` filters, B15D scenarios, backward-compatible keys).
+**Result:** `8 passed` (auth, shape, `kind` filters, B15D scenarios, B15E `actions[]` / affordances, backward-compatible keys).
 
 ---
 
@@ -96,4 +98,4 @@ python -m pytest tests/unit/test_admin_publishing_console.py -q
 
 ## 8. Next step
 
-**B15E** — explicit publishing-console **action affordances** / design (still guarded; no auto-publish unless separately scoped). Further roadmap: **B15F** (templates/sources), **B15G** (guarded auto-publish **only** after explicit design approval)—see [`docs/B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md`](B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md).
+**B15E** — implemented: **[`docs/B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md`](B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md)** (additive **`actions[]`** on the same endpoint). Further roadmap: **B15F** (templates/sources/channels), **B15E2** (explicit execution, if approved), **B15G** (guarded auto-publish **only** after explicit design approval)—see [`docs/B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md`](B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md).
