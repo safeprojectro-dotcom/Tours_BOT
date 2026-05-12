@@ -21,6 +21,7 @@ from app.services.supplier_offer_deep_link import (
     mini_app_supplier_offer_url,
     mini_app_tour_channel_startapp_url,
     mini_app_tour_detail_url,
+    normalize_telegram_mini_app_short_name_for_url,
     private_bot_deeplink,
 )
 from app.services.supplier_offer_channel_publish_gate import (
@@ -161,6 +162,9 @@ class SupplierOfferModerationService:
                     rezerva_href = mini_app_tour_channel_startapp_url(
                         bot_username=uname,
                         tour_code=display_code,
+                        mini_app_short_name=normalize_telegram_mini_app_short_name_for_url(
+                            getattr(cfg, "telegram_mini_app_short_name", None)
+                        ),
                     )
                 except ValueError:
                     rezerva_href = None

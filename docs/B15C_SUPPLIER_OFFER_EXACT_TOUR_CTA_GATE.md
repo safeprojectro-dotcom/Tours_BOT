@@ -39,7 +39,7 @@ If missing, operators see a bilingual reason (EN/RO), e.g. execution link requir
 ## Showcase builder
 
 - **`build_showcase_publication`** / **`_cta_block_html`**: **`rezerva_tour_code`** + **`channel_rezerva_requires_exact_tour`** for approved/preview paths.
-- **`mini_app_tour_channel_startapp_url`** (**`t.me/{bot}?startapp=tour_{code}`**) for **Rezervă** when **`tour_code`** and bot username are known (B15C1); **`mini_app_tour_detail_url`** as HTTPS fallback when startapp cannot be built; no silent fallback to supplier-offer URL for channel publish when exact tour is required.
+- **`mini_app_tour_channel_startapp_url`** — **`t.me/{bot}?startapp=tour_{code}`** or, when **`TELEGRAM_MINI_APP_SHORT_NAME`** is set (B15C5), **`t.me/{bot}/{short}?startapp=tour_{code}`** for **Rezervă** when **`tour_code`** and bot username are known; **`mini_app_tour_detail_url`** as HTTPS fallback when startapp cannot be built; no silent fallback to supplier-offer URL for channel publish when exact tour is required.
 
 ## Backward compatibility
 

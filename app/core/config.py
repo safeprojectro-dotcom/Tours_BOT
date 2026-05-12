@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     telegram_webhook_secret: str | None = Field(default=None, alias="TELEGRAM_WEBHOOK_SECRET")
     telegram_webhook_base_url: str | None = Field(default=None, alias="TELEGRAM_WEBHOOK_BASE_URL")
     telegram_mini_app_url: str | None = Field(default=None, alias="TELEGRAM_MINI_APP_URL")
+    #: BotFather Mini App short name (second path segment) for direct open: ``t.me/{bot}/{short}?startapp=…`` (B15C5).
+    telegram_mini_app_short_name: str | None = Field(default=None, alias="TELEGRAM_MINI_APP_SHORT_NAME")
     #: Channel ID (e.g. -1001234567890) for moderated supplier-offer showcase posts (Track 3). Optional until publishing.
     telegram_offer_showcase_channel_id: str | None = Field(default=None, alias="TELEGRAM_OFFER_SHOWCASE_CHANNEL_ID")
     #: Comma-separated Telegram user IDs allowed to access admin bot workspace (Y28.1, fail-closed).

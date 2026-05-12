@@ -755,6 +755,29 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertIn(f"tour_{tour_code}", href)
         self.assertRegex(href, r"https://t\.me/previewbot\?startapp=tour_")
 
+    def test_admin_showcase_preview_rezerva_uses_inline_mini_app_short_name_b15c5(self) -> None:
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        tour_id, tour_code = self._prepare_offer_for_channel_publish(oid, headers)
+        self.assertGreater(tour_id, 0)
+        mock_cfg = SimpleNamespace(
+            telegram_bot_username="previewbot",
+            telegram_mini_app_url="https://example.com/app",
+            telegram_mini_app_short_name="appshort",
+            telegram_offer_showcase_channel_id="-10012345",
+            telegram_bot_token="secret-token-for-tests",
+        )
+        with patch(
+            "app.services.supplier_offer_moderation_service.get_settings",
+            return_value=mock_cfg,
+        ):
+            r = self.client.get(f"/admin/supplier-offers/{oid}/showcase-preview", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        href = r.json().get("cta_rezerva_href") or ""
+        self.assertIn(tour_code, href)
+        self.assertRegex(href, r"https://t\.me/previewbot/appshort\?startapp=tour_")
+
     def test_admin_showcase_preview_404_unknown_offer(self) -> None:
         r = self.client.get(
             "/admin/supplier-offers/999999001/showcase-preview",

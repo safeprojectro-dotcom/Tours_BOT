@@ -23,6 +23,7 @@ from app.services.supplier_offer_deep_link import (
     mini_app_supplier_offer_url,
     mini_app_tour_channel_startapp_url,
     mini_app_tour_detail_url,
+    normalize_telegram_mini_app_short_name_for_url,
     private_bot_deeplink,
 )
 from app.services.supplier_offer_showcase_cover_sendability import (
@@ -315,7 +316,13 @@ def _cta_block_html(
         reserve_href: str | None = None
         if uname:
             try:
-                reserve_href = mini_app_tour_channel_startapp_url(bot_username=uname, tour_code=tc)
+                reserve_href = mini_app_tour_channel_startapp_url(
+                    bot_username=uname,
+                    tour_code=tc,
+                    mini_app_short_name=normalize_telegram_mini_app_short_name_for_url(
+                        getattr(settings, "telegram_mini_app_short_name", None)
+                    ),
+                )
             except ValueError:
                 reserve_href = None
         if reserve_href is None and mini_base:

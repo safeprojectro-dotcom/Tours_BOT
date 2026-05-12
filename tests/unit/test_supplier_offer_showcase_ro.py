@@ -110,6 +110,40 @@ class SupplierOfferShowcaseRoTests(unittest.TestCase):
             r'<a href="https://t\.me/mybot\?startapp=tour_B10-SO13-e9f389">Rezervă</a>',
         )
 
+    def test_cta_rezerva_exact_tour_uses_inline_short_name_when_configured_b15c5(self) -> None:
+        cfg = SimpleNamespace(
+            telegram_bot_username="mybot",
+            telegram_mini_app_url="https://t.me/mybot/miniapp",
+            telegram_mini_app_short_name="banattours",
+        )
+        pub = build_showcase_publication(
+            _offer(),
+            cfg,  # type: ignore[arg-type]
+            rezerva_tour_code="B10-SO13-e9f389",
+            channel_rezerva_requires_exact_tour=True,
+        )
+        self.assertRegex(
+            pub.caption_html,
+            r'<a href="https://t\.me/mybot/banattours\?startapp=tour_B10-SO13-e9f389">Rezervă</a>',
+        )
+
+    def test_cta_rezerva_invalid_short_name_ignored_b15c5(self) -> None:
+        cfg = SimpleNamespace(
+            telegram_bot_username="mybot",
+            telegram_mini_app_url="https://t.me/mybot/miniapp",
+            telegram_mini_app_short_name="evil/name",
+        )
+        pub = build_showcase_publication(
+            _offer(),
+            cfg,  # type: ignore[arg-type]
+            rezerva_tour_code="B10-SO13-e9f389",
+            channel_rezerva_requires_exact_tour=True,
+        )
+        self.assertRegex(
+            pub.caption_html,
+            r'<a href="https://t\.me/mybot\?startapp=tour_B10-SO13-e9f389">Rezervă</a>',
+        )
+
     def test_cta_rezerva_exact_tour_fallback_https_when_no_bot_username(self) -> None:
         cfg = SimpleNamespace(telegram_bot_username=None, telegram_mini_app_url="https://app.example/root")
         pub = build_showcase_publication(
