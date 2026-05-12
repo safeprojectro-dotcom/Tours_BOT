@@ -2054,7 +2054,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         call_kw = mock_bridge.call_args.kwargs
         self.assertEqual(call_kw.get("supplier_offer_id"), valid_offer_id)
         self.assertEqual(call_kw.get("created_by"), "telegram:990001")
-        self.assertIn("tour bridge ready", text)
+        self.assertIn("tour linked", text)
         self.assertIn("555", text)
 
     def test_workflow_activate_catalog_confirm_calls_service_when_gate_enabled(self) -> None:
@@ -2203,7 +2203,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         self.assertEqual(call_kw.get("offer_id"), valid_offer_id)
         self.assertEqual(call_kw.get("tour_id"), tour.id)
         self.assertIsNone(call_kw.get("link_note"))
-        self.assertIn("execution link set", text)
+        self.assertIn("booking link set", text)
         self.assertIn(str(tour.id), text)
 
     def test_admin_can_retract_only_from_valid_state(self) -> None:

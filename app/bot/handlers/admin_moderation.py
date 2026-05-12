@@ -1897,6 +1897,48 @@ async def _store_queue_state(
     )
 
 
+def _queue_state_after_offer_mutation(*, fresh_queue_ids: list[int], offer_id: int) -> tuple[list[int], int, int]:
+    """Pin operator queue navigation to offer_id after a mutation (B15C2).
+
+    If the offer still appears in the refreshed queue for this mode, keep that ordering
+    and index. If filters changed such that the offer no longer appears, use a single-item
+    queue so Prev/Next do not jump to another offer.
+    """
+    if offer_id in fresh_queue_ids:
+        idx = fresh_queue_ids.index(offer_id)
+        return fresh_queue_ids, idx, offer_id
+    return [offer_id], 0, offer_id
+
+
+async def _sync_offer_queue_after_mutation(state: FSMContext, *, offer_id: int) -> None:
+    """Re-pin FSM queue navigation to ``offer_id`` without extra ORM reads (B15C2).
+
+    Uses the snapshot already in FSM from ``/admin_ops`` when present; otherwise a
+    single-offer queue. Avoids ``_load_queue_ids`` on the post-commit session, which
+    can interact badly with test harness session/connection binding.
+    """
+    data = await state.get_data()
+    queue_mode = str(data.get("queue_mode") or _QUEUE_MODE_MODERATION)
+    prev = [x for x in data.get("queue_offer_ids", []) if isinstance(x, int)]
+    if offer_id in prev:
+        idx = prev.index(offer_id)
+        await _store_queue_state(
+            state,
+            queue_ids=prev,
+            queue_index=idx,
+            current_offer_id=offer_id,
+            queue_mode=queue_mode,
+        )
+        return
+    await _store_queue_state(
+        state,
+        queue_ids=[offer_id],
+        queue_index=0,
+        current_offer_id=offer_id,
+        queue_mode=queue_mode,
+    )
+
+
 async def _show_current_offer(message: Message, state: FSMContext, *, language_code: str | None) -> None:
     data = await state.get_data()
     current_offer_id = data.get("current_offer_id")
@@ -2693,6 +2735,7 @@ async def admin_ops_operator_workflow_c2b1_packaging(query: CallbackQuery, state
                 return
 
             await query.message.answer(translate(lg, "admin_offer_ow_pkg_done", offer_id=str(offer_id)))
+            await _sync_offer_queue_after_mutation(state, offer_id=offer_id)
             body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=updated))
             await query.message.answer(body, reply_markup=_detail_keyboard(lg, updated, session).as_markup())
             await query.answer()
@@ -2790,6 +2833,7 @@ async def admin_ops_operator_workflow_c2b2_generate_packaging(query: CallbackQue
                 return
 
             await query.message.answer(translate(lg, "admin_offer_ow_pkg_gen_done", offer_id=str(offer_id)))
+            await _sync_offer_queue_after_mutation(state, offer_id=offer_id)
             body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=updated))
             await query.message.answer(body, reply_markup=_detail_keyboard(lg, updated, session).as_markup())
             await query.answer()
@@ -2895,6 +2939,7 @@ async def admin_ops_operator_workflow_c2b6_media_request_photo(query: CallbackQu
                 return
 
             await query.message.answer(translate(lg, "admin_offer_ow_media_req_done", offer_id=str(offer_id)))
+            await _sync_offer_queue_after_mutation(state, offer_id=offer_id)
             body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=updated))
             await query.message.answer(body, reply_markup=_detail_keyboard(lg, updated, session).as_markup())
             await query.answer()
@@ -3002,6 +3047,7 @@ async def admin_ops_operator_workflow_c2b7_2_ok_photo(query: CallbackQuery, stat
                 return
 
             await query.message.answer(translate(lg, "admin_offer_ow_media_ok_done", offer_id=str(offer_id)))
+            await _sync_offer_queue_after_mutation(state, offer_id=offer_id)
             body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=updated))
             await query.message.answer(body, reply_markup=_detail_keyboard(lg, updated, session).as_markup())
             await query.answer()
@@ -3108,6 +3154,7 @@ async def admin_ops_operator_workflow_c2b8b_publish_showcase(query: CallbackQuer
             except Exception:
                 pass
             await query.message.answer(translate(lg, "admin_offer_action_done_publish", offer_id=str(offer_id)))
+            await _sync_offer_queue_after_mutation(state, offer_id=offer_id)
             body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=updated))
             await query.message.answer(body, reply_markup=_detail_keyboard(lg, updated, session).as_markup())
             await query.answer()
@@ -3252,6 +3299,7 @@ async def admin_ops_operator_workflow_c2b10ta_tour_bridge(query: CallbackQuery, 
                     tour_id=str(res.tour_id),
                 ),
             )
+            await _sync_offer_queue_after_mutation(state, offer_id=offer_id)
             body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=offer_read))
             await query.message.answer(body, reply_markup=_detail_keyboard(lg, offer_read, session).as_markup())
             await query.answer()
@@ -3386,6 +3434,7 @@ async def admin_ops_operator_workflow_c2b10tb_activate_catalog(query: CallbackQu
                     tour_id=str(tour_id),
                 ),
             )
+            await _sync_offer_queue_after_mutation(state, offer_id=offer_id)
             body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=offer_read))
             await query.message.answer(body, reply_markup=_detail_keyboard(lg, offer_read, session).as_markup())
             await query.answer()
@@ -3515,6 +3564,7 @@ async def admin_ops_operator_workflow_c2b10tc_execution_link(query: CallbackQuer
                     tour_id=str(tour_id),
                 ),
             )
+            await _sync_offer_queue_after_mutation(state, offer_id=offer_id)
             body = _telegram_plain_trim(_offer_detail_text(session, lg, offer=offer_read))
             await query.message.answer(body, reply_markup=_detail_keyboard(lg, offer_read, session).as_markup())
             await query.answer()
@@ -3640,17 +3690,6 @@ def _parse_action(data: str) -> tuple[str, int, tuple[str, ...]] | None:
         except ValueError:
             return None
     return None
-
-
-def _refresh_queue(current_offer_id: int, *, session, mode: str) -> tuple[list[int], int, int]:
-    queue_ids = _load_queue_ids(session, mode=mode)
-    if queue_ids:
-        if current_offer_id in queue_ids:
-            idx = queue_ids.index(current_offer_id)
-            return queue_ids, idx, current_offer_id
-        idx = 0
-        return queue_ids, idx, queue_ids[0]
-    return [], 0, current_offer_id
 
 
 @router.callback_query(
@@ -3912,6 +3951,14 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                     text,
                     reply_markup=_link_status_keyboard(lg, offer_id=offer_id, has_active_link=has_active).as_markup(),
                 )
+                row_panel = moderation._offers.get_any(session, offer_id=offer_id)
+                if row_panel is not None:
+                    offer_panel = moderation._to_read(row_panel)
+                    await _sync_offer_queue_after_mutation(state, offer_id=offer_id)
+                    await query.message.answer(
+                        _telegram_plain_trim(_offer_detail_text(session, lg, offer=offer_panel)),
+                        reply_markup=_detail_keyboard(lg, offer_panel, session).as_markup(),
+                    )
                 await query.answer()
                 return
             if action_name == ADMIN_OFFERS_ACTION_CLOSE_LINK:
@@ -3927,6 +3974,14 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                     text,
                     reply_markup=_link_status_keyboard(lg, offer_id=offer_id, has_active_link=has_active).as_markup(),
                 )
+                row_panel = moderation._offers.get_any(session, offer_id=offer_id)
+                if row_panel is not None:
+                    offer_panel = moderation._to_read(row_panel)
+                    await _sync_offer_queue_after_mutation(state, offer_id=offer_id)
+                    await query.message.answer(
+                        _telegram_plain_trim(_offer_detail_text(session, lg, offer=offer_panel)),
+                        reply_markup=_detail_keyboard(lg, offer_panel, session).as_markup(),
+                    )
                 await query.answer()
                 return
             if action_name == ADMIN_OFFERS_ACTION_APPROVE:
@@ -3965,7 +4020,11 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                 )
                 await query.answer()
                 return
-            queue_ids, idx, current_offer_id = _refresh_queue(offer_id, session=session, mode=queue_mode)
+            fresh = _load_queue_ids(session, mode=queue_mode)
+            queue_ids, idx, current_offer_id = _queue_state_after_offer_mutation(
+                fresh_queue_ids=fresh,
+                offer_id=offer_id,
+            )
             await _store_queue_state(
                 state,
                 queue_ids=queue_ids,
@@ -3974,11 +4033,11 @@ async def admin_offer_action(query: CallbackQuery, state: FSMContext) -> None:
                 queue_mode=queue_mode,
             )
             await query.message.answer(translate(lg, done_key, offer_id=str(offer_id)))
-            row = moderation._offers.get_any(session, offer_id=current_offer_id)
+            row = moderation._offers.get_any(session, offer_id=offer_id)
             if row is not None:
                 offer = moderation._to_read(row)
                 await query.message.answer(
-                    _offer_detail_text(session, lg, offer=offer),
+                    _telegram_plain_trim(_offer_detail_text(session, lg, offer=offer)),
                     reply_markup=_detail_keyboard(lg, offer, session).as_markup(),
                 )
             elif not queue_ids:
@@ -4241,7 +4300,11 @@ async def admin_offer_reject_reason(message: Message, state: FSMContext) -> None
                 )
             except Exception:
                 pass
-            queue_ids, idx, current_offer_id = _refresh_queue(reject_offer_id, session=session, mode=queue_mode)
+            fresh = _load_queue_ids(session, mode=queue_mode)
+            queue_ids, idx, current_offer_id = _queue_state_after_offer_mutation(
+                fresh_queue_ids=fresh,
+                offer_id=reject_offer_id,
+            )
             await _store_queue_state(
                 state,
                 queue_ids=queue_ids,
@@ -4251,11 +4314,11 @@ async def admin_offer_reject_reason(message: Message, state: FSMContext) -> None
             )
             await state.update_data(reject_offer_id=None)
             await message.answer(translate(lg, "admin_offer_action_done_reject", offer_id=str(reject_offer_id)))
-            row = moderation._offers.get_any(session, offer_id=current_offer_id)
+            row = moderation._offers.get_any(session, offer_id=reject_offer_id)
             if row is not None:
                 offer = moderation._to_read(row)
                 await message.answer(
-                    _offer_detail_text(session, lg, offer=offer),
+                    _telegram_plain_trim(_offer_detail_text(session, lg, offer=offer)),
                     reply_markup=_detail_keyboard(lg, offer, session).as_markup(),
                 )
             elif not queue_ids:
