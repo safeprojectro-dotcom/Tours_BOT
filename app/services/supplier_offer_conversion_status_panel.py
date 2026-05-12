@@ -150,12 +150,18 @@ def _booking_link_row(
     if offer.lifecycle_status is not SupplierOfferLifecycle.PUBLISHED:
         return AdminSupplierOfferConversionStatusPanelLayerRead(
             status="missing",
-            summary="Booking link: missing — execution links are created after showcase publish.",
+            summary=(
+                "Booking link: missing — create an active execution link after the tour is "
+                "listed for sale and before channel publish."
+            ),
             detail=_truncate_detail(exec_review.execution_link_precheck_note),
         )
     return AdminSupplierOfferConversionStatusPanelLayerRead(
         status="missing",
-        summary="Booking link: missing — create an execution link when the tour is ready.",
+        summary=(
+            "Booking link: missing — create an active execution link for the exact Mini App tour "
+            "(channel publish requires it)."
+        ),
         detail=_truncate_detail(exec_review.execution_link_precheck_note),
     )
 

@@ -91,7 +91,7 @@ After **Leagă tur**, Telegram admin **moved to the next offer** in the moderati
 
 ### 8.3 — Stale wording post-B15C
 
-Some review/conversion copy still says execution links are created **after** showcase publish. **B15C** requires **create execution link before channel publish** (bilingual / RO updates as needed). Track under **B15C3**.
+Copy implying execution links were created **after** showcase publish was removed under **B15C3** (**`CURSOR_PROMPT_B15C3_POST_B15C_COPY_POLISH.md`**): conversion status panel summaries, Telegram **Booking link** confirm strings, **`review-package`** precheck note wording, **`admin_conversion_panel_booking_link_missing`**, and related **docs/** sync (**B14A** supersession note, **OPEN_QUESTIONS**, **CHAT_HANDOFF**).
 
 ## 9. Non-goals (historical smoke record)
 

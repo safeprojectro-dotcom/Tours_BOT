@@ -43,11 +43,13 @@ from app.models.enums import (
     OperatorWorkflowIntent,
     PaymentStatus,
     SupplierOfferLifecycle,
+    SupplierOfferPackagingStatus,
     SupplierOfferPaymentMode,
     TourSalesMode,
     TourStatus,
 )
-from app.models.supplier import SupplierOfferExecutionLink
+from app.models.supplier import SupplierOffer, SupplierOfferExecutionLink
+from app.models.supplier_offer_tour_bridge import SupplierOfferTourBridge
 from app.schemas.supplier_admin import (
     AdminSupplierOfferLinkedTourCatalogRead,
     AdminSupplierOfferOperatorWorkflowActionRead,
@@ -148,6 +150,9 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             display_name="Moderation Supplier",
             is_active=True,
         )
+        packaging_kw: dict = {}
+        if lifecycle in (SupplierOfferLifecycle.APPROVED, SupplierOfferLifecycle.PUBLISHED):
+            packaging_kw["packaging_status"] = SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH
         offer = self.create_supplier_offer(
             supplier,
             title=f"Offer {lifecycle.value}",
@@ -157,9 +162,57 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             sales_mode=TourSalesMode.PER_SEAT,
             departure_datetime=datetime.now(UTC).replace(second=0, microsecond=0),
             return_datetime=datetime.now(UTC).replace(second=0, microsecond=0),
+            **packaging_kw,
         )
         self.session.commit()
         return offer.id
+
+    def _attach_active_bridge(self, offer_id: int, tour_id: int) -> None:
+        offer = self.session.get(SupplierOffer, offer_id)
+        self.assertIsNotNone(offer)
+        assert offer is not None
+        self.session.add(
+            SupplierOfferTourBridge(
+                supplier_offer_id=offer_id,
+                tour_id=tour_id,
+                status="active",
+                bridge_kind="linked_existing_tour",
+                created_by="y281-test",
+                source_packaging_status=offer.packaging_status.value,
+                source_lifecycle_status=offer.lifecycle_status.value,
+                packaging_snapshot_json={},
+                notes="y281-test bridge",
+            ),
+        )
+        self.session.commit()
+
+    def _supersede_active_bridge_to_tour(self, offer_id: int, new_tour_id: int) -> None:
+        cur = (
+            self.session.query(SupplierOfferTourBridge)
+            .filter(
+                SupplierOfferTourBridge.supplier_offer_id == offer_id,
+                SupplierOfferTourBridge.status == "active",
+            )
+            .one()
+        )
+        cur.status = "superseded"
+        offer = self.session.get(SupplierOffer, offer_id)
+        self.assertIsNotNone(offer)
+        assert offer is not None
+        self.session.add(
+            SupplierOfferTourBridge(
+                supplier_offer_id=offer_id,
+                tour_id=new_tour_id,
+                status="active",
+                bridge_kind="linked_existing_tour",
+                created_by="y281-test",
+                source_packaging_status=offer.packaging_status.value,
+                source_lifecycle_status=offer.lifecycle_status.value,
+                packaging_snapshot_json={},
+                notes="y281-test bridge supersede",
+            ),
+        )
+        self.session.commit()
 
     @staticmethod
     def _all_answer_texts(message: MagicMock) -> str:
@@ -815,6 +868,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
     def test_admin_can_view_execution_link_status_and_history(self) -> None:
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
         tour = self.create_tour(code="TG-LINK-STATUS", sales_mode=TourSalesMode.PER_SEAT)
+        self._attach_active_bridge(offer_id, tour.id)
         self.session.add(SupplierOfferExecutionLink(supplier_offer_id=offer_id, tour_id=tour.id, link_status="active"))
         self.session.commit()
 
@@ -842,6 +896,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
         tour = self.create_tour(code="TG-LINK-CREATE", sales_mode=TourSalesMode.PER_SEAT)
         tour_id = tour.id
+        self._attach_active_bridge(offer_id, tour_id)
         self.session.commit()
 
         async def body() -> str:
@@ -887,6 +942,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
         compatible = self.create_tour(code="TG-CANDIDATE-OK", title_default="Compatible", sales_mode=TourSalesMode.PER_SEAT)
         mismatch = self.create_tour(code="TG-CANDIDATE-BAD", title_default="Mismatch", sales_mode=TourSalesMode.FULL_BUS)
+        self._attach_active_bridge(offer_id, compatible.id)
         self.session.commit()
         self.assertGreater(compatible.id, 0)
         self.assertGreater(mismatch.id, 0)
@@ -954,7 +1010,8 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
 
     def test_admin_link_code_search_button_enters_search_state(self) -> None:
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
-        self.create_tour(code="TG-SEARCH-ENTRY", sales_mode=TourSalesMode.PER_SEAT)
+        search_tour = self.create_tour(code="TG-SEARCH-ENTRY", sales_mode=TourSalesMode.PER_SEAT)
+        self._attach_active_bridge(offer_id, search_tour.id)
         self.session.commit()
 
         async def body() -> tuple[str, object, dict]:
@@ -1423,6 +1480,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             for idx in range(6)
         ]
         target_id = tours[-1].id
+        self._attach_active_bridge(offer_id, target_id)
         self.session.commit()
 
         async def body() -> tuple[str, list[str], list[str]]:
@@ -1465,6 +1523,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
         tour = self.create_tour(code="TG-SEARCH-CONFIRM", sales_mode=TourSalesMode.PER_SEAT)
         tour_id = tour.id
+        self._attach_active_bridge(offer_id, tour_id)
         self.session.commit()
 
         async def body() -> tuple[str, list[str]]:
@@ -1510,6 +1569,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         )
         tour_id = tour.id
         date_text = target_departure.date().isoformat()
+        self._attach_active_bridge(offer_id, tour_id)
         self.session.commit()
 
         async def body() -> tuple[str, list[str]]:
@@ -1552,6 +1612,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             sales_mode=TourSalesMode.PER_SEAT,
         )
         tour_id = tour.id
+        self._attach_active_bridge(offer_id, tour_id)
         self.session.commit()
 
         async def body() -> tuple[str, list[str]]:
@@ -1590,6 +1651,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
         tour = self.create_tour(code="TG-LINK-CANDIDATE", sales_mode=TourSalesMode.PER_SEAT)
         tour_id = tour.id
+        self._attach_active_bridge(offer_id, tour_id)
         self.session.commit()
 
         async def body() -> str:
@@ -1640,6 +1702,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             for idx in range(6)
         ]
         target_id = tours[-1].id
+        self._attach_active_bridge(offer_id, target_id)
         self.session.commit()
 
         async def body() -> tuple[str, list[str], list[str]]:
@@ -1684,7 +1747,9 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         old_tour_id = old_tour.id
         new_tour_id = new_tour.id
         new_tour_code = new_tour.code
+        self._attach_active_bridge(offer_id, old_tour_id)
         self.session.add(SupplierOfferExecutionLink(supplier_offer_id=offer_id, tour_id=old_tour.id, link_status="active"))
+        self._supersede_active_bridge_to_tour(offer_id, new_tour_id)
         self.session.commit()
 
         async def body() -> str:
@@ -1734,7 +1799,9 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         new_tour = self.create_tour(code="TG-CAND-NEW", sales_mode=TourSalesMode.PER_SEAT)
         old_tour_id = old_tour.id
         new_tour_id = new_tour.id
+        self._attach_active_bridge(offer_id, old_tour_id)
         self.session.add(SupplierOfferExecutionLink(supplier_offer_id=offer_id, tour_id=old_tour_id, link_status="active"))
+        self._supersede_active_bridge_to_tour(offer_id, new_tour_id)
         self.session.commit()
 
         async def body() -> str:
@@ -1780,6 +1847,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
     def test_admin_execution_link_tour_input_blocks_sales_mode_mismatch(self) -> None:
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
         mismatched_tour = self.create_tour(code="TG-LINK-MISMATCH", sales_mode=TourSalesMode.FULL_BUS)
+        self._attach_active_bridge(offer_id, mismatched_tour.id)
         self.session.commit()
 
         async def body() -> str:
@@ -1806,13 +1874,14 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
             )
 
         text = asyncio.run(body())
-        self.assertIn("sales_mode must match", text)
+        self.assertIn("tour sales_mode must match", text)
         links = self.session.query(SupplierOfferExecutionLink).filter_by(supplier_offer_id=offer_id).all()
         self.assertEqual(links, [])
 
     def test_admin_can_close_active_execution_link_from_status_screen(self) -> None:
         offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.PUBLISHED)
         tour = self.create_tour(code="TG-LINK-CLOSE", sales_mode=TourSalesMode.PER_SEAT)
+        self._attach_active_bridge(offer_id, tour.id)
         self.session.add(SupplierOfferExecutionLink(supplier_offer_id=offer_id, tour_id=tour.id, link_status="active"))
         self.session.commit()
 
@@ -1914,6 +1983,16 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
 
     def test_workflow_publish_confirm_publishes_when_gate_enabled(self) -> None:
         valid_offer_id = self._create_offer(lifecycle=SupplierOfferLifecycle.APPROVED)
+        pub_tour = self.create_tour(code="Y281-WF-PUBLISH", sales_mode=TourSalesMode.PER_SEAT)
+        self._attach_active_bridge(valid_offer_id, pub_tour.id)
+        self.session.add(
+            SupplierOfferExecutionLink(
+                supplier_offer_id=valid_offer_id,
+                tour_id=pub_tour.id,
+                link_status="active",
+            ),
+        )
+        self.session.commit()
         mock_cfg = SimpleNamespace(
             telegram_bot_token="dummy-token",
             telegram_offer_showcase_channel_id="-10012345",

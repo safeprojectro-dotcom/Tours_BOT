@@ -353,9 +353,7 @@ class SupplierOfferReviewPackageService:
             SupplierOfferLifecycle.APPROVED,
             SupplierOfferLifecycle.PUBLISHED,
         ):
-            exec_note = (
-                "Moderation must approve the offer (or it must already be published) before execution link."
-            )
+            exec_note = "Moderation must approve the offer before execution link."
         elif active_bridge_result is None:
             exec_note = "Create an active tour bridge before execution link."
         else:

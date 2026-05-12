@@ -4,6 +4,8 @@
 
 **Trigger:** B13G full conversion smoke — **Supplier Offer #12**, **Tour #6**, **`tour_code`** **`B10-SO12-04fb1f`**, **execution link #5** **`active`**, showcase audit **attempt id 2** **`persisted`** (**`showcase_message_id` 25**). Mini App: supplier landing and tour detail look healthy; **`GET /mini-app/tours/{tour_code}/preparation`** returns **404** with detail **`tour is not available for reservation preparation`**.
 
+**Supersession (B15C, 2026):** Subsequent work requires an **active execution link** and **exact-tour chain** **before** channel publish (`can_publish_now` / **`SupplierOfferModerationService.publish`**). Rows **#5–8** in §2.2 and the table in §3 below reflect the **pre-B15C** code baseline captured in this diagnostic; see **[`docs/B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md`](B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md)** and **[`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md)** for current sequencing.
+
 ---
 
 ## 1. Context and recorded facts (smoke)
@@ -53,10 +55,10 @@ def mini_app_supplier_offer_url(*, mini_app_url: str, offer_id: int) -> str:
 | 2 | Always **`/supplier-offers/{id}`**? | **Yes** for channel assembly today. |
 | 3 | Ever **`/tours/{tour_code}`**? | **Not** from showcase builder; **`mini_app_tour_detail_url`** exists for other flows (e.g. B11), not wired into showcase CTA. |
 | 4 | Can builder see execution links? | **No.** **`build_showcase_publication(offer, settings)`** takes only **`SupplierOffer`** + **`Settings`** — no `Session`, no bridge, no **`tour_code`**, no execution-link repository. |
-| 5 | Does publish expect execution link already? | **No.** **`publish_showcase_channel`** / **`SupplierOfferModerationService.publish`** do not load or check execution links; they call **`build_showcase_publication(row, cfg)`** then the Telegram adapter. |
-| 6 | Publish allowed before execution link? | **Yes**, by code: publish gates are lifecycle **`APPROVED`**, packaging/showcase readiness, channel config, media gates — **not** execution link. |
-| 7 | Consistent with docs? | **Yes.** **[`docs/B13_CHANNEL_ADAPTER_DESIGN.md`](B13_CHANNEL_ADAPTER_DESIGN.md)** describes content from **`SupplierOffer`** + settings, not conversion-chain I/O. **[`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md)** canonical chain lists **showcase publish → bridge → activate-for-catalog → execution link (after `published`)** — i.e. **execution link is explicitly later than channel publish**, not a prerequisite. **`_booking_link_row`** in **`build_conversion_status_panel`** states execution links are **created after showcase publish** when offer is not published. |
-| 8 | Product options | **(a)** Keep stable **`/supplier-offers/{id}`** landing (current). **(b)** Require execution link before publish (would be a **new** product gate; contradicts current operator-workflow sequencing docs). **(c)** **Hybrid:** use **`mini_app_tour_detail_url`** when an active link + **`tour_code`** are knowable at **assembly time** — would need **`build_showcase_publication`** (or a wrapper) to accept **derived tour context** (session/read-model change; not present today). |
+| 5 | Does publish expect execution link already? | **Pre-B15C (this diagnostic):** **No** — publish path did not load execution links. **Current (B15C):** **Yes** — **`can_publish_now`** / publish gate require **`channel_publish_exact_tour_ready`** (active execution link + bridge + catalog + **`tour_code`**). |
+| 6 | Publish allowed before execution link? | **Pre-B15C:** **Yes** (lifecycle/packaging/channel gates only). **Current (B15C):** **No** when exact-tour CTA gates apply — publish is blocked until an active booking link exists. |
+| 7 | Consistent with docs? | **Pre-B15C:** runbooks listed publish before execution link; conversion panel copy implied link **after** showcase publish. **Current:** **[`docs/B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md`](B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md)**, **[`docs/ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md`](ADMIN_SHOWCASE_PUBLISH_RUNBOOK.md)** — bridge → catalog → **execution link** → channel publish; **`_booking_link_row`** copy updated under **B15C3** (link **before** channel publish). |
+| 8 | Product options | **(a)** Stable **`/supplier-offers/{id}`** landing (historical CTA path in §2.1). **(b)** **Implemented (B15C):** execution link and exact-tour chain **before** showcase publish. **(c)** **Hybrid CTA assembly:** deep-link **`/tours/{code}`** when context is available — see B15C / showcase builder evolution beyond this snapshot. |
 
 **Conclusion (CTA):** Pointing **Rezervă** at **`/supplier-offers/12`** is **current intentional design** (explicit in code comments and deep-link helper split), **not** an accidental omission in the narrow sense. Whether **marketing** should deep-link **`/tours/{code}`** once the chain is complete is an **open product decision** (B14B-class), not a sequencing bug relative to written runbooks.
 
@@ -66,9 +68,9 @@ def mini_app_supplier_offer_url(*, mini_app_url: str, offer_id: int) -> str:
 
 | Question | Finding |
 |----------|---------|
-| Publish first, link later? | **Yes** in **docs** and **code**. Runbook: publish step precedes execution link in the canonical checklist. **`SupplierOfferModerationService.publish`** has no execution-link dependency. |
-| **`operator_workflow`** | **`publish_showcase_channel`** is enabled from lifecycle/preview/packaging/media. **`create_execution_link`** is gated by **`execution_links_review.can_create_execution_link`** — independent boolean from publish action. Typical **order**: publish offer to channel → then create link when tour/catalog ready. |
-| **`build_showcase_publication`** inputs | **Supplier offer snapshot + settings only** — cannot “see” active execution links without API changes. |
+| Publish first, link later? | **Pre-B15C:** **Yes** in the baseline described above. **Current (B15C):** **No** — operator runbook and gates require **active execution link before channel publish** for supplier-offer showcase with exact-tour **Rezervă**. |
+| **`operator_workflow`** | **Pre-B15C:** publish and execution-link actions were independently gated. **Current:** **`publish_showcase_channel`** stays disabled until **`showcase_preview.can_publish_now`** includes B15C readiness; **`create_execution_link`** runs **before** publish in the **accepted** conversion order. |
+| **`build_showcase_publication`** inputs | Still **`SupplierOffer` + settings** for HTML fragments; **publish eligibility** is enforced upstream in moderation/preview (**B15C**), not by widening this builder’s parameters alone. |
 
 ---
 
