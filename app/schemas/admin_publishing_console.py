@@ -9,6 +9,17 @@ from pydantic import BaseModel, ConfigDict, Field
 PublishingConsoleCandidateKind = Literal["supplier_offer_initial", "tour_promotion"]
 PublishingConsoleItemStatus = Literal["ready", "blocked", "needs_attention"]
 
+PublishingConsoleReadinessLevel = Literal["ready", "needs_action", "blocked", "published", "unknown"]
+PublishingConsoleConversionTargetKind = Literal["exact_tour", "supplier_offer_landing", "none"]
+PublishingConsoleCtaSafetyStatusLiteral = Literal[
+    "exact_tour_ready",
+    "missing_execution_link",
+    "tour_not_listed",
+    "media_blocked",
+    "already_published",
+    "not_applicable",
+]
+
 
 class AdminPublishingConsoleOfferDebugRead(BaseModel):
     """Technical fields for diagnostics (B15A advanced mode parity)."""
@@ -54,6 +65,20 @@ class AdminPublishingConsoleItemRead(BaseModel):
     admin_tour_path: str | None = None
     offer_debug: AdminPublishingConsoleOfferDebugRead | None = None
     tour_debug: AdminPublishingConsoleTourDebugRead | None = None
+    # B15D — richer read-model (additive; still read-only console).
+    readiness_summary: str = ""
+    readiness_level: PublishingConsoleReadinessLevel = "unknown"
+    conversion_target_kind: PublishingConsoleConversionTargetKind = "none"
+    conversion_target_url: str | None = None
+    cta_safety_status: PublishingConsoleCtaSafetyStatusLiteral = "not_applicable"
+    primary_blocker: str | None = None
+    blocker_codes: list[str] = Field(default_factory=list)
+    next_action_code: str | None = None
+    next_action_label: str | None = None
+    admin_action_path: str | None = None
+    preview_path: str | None = None
+    source_status_summary: str | None = None
+    audit_hint: str | None = None
 
 
 class AdminPublishingConsoleRead(BaseModel):

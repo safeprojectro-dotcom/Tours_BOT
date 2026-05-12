@@ -1,7 +1,10 @@
-"""B15B: GET /admin/publishing-console read-only publishing queue."""
+"""B15B/B15D: GET /admin/publishing-console read-only publishing queue + rich read-model."""
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -11,6 +14,13 @@ from sqlalchemy import event
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
+from app.models.enums import (
+    SupplierOfferLifecycle,
+    SupplierOfferPackagingStatus,
+    SupplierOfferPaymentMode,
+    TourSalesMode,
+    TourStatus,
+)
 from tests.unit.base import FoundationDBTestCase
 
 
@@ -35,6 +45,27 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
 
         self.app.dependency_overrides[get_db] = override_get_db
         self.client = TestClient(self.app)
+
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": "Bearer test-admin-secret"}
+
+    def _publishing_console_settings(self) -> SimpleNamespace:
+        return SimpleNamespace(
+            telegram_bot_username="pubconsolebot",
+            telegram_mini_app_url="https://pubconsole.example/mini",
+            telegram_mini_app_short_name="appshort",
+            telegram_offer_showcase_channel_id="-10012345",
+            telegram_bot_token="tok",
+        )
+
+    @contextmanager
+    def _review_console_settings(self, cfg: SimpleNamespace):
+        with (
+            patch("app.services.supplier_offer_moderation_service.get_settings", return_value=cfg),
+            patch("app.services.supplier_offer_review_package_service.get_settings", return_value=cfg),
+            patch("app.services.admin_publishing_console_service.get_settings", return_value=cfg),
+        ):
+            yield
 
     def tearDown(self) -> None:
         self.client.close()
@@ -100,3 +131,187 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             self.assertEqual(item["kind"], "tour_promotion")
             self.assertIn("tour_debug", item)
             self.assertIsNone(item["offer_debug"])
+
+    def test_b15d_supplier_offer_ready_exact_tour_cta(self) -> None:
+        """Ready supplier row: B15C gate green, conversion target is exact tour, CTA safety exact_tour_ready."""
+        supplier = self.create_supplier()
+        dep = datetime(2026, 12, 10, 8, 0, tzinfo=UTC)
+        ret = datetime(2026, 12, 12, 18, 0, tzinfo=UTC)
+        offer = self.create_supplier_offer(
+            supplier,
+            title="B15D Ready Row",
+            program_text="Day one walk.",
+            departure_datetime=dep,
+            return_datetime=ret,
+            seats_total=40,
+            base_price=Decimal("199.00"),
+            currency="EUR",
+            sales_mode=TourSalesMode.PER_SEAT,
+            payment_mode=SupplierOfferPaymentMode.PLATFORM_CHECKOUT,
+            lifecycle_status=SupplierOfferLifecycle.READY_FOR_MODERATION,
+            packaging_status=SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH,
+        )
+        self.session.commit()
+        oid = offer.id
+        h = self._headers()
+
+        self.assertEqual(
+            self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=h).status_code,
+            200,
+        )
+        br = self.client.post(f"/admin/supplier-offers/{oid}/tour-bridge", headers=h, json={})
+        self.assertEqual(br.status_code, 200, br.text)
+        tour_id = br.json()["tour_id"]
+        act = self.client.post(f"/admin/tours/{tour_id}/activate-for-catalog", headers=h, json={})
+        self.assertEqual(act.status_code, 200, act.text)
+        lk = self.client.post(
+            f"/admin/supplier-offers/{oid}/execution-link",
+            headers=h,
+            json={"tour_id": tour_id},
+        )
+        self.assertEqual(lk.status_code, 200, lk.text)
+
+        cfg = self._publishing_console_settings()
+        with self._review_console_settings(cfg):
+            r = self.client.get(
+                "/admin/publishing-console?kind=supplier_offer_initial&limit=20",
+                headers=h,
+            )
+        self.assertEqual(r.status_code, 200, r.text)
+        match = next((it for it in r.json()["items"] if it["candidate_key"] == f"supplier_offer:{oid}"), None)
+        self.assertIsNotNone(match)
+        assert match is not None
+        self.assertEqual(match["console_status"], "ready")
+        self.assertEqual(match["readiness_level"], "ready")
+        self.assertEqual(match["conversion_target_kind"], "exact_tour")
+        self.assertEqual(match["cta_safety_status"], "exact_tour_ready")
+        self.assertTrue(match["readiness_summary"].endswith("b15c_exact_tour_ready=True"))
+        self.assertIsNotNone(match.get("conversion_target_url"))
+        self.assertIn("appshort", match["conversion_target_url"] or "")
+
+    def test_b15d_supplier_offer_missing_execution_link(self) -> None:
+        """Blocked bridge path: no execution link — CTA safety missing_execution_link, next action execution-link."""
+        supplier = self.create_supplier()
+        dep = datetime(2026, 11, 5, 9, 0, tzinfo=UTC)
+        ret = datetime(2026, 11, 7, 19, 0, tzinfo=UTC)
+        offer = self.create_supplier_offer(
+            supplier,
+            title="B15D No Exec Link",
+            program_text="Itinerary.",
+            departure_datetime=dep,
+            return_datetime=ret,
+            seats_total=30,
+            base_price=Decimal("149.00"),
+            currency="EUR",
+            sales_mode=TourSalesMode.PER_SEAT,
+            payment_mode=SupplierOfferPaymentMode.PLATFORM_CHECKOUT,
+            lifecycle_status=SupplierOfferLifecycle.READY_FOR_MODERATION,
+            packaging_status=SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH,
+        )
+        self.session.commit()
+        oid = offer.id
+        h = self._headers()
+
+        self.assertEqual(
+            self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=h).status_code,
+            200,
+        )
+        br = self.client.post(f"/admin/supplier-offers/{oid}/tour-bridge", headers=h, json={})
+        self.assertEqual(br.status_code, 200, br.text)
+        tour_id = br.json()["tour_id"]
+        act = self.client.post(f"/admin/tours/{tour_id}/activate-for-catalog", headers=h, json={})
+        self.assertEqual(act.status_code, 200, act.text)
+
+        cfg = self._publishing_console_settings()
+        with self._review_console_settings(cfg):
+            r = self.client.get(
+                "/admin/publishing-console?kind=supplier_offer_initial&limit=20",
+                headers=h,
+            )
+        self.assertEqual(r.status_code, 200, r.text)
+        match = next((it for it in r.json()["items"] if it["candidate_key"] == f"supplier_offer:{oid}"), None)
+        self.assertIsNotNone(match)
+        assert match is not None
+        self.assertEqual(match["console_status"], "needs_attention")
+        self.assertEqual(match["readiness_level"], "needs_action")
+        self.assertEqual(match["cta_safety_status"], "missing_execution_link")
+        self.assertEqual(match["conversion_target_kind"], "exact_tour")
+        pb = (match.get("primary_blocker") or "").lower()
+        self.assertTrue("execution" in pb or "execution link" in pb or bool(match.get("next_action_code")))
+        self.assertIn("create_execution_link", match["blocker_codes"])
+        self.assertEqual(match["next_action_code"], "create_execution_link")
+        self.assertIn("execution-link", match.get("admin_action_path") or "")
+
+    def test_b15d_tour_promotion_row_safe_summary(self) -> None:
+        """Tour promotion keeps B15B role; supplier-offer CTA semantics are not misleading."""
+        dep = datetime.now(UTC) + timedelta(days=40)
+        tour = self.create_tour(
+            departure_datetime=dep,
+            return_datetime=dep + timedelta(days=2),
+            sales_deadline=dep - timedelta(days=1),
+            status=TourStatus.OPEN_FOR_SALE,
+            seats_available=4,
+            code="B15D-T-PROMO",
+        )
+        self.session.commit()
+
+        cfg = self._publishing_console_settings()
+        with self._review_console_settings(cfg):
+            r = self.client.get(
+                "/admin/publishing-console?kind=tour_promotion&limit=10",
+                headers=self._headers(),
+            )
+        self.assertEqual(r.status_code, 200, r.text)
+        match = next((it for it in r.json()["items"] if it.get("tour_debug", {}).get("tour_id") == tour.id), None)
+        self.assertIsNotNone(match)
+        assert match is not None
+        self.assertEqual(match["kind"], "tour_promotion")
+        self.assertEqual(match["conversion_target_kind"], "exact_tour")
+        self.assertEqual(match["cta_safety_status"], "exact_tour_ready")
+        self.assertNotIn("missing_execution_link", match["blocker_codes"])
+        self.assertIn("not apply", (match.get("audit_hint") or "").lower())
+        self.assertIsNone(match.get("next_action_code"))
+
+    def test_b15b_response_shape_backward_compatible(self) -> None:
+        """Original B15B top-level and per-item keys remain present (B15D is additive)."""
+        mock_cfg = SimpleNamespace(
+            telegram_bot_username="testbot",
+            telegram_mini_app_url="https://example.com/mini",
+            telegram_offer_showcase_channel_id="",
+            telegram_bot_token="",
+        )
+        with patch(
+            "app.services.supplier_offer_moderation_service.get_settings",
+            return_value=mock_cfg,
+        ), patch(
+            "app.services.supplier_offer_review_package_service.get_settings",
+            return_value=mock_cfg,
+        ), patch(
+            "app.services.admin_publishing_console_service.get_settings",
+            return_value=mock_cfg,
+        ):
+            r = self.client.get("/admin/publishing-console?limit=3", headers=self._headers())
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        for key in ("items", "total_returned", "console_notice", "debug_notice"):
+            self.assertIn(key, body)
+        enrich_keys = (
+            "readiness_summary",
+            "readiness_level",
+            "conversion_target_kind",
+            "cta_safety_status",
+            "blocker_codes",
+            "admin_action_path",
+        )
+        for item in body["items"]:
+            for key in (
+                "candidate_key",
+                "kind",
+                "console_status",
+                "title",
+                "target_summary",
+                "human_summary",
+            ):
+                self.assertIn(key, item)
+            for key in enrich_keys:
+                self.assertIn(key, item)

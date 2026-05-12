@@ -1,12 +1,13 @@
-"""B15B: read-only publishing console queue — aggregates review-package + tour reads; no I/O side effects."""
+"""B15B/B15D: read-only publishing console queue — aggregates review-package + tour reads + rich readiness; no I/O side effects."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.enums import SupplierOfferLifecycle, TourStatus
 from app.repositories.supplier import SupplierOfferRepository
 from app.repositories.tour import TourRepository
@@ -16,10 +17,20 @@ from app.schemas.admin_publishing_console import (
     AdminPublishingConsoleRead,
     AdminPublishingConsoleTourDebugRead,
     PublishingConsoleCandidateKind,
+    PublishingConsoleConversionTargetKind,
+    PublishingConsoleCtaSafetyStatusLiteral,
     PublishingConsoleItemStatus,
+    PublishingConsoleReadinessLevel,
 )
 from app.schemas.supplier_admin import AdminSupplierOfferReviewPackageRead
 from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
+from app.services.supplier_offer_channel_publish_gate import channel_publish_exact_tour_ready
+from app.services.supplier_offer_deep_link import (
+    mini_app_supplier_offer_url,
+    mini_app_tour_channel_startapp_url,
+    mini_app_tour_detail_url,
+    normalize_telegram_mini_app_short_name_for_url,
+)
 from app.services.supplier_offer_review_package_service import SupplierOfferReviewPackageService
 
 
@@ -137,6 +148,263 @@ def _blocked_reasons_tour(
     return reasons
 
 
+def _readiness_level_from_console(status: PublishingConsoleItemStatus) -> PublishingConsoleReadinessLevel:
+    if status == "ready":
+        return "ready"
+    if status == "needs_attention":
+        return "needs_action"
+    if status == "blocked":
+        return "blocked"
+    return "unknown"
+
+
+def _blocker_codes_from_b15c_reasons(reasons: list[str]) -> list[str]:
+    codes: list[str] = []
+    for r in reasons:
+        low = r.lower()
+        if "execution link" in low or "execution_link" in low:
+            codes.append("missing_execution_link")
+        elif "catalog-listed" in low or "catalog listed" in low:
+            codes.append("tour_not_listed")
+        elif "open_for_sale" in low:
+            codes.append("tour_not_listed")
+        elif "bridge" in low:
+            codes.append("bridge_mismatch")
+        elif "tour_code" in low or "tour code" in low:
+            codes.append("missing_tour_code")
+        elif "departure" in low:
+            codes.append("tour_departure_invalid")
+    seen: set[str] = set()
+    out: list[str] = []
+    for c in codes:
+        if c not in seen:
+            seen.add(c)
+            out.append(c)
+    return out[:12]
+
+
+def _conversion_url_for_tour_code(settings: object, tour_code: str) -> str | None:
+    tc = (tour_code or "").strip()
+    if not tc:
+        return None
+    uname = (getattr(settings, "telegram_bot_username", None) or "").strip().lstrip("@")
+    if uname and "/" not in uname:
+        try:
+            sn = normalize_telegram_mini_app_short_name_for_url(
+                getattr(settings, "telegram_mini_app_short_name", None)
+            )
+            return mini_app_tour_channel_startapp_url(
+                bot_username=uname,
+                tour_code=tc,
+                mini_app_short_name=sn,
+            )
+        except ValueError:
+            pass
+    base = (getattr(settings, "telegram_mini_app_url", None) or "").strip().rstrip("/")
+    if base:
+        try:
+            return mini_app_tour_detail_url(mini_app_url=base, tour_code=tc)
+        except ValueError:
+            return None
+    return None
+
+
+def _next_action_fields(
+    rp: AdminSupplierOfferReviewPackageRead, offer_id: int
+) -> tuple[str | None, str | None, str | None]:
+    pna = (rp.operator_workflow.primary_next_action or "").strip() or None
+    code_match: str | None = None
+    label_match: str | None = None
+    endpoint_match: str | None = None
+    for a in rp.operator_workflow.actions:
+        if not a.enabled:
+            continue
+        if pna and a.code == pna:
+            code_match, label_match = a.code, a.label
+            endpoint_match = a.endpoint.replace("{offer_id}", str(offer_id))
+            break
+    if code_match is None:
+        for a in rp.operator_workflow.actions:
+            if a.enabled and a.danger_level in ("conversion_enabling", "public_dangerous"):
+                code_match, label_match = a.code, a.label
+                endpoint_match = a.endpoint.replace("{offer_id}", str(offer_id))
+                break
+    return code_match, label_match, endpoint_match
+
+
+def _b15d_supplier_offer(
+    session: Session,
+    *,
+    offer_id: int,
+    rp: AdminSupplierOfferReviewPackageRead,
+    console_status: PublishingConsoleItemStatus,
+    blocked_reasons: list[str],
+) -> dict[str, Any]:
+    settings = get_settings()
+    rl = _readiness_level_from_console(console_status)
+    cc = rp.conversion_closure
+    lc = rp.linked_tour_catalog
+    exact_ok, exact_reasons = channel_publish_exact_tour_ready(session, offer_id=offer_id)
+    tour_code = (lc.tour_code or "").strip() if lc else ""
+
+    ctk: PublishingConsoleConversionTargetKind
+    conv_url: str | None = None
+    base = (settings.telegram_mini_app_url or "").strip().rstrip("/")
+
+    if cc.has_tour_bridge and tour_code:
+        ctk = "exact_tour"
+        conv_url = _conversion_url_for_tour_code(settings, tour_code)
+    elif cc.has_tour_bridge:
+        ctk = "exact_tour"
+        conv_url = None
+    else:
+        ctk = "none"
+        if base:
+            try:
+                conv_url = mini_app_supplier_offer_url(mini_app_url=base, offer_id=offer_id)
+                ctk = "supplier_offer_landing"
+            except ValueError:
+                conv_url = None
+
+    cta_status: PublishingConsoleCtaSafetyStatusLiteral
+    if exact_ok:
+        cta_status = "exact_tour_ready"
+    else:
+        codes_from_reasons = _blocker_codes_from_b15c_reasons(exact_reasons)
+        if "missing_execution_link" in codes_from_reasons:
+            cta_status = "missing_execution_link"
+        elif "tour_not_listed" in codes_from_reasons:
+            cta_status = "tour_not_listed"
+        elif not cc.has_active_execution_link:
+            cta_status = "missing_execution_link"
+        elif lc is not None and not lc.catalog_listed_for_mini_app:
+            cta_status = "tour_not_listed"
+        else:
+            cta_status = "missing_execution_link"
+
+    pub_act = next(
+        (a for a in rp.operator_workflow.actions if a.code == "publish_showcase_channel"),
+        None,
+    )
+    if (
+        exact_ok
+        and not rp.showcase_preview.can_publish_now
+        and pub_act
+        and not pub_act.enabled
+        and pub_act.disabled_reason
+    ):
+        dr = pub_act.disabled_reason.lower()
+        if any(x in dr for x in ("cover", "media", "photo", "c2b8")):
+            cta_status = "media_blocked"
+
+    blocker_codes: list[str] = []
+    ns = (cc.next_missing_step or "").strip()
+    if ns:
+        blocker_codes.append(ns)
+    blocker_codes.extend(_blocker_codes_from_b15c_reasons(exact_reasons))
+    seen2: set[str] = set()
+    dedup: list[str] = []
+    for c in blocker_codes:
+        if c not in seen2:
+            seen2.add(c)
+            dedup.append(c)
+    blocker_codes = dedup[:12]
+
+    primary: str | None = None
+    if blocked_reasons:
+        primary = blocked_reasons[0]
+    elif exact_reasons:
+        primary = exact_reasons[0]
+    elif not rp.showcase_preview.can_publish_now and rp.showcase_preview.warnings:
+        primary = rp.showcase_preview.warnings[0]
+    elif ns:
+        primary = f"Next conversion step: {ns}"
+
+    lifecycle_v = getattr(rp.offer.lifecycle_status, "value", rp.offer.lifecycle_status)
+    packaging_v = getattr(rp.offer.packaging_status, "value", rp.offer.packaging_status)
+    readiness_summary = (
+        f"lifecycle={lifecycle_v}; packaging={packaging_v}; "
+        f"can_publish_now={rp.showcase_preview.can_publish_now}; b15c_exact_tour_ready={exact_ok}"
+    )
+
+    n_code, n_label, adm_path = _next_action_fields(rp, offer_id)
+    audit_hint = (
+        f"Full audit: GET /admin/supplier-offers/{offer_id}/review-package "
+        "(conversion_closure, publish attempts, operator_workflow)."
+    )
+
+    return {
+        "readiness_summary": readiness_summary,
+        "readiness_level": rl,
+        "conversion_target_kind": ctk,
+        "conversion_target_url": conv_url,
+        "cta_safety_status": cta_status,
+        "primary_blocker": primary,
+        "blocker_codes": blocker_codes,
+        "next_action_code": n_code,
+        "next_action_label": n_label,
+        "admin_action_path": adm_path or f"/admin/supplier-offers/{offer_id}/review-package",
+        "preview_path": f"/admin/supplier-offers/{offer_id}/showcase-preview",
+        "source_status_summary": (
+            f"{lifecycle_v} · packaging {packaging_v} · publish_gate={rp.showcase_preview.can_publish_now}"
+        ),
+        "audit_hint": audit_hint,
+    }
+
+
+def _b15d_tour_promotion(
+    *,
+    tour_id: int,
+    tour_code: str,
+    console_status: PublishingConsoleItemStatus,
+    blocked_reasons: list[str],
+    human_summary: str,
+    tour_status: str,
+    sales_mode: str,
+    seats_available: int,
+) -> dict[str, Any]:
+    settings = get_settings()
+    rl = _readiness_level_from_console(console_status)
+    conv_url = _conversion_url_for_tour_code(settings, tour_code)
+
+    if console_status == "ready":
+        cta: PublishingConsoleCtaSafetyStatusLiteral = "exact_tour_ready"
+    elif any("catalog" in b.lower() or "window" in b.lower() for b in blocked_reasons):
+        cta = "tour_not_listed"
+    else:
+        cta = "not_applicable"
+
+    primary = blocked_reasons[0] if blocked_reasons else None
+    codes: list[str] = []
+    if seats_available < 1:
+        codes.append("no_seats")
+    if tour_status.lower() == "closed":
+        codes.append("tour_closed")
+    if sales_mode.lower() == "request_only":
+        codes.append("request_only")
+
+    readiness_summary = (
+        f"tour={tour_code} status={tour_status} sales_mode={sales_mode} "
+        f"seats={seats_available}; console={console_status}"
+    )
+
+    return {
+        "readiness_summary": readiness_summary,
+        "readiness_level": rl,
+        "conversion_target_kind": "exact_tour",
+        "conversion_target_url": conv_url,
+        "cta_safety_status": cta,
+        "primary_blocker": primary,
+        "blocker_codes": codes[:12],
+        "next_action_code": None,
+        "next_action_label": "Open tour in admin" if tour_id else None,
+        "admin_action_path": f"/admin/tours/{tour_id}" if tour_id else None,
+        "preview_path": None,
+        "source_status_summary": human_summary,
+        "audit_hint": "Supplier-offer-only CTA gate fields do not apply to tour promotion rows.",
+    }
+
+
 class AdminPublishingConsoleService:
     """Builds a merged, sorted candidate list for the publishing console (read-only)."""
 
@@ -212,6 +480,13 @@ class AdminPublishingConsoleService:
                 continue
             status = _classify_supplier_offer(rp)
             br = _blocked_reasons_offer(rp, status)
+            b15d = _b15d_supplier_offer(
+                session,
+                offer_id=row.id,
+                rp=rp,
+                console_status=status,
+                blocked_reasons=br,
+            )
             item = AdminPublishingConsoleItemRead(
                 candidate_key=f"supplier_offer:{row.id}",
                 kind="supplier_offer_initial",
@@ -236,6 +511,7 @@ class AdminPublishingConsoleService:
                     primary_operator_action=rp.operator_workflow.primary_next_action,
                 ),
                 tour_debug=None,
+                **b15d,
             )
             out.append(item)
         return out[:max_items]
@@ -282,6 +558,16 @@ class AdminPublishingConsoleService:
                 if status == "ready"
                 else "Not ideal for catalog promotion until gates pass."
             )
+            b15d = _b15d_tour_promotion(
+                tour_id=t.id,
+                tour_code=t.code,
+                console_status=status,
+                blocked_reasons=br,
+                human_summary=human,
+                tour_status=t.status.value,
+                sales_mode=t.sales_mode.value,
+                seats_available=t.seats_available,
+            )
             enriched.append(
                 (
                     t.departure_datetime,
@@ -307,6 +593,7 @@ class AdminPublishingConsoleService:
                             seats_total=t.seats_total,
                             catalog_customer_visible=catalog_visible,
                         ),
+                        **b15d,
                     ),
                 ),
             )

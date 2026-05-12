@@ -1,6 +1,6 @@
 # B15B — Read-only Admin Publishing Console
 
-**Status:** Implemented (read-only API).  
+**Status:** Implemented (read-only API). **B15D** adds an additive rich read-model on the same endpoint — [`docs/B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW.md`](B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW.md).  
 **Design context:** [`docs/B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md`](B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md).  
 **Code:** `app/api/routes/admin.py` · `app/services/admin_publishing_console_service.py` · `app/schemas/admin_publishing_console.py`.
 
@@ -80,6 +80,10 @@ Top-level model: **`AdminPublishingConsoleRead`**.
 | `offer_debug` | Diagnostics for offers (`can_publish_now`, `next_missing_step`, template id, …). |
 | `tour_debug` | Diagnostics for tours (code, seats, catalog visibility flag, …). |
 
+### B15D — additive item fields (same endpoint)
+
+Still **read-only.** Extra fields help operators see readiness, blockers, **B15C** exact-tour CTA safety (`channel_publish_exact_tour_ready`), conversion target hints, and suggested admin paths. See **`AdminPublishingConsoleItemRead`** in `app/schemas/admin_publishing_console.py` and **[`docs/B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW.md`](B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW.md)** for the full list (`readiness_summary`, `readiness_level`, `conversion_target_kind`, `conversion_target_url`, `cta_safety_status`, `primary_blocker`, `blocker_codes`, `next_action_code`, `next_action_label`, `admin_action_path`, `preview_path`, `source_status_summary`, `audit_hint`).
+
 ---
 
 ## Candidate types and readiness assumptions
@@ -105,7 +109,7 @@ Top-level model: **`AdminPublishingConsoleRead`**.
   - **`needs_attention`:** not in customer catalog time window but otherwise saleable.
   - **`ready`:** open for sale, future departure, catalog-visible, at least one seat.
 
-Tour cards are **promotion candidates** only; B15B does **not** create tour-specific channel drafts or templates (see B15D in design doc).
+Tour cards are **promotion candidates** only; B15B does **not** create tour-specific channel drafts or templates. **B15D** enriches tour rows with promotion-oriented readiness text without implying supplier-offer channel CTA semantics (see B15D doc).
 
 ### Filters `ready` / `blocked` / `needs_attention`
 
@@ -192,12 +196,12 @@ This endpoint performs **SELECT-style ORM access** and **reuses read-only aggreg
 
 ## Tests
 
-- **`tests/unit/test_admin_publishing_console.py`** — auth, response shape, `kind=supplier_offer_initial`, `kind=tour_promotion`.
+- **`tests/unit/test_admin_publishing_console.py`** — auth, response shape, `kind=supplier_offer_initial`, `kind=tour_promotion`, **B15D** readiness/CTA scenarios, backward-compatible keys (**`8 passed`** as of B15D docs sync).
 
 ---
 
 ## Next step
 
-**B15C** — implemented: **[`docs/B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md`](B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md)**. **B15C6 (docs checkpoint):** **[`docs/B15C_EXACT_CTA_CHAIN_CLOSURE_CHECKPOINT.md`](B15C_EXACT_CTA_CHAIN_CLOSURE_CHECKPOINT.md)** — stable baseline before the next console slice; **[`docs/HANDOFF_B15C6_CLOSE_EXACT_CTA_CHAIN_CHECKPOINT_TO_NEXT_STEP.md`](HANDOFF_B15C6_CLOSE_EXACT_CTA_CHAIN_CHECKPOINT_TO_NEXT_STEP.md)**. Forward: **B15D** (richer console read/admin surfaces, still no auto-publish/scheduler unless chartered) and **B15E–G** per **[`docs/B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md`](B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md)**.
+**B15C** — implemented: **[`docs/B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md`](B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md)**. **B15C6 (docs checkpoint):** **[`docs/B15C_EXACT_CTA_CHAIN_CLOSURE_CHECKPOINT.md`](B15C_EXACT_CTA_CHAIN_CLOSURE_CHECKPOINT.md)** — stable baseline; **[`docs/HANDOFF_B15C6_CLOSE_EXACT_CTA_CHAIN_CHECKPOINT_TO_NEXT_STEP.md`](HANDOFF_B15C6_CLOSE_EXACT_CTA_CHAIN_CHECKPOINT_TO_NEXT_STEP.md)**. **B15D** — implemented: **[`docs/B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW.md`](B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW.md)**; handoff **[`docs/HANDOFF_B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW_TO_NEXT_STEP.md`](HANDOFF_B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW_TO_NEXT_STEP.md)**. Forward: **B15E–G** per **[`docs/B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md`](B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md)** (B15E: console action affordances/design).
 
 **Related handoff:** [`docs/HANDOFF_B15B_READ_ONLY_ADMIN_PUBLISHING_CONSOLE_TO_NEXT_STEP.md`](HANDOFF_B15B_READ_ONLY_ADMIN_PUBLISHING_CONSOLE_TO_NEXT_STEP.md).
