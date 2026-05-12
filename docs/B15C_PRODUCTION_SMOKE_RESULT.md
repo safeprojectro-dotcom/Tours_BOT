@@ -108,9 +108,17 @@ The table in §3–§6 reflects the **run as observed**; the following applied t
 
 The **2026** operator smoke in §3 captured **`cta_rezerva_href`** as a **direct HTTPS** tour URL (B15C ship at **`37f213e`**). **B15C1** changes **new** showcase captions and admin preview **`cta_rezerva_href`** to **`t.me/{bot}?startapp=tour_{tour_code}`** when **`telegram_bot_username`** is configured, so **Rezervă** opens inside Telegram WebApp with **`initData`**. Historical post **#26** is unchanged per backward-compatibility rules.
 
+## 11. B15C5 — Direct Mini App short-name channel CTA (operator smoke, **PASS**)
+
+After **`06741d`** (*direct short-name tour links*) and **`TELEGRAM_MINI_APP_SHORT_NAME=banattours`**, operators re-smoked **Rezervă** on a **new** channel post: Offer **#15**, tour **`B10-SO15-460344`**, **`showcase_message_id` 28**, **`cta_rezerva_href`** `https://t.me/tours_tm_bot/banattours?startapp=tour_B10-SO15-460344`. **Rezervă** opened the **Mini App directly** (no private-bot launcher); **no** identity warning; reservation path through temporary hold **#55** and payment screen matched **Layer A** expectations.
+
+**Canonical record:** [`docs/B15C5_DIRECT_MINI_APP_LINK_PRODUCTION_SMOKE_RESULT.md`](B15C5_DIRECT_MINI_APP_LINK_PRODUCTION_SMOKE_RESULT.md)  
+**Handoff:** [`docs/HANDOFF_B15C5_DIRECT_MINI_APP_LINK_PRODUCTION_SMOKE_RESULT_TO_NEXT_STEP.md`](HANDOFF_B15C5_DIRECT_MINI_APP_LINK_PRODUCTION_SMOKE_RESULT_TO_NEXT_STEP.md)
+
 ## Related
 
 - Design / gate: [`docs/B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md`](B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md)  
 - Handoff (implementation): [`docs/HANDOFF_B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE_TO_NEXT_STEP.md`](HANDOFF_B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE_TO_NEXT_STEP.md)  
 - Smoke handoff: [`docs/HANDOFF_B15C_PRODUCTION_SMOKE_RESULT_TO_NEXT_STEP.md`](HANDOFF_B15C_PRODUCTION_SMOKE_RESULT_TO_NEXT_STEP.md)  
 - B15C1 handoff: [`docs/HANDOFF_B15C1_MINI_APP_IDENTITY_FROM_CHANNEL_EXACT_TOUR_ENTRY_TO_NEXT_STEP.md`](HANDOFF_B15C1_MINI_APP_IDENTITY_FROM_CHANNEL_EXACT_TOUR_ENTRY_TO_NEXT_STEP.md)
+- B15C5 smoke: [`docs/B15C5_DIRECT_MINI_APP_LINK_PRODUCTION_SMOKE_RESULT.md`](B15C5_DIRECT_MINI_APP_LINK_PRODUCTION_SMOKE_RESULT.md)

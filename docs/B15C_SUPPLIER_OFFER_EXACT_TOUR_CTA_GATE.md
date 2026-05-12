@@ -72,6 +72,8 @@ If missing, operators see a bilingual reason (EN/RO), e.g. execution link requir
 
 **Recorded operator smoke (PASS, prod):** **[`docs/B15C_PRODUCTION_SMOKE_RESULT.md`](B15C_PRODUCTION_SMOKE_RESULT.md)** — Offer **#13**, **`B10-SO13-e9f389`**, with follow-ups noted there.
 
+**Recorded operator smoke (PASS, prod, B15C5 direct short-name CTA):** **[`docs/B15C5_DIRECT_MINI_APP_LINK_PRODUCTION_SMOKE_RESULT.md`](B15C5_DIRECT_MINI_APP_LINK_PRODUCTION_SMOKE_RESULT.md)** — Offer **#15**, **`B10-SO15-460344`**, **`showcase_message_id` 28**, **`TELEGRAM_MINI_APP_SHORT_NAME=banattours`**; **Rezervă** → one-tap Mini App, identity + Layer A hold **#55** recorded.
+
 ## Next steps
 
 - Optional: admin API to **replace tour bridge** without raw DB steps.

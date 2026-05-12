@@ -46,7 +46,15 @@ depending on client/BotFather setup — **not** always one tap from the channel 
 - **Old posts** — leave as-is; only new captions get the new link shape.
 - **Invalid short name** in env is **ignored** (falls back to bare **`?startapp=`**), so a typo should not blank the CTA if bot username is still set.
 
+## Production smoke (operator, **PASS**, 2026-05-09)
+
+With **`TELEGRAM_MINI_APP_SHORT_NAME=banattours`** and BotFather Mini App URL on **`https://miniappui-production.up.railway.app`**, **new** showcase message **#28** (Offer **#15**, tour **`B10-SO15-460344`**) validated **direct** **`https://t.me/tours_tm_bot/banattours?startapp=tour_B10-SO15-460344`** → Mini App → exact tour → reservation → temp hold **#55** → payment screen; **no** private-bot launcher; **no** red identity warning.
+
+**Record:** [`docs/B15C5_DIRECT_MINI_APP_LINK_PRODUCTION_SMOKE_RESULT.md`](B15C5_DIRECT_MINI_APP_LINK_PRODUCTION_SMOKE_RESULT.md)  
+**Post-smoke handoff:** [`docs/HANDOFF_B15C5_DIRECT_MINI_APP_LINK_PRODUCTION_SMOKE_RESULT_TO_NEXT_STEP.md`](HANDOFF_B15C5_DIRECT_MINI_APP_LINK_PRODUCTION_SMOKE_RESULT_TO_NEXT_STEP.md)
+
 ## Related
 
 - Prompt: **`docs/CURSOR_PROMPT_B15C5_DIRECT_MINI_APP_LINK_SHORT_NAME.md`**
+- Smoke prompt: **`docs/CURSOR_PROMPT_B15C5_RECORD_DIRECT_MINI_APP_SMOKE_RESULT.md`**
 - Identity / **`start_param`**: **`docs/HANDOFF_B15C1_MINI_APP_IDENTITY_FROM_CHANNEL_EXACT_TOUR_ENTRY_TO_NEXT_STEP.md`**
