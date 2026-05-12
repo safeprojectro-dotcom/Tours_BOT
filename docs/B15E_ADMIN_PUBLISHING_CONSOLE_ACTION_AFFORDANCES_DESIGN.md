@@ -5,6 +5,8 @@
 **Code:** `app/schemas/admin_publishing_console.py` · `app/services/admin_publishing_console_service.py`.  
 **Handoff:** [`docs/HANDOFF_B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN_TO_NEXT_STEP.md`](HANDOFF_B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN_TO_NEXT_STEP.md).
 
+**B15F (implemented):** **[`docs/B15F_PUBLISHING_CONSOLE_TEMPLATE_SOURCE_CHANNEL_READ_MODEL.md`](B15F_PUBLISHING_CONSOLE_TEMPLATE_SOURCE_CHANNEL_READ_MODEL.md)** adds **source / template / channel / media** read metadata and future-disabled **`template_actions[]`** / **`channel_actions[]`** on the **same** **`GET /admin/publishing-console`** response. **B15E** **`actions[]`** remain **metadata only**; neither slice turns the console into an execution endpoint.
+
 ---
 
 ## 1. Objective
@@ -80,8 +82,9 @@ python -m pytest tests/unit/test_admin_publishing_console.py -q
 
 ## 9. Next steps
 
-1. **B15F** — template / source / channel expansion (read models and design as scoped).
-2. **B15E2** — explicit **action execution** from the console (or dedicated flow) **only if approved**; remains guarded.
-3. **B15G** — guarded **auto-publish** design **only** after explicit product/security approval.
+1. **B15F** — **done:** **[`docs/B15F_PUBLISHING_CONSOLE_TEMPLATE_SOURCE_CHANNEL_READ_MODEL.md`](B15F_PUBLISHING_CONSOLE_TEMPLATE_SOURCE_CHANNEL_READ_MODEL.md)**.
+2. **B15F2** / **B15F3** — template editor / channel selector **read or design** slices **only** if explicitly approved.
+3. **B15E2** — explicit **action execution** from the console (or dedicated flow) **only if approved**; remains guarded.
+4. **B15G** — guarded **auto-publish** design **only** after explicit product/security approval.
 
 See [`docs/B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md`](B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md).

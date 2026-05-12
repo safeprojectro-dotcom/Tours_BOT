@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E: GET /admin/publishing-console read-only publishing queue + rich read-model + action affordances."""
+"""B15B/B15D/B15E/B15F: GET /admin/publishing-console read-only queue + rich read-model + affordances + template/channel read model."""
 
 from __future__ import annotations
 
@@ -198,6 +198,15 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
         self.assertTrue(preview["implemented"])
         self.assertIn(str(oid), preview["admin_path"])
 
+        self.assertEqual(match["source_kind"], "supplier_offer")
+        self.assertEqual(match["source_id"], oid)
+        self.assertEqual(match["template_kind"], "supplier_offer_showcase")
+        self.assertTrue(match["template_preview_available"])
+        self.assertIn("/showcase-preview", match.get("template_preview_path") or "")
+        self.assertEqual(match["channel_kind"], "telegram_showcase_channel")
+        self.assertIn("template_actions", match)
+        self.assertIn("channel_actions", match)
+
     def test_b15d_supplier_offer_missing_execution_link(self) -> None:
         """Blocked bridge path: no execution link — CTA safety missing_execution_link, next action execution-link."""
         supplier = self.create_supplier()
@@ -287,6 +296,12 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
         self.assertFalse(future["enabled"])
         self.assertFalse(future["implemented"])
         self.assertEqual(future["source"], "future")
+        self.assertEqual(match["source_kind"], "tour")
+        self.assertEqual(match["source_id"], tour.id)
+        self.assertEqual(match["template_kind"], "tour_promotion_placeholder")
+        self.assertFalse(match["template_preview_available"])
+        self.assertEqual(match["channel_kind"], "none")
+        self.assertFalse(match["template_actions"][0]["implemented"])
 
     def test_b15b_response_shape_backward_compatible(self) -> None:
         """Original B15B top-level and per-item keys remain present (B15D is additive)."""
@@ -319,6 +334,23 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             "blocker_codes",
             "admin_action_path",
             "actions",
+            "source_kind",
+            "source_id",
+            "source_title",
+            "template_kind",
+            "template_version",
+            "template_source_status",
+            "template_source_summary",
+            "template_preview_available",
+            "template_preview_path",
+            "channel_kind",
+            "channel_status",
+            "channel_ref",
+            "channel_summary",
+            "media_policy_status",
+            "media_summary",
+            "template_actions",
+            "channel_actions",
         )
         action_keys = (
             "code",
@@ -333,6 +365,7 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             "disabled_reason",
             "source",
         )
+        hint_keys = ("code", "label", "implemented", "enabled", "disabled_reason")
         for item in body["items"]:
             for key in (
                 "candidate_key",
@@ -349,3 +382,6 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             for act in item["actions"]:
                 for ak in action_keys:
                     self.assertIn(ak, act)
+            for hint in item["template_actions"] + item["channel_actions"]:
+                for hk in hint_keys:
+                    self.assertIn(hk, hint)

@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E: read-only publishing console queue — aggregates review-package + tour reads + rich readiness + action affordances; no I/O side effects."""
+"""B15B/B15D/B15E/B15F: read-only publishing console — review-package + tours + readiness + affordances + template/channel read model; no I/O side effects."""
 
 from __future__ import annotations
 
@@ -13,20 +13,27 @@ from app.repositories.supplier import SupplierOfferRepository
 from app.repositories.tour import TourRepository
 from app.schemas.admin_publishing_console import (
     AdminPublishingConsoleActionAffordanceRead,
+    AdminPublishingConsoleFutureCapabilityHintRead,
     AdminPublishingConsoleItemRead,
     AdminPublishingConsoleOfferDebugRead,
     AdminPublishingConsoleRead,
     AdminPublishingConsoleTourDebugRead,
     PublishingConsoleActionDangerLevel,
     PublishingConsoleCandidateKind,
+    PublishingConsoleChannelKind,
+    PublishingConsoleChannelStatus,
     PublishingConsoleConversionTargetKind,
     PublishingConsoleCtaSafetyStatusLiteral,
     PublishingConsoleItemStatus,
+    PublishingConsoleMediaPolicyStatus,
     PublishingConsoleReadinessLevel,
+    PublishingConsoleTemplateKind,
+    PublishingConsoleTemplateSourceStatus,
 )
 from app.schemas.supplier_admin import AdminSupplierOfferReviewPackageRead
 from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
 from app.services.supplier_offer_channel_publish_gate import channel_publish_exact_tour_ready
+from app.services.supplier_offer_cover_media_quality_review import cover_media_publish_blocking_reasons
 from app.services.supplier_offer_deep_link import (
     mini_app_supplier_offer_url,
     mini_app_tour_channel_startapp_url,
@@ -476,6 +483,145 @@ def _tour_promotion_action_affordances(*, tour_id: int) -> list[AdminPublishingC
     ]
 
 
+def _b15f_future_template_channel_hints() -> tuple[
+    list[AdminPublishingConsoleFutureCapabilityHintRead],
+    list[AdminPublishingConsoleFutureCapabilityHintRead],
+]:
+    template_actions = [
+        AdminPublishingConsoleFutureCapabilityHintRead(
+            code="edit_showcase_template",
+            label="Edit template",
+            implemented=False,
+            enabled=False,
+            disabled_reason="Template editor is not implemented in B15F.",
+        ),
+    ]
+    channel_actions = [
+        AdminPublishingConsoleFutureCapabilityHintRead(
+            code="select_channel",
+            label="Select channel",
+            implemented=False,
+            enabled=False,
+            disabled_reason="Channel selector is not implemented in B15F.",
+        ),
+    ]
+    return template_actions, channel_actions
+
+
+def _b15f_supplier_offer(
+    *,
+    settings: object,
+    rp: AdminSupplierOfferReviewPackageRead,
+    offer_id: int,
+    title: str,
+) -> dict[str, Any]:
+    st = rp.showcase_template_preview
+    sp = rp.showcase_preview
+    cm = rp.cover_media_quality_review
+    channel_id = (getattr(settings, "telegram_offer_showcase_channel_id", None) or "").strip()
+    channel_configured = bool(channel_id)
+
+    blocking = cover_media_publish_blocking_reasons(
+        cover_media_quality_review=cm,
+        publication_mode=sp.publication_mode,
+    )
+    if blocking:
+        media_status = cast(PublishingConsoleMediaPolicyStatus, "media_blocked")
+        media_summary = blocking[0]
+    elif cm.has_warnings and cm.warnings:
+        media_status = cast(PublishingConsoleMediaPolicyStatus, "media_review_pending")
+        media_summary = cm.warnings[0].message
+    elif sp.publication_mode == "text_only":
+        media_status = cast(PublishingConsoleMediaPolicyStatus, "text_only_channel_ok")
+        media_summary = (
+            "Text-only channel publication mode for this preview; no showcase photo required on the card."
+        )
+    else:
+        media_status = cast(PublishingConsoleMediaPolicyStatus, "publish_safe_metadata_only")
+        if sp.showcase_photo_url:
+            media_summary = (
+                "Showcase preview resolves a photo URL or Telegram reference; durable bytes policy is still "
+                "metadata-first (B7)."
+            )
+        else:
+            media_summary = (
+                "Photo-with-caption mode in preview but no showcase photo URL; verify cover and approve-for-card gates."
+            )
+
+    eff = (st.effective_template_id or "").strip()
+    if eff and st.preview_fact_lines_ro_html:
+        tpl_status = cast(PublishingConsoleTemplateSourceStatus, "available")
+    elif eff:
+        tpl_status = cast(PublishingConsoleTemplateSourceStatus, "partial")
+    else:
+        tpl_status = cast(PublishingConsoleTemplateSourceStatus, "unavailable")
+
+    tpl_summary_parts: list[str] = []
+    if eff:
+        tpl_summary_parts.append(f"Effective B12B template `{eff}` from packaging draft.")
+    else:
+        tpl_summary_parts.append("No effective marketing template id; complete packaging or template selection.")
+    if st.notes:
+        tpl_summary_parts.append(st.notes[0][:200])
+
+    t_actions, c_actions = _b15f_future_template_channel_hints()
+    clean_title = (title or "").strip() or f"Offer #{offer_id}"
+
+    return {
+        "source_kind": "supplier_offer",
+        "source_id": offer_id,
+        "source_title": clean_title,
+        "template_kind": cast(PublishingConsoleTemplateKind, "supplier_offer_showcase"),
+        "template_version": f"{eff}_b12b_deterministic" if eff else "packaging_pending",
+        "template_source_status": tpl_status,
+        "template_source_summary": " ".join(tpl_summary_parts).strip(),
+        "template_preview_available": True,
+        "template_preview_path": f"/admin/supplier-offers/{offer_id}/showcase-preview",
+        "channel_kind": cast(PublishingConsoleChannelKind, "telegram_showcase_channel"),
+        "channel_status": cast(
+            PublishingConsoleChannelStatus,
+            "configured" if channel_configured else "not_configured",
+        ),
+        "channel_ref": channel_id or None,
+        "channel_summary": (
+            "Telegram showcase channel id present in settings."
+            if channel_configured
+            else "Telegram showcase channel id missing in settings; channel publish cannot succeed until configured."
+        ),
+        "media_policy_status": media_status,
+        "media_summary": media_summary,
+        "template_actions": t_actions,
+        "channel_actions": c_actions,
+    }
+
+
+def _b15f_tour_promotion(*, tour_id: int, title: str) -> dict[str, Any]:
+    t_actions, c_actions = _b15f_future_template_channel_hints()
+    return {
+        "source_kind": "tour",
+        "source_id": tour_id,
+        "source_title": (title or "").strip() or f"Tour #{tour_id}",
+        "template_kind": cast(PublishingConsoleTemplateKind, "tour_promotion_placeholder"),
+        "template_version": "not_implemented",
+        "template_source_status": cast(PublishingConsoleTemplateSourceStatus, "not_applicable"),
+        "template_source_summary": "Tour promotion templates are not implemented in B15F (read-model placeholder only).",
+        "template_preview_available": False,
+        "template_preview_path": None,
+        "channel_kind": cast(PublishingConsoleChannelKind, "none"),
+        "channel_status": cast(PublishingConsoleChannelStatus, "not_applicable"),
+        "channel_ref": None,
+        "channel_summary": (
+            "No supplier-offer Telegram showcase channel binding on tour promotion rows in B15F."
+        ),
+        "media_policy_status": cast(PublishingConsoleMediaPolicyStatus, "not_applicable"),
+        "media_summary": (
+            "Supplier-offer showcase cover/media gating does not apply to tour promotion placeholders."
+        ),
+        "template_actions": t_actions,
+        "channel_actions": c_actions,
+    }
+
+
 class AdminPublishingConsoleService:
     """Builds a merged, sorted candidate list for the publishing console (read-only)."""
 
@@ -559,11 +705,18 @@ class AdminPublishingConsoleService:
                 blocked_reasons=br,
             )
             actions = _affordances_from_operator_workflow(rp, row.id)
+            item_title = (row.title or f"Offer #{row.id}").strip() or f"Offer #{row.id}"
+            b15f = _b15f_supplier_offer(
+                settings=get_settings(),
+                rp=rp,
+                offer_id=row.id,
+                title=item_title,
+            )
             item = AdminPublishingConsoleItemRead(
                 candidate_key=f"supplier_offer:{row.id}",
                 kind="supplier_offer_initial",
                 console_status=status,
-                title=(row.title or f"Offer #{row.id}").strip() or f"Offer #{row.id}",
+                title=item_title,
                 subtitle=f"Lifecycle {row.lifecycle_status}",
                 target_summary=_target_summary_offer(rp),
                 next_best_action=rp.operator_workflow.primary_next_action or (
@@ -585,6 +738,7 @@ class AdminPublishingConsoleService:
                 tour_debug=None,
                 actions=actions,
                 **b15d,
+                **b15f,
             )
             out.append(item)
         return out[:max_items]
@@ -642,6 +796,8 @@ class AdminPublishingConsoleService:
                 seats_available=t.seats_available,
             )
             t_actions = _tour_promotion_action_affordances(tour_id=t.id)
+            tour_title = (t.title_default or t.code or f"Tour #{t.id}").strip()
+            b15f = _b15f_tour_promotion(tour_id=t.id, title=tour_title)
             enriched.append(
                 (
                     t.departure_datetime,
@@ -649,7 +805,7 @@ class AdminPublishingConsoleService:
                         candidate_key=f"tour:{t.id}",
                         kind="tour_promotion",
                         console_status=status,
-                        title=(t.title_default or t.code or f"Tour #{t.id}").strip(),
+                        title=tour_title,
                         subtitle=f"{t.code} · {t.sales_mode.value}",
                         target_summary=f"exact_tour · /mini-app/tours/{t.code} (conceptual; B15D template)",
                         next_best_action="compose_tour_promotion_draft" if status == "ready" else "resolve_tour_blockers",
@@ -669,6 +825,7 @@ class AdminPublishingConsoleService:
                         ),
                         actions=t_actions,
                         **b15d,
+                        **b15f,
                     ),
                 ),
             )

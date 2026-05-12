@@ -7,6 +7,8 @@
 
 **B15E extends B15D:** **[`docs/B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md`](B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md)** adds additive per-item **`actions[]`** (read-only affordance metadata). All B15D readiness fields remain **unchanged** in meaning and **backward-compatible**.
 
+**B15F extends the same endpoint:** **[`docs/B15F_PUBLISHING_CONSOLE_TEMPLATE_SOURCE_CHANNEL_READ_MODEL.md`](B15F_PUBLISHING_CONSOLE_TEMPLATE_SOURCE_CHANNEL_READ_MODEL.md)** adds **source / template / channel / media** metadata plus future-disabled **`template_actions[]`** / **`channel_actions[]`** hints. **B15D** readiness fields (**`readiness_summary`**, **`readiness_level`**, blockers, CTA safety, **`preview_path`**, etc.) remain **unchanged** and **backward-compatible**.
+
 ---
 
 ## 1. Objective
@@ -83,7 +85,7 @@ The console **does not** own business rules. It **aggregates**:
 python -m pytest tests/unit/test_admin_publishing_console.py -q
 ```
 
-**Result:** `8 passed` (auth, shape, `kind` filters, B15D scenarios, B15E `actions[]` / affordances, backward-compatible keys).
+**Result:** `8 passed` (auth, shape, `kind` filters, B15D scenarios, B15E `actions[]` / affordances, B15F source/template/channel/media fields, backward-compatible keys).
 
 ---
 
@@ -98,4 +100,4 @@ python -m pytest tests/unit/test_admin_publishing_console.py -q
 
 ## 8. Next step
 
-**B15E** — implemented: **[`docs/B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md`](B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md)** (additive **`actions[]`** on the same endpoint). Further roadmap: **B15F** (templates/sources/channels), **B15E2** (explicit execution, if approved), **B15G** (guarded auto-publish **only** after explicit design approval)—see [`docs/B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md`](B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md).
+**B15E** — implemented: **[`docs/B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md`](B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md)** (additive **`actions[]`** on the same endpoint). **B15F** — implemented: **[`docs/B15F_PUBLISHING_CONSOLE_TEMPLATE_SOURCE_CHANNEL_READ_MODEL.md`](B15F_PUBLISHING_CONSOLE_TEMPLATE_SOURCE_CHANNEL_READ_MODEL.md)** (template/source/channel/media read metadata). Further roadmap: **B15F2** / **B15F3** / **B15E2** (only if approved), **B15G** (guarded auto-publish **only** after explicit design approval)—see [`docs/B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md`](B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md).

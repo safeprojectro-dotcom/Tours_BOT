@@ -1,4 +1,4 @@
-"""B15B: read-only Admin Publishing Console response DTOs (no publish / schedule / mutations)."""
+"""B15B/B15D/B15E/B15F: read-only Admin Publishing Console response DTOs (no publish / schedule / mutations)."""
 
 from __future__ import annotations
 
@@ -27,6 +27,31 @@ PublishingConsoleActionDangerLevel = Literal[
     "public_dangerous",
 ]
 PublishingConsoleActionSource = Literal["operator_workflow", "console_read_only", "future"]
+
+PublishingConsoleSourceKind = Literal["supplier_offer", "tour"]
+PublishingConsoleTemplateKind = Literal["supplier_offer_showcase", "tour_promotion_placeholder", "none"]
+PublishingConsoleTemplateSourceStatus = Literal["available", "partial", "unavailable", "not_applicable"]
+PublishingConsoleChannelKind = Literal["telegram_showcase_channel", "none"]
+PublishingConsoleChannelStatus = Literal["configured", "not_configured", "not_applicable"]
+PublishingConsoleMediaPolicyStatus = Literal[
+    "publish_safe_metadata_only",
+    "media_review_pending",
+    "media_blocked",
+    "text_only_channel_ok",
+    "not_applicable",
+]
+
+
+class AdminPublishingConsoleFutureCapabilityHintRead(BaseModel):
+    """B15F: placeholder rows for template/channel UX not built yet (read-only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    label: str
+    implemented: bool
+    enabled: bool
+    disabled_reason: str | None = None
 
 
 class AdminPublishingConsoleActionAffordanceRead(BaseModel):
@@ -107,6 +132,24 @@ class AdminPublishingConsoleItemRead(BaseModel):
     audit_hint: str | None = None
     # B15E — action affordance metadata (read-only; mirrors operator_workflow / console hints).
     actions: list[AdminPublishingConsoleActionAffordanceRead] = Field(default_factory=list)
+    # B15F — template/source/channel visibility (read-only; no editor or selector).
+    source_kind: PublishingConsoleSourceKind = "supplier_offer"
+    source_id: int = 0
+    source_title: str = ""
+    template_kind: PublishingConsoleTemplateKind = "none"
+    template_version: str = ""
+    template_source_status: PublishingConsoleTemplateSourceStatus = "not_applicable"
+    template_source_summary: str = ""
+    template_preview_available: bool = False
+    template_preview_path: str | None = None
+    channel_kind: PublishingConsoleChannelKind = "none"
+    channel_status: PublishingConsoleChannelStatus = "not_applicable"
+    channel_ref: str | None = None
+    channel_summary: str = ""
+    media_policy_status: PublishingConsoleMediaPolicyStatus = "not_applicable"
+    media_summary: str = ""
+    template_actions: list[AdminPublishingConsoleFutureCapabilityHintRead] = Field(default_factory=list)
+    channel_actions: list[AdminPublishingConsoleFutureCapabilityHintRead] = Field(default_factory=list)
 
 
 class AdminPublishingConsoleRead(BaseModel):
