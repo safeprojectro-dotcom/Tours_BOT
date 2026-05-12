@@ -1,6 +1,7 @@
 # B15C — Supplier-offer exact Mini App tour CTA gate
 
 **Status:** Implemented (code + tests).  
+**Closure checkpoint (docs):** [`docs/B15C_EXACT_CTA_CHAIN_CLOSURE_CHECKPOINT.md`](B15C_EXACT_CTA_CHAIN_CLOSURE_CHECKPOINT.md) — **B15C6** baseline before **B15D**.  
 **Prompt:** [`docs/CURSOR_PROMPT_B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md`](CURSOR_PROMPT_B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md).
 
 ## Purpose

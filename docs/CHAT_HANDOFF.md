@@ -16,7 +16,7 @@ Completed closeout docs:
 
 **Media pipeline** remains **paused** at **B7.4D** until an explicit charter — [`docs/TELEGRAM_CONVERSION_AND_MEDIA_FOUNDATION_CHECKPOINT.md`](TELEGRAM_CONVERSION_AND_MEDIA_FOUNDATION_CHECKPOINT.md).
 
----
+**B15C exact CTA chain — closure checkpoint (B15C6, docs):** Stable baseline after exact-tour **Rezervă**, execution-link-before-publish, short-name **`startapp`**, cover guard, admin nav, and copy alignment — [`docs/B15C_EXACT_CTA_CHAIN_CLOSURE_CHECKPOINT.md`](B15C_EXACT_CTA_CHAIN_CLOSURE_CHECKPOINT.md). **Next:** [`docs/HANDOFF_B15C6_CLOSE_EXACT_CTA_CHAIN_CHECKPOINT_TO_NEXT_STEP.md`](HANDOFF_B15C6_CLOSE_EXACT_CTA_CHAIN_CHECKPOINT_TO_NEXT_STEP.md) (**B15D**).
 
 ## Continuity Sync — Admin Offer Review & Approval Gate — Slice 1 (2026-04-27)
 

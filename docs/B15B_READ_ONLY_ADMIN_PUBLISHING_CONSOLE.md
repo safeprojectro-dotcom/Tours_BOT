@@ -198,6 +198,6 @@ This endpoint performs **SELECT-style ORM access** and **reuses read-only aggreg
 
 ## Next step
 
-**B15C** — implemented: **[`docs/B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md`](B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md)**. Forward: **B15D–G** (tour promotion drafts, scheduler, limited auto-publish, etc.) per **[`docs/B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md`](B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md)**.
+**B15C** — implemented: **[`docs/B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md`](B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md)**. **B15C6 (docs checkpoint):** **[`docs/B15C_EXACT_CTA_CHAIN_CLOSURE_CHECKPOINT.md`](B15C_EXACT_CTA_CHAIN_CLOSURE_CHECKPOINT.md)** — stable baseline before the next console slice; **[`docs/HANDOFF_B15C6_CLOSE_EXACT_CTA_CHAIN_CHECKPOINT_TO_NEXT_STEP.md`](HANDOFF_B15C6_CLOSE_EXACT_CTA_CHAIN_CHECKPOINT_TO_NEXT_STEP.md)**. Forward: **B15D** (richer console read/admin surfaces, still no auto-publish/scheduler unless chartered) and **B15E–G** per **[`docs/B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md`](B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md)**.
 
 **Related handoff:** [`docs/HANDOFF_B15B_READ_ONLY_ADMIN_PUBLISHING_CONSOLE_TO_NEXT_STEP.md`](HANDOFF_B15B_READ_ONLY_ADMIN_PUBLISHING_CONSOLE_TO_NEXT_STEP.md).
