@@ -3,7 +3,8 @@
 **Status:** Implemented (additive read-model only; **metadata**, not execution).  
 **Builds on:** [`docs/B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW.md`](B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW.md), [`docs/B15B_READ_ONLY_ADMIN_PUBLISHING_CONSOLE.md`](B15B_READ_ONLY_ADMIN_PUBLISHING_CONSOLE.md).  
 **Code:** `app/schemas/admin_publishing_console.py` · `app/services/admin_publishing_console_service.py`.  
-**Handoff:** [`docs/HANDOFF_B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN_TO_NEXT_STEP.md`](HANDOFF_B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN_TO_NEXT_STEP.md).
+**Handoff:** [`docs/HANDOFF_B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN_TO_NEXT_STEP.md`](HANDOFF_B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN_TO_NEXT_STEP.md).  
+**Foundation closure (B15B–B15F):** [`docs/B15_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE_CHECKPOINT.md`](B15_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE_CHECKPOINT.md).
 
 **B15F (implemented):** **[`docs/B15F_PUBLISHING_CONSOLE_TEMPLATE_SOURCE_CHANNEL_READ_MODEL.md`](B15F_PUBLISHING_CONSOLE_TEMPLATE_SOURCE_CHANNEL_READ_MODEL.md)** adds **source / template / channel / media** read metadata and future-disabled **`template_actions[]`** / **`channel_actions[]`** on the **same** **`GET /admin/publishing-console`** response. **B15E** **`actions[]`** remain **metadata only**; neither slice turns the console into an execution endpoint.
 

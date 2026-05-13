@@ -3,7 +3,8 @@
 **Status:** Implemented (additive read-model only).  
 **Builds on:** [`docs/B15B_READ_ONLY_ADMIN_PUBLISHING_CONSOLE.md`](B15B_READ_ONLY_ADMIN_PUBLISHING_CONSOLE.md).  
 **Code:** `app/schemas/admin_publishing_console.py` · `app/services/admin_publishing_console_service.py`.  
-**Handoff:** [`docs/HANDOFF_B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW_TO_NEXT_STEP.md`](HANDOFF_B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW_TO_NEXT_STEP.md).
+**Handoff:** [`docs/HANDOFF_B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW_TO_NEXT_STEP.md`](HANDOFF_B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW_TO_NEXT_STEP.md).  
+**Foundation closure (B15B–B15F):** [`docs/B15_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE_CHECKPOINT.md`](B15_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE_CHECKPOINT.md).
 
 **B15E extends B15D:** **[`docs/B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md`](B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md)** adds additive per-item **`actions[]`** (read-only affordance metadata). All B15D readiness fields remain **unchanged** in meaning and **backward-compatible**.
 

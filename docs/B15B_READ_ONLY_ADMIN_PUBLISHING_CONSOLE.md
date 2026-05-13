@@ -1,6 +1,7 @@
 # B15B — Read-only Admin Publishing Console
 
 **Status:** Implemented (read-only API). **B15D** adds an additive rich read-model on the same endpoint — [`docs/B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW.md`](B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW.md).  
+**Foundation closure (B15B–B15F):** [`docs/B15_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE_CHECKPOINT.md`](B15_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE_CHECKPOINT.md).  
 **Design context:** [`docs/B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md`](B15_ADMIN_PUBLISHING_CONSOLE_DESIGN.md).  
 **Code:** `app/api/routes/admin.py` · `app/services/admin_publishing_console_service.py` · `app/schemas/admin_publishing_console.py`.
 
