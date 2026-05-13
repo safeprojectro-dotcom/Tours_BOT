@@ -59,6 +59,12 @@ class AdminOpsDashboardFiltersRead(BaseModel):
     )
 
 
+class AdminOpsOrderListItem(AdminOrderListItem):
+    """`recent_orders` row for OPS dashboard — adds `admin_path` (B16C); all other fields match `AdminOrderListItem`."""
+
+    admin_path: str = Field(description="Admin HTTP path to order detail.")
+
+
 class AdminOpsDashboardSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -95,6 +101,7 @@ class AdminOpsUpcomingTourRead(BaseModel):
     status: TourStatus
     seats_available: int
     seats_total: int
+    admin_path: str = Field(description="Admin HTTP path to tour detail.")
 
 
 class AdminOpsRecentPublicationRead(BaseModel):
@@ -106,6 +113,9 @@ class AdminOpsRecentPublicationRead(BaseModel):
     showcase_message_id: int | None = None
     channel_ref: str | None = None
     created_at: datetime
+    admin_path: str = Field(
+        description="Admin HTTP path to supplier offer review package when supplier_offer_id is set.",
+    )
 
 
 class AdminOpsConversionLinkRead(BaseModel):
@@ -116,6 +126,11 @@ class AdminOpsConversionLinkRead(BaseModel):
     tour_id: int
     tour_code: str
     link_status: str
+    supplier_offer_admin_path: str = Field(description="Admin path: supplier offer review package.")
+    tour_admin_path: str = Field(description="Admin path: tour detail.")
+    admin_path: str = Field(
+        description="Primary admin navigation path (supplier offer review package for this link).",
+    )
 
 
 class AdminOpsDashboardRead(BaseModel):
@@ -125,7 +140,7 @@ class AdminOpsDashboardRead(BaseModel):
 
     summary: AdminOpsDashboardSummary
     attention_items: list[AdminOpsAttentionItemRead] = Field(default_factory=list)
-    recent_orders: list[AdminOrderListItem] = Field(default_factory=list)
+    recent_orders: list[AdminOpsOrderListItem] = Field(default_factory=list)
     upcoming_tours: list[AdminOpsUpcomingTourRead] = Field(default_factory=list)
     recent_publications: list[AdminOpsRecentPublicationRead] = Field(default_factory=list)
     conversion_links: list[AdminOpsConversionLinkRead] = Field(default_factory=list)
@@ -144,6 +159,7 @@ __all__ = [
     "AdminOpsDashboardFiltersRead",
     "AdminOpsDashboardRead",
     "AdminOpsDashboardSummary",
+    "AdminOpsOrderListItem",
     "AdminOpsRecentPublicationRead",
     "AdminOpsUpcomingTourRead",
     "OPS_DASHBOARD_SECTION_KEYS",

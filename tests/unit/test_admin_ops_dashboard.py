@@ -122,6 +122,7 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
         hit = next(x for x in pay_pending if x["related_order_id"] == order.id)
         self.assertEqual(hit.get("related_supplier_offer_id"), offer.id)
         self.assertEqual(hit.get("related_tour_id"), tour.id)
+        self.assertEqual(hit.get("admin_path"), f"/admin/orders/{order.id}")
 
     def test_ops_dashboard_lists_publication_and_conversion(self) -> None:
         supplier = self.create_supplier()
@@ -146,7 +147,13 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
         body = r.json()
         pubs = body["recent_publications"]
         self.assertTrue(any(p["supplier_offer_id"] == offer.id for p in pubs))
+        hit_pub = next(p for p in pubs if p["supplier_offer_id"] == offer.id)
+        self.assertEqual(hit_pub["admin_path"], f"/admin/supplier-offers/{offer.id}/review-package")
         links = body["conversion_links"]
+        hit_link = next(l for l in links if l["tour_id"] == tour.id)
+        self.assertEqual(hit_link["supplier_offer_admin_path"], f"/admin/supplier-offers/{offer.id}/review-package")
+        self.assertEqual(hit_link["tour_admin_path"], f"/admin/tours/{tour.id}")
+        self.assertEqual(hit_link["admin_path"], f"/admin/supplier-offers/{offer.id}/review-package")
         self.assertTrue(any(l["execution_link_id"] and l["tour_id"] == tour.id for l in links))
 
     def test_ops_dashboard_invalid_include_sections_422(self) -> None:
@@ -252,3 +259,74 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
         ids = {p["publish_attempt_id"] for p in r.json()["recent_publications"]}
         self.assertIn(fresh.id, ids)
         self.assertNotIn(stale.id, ids)
+
+    def test_ops_dashboard_b16c_recent_orders_have_admin_path(self) -> None:
+        user = self.create_user()
+        tour = self.create_tour(departure_datetime=datetime.now(UTC) + timedelta(days=14))
+        bp = self.create_boarding_point(tour)
+        order = self.create_order(
+            user,
+            tour,
+            bp,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=datetime.now(UTC) + timedelta(hours=2),
+            total_amount=Decimal("50.00"),
+        )
+        self.session.flush()
+
+        r = self.client.get(
+            "/admin/ops-dashboard",
+            params={"include_sections": "recent_orders"},
+            headers=self._headers(),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        rows = [x for x in r.json()["recent_orders"] if x["id"] == order.id]
+        self.assertTrue(rows)
+        self.assertEqual(rows[0]["admin_path"], f"/admin/orders/{order.id}")
+
+    def test_ops_dashboard_b16c_upcoming_tours_have_admin_path(self) -> None:
+        near = self.create_tour(
+            departure_datetime=datetime.now(UTC) + timedelta(days=5),
+            status=TourStatus.DRAFT,
+        )
+        self.session.flush()
+
+        r = self.client.get(
+            "/admin/ops-dashboard",
+            params={"include_sections": "upcoming_tours", "days_ahead": 30, "tours_limit": 50},
+            headers=self._headers(),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        rows = [t for t in r.json()["upcoming_tours"] if t["code"] == near.code]
+        self.assertTrue(rows)
+        self.assertEqual(rows[0]["admin_path"], f"/admin/tours/{near.id}")
+
+    def test_ops_dashboard_b16c_attention_failed_publish_review_package_path(self) -> None:
+        # showcase_publish_failed attention uses supplier offer review-package (same as recent_publications rows).
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(supplier)
+        self.session.add(
+            SupplierOfferShowcasePublishAttempt(
+                supplier_offer_id=offer.id,
+                provider="telegram",
+                channel_ref="-1001",
+                status=SupplierOfferShowcasePublishAttemptStatus.FAILED,
+                actor_surface=SupplierOfferShowcasePublishActorSurface.HTTP_ADMIN,
+                requested_by="admin:test",
+                error_code="channel_denied",
+            )
+        )
+        self.session.flush()
+
+        r = self.client.get(
+            "/admin/ops-dashboard",
+            params={"include_sections": "attention_items"},
+            headers=self._headers(),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        failed = [x for x in r.json()["attention_items"] if x.get("kind") == "showcase_publish_failed"]
+        self.assertTrue(failed)
+        hit = next(x for x in failed if x.get("related_supplier_offer_id") == offer.id)
+        self.assertEqual(hit["admin_path"], f"/admin/supplier-offers/{offer.id}/review-package")

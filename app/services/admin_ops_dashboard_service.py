@@ -19,13 +19,13 @@ from app.models.order import Order
 from app.models.supplier import SupplierOfferExecutionLink
 from app.models.supplier_offer_showcase_publish_attempt import SupplierOfferShowcasePublishAttempt
 from app.models.tour import Tour
-from app.schemas.admin import AdminOrderListItem
 from app.schemas.admin_ops_dashboard import (
     AdminOpsAttentionItemRead,
     AdminOpsConversionLinkRead,
     AdminOpsDashboardFiltersRead,
     AdminOpsDashboardRead,
     AdminOpsDashboardSummary,
+    AdminOpsOrderListItem,
     AdminOpsRecentPublicationRead,
     AdminOpsUpcomingTourRead,
     OPS_DASHBOARD_SECTION_KEYS,
@@ -45,6 +45,18 @@ _TERMINAL_TOUR_STATUSES = (
     TourStatus.CANCELLED,
     TourStatus.COMPLETED,
 )
+
+
+def _ops_order_admin_path(order_id: int) -> str:
+    return f"/admin/orders/{order_id}"
+
+
+def _ops_tour_admin_path(tour_id: int) -> str:
+    return f"/admin/tours/{tour_id}"
+
+
+def _ops_supplier_offer_review_path(supplier_offer_id: int) -> str:
+    return f"/admin/supplier-offers/{supplier_offer_id}/review-package"
 
 
 def _pred_closed_orders() -> Any:
@@ -128,7 +140,7 @@ class AdminOpsDashboardService:
             open_handoffs=handoffs_n,
         )
 
-        orders_read_items: list[AdminOrderListItem] = []
+        orders_read_items: list[AdminOpsOrderListItem] = []
         if "recent_orders" in active:
             orders_read = self._admin_read.list_orders(
                 session,
@@ -136,7 +148,12 @@ class AdminOpsDashboardService:
                 offset=0,
                 created_since=recent_since,
             )
-            orders_read_items = orders_read.items
+            orders_read_items = [
+                AdminOpsOrderListItem.model_validate(
+                    {**base.model_dump(), "admin_path": _ops_order_admin_path(base.id)},
+                )
+                for base in orders_read.items
+            ]
 
         upcoming_read: list[AdminOpsUpcomingTourRead] = []
         if "upcoming_tours" in active:
@@ -155,6 +172,7 @@ class AdminOpsDashboardService:
                     status=t.status,
                     seats_available=t.seats_available,
                     seats_total=t.seats_total,
+                    admin_path=_ops_tour_admin_path(t.id),
                 )
                 for t in upcoming_rows
             ]
@@ -174,6 +192,7 @@ class AdminOpsDashboardService:
                     showcase_message_id=p.showcase_message_id,
                     channel_ref=p.channel_ref,
                     created_at=p.created_at,
+                    admin_path=_ops_supplier_offer_review_path(p.supplier_offer_id),
                 )
                 for p in pub_rows
             ]
@@ -272,6 +291,8 @@ class AdminOpsDashboardService:
         )
         reads: list[AdminOpsConversionLinkRead] = []
         for link, code in session.execute(stmt).all():
+            so_path = _ops_supplier_offer_review_path(link.supplier_offer_id)
+            tour_path = _ops_tour_admin_path(link.tour_id)
             reads.append(
                 AdminOpsConversionLinkRead(
                     execution_link_id=link.id,
@@ -279,6 +300,9 @@ class AdminOpsDashboardService:
                     tour_id=link.tour_id,
                     tour_code=code,
                     link_status=link.link_status,
+                    supplier_offer_admin_path=so_path,
+                    tour_admin_path=tour_path,
+                    admin_path=so_path,
                 )
             )
         return reads
@@ -307,7 +331,7 @@ class AdminOpsDashboardService:
                     severity="info",
                     title=f"Order #{o.id} pending payment",
                     summary="Temporary hold active; payment not confirmed yet.",
-                    admin_path=f"/admin/orders/{o.id}",
+                    admin_path=_ops_order_admin_path(o.id),
                     related_order_id=o.id,
                     related_tour_id=o.tour_id,
                     related_supplier_offer_id=offer_id,
@@ -329,7 +353,7 @@ class AdminOpsDashboardService:
                     severity="warning",
                     title=f"Order #{o.id} expired unpaid hold",
                     summary="Reservation cancelled for non-payment; verify seats and customer comms if needed.",
-                    admin_path=f"/admin/orders/{o.id}",
+                    admin_path=_ops_order_admin_path(o.id),
                     related_order_id=o.id,
                     related_tour_id=o.tour_id,
                     related_supplier_offer_id=offer_id,
@@ -361,7 +385,7 @@ class AdminOpsDashboardService:
                     severity="warning",
                     title=f"Showcase publish failed (offer #{a.supplier_offer_id})",
                     summary=f"Attempt #{a.id}: {err}",
-                    admin_path=f"/admin/supplier-offers/{a.supplier_offer_id}/review-package",
+                    admin_path=_ops_supplier_offer_review_path(a.supplier_offer_id),
                     related_supplier_offer_id=a.supplier_offer_id,
                 )
             )
