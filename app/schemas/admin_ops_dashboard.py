@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -11,6 +11,52 @@ from app.models.enums import SupplierOfferShowcasePublishAttemptStatus, TourStat
 from app.schemas.admin import AdminOrderListItem
 
 AdminOpsAttentionSeverity = Literal["info", "warning", "error"]
+
+OPS_DASHBOARD_SECTION_KEYS: Final[tuple[str, ...]] = (
+    "summary",
+    "attention_items",
+    "recent_orders",
+    "upcoming_tours",
+    "recent_publications",
+    "conversion_links",
+)
+OPS_DASHBOARD_SECTION_KEYS_SET: Final[frozenset[str]] = frozenset(OPS_DASHBOARD_SECTION_KEYS)
+
+
+def parse_include_sections_query(raw: str | None) -> frozenset[str] | None:
+    """Parse comma-separated include_sections; None/empty => all sections. Raises ValueError on unknown tokens."""
+    if raw is None:
+        return None
+    text = raw.strip()
+    if not text:
+        return None
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    if not parts:
+        return None
+    invalid = sorted({p for p in parts if p not in OPS_DASHBOARD_SECTION_KEYS_SET})
+    if invalid:
+        raise ValueError(
+            f"Unknown include_sections {invalid!r}; "
+            f"allowed: {list(OPS_DASHBOARD_SECTION_KEYS)}",
+        )
+    return frozenset(parts)
+
+
+class AdminOpsDashboardFiltersRead(BaseModel):
+    """Echo of query parameters applied to build this dashboard response (B16B)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    days_ahead: int
+    recent_days: int
+    orders_limit: int
+    tours_limit: int
+    publications_limit: int
+    conversion_links_limit: int
+    attention_limit: int
+    include_sections: list[str] = Field(
+        description="Sections with data populated in this response; canonical order when all included.",
+    )
 
 
 class AdminOpsDashboardSummary(BaseModel):
@@ -83,6 +129,7 @@ class AdminOpsDashboardRead(BaseModel):
     upcoming_tours: list[AdminOpsUpcomingTourRead] = Field(default_factory=list)
     recent_publications: list[AdminOpsRecentPublicationRead] = Field(default_factory=list)
     conversion_links: list[AdminOpsConversionLinkRead] = Field(default_factory=list)
+    filters: AdminOpsDashboardFiltersRead
     generated_at: datetime = Field(description="UTC timestamp when the dashboard was built.")
     audit_hint: str = Field(
         default="Read-only OPS dashboard; no mutation or Telegram send is performed from this endpoint.",
@@ -94,8 +141,12 @@ __all__ = [
     "AdminOpsAttentionItemRead",
     "AdminOpsAttentionSeverity",
     "AdminOpsConversionLinkRead",
+    "AdminOpsDashboardFiltersRead",
     "AdminOpsDashboardRead",
     "AdminOpsDashboardSummary",
     "AdminOpsRecentPublicationRead",
     "AdminOpsUpcomingTourRead",
+    "OPS_DASHBOARD_SECTION_KEYS",
+    "OPS_DASHBOARD_SECTION_KEYS_SET",
+    "parse_include_sections_query",
 ]

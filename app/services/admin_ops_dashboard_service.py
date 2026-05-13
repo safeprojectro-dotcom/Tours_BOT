@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import and_, func, or_, select
@@ -19,20 +19,24 @@ from app.models.order import Order
 from app.models.supplier import SupplierOfferExecutionLink
 from app.models.supplier_offer_showcase_publish_attempt import SupplierOfferShowcasePublishAttempt
 from app.models.tour import Tour
+from app.schemas.admin import AdminOrderListItem
 from app.schemas.admin_ops_dashboard import (
     AdminOpsAttentionItemRead,
     AdminOpsConversionLinkRead,
+    AdminOpsDashboardFiltersRead,
     AdminOpsDashboardRead,
     AdminOpsDashboardSummary,
     AdminOpsRecentPublicationRead,
     AdminOpsUpcomingTourRead,
+    OPS_DASHBOARD_SECTION_KEYS,
+    OPS_DASHBOARD_SECTION_KEYS_SET,
 )
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind, sql_predicate_for_lifecycle_kind
 from app.services.admin_read import AdminReadService
 
 _RECENT_ORDERS_LIMIT = 20
 _UPCOMING_TOURS_LIMIT = 15
-_RECENT_PUBLICATIONS_LIMIT = 15
+_RECENT_PUBLICATIONS_LIMIT = 20
 _CONVERSION_LINKS_LIMIT = 20
 _MAX_ATTENTION_FROM_HOLDS = 8
 _MAX_ATTENTION_FROM_EXPIRED = 5
@@ -60,13 +64,31 @@ class AdminOpsDashboardService:
     def __init__(self, *, admin_read: AdminReadService | None = None) -> None:
         self._admin_read = admin_read or AdminReadService()
 
-    def read_dashboard(self, session: Session, *, now: datetime | None = None) -> AdminOpsDashboardRead:
+    def read_dashboard(
+        self,
+        session: Session,
+        *,
+        now: datetime | None = None,
+        days_ahead: int = 30,
+        recent_days: int = 7,
+        orders_limit: int = _RECENT_ORDERS_LIMIT,
+        tours_limit: int = _UPCOMING_TOURS_LIMIT,
+        publications_limit: int = _RECENT_PUBLICATIONS_LIMIT,
+        conversion_links_limit: int = _CONVERSION_LINKS_LIMIT,
+        attention_limit: int = 20,
+        include_sections: frozenset[str] | None = None,
+    ) -> AdminOpsDashboardRead:
         now_utc = now if now is not None else datetime.now(UTC)
         if now_utc.tzinfo is None:
             now_utc = now_utc.replace(tzinfo=UTC)
 
+        active = OPS_DASHBOARD_SECTION_KEYS_SET if include_sections is None else include_sections
+        window_end = now_utc + timedelta(days=days_ahead)
+        recent_since = now_utc - timedelta(days=recent_days)
+
         upcoming_where = and_(
             Tour.departure_datetime >= now_utc,
+            Tour.departure_datetime <= window_end,
             Tour.status.not_in(_TERMINAL_TOUR_STATUSES),
         )
         open_for_sale_where = Tour.status == TourStatus.OPEN_FOR_SALE
@@ -100,41 +122,69 @@ class AdminOpsDashboardService:
 
         tour_offer_map = self._active_execution_offer_by_tour(session)
 
-        attention = self._collect_attention_items(
+        attention_full = self._collect_attention_items(
             session,
             tour_offer_map=tour_offer_map,
             open_handoffs=handoffs_n,
         )
 
-        orders_read = self._admin_read.list_orders(session, limit=_RECENT_ORDERS_LIMIT, offset=0)
-        upcoming_rows = self._list_upcoming_tours(session, now_utc=now_utc)
-        upcoming_read = [
-            AdminOpsUpcomingTourRead(
-                tour_id=t.id,
-                code=t.code,
-                title_default=t.title_default,
-                departure_datetime=t.departure_datetime,
-                status=t.status,
-                seats_available=t.seats_available,
-                seats_total=t.seats_total,
+        orders_read_items: list[AdminOrderListItem] = []
+        if "recent_orders" in active:
+            orders_read = self._admin_read.list_orders(
+                session,
+                limit=orders_limit,
+                offset=0,
+                created_since=recent_since,
             )
-            for t in upcoming_rows
-        ]
+            orders_read_items = orders_read.items
 
-        pub_rows = self._list_recent_publications(session, limit=_RECENT_PUBLICATIONS_LIMIT)
-        publications_read = [
-            AdminOpsRecentPublicationRead(
-                publish_attempt_id=p.id,
-                supplier_offer_id=p.supplier_offer_id,
-                status=p.status,
-                showcase_message_id=p.showcase_message_id,
-                channel_ref=p.channel_ref,
-                created_at=p.created_at,
+        upcoming_read: list[AdminOpsUpcomingTourRead] = []
+        if "upcoming_tours" in active:
+            upcoming_rows = self._list_upcoming_tours(
+                session,
+                now_utc=now_utc,
+                window_end=window_end,
+                limit=tours_limit,
             )
-            for p in pub_rows
-        ]
+            upcoming_read = [
+                AdminOpsUpcomingTourRead(
+                    tour_id=t.id,
+                    code=t.code,
+                    title_default=t.title_default,
+                    departure_datetime=t.departure_datetime,
+                    status=t.status,
+                    seats_available=t.seats_available,
+                    seats_total=t.seats_total,
+                )
+                for t in upcoming_rows
+            ]
 
-        conv_read = self._list_conversion_link_reads(session, limit=_CONVERSION_LINKS_LIMIT)
+        publications_read: list[AdminOpsRecentPublicationRead] = []
+        if "recent_publications" in active:
+            pub_rows = self._list_recent_publications(
+                session,
+                limit=publications_limit,
+                created_since=recent_since,
+            )
+            publications_read = [
+                AdminOpsRecentPublicationRead(
+                    publish_attempt_id=p.id,
+                    supplier_offer_id=p.supplier_offer_id,
+                    status=p.status,
+                    showcase_message_id=p.showcase_message_id,
+                    channel_ref=p.channel_ref,
+                    created_at=p.created_at,
+                )
+                for p in pub_rows
+            ]
+
+        conv_read: list[AdminOpsConversionLinkRead] = []
+        if "conversion_links" in active:
+            conv_read = self._list_conversion_link_reads(session, limit=conversion_links_limit)
+
+        attention_out: list[AdminOpsAttentionItemRead] = (
+            attention_full[:attention_limit] if "attention_items" in active else []
+        )
 
         summary = AdminOpsDashboardSummary(
             upcoming_tours_count=upcoming_n,
@@ -144,16 +194,28 @@ class AdminOpsDashboardService:
             confirmed_orders_count=confirmed_n,
             expired_or_closed_orders_count=expired_or_closed_n,
             open_handoffs_count=handoffs_n,
-            attention_items_count=len(attention),
+            attention_items_count=len(attention_full),
+        )
+
+        filters_echo = AdminOpsDashboardFiltersRead(
+            days_ahead=days_ahead,
+            recent_days=recent_days,
+            orders_limit=orders_limit,
+            tours_limit=tours_limit,
+            publications_limit=publications_limit,
+            conversion_links_limit=conversion_links_limit,
+            attention_limit=attention_limit,
+            include_sections=[k for k in OPS_DASHBOARD_SECTION_KEYS if k in active],
         )
 
         return AdminOpsDashboardRead(
             summary=summary,
-            attention_items=attention,
-            recent_orders=orders_read.items,
+            attention_items=attention_out,
+            recent_orders=orders_read_items,
             upcoming_tours=upcoming_read,
             recent_publications=publications_read,
             conversion_links=conv_read,
+            filters=filters_echo,
             generated_at=now_utc,
         )
 
@@ -166,12 +228,15 @@ class AdminOpsDashboardService:
                 out[row.tour_id] = row.supplier_offer_id
         return out
 
-    def _list_upcoming_tours(self, session: Session, *, now_utc: datetime, limit: int = _UPCOMING_TOURS_LIMIT) -> list[Tour]:
+    def _list_upcoming_tours(
+        self, session: Session, *, now_utc: datetime, window_end: datetime, limit: int
+    ) -> list[Tour]:
         stmt = (
             select(Tour)
             .where(
                 and_(
                     Tour.departure_datetime >= now_utc,
+                    Tour.departure_datetime <= window_end,
                     Tour.status.not_in(_TERMINAL_TOUR_STATUSES),
                 )
             )
@@ -184,15 +249,17 @@ class AdminOpsDashboardService:
         self,
         session: Session,
         *,
-        limit: int = _RECENT_PUBLICATIONS_LIMIT,
+        limit: int,
+        created_since: datetime | None,
     ) -> list[SupplierOfferShowcasePublishAttempt]:
+        stmt = select(SupplierOfferShowcasePublishAttempt)
+        if created_since is not None:
+            stmt = stmt.where(SupplierOfferShowcasePublishAttempt.created_at >= created_since)
         stmt = (
-            select(SupplierOfferShowcasePublishAttempt)
-            .order_by(
+            stmt.order_by(
                 SupplierOfferShowcasePublishAttempt.created_at.desc(),
                 SupplierOfferShowcasePublishAttempt.id.desc(),
-            )
-            .limit(limit)
+            ).limit(limit)
         )
         return list(session.scalars(stmt).all())
 

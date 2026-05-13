@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -416,6 +418,7 @@ class AdminReadService:
         lifecycle_kind: AdminOrderLifecycleKind | None = None,
         tour_id: int | None = None,
         booking_status: BookingStatus | None = None,
+        created_since: datetime | None = None,
     ) -> AdminOrderListRead:
         lifecycle_where = (
             sql_predicate_for_lifecycle_kind(lifecycle_kind) if lifecycle_kind is not None else None
@@ -427,6 +430,7 @@ class AdminReadService:
             tour_id=tour_id,
             booking_status=booking_status,
             lifecycle_where=lifecycle_where,
+            created_since=created_since,
         )
         items: list[AdminOrderListItem] = []
         for o in rows:

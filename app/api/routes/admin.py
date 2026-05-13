@@ -17,7 +17,7 @@ from app.models.enums import (
     TourStatus,
 )
 from app.models.supplier import Supplier
-from app.schemas.admin_ops_dashboard import AdminOpsDashboardRead
+from app.schemas.admin_ops_dashboard import AdminOpsDashboardRead, parse_include_sections_query
 from app.schemas.admin_publishing_console import AdminPublishingConsoleRead
 from app.schemas.admin import (
     AdminBoardingPointCreate,
@@ -225,9 +225,41 @@ def get_admin_overview(
 @router.get("/ops-dashboard", response_model=AdminOpsDashboardRead)
 def get_admin_ops_dashboard(
     db: Session = Depends(get_db),
+    days_ahead: int = Query(default=30, ge=1, le=366),
+    recent_days: int = Query(default=7, ge=1, le=366),
+    orders_limit: int = Query(default=20, ge=1, le=100),
+    tours_limit: int = Query(default=15, ge=1, le=100),
+    publications_limit: int = Query(default=20, ge=1, le=100),
+    conversion_links_limit: int = Query(default=20, ge=1, le=100),
+    attention_limit: int = Query(default=20, ge=1, le=100),
+    include_sections: str | None = Query(
+        default=None,
+        description=(
+            "Comma-separated subset of sections to populate. "
+            "Allowed: summary, attention_items, recent_orders, upcoming_tours, "
+            "recent_publications, conversion_links. Omit for all."
+        ),
+    ),
 ) -> AdminOpsDashboardRead:
-    """B16: read-only OPS visibility — tours, orders, handoffs, publications, execution links (no mutations)."""
-    return AdminOpsDashboardService().read_dashboard(db)
+    """B16 / B16B: read-only OPS visibility — optional filters and section subset (no mutations)."""
+    try:
+        include = parse_include_sections_query(include_sections)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=[{"loc": ("query", "include_sections"), "msg": str(exc), "type": "value_error"}],
+        ) from exc
+    return AdminOpsDashboardService().read_dashboard(
+        db,
+        days_ahead=days_ahead,
+        recent_days=recent_days,
+        orders_limit=orders_limit,
+        tours_limit=tours_limit,
+        publications_limit=publications_limit,
+        conversion_links_limit=conversion_links_limit,
+        attention_limit=attention_limit,
+        include_sections=include,
+    )
 
 
 @router.get("/publishing-console", response_model=AdminPublishingConsoleRead)

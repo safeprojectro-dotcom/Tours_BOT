@@ -61,6 +61,7 @@ class OrderRepository(SQLAlchemyRepository[Order]):
         tour_id: int | None = None,
         booking_status: BookingStatus | None = None,
         lifecycle_where: Any | None = None,
+        created_since: datetime | None = None,
     ) -> list[Order]:
         """Recent orders for admin read-only lists (newest first); loads tour for display code."""
         stmt = (
@@ -77,6 +78,8 @@ class OrderRepository(SQLAlchemyRepository[Order]):
             stmt = stmt.where(Order.booking_status == booking_status)
         if lifecycle_where is not None:
             stmt = stmt.where(lifecycle_where)
+        if created_since is not None:
+            stmt = stmt.where(Order.created_at >= created_since)
         stmt = stmt.offset(offset).limit(limit)
         return list(session.scalars(stmt).all())
 

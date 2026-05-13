@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
+from sqlalchemy import update
 
 from app.core.config import get_settings
 from app.db.session import get_db
@@ -73,6 +74,25 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
         self.assertIn("generated_at", body)
         self.assertIn("audit_hint", body)
         self.assertIn("Read-only OPS dashboard", body["audit_hint"])
+        f = body["filters"]
+        self.assertEqual(f["days_ahead"], 30)
+        self.assertEqual(f["recent_days"], 7)
+        self.assertEqual(f["orders_limit"], 20)
+        self.assertEqual(f["tours_limit"], 15)
+        self.assertEqual(f["publications_limit"], 20)
+        self.assertEqual(f["conversion_links_limit"], 20)
+        self.assertEqual(f["attention_limit"], 20)
+        self.assertEqual(
+            f["include_sections"],
+            [
+                "summary",
+                "attention_items",
+                "recent_orders",
+                "upcoming_tours",
+                "recent_publications",
+                "conversion_links",
+            ],
+        )
 
     def test_ops_dashboard_attention_links_execution_offer(self) -> None:
         user = self.create_user()
@@ -128,3 +148,107 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
         self.assertTrue(any(p["supplier_offer_id"] == offer.id for p in pubs))
         links = body["conversion_links"]
         self.assertTrue(any(l["execution_link_id"] and l["tour_id"] == tour.id for l in links))
+
+    def test_ops_dashboard_invalid_include_sections_422(self) -> None:
+        r = self.client.get(
+            "/admin/ops-dashboard",
+            params={"include_sections": "summary,bogus"},
+            headers=self._headers(),
+        )
+        self.assertEqual(r.status_code, 422, r.text)
+
+    def test_ops_dashboard_include_sections_summary_only_lists_empty(self) -> None:
+        user = self.create_user()
+        tour = self.create_tour(departure_datetime=datetime.now(UTC) + timedelta(days=14))
+        bp = self.create_boarding_point(tour)
+        self.create_order(
+            user,
+            tour,
+            bp,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=datetime.now(UTC) + timedelta(hours=2),
+            total_amount=Decimal("50.00"),
+        )
+        self.session.flush()
+
+        r = self.client.get(
+            "/admin/ops-dashboard",
+            params={"include_sections": "summary"},
+            headers=self._headers(),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["filters"]["include_sections"], ["summary"])
+        self.assertGreaterEqual(body["summary"]["active_holds_count"], 1)
+        self.assertEqual(body["attention_items"], [])
+        self.assertEqual(body["recent_orders"], [])
+        self.assertEqual(body["upcoming_tours"], [])
+        self.assertEqual(body["recent_publications"], [])
+        self.assertEqual(body["conversion_links"], [])
+
+    def test_ops_dashboard_days_ahead_limits_upcoming(self) -> None:
+        self.create_tour(
+            departure_datetime=datetime.now(UTC) + timedelta(days=200),
+            status=TourStatus.DRAFT,
+        )
+        near = self.create_tour(
+            departure_datetime=datetime.now(UTC) + timedelta(days=5),
+            status=TourStatus.DRAFT,
+        )
+        self.session.flush()
+
+        r = self.client.get(
+            "/admin/ops-dashboard",
+            params={
+                "include_sections": "upcoming_tours",
+                "days_ahead": 30,
+                "tours_limit": 50,
+            },
+            headers=self._headers(),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        codes = {t["code"] for t in body["upcoming_tours"]}
+        self.assertIn(near.code, codes)
+        self.assertEqual(body["summary"]["upcoming_tours_count"], 1)
+
+    def test_ops_dashboard_recent_days_filters_publications(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(supplier)
+        fresh = SupplierOfferShowcasePublishAttempt(
+            supplier_offer_id=offer.id,
+            provider="telegram",
+            channel_ref="-1001",
+            status=SupplierOfferShowcasePublishAttemptStatus.PERSISTED,
+            actor_surface=SupplierOfferShowcasePublishActorSurface.HTTP_ADMIN,
+            requested_by="admin:test",
+        )
+        stale = SupplierOfferShowcasePublishAttempt(
+            supplier_offer_id=offer.id,
+            provider="telegram",
+            channel_ref="-1002",
+            status=SupplierOfferShowcasePublishAttemptStatus.PERSISTED,
+            actor_surface=SupplierOfferShowcasePublishActorSurface.HTTP_ADMIN,
+            requested_by="admin:test",
+        )
+        self.session.add(fresh)
+        self.session.add(stale)
+        self.session.flush()
+        self.session.execute(
+            update(SupplierOfferShowcasePublishAttempt)
+            .where(SupplierOfferShowcasePublishAttempt.id == stale.id)
+            .values(created_at=datetime.now(UTC) - timedelta(days=30))
+        )
+        self.session.flush()
+
+        r = self.client.get(
+            "/admin/ops-dashboard",
+            params={"include_sections": "recent_publications", "recent_days": 7},
+            headers=self._headers(),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        ids = {p["publish_attempt_id"] for p in r.json()["recent_publications"]}
+        self.assertIn(fresh.id, ids)
+        self.assertNotIn(stale.id, ids)
