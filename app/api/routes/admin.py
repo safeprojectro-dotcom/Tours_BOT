@@ -72,6 +72,8 @@ from app.services.admin_order_write import (
     AdminOrderWriteService,
 )
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
+from app.schemas.admin_prepare_conversion_chain_plan import AdminPrepareConversionChainPlanRead
+from app.services.admin_prepare_conversion_chain_plan_service import AdminPrepareConversionChainPlanService
 from app.services.admin_ops_dashboard_service import AdminOpsDashboardService
 from app.services.admin_publishing_console_service import (
     AdminPublishingConsoleService,
@@ -1232,6 +1234,21 @@ def get_admin_supplier_offer_showcase_channel_payload(
     try:
         return SupplierOfferModerationService().showcase_channel_payload_preview(db, offer_id=offer_id)
     except SupplierOfferModerationNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+
+
+@router.get(
+    "/supplier-offers/{offer_id}/prepare-conversion-chain/plan",
+    response_model=AdminPrepareConversionChainPlanRead,
+)
+def get_admin_supplier_offer_prepare_conversion_chain_plan(
+    offer_id: int,
+    db: Session = Depends(get_db),
+) -> AdminPrepareConversionChainPlanRead:
+    """B16D1: read-only preview of an internal prepare-conversion-chain (bridge → catalog → execution link); no mutations."""
+    try:
+        return AdminPrepareConversionChainPlanService().read_plan(db, offer_id=offer_id)
+    except SupplierOfferReviewPackageNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
 
 
