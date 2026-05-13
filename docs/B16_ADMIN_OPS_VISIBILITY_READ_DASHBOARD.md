@@ -122,5 +122,5 @@ python -m pytest tests/unit/test_admin_ops_dashboard.py tests/unit/test_admin_pu
 
 1. **B16B** — filters / pagination / time-window query parameters.
 2. **B16C** — dashboard → admin detail navigation polish.
-3. **B16D** — explicit OPS **actions** (**design-only** first).
+3. **B16D** — guarded OPS automation and **`prepare_conversion_chain`** — **design** **[`docs/B16D_OPS_ACTIONS_GUARDED_AUTOMATION_DESIGN.md`](B16D_OPS_ACTIONS_GUARDED_AUTOMATION_DESIGN.md)** **(done, docs only)** **;** future **B16D1** / **B16D2** before execution.
 4. **B16E** — notification / audit visibility (**read-only**).

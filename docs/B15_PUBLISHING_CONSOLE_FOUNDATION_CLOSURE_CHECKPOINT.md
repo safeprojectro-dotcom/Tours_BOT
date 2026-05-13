@@ -98,6 +98,8 @@ Dangerous automation and execution UX remain **explicitly future-gated** (§7).
 | **B15G** | Guarded **auto-publish** (and related send automation). |
 | **B16** / **Admin OPS visibility** | If roadmap priority shifts to broader ops surfaces outside this foundation. |
 
+**Related (design record — not implemented by B15B–F):** **[`docs/B16D_OPS_ACTIONS_GUARDED_AUTOMATION_DESIGN.md`](B16D_OPS_ACTIONS_GUARDED_AUTOMATION_DESIGN.md)** — guarded **`prepare_conversion_chain`** (internal bridge / catalog / execution link **without** Telegram); **B15** read-only foundation unchanged until **B16D2** / **B15E2**.
+
 ---
 
 ## 8. Recommended next step
