@@ -1,0 +1,130 @@
+"""B16: GET /admin/ops-dashboard read-only OPS visibility."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+
+from fastapi.testclient import TestClient
+
+from app.core.config import get_settings
+from app.db.session import get_db
+from app.main import create_app
+from app.models.enums import (
+    BookingStatus,
+    CancellationStatus,
+    PaymentStatus,
+    SupplierOfferShowcasePublishAttemptStatus,
+    SupplierOfferShowcasePublishActorSurface,
+    TourStatus,
+)
+from app.models.supplier import SupplierOfferExecutionLink
+from app.models.supplier_offer_showcase_publish_attempt import SupplierOfferShowcasePublishAttempt
+from tests.unit.base import FoundationDBTestCase
+
+
+class AdminOpsDashboardTests(FoundationDBTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.app = create_app()
+        self._original_admin = get_settings().admin_api_token
+        get_settings().admin_api_token = "test-admin-secret"
+
+        def override_get_db():
+            yield self.session
+
+        self.app.dependency_overrides[get_db] = override_get_db
+        self.client = TestClient(self.app)
+
+    def tearDown(self) -> None:
+        self.client.close()
+        self.app.dependency_overrides.clear()
+        get_settings().admin_api_token = self._original_admin
+        super().tearDown()
+
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": "Bearer test-admin-secret"}
+
+    def test_ops_dashboard_401_without_token(self) -> None:
+        r = self.client.get("/admin/ops-dashboard")
+        self.assertEqual(r.status_code, 401)
+
+    def test_ops_dashboard_shape_read_only(self) -> None:
+        r = self.client.get("/admin/ops-dashboard", headers=self._headers())
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertIn("summary", body)
+        for k in (
+            "upcoming_tours_count",
+            "open_for_sale_tours_count",
+            "active_holds_count",
+            "pending_payment_orders_count",
+            "confirmed_orders_count",
+            "expired_or_closed_orders_count",
+            "open_handoffs_count",
+            "attention_items_count",
+        ):
+            self.assertIn(k, body["summary"])
+        self.assertIsInstance(body["attention_items"], list)
+        self.assertIsInstance(body["recent_orders"], list)
+        self.assertIsInstance(body["upcoming_tours"], list)
+        self.assertIsInstance(body["recent_publications"], list)
+        self.assertIsInstance(body["conversion_links"], list)
+        self.assertIn("generated_at", body)
+        self.assertIn("audit_hint", body)
+        self.assertIn("Read-only OPS dashboard", body["audit_hint"])
+
+    def test_ops_dashboard_attention_links_execution_offer(self) -> None:
+        user = self.create_user()
+        tour = self.create_tour(departure_datetime=datetime.now(UTC) + timedelta(days=14))
+        bp = self.create_boarding_point(tour)
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(supplier)
+        self.session.add(SupplierOfferExecutionLink(supplier_offer_id=offer.id, tour_id=tour.id, link_status="active"))
+        order = self.create_order(
+            user,
+            tour,
+            bp,
+            booking_status=BookingStatus.RESERVED,
+            payment_status=PaymentStatus.AWAITING_PAYMENT,
+            cancellation_status=CancellationStatus.ACTIVE,
+            reservation_expires_at=datetime.now(UTC) + timedelta(hours=2),
+            total_amount=Decimal("50.00"),
+        )
+        self.session.flush()
+
+        r = self.client.get("/admin/ops-dashboard", headers=self._headers())
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertGreaterEqual(body["summary"]["active_holds_count"], 1)
+        pay_pending = [x for x in body["attention_items"] if x.get("kind") == "payment_pending"]
+        self.assertTrue(any(x.get("related_order_id") == order.id for x in pay_pending))
+        hit = next(x for x in pay_pending if x["related_order_id"] == order.id)
+        self.assertEqual(hit.get("related_supplier_offer_id"), offer.id)
+        self.assertEqual(hit.get("related_tour_id"), tour.id)
+
+    def test_ops_dashboard_lists_publication_and_conversion(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(supplier)
+        tour = self.create_tour(status=TourStatus.OPEN_FOR_SALE)
+        self.session.add(SupplierOfferExecutionLink(supplier_offer_id=offer.id, tour_id=tour.id, link_status="active"))
+        self.session.add(
+            SupplierOfferShowcasePublishAttempt(
+                supplier_offer_id=offer.id,
+                provider="telegram",
+                channel_ref="-1001",
+                status=SupplierOfferShowcasePublishAttemptStatus.PERSISTED,
+                actor_surface=SupplierOfferShowcasePublishActorSurface.HTTP_ADMIN,
+                requested_by="admin:test",
+                showcase_message_id=28,
+            )
+        )
+        self.session.flush()
+
+        r = self.client.get("/admin/ops-dashboard", headers=self._headers())
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        pubs = body["recent_publications"]
+        self.assertTrue(any(p["supplier_offer_id"] == offer.id for p in pubs))
+        links = body["conversion_links"]
+        self.assertTrue(any(l["execution_link_id"] and l["tour_id"] == tour.id for l in links))

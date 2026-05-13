@@ -17,6 +17,7 @@ from app.models.enums import (
     TourStatus,
 )
 from app.models.supplier import Supplier
+from app.schemas.admin_ops_dashboard import AdminOpsDashboardRead
 from app.schemas.admin_publishing_console import AdminPublishingConsoleRead
 from app.schemas.admin import (
     AdminBoardingPointCreate,
@@ -71,6 +72,7 @@ from app.services.admin_order_write import (
     AdminOrderWriteService,
 )
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
+from app.services.admin_ops_dashboard_service import AdminOpsDashboardService
 from app.services.admin_publishing_console_service import (
     AdminPublishingConsoleService,
     PublishingConsoleKindQuery,
@@ -218,6 +220,14 @@ def get_admin_overview(
     db: Session = Depends(get_db),
 ) -> AdminOverviewRead:
     return AdminReadService().overview(db)
+
+
+@router.get("/ops-dashboard", response_model=AdminOpsDashboardRead)
+def get_admin_ops_dashboard(
+    db: Session = Depends(get_db),
+) -> AdminOpsDashboardRead:
+    """B16: read-only OPS visibility — tours, orders, handoffs, publications, execution links (no mutations)."""
+    return AdminOpsDashboardService().read_dashboard(db)
 
 
 @router.get("/publishing-console", response_model=AdminPublishingConsoleRead)
