@@ -32,6 +32,9 @@ class AdminPrepareConversionChainPlanRead(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     supplier_offer_id: int
+    prepare_conversion_chain_plan_path: str = Field(
+        description="Admin HTTP path for this plan response (same route; stable navigation key for clients).",
+    )
     prepare_conversion_chain_eligible: bool = Field(
         description="True when packaging/moderation gates would allow starting the chain (preview only).",
     )

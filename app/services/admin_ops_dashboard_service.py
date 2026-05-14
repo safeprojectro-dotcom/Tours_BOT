@@ -31,6 +31,7 @@ from app.schemas.admin_ops_dashboard import (
     OPS_DASHBOARD_SECTION_KEYS,
     OPS_DASHBOARD_SECTION_KEYS_SET,
 )
+from app.services.admin_navigation_paths import supplier_offer_prepare_conversion_chain_plan_path
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind, sql_predicate_for_lifecycle_kind
 from app.services.admin_read import AdminReadService
 
@@ -193,6 +194,9 @@ class AdminOpsDashboardService:
                     channel_ref=p.channel_ref,
                     created_at=p.created_at,
                     admin_path=_ops_supplier_offer_review_path(p.supplier_offer_id),
+                    prepare_conversion_chain_plan_path=supplier_offer_prepare_conversion_chain_plan_path(
+                        p.supplier_offer_id,
+                    ),
                 )
                 for p in pub_rows
             ]
@@ -303,6 +307,9 @@ class AdminOpsDashboardService:
                     supplier_offer_admin_path=so_path,
                     tour_admin_path=tour_path,
                     admin_path=so_path,
+                    prepare_conversion_chain_plan_path=supplier_offer_prepare_conversion_chain_plan_path(
+                        link.supplier_offer_id,
+                    ),
                 )
             )
         return reads
@@ -325,6 +332,9 @@ class AdminOpsDashboardService:
         )
         for o in session.scalars(hold_stmt).all():
             offer_id = tour_offer_map.get(o.tour_id)
+            plan_path = (
+                supplier_offer_prepare_conversion_chain_plan_path(offer_id) if offer_id is not None else None
+            )
             items.append(
                 AdminOpsAttentionItemRead(
                     kind="payment_pending",
@@ -335,6 +345,7 @@ class AdminOpsDashboardService:
                     related_order_id=o.id,
                     related_tour_id=o.tour_id,
                     related_supplier_offer_id=offer_id,
+                    prepare_conversion_chain_plan_path=plan_path,
                 )
             )
 
@@ -347,6 +358,9 @@ class AdminOpsDashboardService:
         )
         for o in session.scalars(ex_stmt).all():
             offer_id = tour_offer_map.get(o.tour_id)
+            plan_path = (
+                supplier_offer_prepare_conversion_chain_plan_path(offer_id) if offer_id is not None else None
+            )
             items.append(
                 AdminOpsAttentionItemRead(
                     kind="hold_expired_unpaid",
@@ -357,6 +371,7 @@ class AdminOpsDashboardService:
                     related_order_id=o.id,
                     related_tour_id=o.tour_id,
                     related_supplier_offer_id=offer_id,
+                    prepare_conversion_chain_plan_path=plan_path,
                 )
             )
 
@@ -387,6 +402,9 @@ class AdminOpsDashboardService:
                     summary=f"Attempt #{a.id}: {err}",
                     admin_path=_ops_supplier_offer_review_path(a.supplier_offer_id),
                     related_supplier_offer_id=a.supplier_offer_id,
+                    prepare_conversion_chain_plan_path=supplier_offer_prepare_conversion_chain_plan_path(
+                        a.supplier_offer_id,
+                    ),
                 )
             )
 

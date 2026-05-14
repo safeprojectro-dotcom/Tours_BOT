@@ -31,6 +31,7 @@ from app.schemas.admin_publishing_console import (
     PublishingConsoleTemplateSourceStatus,
 )
 from app.schemas.supplier_admin import AdminSupplierOfferReviewPackageRead
+from app.services.admin_navigation_paths import supplier_offer_prepare_conversion_chain_plan_path
 from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
 from app.services.supplier_offer_channel_publish_gate import channel_publish_exact_tour_ready
 from app.services.supplier_offer_cover_media_quality_review import cover_media_publish_blocking_reasons
@@ -725,6 +726,7 @@ class AdminPublishingConsoleService:
                 blocked_reasons=br,
                 human_summary=_human_summary_offer(rp, status),
                 review_package_path=f"/admin/supplier-offers/{row.id}/review-package",
+                prepare_conversion_chain_plan_path=supplier_offer_prepare_conversion_chain_plan_path(row.id),
                 admin_tour_path=None,
                 offer_debug=AdminPublishingConsoleOfferDebugRead(
                     supplier_offer_id=row.id,

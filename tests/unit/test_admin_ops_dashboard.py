@@ -123,6 +123,10 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
         self.assertEqual(hit.get("related_supplier_offer_id"), offer.id)
         self.assertEqual(hit.get("related_tour_id"), tour.id)
         self.assertEqual(hit.get("admin_path"), f"/admin/orders/{order.id}")
+        self.assertEqual(
+            hit.get("prepare_conversion_chain_plan_path"),
+            f"/admin/supplier-offers/{offer.id}/prepare-conversion-chain/plan",
+        )
 
     def test_ops_dashboard_lists_publication_and_conversion(self) -> None:
         supplier = self.create_supplier()
@@ -149,11 +153,19 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
         self.assertTrue(any(p["supplier_offer_id"] == offer.id for p in pubs))
         hit_pub = next(p for p in pubs if p["supplier_offer_id"] == offer.id)
         self.assertEqual(hit_pub["admin_path"], f"/admin/supplier-offers/{offer.id}/review-package")
+        self.assertEqual(
+            hit_pub["prepare_conversion_chain_plan_path"],
+            f"/admin/supplier-offers/{offer.id}/prepare-conversion-chain/plan",
+        )
         links = body["conversion_links"]
         hit_link = next(l for l in links if l["tour_id"] == tour.id)
         self.assertEqual(hit_link["supplier_offer_admin_path"], f"/admin/supplier-offers/{offer.id}/review-package")
         self.assertEqual(hit_link["tour_admin_path"], f"/admin/tours/{tour.id}")
         self.assertEqual(hit_link["admin_path"], f"/admin/supplier-offers/{offer.id}/review-package")
+        self.assertEqual(
+            hit_link["prepare_conversion_chain_plan_path"],
+            f"/admin/supplier-offers/{offer.id}/prepare-conversion-chain/plan",
+        )
         self.assertTrue(any(l["execution_link_id"] and l["tour_id"] == tour.id for l in links))
 
     def test_ops_dashboard_invalid_include_sections_422(self) -> None:
@@ -330,3 +342,7 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
         self.assertTrue(failed)
         hit = next(x for x in failed if x.get("related_supplier_offer_id") == offer.id)
         self.assertEqual(hit["admin_path"], f"/admin/supplier-offers/{offer.id}/review-package")
+        self.assertEqual(
+            hit["prepare_conversion_chain_plan_path"],
+            f"/admin/supplier-offers/{offer.id}/prepare-conversion-chain/plan",
+        )

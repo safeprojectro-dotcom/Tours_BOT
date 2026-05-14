@@ -26,6 +26,7 @@ from app.schemas.supplier_admin import (
     AdminSupplierOfferTourBridgeRead,
     SupplierOfferExecutionLinkRead,
 )
+from app.services.admin_navigation_paths import supplier_offer_prepare_conversion_chain_plan_path
 from app.services.admin_tour_write import AdminTourWriteService, TourCatalogActivationPreview
 from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
 from app.services.mini_app_supplier_offer_landing import (
@@ -489,6 +490,7 @@ class SupplierOfferReviewPackageService:
             cover_media_quality_review=cover_media_quality_review,
             operator_workflow=operator_workflow,
             showcase_template_preview=showcase_template_preview,
+            prepare_conversion_chain_plan_path=supplier_offer_prepare_conversion_chain_plan_path(offer_id),
             warnings=warnings,
             recommended_next_actions=actions,
         )

@@ -131,6 +131,7 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             self.assertEqual(item["kind"], "tour_promotion")
             self.assertIn("tour_debug", item)
             self.assertIsNone(item["offer_debug"])
+            self.assertIsNone(item.get("prepare_conversion_chain_plan_path"))
 
     def test_b15d_supplier_offer_ready_exact_tour_cta(self) -> None:
         """Ready supplier row: B15C gate green, conversion target is exact tour, CTA safety exact_tour_ready."""
@@ -200,6 +201,10 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
 
         self.assertEqual(match["source_kind"], "supplier_offer")
         self.assertEqual(match["source_id"], oid)
+        self.assertEqual(
+            match["prepare_conversion_chain_plan_path"],
+            f"/admin/supplier-offers/{oid}/prepare-conversion-chain/plan",
+        )
         self.assertEqual(match["template_kind"], "supplier_offer_showcase")
         self.assertTrue(match["template_preview_available"])
         self.assertIn("/showcase-preview", match.get("template_preview_path") or "")

@@ -113,6 +113,10 @@ class AdminPublishingConsoleItemRead(BaseModel):
     blocked_reasons: list[str] = Field(default_factory=list)
     human_summary: str
     review_package_path: str | None = None
+    prepare_conversion_chain_plan_path: str | None = Field(
+        default=None,
+        description="When row is supplier-offer scoped: GET prepare_conversion_chain plan preview (B16D1).",
+    )
     admin_tour_path: str | None = None
     offer_debug: AdminPublishingConsoleOfferDebugRead | None = None
     tour_debug: AdminPublishingConsoleTourDebugRead | None = None

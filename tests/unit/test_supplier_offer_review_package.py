@@ -110,6 +110,10 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
         self.assertEqual(r.status_code, 200, r.text)
         body = r.json()
         self.assertEqual(body["offer"]["id"], oid)
+        self.assertEqual(
+            body["prepare_conversion_chain_plan_path"],
+            f"/admin/supplier-offers/{oid}/prepare-conversion-chain/plan",
+        )
         self.assertIn("content_quality_review", body)
         self.assertIn("cover_media_quality_review", body)
         self.assertIn("has_warnings", body["cover_media_quality_review"])

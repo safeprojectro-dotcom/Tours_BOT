@@ -67,5 +67,9 @@ class AdminPrepareConversionChainPlanTests(FoundationDBTestCase):
             body["review_package_path"],
             f"/admin/supplier-offers/{offer.id}/review-package",
         )
+        self.assertEqual(
+            body["prepare_conversion_chain_plan_path"],
+            f"/admin/supplier-offers/{offer.id}/prepare-conversion-chain/plan",
+        )
         self.assertIn("generated_at", body)
         self.assertIsInstance(body["prepare_conversion_chain_eligible"], bool)

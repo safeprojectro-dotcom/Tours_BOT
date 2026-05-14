@@ -483,6 +483,9 @@ class AdminSupplierOfferReviewPackageRead(BaseModel):
     cover_media_quality_review: AdminSupplierOfferCoverMediaQualityReviewRead
     operator_workflow: AdminSupplierOfferOperatorWorkflowRead
     showcase_template_preview: AdminSupplierOfferShowcaseTemplatePreviewRead
+    prepare_conversion_chain_plan_path: str = Field(
+        description="Admin HTTP path: read-only prepare_conversion_chain plan preview (B16D1).",
+    )
     warnings: list[str]
     recommended_next_actions: list[str]
 

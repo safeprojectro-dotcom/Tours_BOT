@@ -89,6 +89,10 @@ class AdminOpsAttentionItemRead(BaseModel):
     related_order_id: int | None = None
     related_tour_id: int | None = None
     related_supplier_offer_id: int | None = None
+    prepare_conversion_chain_plan_path: str | None = Field(
+        default=None,
+        description="When related supplier offer is known: GET plan preview path (B16D1).",
+    )
 
 
 class AdminOpsUpcomingTourRead(BaseModel):
@@ -116,6 +120,9 @@ class AdminOpsRecentPublicationRead(BaseModel):
     admin_path: str = Field(
         description="Admin HTTP path to supplier offer review package when supplier_offer_id is set.",
     )
+    prepare_conversion_chain_plan_path: str = Field(
+        description="Admin HTTP path: read-only prepare_conversion_chain plan for this offer (B16D1).",
+    )
 
 
 class AdminOpsConversionLinkRead(BaseModel):
@@ -130,6 +137,9 @@ class AdminOpsConversionLinkRead(BaseModel):
     tour_admin_path: str = Field(description="Admin path: tour detail.")
     admin_path: str = Field(
         description="Primary admin navigation path (supplier offer review package for this link).",
+    )
+    prepare_conversion_chain_plan_path: str = Field(
+        description="Admin HTTP path: read-only prepare_conversion_chain plan for this offer (B16D1).",
     )
 
 

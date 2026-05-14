@@ -13,6 +13,7 @@ from app.schemas.admin_prepare_conversion_chain_plan import (
     PrepareConversionChainPlanStepStatus,
 )
 from app.schemas.supplier_admin import AdminSupplierOfferReviewPackageRead
+from app.services.admin_navigation_paths import supplier_offer_prepare_conversion_chain_plan_path
 from app.services.supplier_offer_review_package_service import SupplierOfferReviewPackageService
 
 _WILL_NOT_DO: tuple[str, ...] = (
@@ -57,6 +58,7 @@ class AdminPrepareConversionChainPlanService:
 
         return AdminPrepareConversionChainPlanRead(
             supplier_offer_id=offer_id,
+            prepare_conversion_chain_plan_path=supplier_offer_prepare_conversion_chain_plan_path(offer_id),
             prepare_conversion_chain_eligible=elig,
             eligibility_blockers=elig_blockers,
             steps=steps,
