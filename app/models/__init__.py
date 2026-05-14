@@ -1,5 +1,6 @@
 """ORM model imports for SQLAlchemy metadata registration."""
 
+from app.models.admin_guarded_action import AdminGuardedActionAttempt, AdminGuardedActionStep
 from app.models.custom_marketplace_request import CustomMarketplaceRequest, SupplierCustomRequestResponse
 from app.models.custom_request_booking_bridge import CustomRequestBookingBridge
 from app.models.content_item import ContentItem
@@ -23,6 +24,8 @@ from app.models.supplier_execution import (
 from app.models.waitlist import WaitlistEntry
 
 __all__ = [
+    "AdminGuardedActionAttempt",
+    "AdminGuardedActionStep",
     "CustomMarketplaceRequest",
     "CustomRequestBookingBridge",
     "BoardingPoint",

@@ -275,6 +275,26 @@ class CustomRequestBookingBridgeStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class AdminGuardedActionAttemptStatus(StrEnum):
+    """B16D2A: top-level status for a guarded admin action attempt row (string-backed in DB)."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    PARTIAL_SUCCESS = "partial_success"
+
+
+class AdminGuardedActionStepStatus(StrEnum):
+    """B16D2A: per-sub-step status (string-backed in DB)."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
 def sqlalchemy_enum(enum_cls: type[StrEnum], *, name: str) -> SQLAlchemyEnum:
     return SQLAlchemyEnum(
         enum_cls,

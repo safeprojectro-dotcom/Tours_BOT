@@ -1,5 +1,6 @@
 """Repository layer exports."""
 
+from app.repositories.admin_guarded_action import AdminGuardedActionAttemptRepository, attempt_repository
 from app.repositories.base import SQLAlchemyRepository
 from app.repositories.content_item import ContentItemRepository
 from app.repositories.handoff import HandoffRepository
@@ -13,6 +14,8 @@ from app.repositories.user import UserRepository
 from app.repositories.waitlist import WaitlistRepository
 
 __all__ = [
+    "AdminGuardedActionAttemptRepository",
+    "attempt_repository",
     "BoardingPointRepository",
     "ContentItemRepository",
     "HandoffRepository",
