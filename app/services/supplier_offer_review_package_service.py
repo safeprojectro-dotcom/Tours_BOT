@@ -27,6 +27,7 @@ from app.schemas.supplier_admin import (
     SupplierOfferExecutionLinkRead,
 )
 from app.services.admin_navigation_paths import supplier_offer_prepare_conversion_chain_plan_path
+from app.services.prepare_conversion_chain_readiness import derive_prepare_conversion_chain_readiness
 from app.services.admin_tour_write import AdminTourWriteService, TourCatalogActivationPreview
 from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
 from app.services.mini_app_supplier_offer_landing import (
@@ -474,7 +475,7 @@ class SupplierOfferReviewPackageService:
             supplier_offer_id=offer_id,
         )
 
-        return AdminSupplierOfferReviewPackageRead(
+        base = AdminSupplierOfferReviewPackageRead(
             offer=offer_read,
             showcase_preview=showcase,
             showcase_publish_attempts_review=showcase_publish_attempts_review,
@@ -491,8 +492,19 @@ class SupplierOfferReviewPackageService:
             operator_workflow=operator_workflow,
             showcase_template_preview=showcase_template_preview,
             prepare_conversion_chain_plan_path=supplier_offer_prepare_conversion_chain_plan_path(offer_id),
+            prepare_conversion_chain_plan_status="ineligible",
+            prepare_conversion_chain_recommended_action=None,
+            prepare_conversion_chain_blockers_count=0,
             warnings=warnings,
             recommended_next_actions=actions,
+        )
+        st, rec, bc = derive_prepare_conversion_chain_readiness(base)
+        return base.model_copy(
+            update={
+                "prepare_conversion_chain_plan_status": st,
+                "prepare_conversion_chain_recommended_action": rec,
+                "prepare_conversion_chain_blockers_count": bc,
+            },
         )
 
 

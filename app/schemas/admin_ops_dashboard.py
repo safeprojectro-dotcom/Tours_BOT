@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import SupplierOfferShowcasePublishAttemptStatus, TourStatus
 from app.schemas.admin import AdminOrderListItem
+from app.schemas.admin_prepare_conversion_chain_plan import PrepareConversionChainPlanSummaryStatus
 
 AdminOpsAttentionSeverity = Literal["info", "warning", "error"]
 
@@ -93,6 +94,18 @@ class AdminOpsAttentionItemRead(BaseModel):
         default=None,
         description="When related supplier offer is known: GET plan preview path (B16D1).",
     )
+    prepare_conversion_chain_plan_status: PrepareConversionChainPlanSummaryStatus | None = Field(
+        default=None,
+        description="When related supplier offer is known: chain readiness summary (B16D1.2).",
+    )
+    prepare_conversion_chain_recommended_action: str | None = Field(
+        default=None,
+        description="When related supplier offer is known: recommended next action (B16D1.2).",
+    )
+    prepare_conversion_chain_blockers_count: int | None = Field(
+        default=None,
+        description="When related supplier offer is known: distinct blocker count (B16D1.2).",
+    )
 
 
 class AdminOpsUpcomingTourRead(BaseModel):
@@ -123,6 +136,17 @@ class AdminOpsRecentPublicationRead(BaseModel):
     prepare_conversion_chain_plan_path: str = Field(
         description="Admin HTTP path: read-only prepare_conversion_chain plan for this offer (B16D1).",
     )
+    prepare_conversion_chain_plan_status: PrepareConversionChainPlanSummaryStatus = Field(
+        description="Lightweight chain readiness for this offer (B16D1.2).",
+    )
+    prepare_conversion_chain_recommended_action: str | None = Field(
+        default=None,
+        description="Recommended next action for prepare chain / funnel (B16D1.2).",
+    )
+    prepare_conversion_chain_blockers_count: int = Field(
+        ge=0,
+        description="Distinct eligibility + plan blocker count (B16D1.2).",
+    )
 
 
 class AdminOpsConversionLinkRead(BaseModel):
@@ -140,6 +164,17 @@ class AdminOpsConversionLinkRead(BaseModel):
     )
     prepare_conversion_chain_plan_path: str = Field(
         description="Admin HTTP path: read-only prepare_conversion_chain plan for this offer (B16D1).",
+    )
+    prepare_conversion_chain_plan_status: PrepareConversionChainPlanSummaryStatus = Field(
+        description="Lightweight chain readiness for this offer (B16D1.2).",
+    )
+    prepare_conversion_chain_recommended_action: str | None = Field(
+        default=None,
+        description="Recommended next action for prepare chain / funnel (B16D1.2).",
+    )
+    prepare_conversion_chain_blockers_count: int = Field(
+        ge=0,
+        description="Distinct eligibility + plan blocker count (B16D1.2).",
     )
 
 

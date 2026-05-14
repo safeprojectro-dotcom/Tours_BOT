@@ -127,6 +127,11 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
             hit.get("prepare_conversion_chain_plan_path"),
             f"/admin/supplier-offers/{offer.id}/prepare-conversion-chain/plan",
         )
+        self.assertIn(
+            hit.get("prepare_conversion_chain_plan_status"),
+            ("ineligible", "blocked", "partial", "already_prepared"),
+        )
+        self.assertIsInstance(hit.get("prepare_conversion_chain_blockers_count"), int)
 
     def test_ops_dashboard_lists_publication_and_conversion(self) -> None:
         supplier = self.create_supplier()
@@ -157,6 +162,11 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
             hit_pub["prepare_conversion_chain_plan_path"],
             f"/admin/supplier-offers/{offer.id}/prepare-conversion-chain/plan",
         )
+        self.assertIn(
+            hit_pub["prepare_conversion_chain_plan_status"],
+            ("ineligible", "blocked", "partial", "already_prepared"),
+        )
+        self.assertIsInstance(hit_pub["prepare_conversion_chain_blockers_count"], int)
         links = body["conversion_links"]
         hit_link = next(l for l in links if l["tour_id"] == tour.id)
         self.assertEqual(hit_link["supplier_offer_admin_path"], f"/admin/supplier-offers/{offer.id}/review-package")
@@ -165,6 +175,11 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
         self.assertEqual(
             hit_link["prepare_conversion_chain_plan_path"],
             f"/admin/supplier-offers/{offer.id}/prepare-conversion-chain/plan",
+        )
+        self.assertEqual(hit_link["prepare_conversion_chain_plan_status"], hit_pub["prepare_conversion_chain_plan_status"])
+        self.assertEqual(
+            hit_link["prepare_conversion_chain_blockers_count"],
+            hit_pub["prepare_conversion_chain_blockers_count"],
         )
         self.assertTrue(any(l["execution_link_id"] and l["tour_id"] == tour.id for l in links))
 
@@ -346,3 +361,8 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
             hit["prepare_conversion_chain_plan_path"],
             f"/admin/supplier-offers/{offer.id}/prepare-conversion-chain/plan",
         )
+        self.assertIn(
+            hit["prepare_conversion_chain_plan_status"],
+            ("ineligible", "blocked", "partial", "already_prepared"),
+        )
+        self.assertIsInstance(hit["prepare_conversion_chain_blockers_count"], int)

@@ -114,6 +114,13 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
             body["prepare_conversion_chain_plan_path"],
             f"/admin/supplier-offers/{oid}/prepare-conversion-chain/plan",
         )
+        self.assertIn(
+            body["prepare_conversion_chain_plan_status"],
+            ("ineligible", "blocked", "partial", "already_prepared"),
+        )
+        self.assertIsInstance(body["prepare_conversion_chain_blockers_count"], int)
+        self.assertGreaterEqual(body["prepare_conversion_chain_blockers_count"], 0)
+        self.assertIn("prepare_conversion_chain_recommended_action", body)
         self.assertIn("content_quality_review", body)
         self.assertIn("cover_media_quality_review", body)
         self.assertIn("has_warnings", body["cover_media_quality_review"])

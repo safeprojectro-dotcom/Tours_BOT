@@ -16,6 +16,7 @@ from app.models.enums import (
     SupplierServiceComposition,
     TourSalesMode,
 )
+from app.schemas.admin_prepare_conversion_chain_plan import PrepareConversionChainPlanSummaryStatus
 
 
 class SupplierOfferRead(BaseModel):
@@ -485,6 +486,17 @@ class AdminSupplierOfferReviewPackageRead(BaseModel):
     showcase_template_preview: AdminSupplierOfferShowcaseTemplatePreviewRead
     prepare_conversion_chain_plan_path: str = Field(
         description="Admin HTTP path: read-only prepare_conversion_chain plan preview (B16D1).",
+    )
+    prepare_conversion_chain_plan_status: PrepareConversionChainPlanSummaryStatus = Field(
+        description="Lightweight chain readiness: ineligible, blocked, partial, or already_prepared (B16D1.2).",
+    )
+    prepare_conversion_chain_recommended_action: str | None = Field(
+        default=None,
+        description="Recommended next step for conversion chain / operator funnel (B16D1.2).",
+    )
+    prepare_conversion_chain_blockers_count: int = Field(
+        ge=0,
+        description="Distinct eligibility + plan blocker count (B16D1.2).",
     )
     warnings: list[str]
     recommended_next_actions: list[str]

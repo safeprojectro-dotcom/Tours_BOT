@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 PrepareConversionChainPlanStepStatus = Literal["satisfied", "pending", "blocked", "not_applicable"]
 
+PrepareConversionChainPlanSummaryStatus = Literal["ineligible", "blocked", "partial", "already_prepared"]
+
 
 class AdminPrepareConversionChainPlanStepRead(BaseModel):
     """Single ordered step in the internal preparation chain (bridge → catalog → execution link)."""
@@ -50,6 +52,17 @@ class AdminPrepareConversionChainPlanRead(BaseModel):
         description="Explicit non-goals for the future mutation action (this endpoint performs none of these).",
     )
     recommended_next_action: str | None = None
+    prepare_conversion_chain_plan_status: PrepareConversionChainPlanSummaryStatus = Field(
+        description="Lightweight chain readiness: ineligible, blocked, partial, or already_prepared (B16D1.2).",
+    )
+    prepare_conversion_chain_recommended_action: str | None = Field(
+        default=None,
+        description="Same derivation as recommended_next_action; stable key for list rows (B16D1.2).",
+    )
+    prepare_conversion_chain_blockers_count: int = Field(
+        ge=0,
+        description="Count of distinct eligibility + plan blocker strings (B16D1.2).",
+    )
     review_package_path: str
     conversion_closure_next_missing_step: str | None = Field(
         default=None,
@@ -68,4 +81,5 @@ __all__ = [
     "AdminPrepareConversionChainPlanRead",
     "AdminPrepareConversionChainPlanStepRead",
     "PrepareConversionChainPlanStepStatus",
+    "PrepareConversionChainPlanSummaryStatus",
 ]

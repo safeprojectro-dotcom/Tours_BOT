@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.admin_prepare_conversion_chain_plan import PrepareConversionChainPlanSummaryStatus
+
 PublishingConsoleCandidateKind = Literal["supplier_offer_initial", "tour_promotion"]
 PublishingConsoleItemStatus = Literal["ready", "blocked", "needs_attention"]
 
@@ -116,6 +118,18 @@ class AdminPublishingConsoleItemRead(BaseModel):
     prepare_conversion_chain_plan_path: str | None = Field(
         default=None,
         description="When row is supplier-offer scoped: GET prepare_conversion_chain plan preview (B16D1).",
+    )
+    prepare_conversion_chain_plan_status: PrepareConversionChainPlanSummaryStatus | None = Field(
+        default=None,
+        description="When row is supplier-offer scoped: chain readiness summary (B16D1.2).",
+    )
+    prepare_conversion_chain_recommended_action: str | None = Field(
+        default=None,
+        description="When row is supplier-offer scoped: recommended next action (B16D1.2).",
+    )
+    prepare_conversion_chain_blockers_count: int | None = Field(
+        default=None,
+        description="When row is supplier-offer scoped: distinct blocker count (B16D1.2).",
     )
     admin_tour_path: str | None = None
     offer_debug: AdminPublishingConsoleOfferDebugRead | None = None

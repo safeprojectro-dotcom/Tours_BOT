@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from collections.abc import Callable
+
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -31,9 +33,10 @@ from app.schemas.admin_ops_dashboard import (
     OPS_DASHBOARD_SECTION_KEYS,
     OPS_DASHBOARD_SECTION_KEYS_SET,
 )
-from app.services.admin_navigation_paths import supplier_offer_prepare_conversion_chain_plan_path
+from app.schemas.supplier_admin import AdminSupplierOfferReviewPackageRead
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind, sql_predicate_for_lifecycle_kind
 from app.services.admin_read import AdminReadService
+from app.services.supplier_offer_review_package_service import SupplierOfferReviewPackageService
 
 _RECENT_ORDERS_LIMIT = 20
 _UPCOMING_TOURS_LIMIT = 15
@@ -74,8 +77,14 @@ def _pred_closed_orders() -> Any:
 
 
 class AdminOpsDashboardService:
-    def __init__(self, *, admin_read: AdminReadService | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        admin_read: AdminReadService | None = None,
+        review_pkg: SupplierOfferReviewPackageService | None = None,
+    ) -> None:
         self._admin_read = admin_read or AdminReadService()
+        self._review_pkg = review_pkg or SupplierOfferReviewPackageService()
 
     def read_dashboard(
         self,
@@ -98,6 +107,13 @@ class AdminOpsDashboardService:
         active = OPS_DASHBOARD_SECTION_KEYS_SET if include_sections is None else include_sections
         window_end = now_utc + timedelta(days=days_ahead)
         recent_since = now_utc - timedelta(days=recent_days)
+
+        prep_pkg_cache: dict[int, AdminSupplierOfferReviewPackageRead] = {}
+
+        def prep_pkg(offer_id: int) -> AdminSupplierOfferReviewPackageRead:
+            if offer_id not in prep_pkg_cache:
+                prep_pkg_cache[offer_id] = self._review_pkg.review_package(session, offer_id=offer_id)
+            return prep_pkg_cache[offer_id]
 
         upcoming_where = and_(
             Tour.departure_datetime >= now_utc,
@@ -139,6 +155,7 @@ class AdminOpsDashboardService:
             session,
             tour_offer_map=tour_offer_map,
             open_handoffs=handoffs_n,
+            prep_pkg=prep_pkg,
         )
 
         orders_read_items: list[AdminOpsOrderListItem] = []
@@ -185,25 +202,28 @@ class AdminOpsDashboardService:
                 limit=publications_limit,
                 created_since=recent_since,
             )
-            publications_read = [
-                AdminOpsRecentPublicationRead(
-                    publish_attempt_id=p.id,
-                    supplier_offer_id=p.supplier_offer_id,
-                    status=p.status,
-                    showcase_message_id=p.showcase_message_id,
-                    channel_ref=p.channel_ref,
-                    created_at=p.created_at,
-                    admin_path=_ops_supplier_offer_review_path(p.supplier_offer_id),
-                    prepare_conversion_chain_plan_path=supplier_offer_prepare_conversion_chain_plan_path(
-                        p.supplier_offer_id,
-                    ),
+            publications_read = []
+            for p in pub_rows:
+                pkg = prep_pkg(p.supplier_offer_id)
+                publications_read.append(
+                    AdminOpsRecentPublicationRead(
+                        publish_attempt_id=p.id,
+                        supplier_offer_id=p.supplier_offer_id,
+                        status=p.status,
+                        showcase_message_id=p.showcase_message_id,
+                        channel_ref=p.channel_ref,
+                        created_at=p.created_at,
+                        admin_path=_ops_supplier_offer_review_path(p.supplier_offer_id),
+                        prepare_conversion_chain_plan_path=pkg.prepare_conversion_chain_plan_path,
+                        prepare_conversion_chain_plan_status=pkg.prepare_conversion_chain_plan_status,
+                        prepare_conversion_chain_recommended_action=pkg.prepare_conversion_chain_recommended_action,
+                        prepare_conversion_chain_blockers_count=pkg.prepare_conversion_chain_blockers_count,
+                    )
                 )
-                for p in pub_rows
-            ]
 
         conv_read: list[AdminOpsConversionLinkRead] = []
         if "conversion_links" in active:
-            conv_read = self._list_conversion_link_reads(session, limit=conversion_links_limit)
+            conv_read = self._list_conversion_link_reads(session, limit=conversion_links_limit, prep_pkg=prep_pkg)
 
         attention_out: list[AdminOpsAttentionItemRead] = (
             attention_full[:attention_limit] if "attention_items" in active else []
@@ -286,7 +306,13 @@ class AdminOpsDashboardService:
         )
         return list(session.scalars(stmt).all())
 
-    def _list_conversion_link_reads(self, session: Session, *, limit: int) -> list[AdminOpsConversionLinkRead]:
+    def _list_conversion_link_reads(
+        self,
+        session: Session,
+        *,
+        limit: int,
+        prep_pkg: Callable[[int], AdminSupplierOfferReviewPackageRead],
+    ) -> list[AdminOpsConversionLinkRead]:
         stmt = (
             select(SupplierOfferExecutionLink, Tour.code)
             .join(Tour, Tour.id == SupplierOfferExecutionLink.tour_id)
@@ -295,6 +321,7 @@ class AdminOpsDashboardService:
         )
         reads: list[AdminOpsConversionLinkRead] = []
         for link, code in session.execute(stmt).all():
+            pkg = prep_pkg(link.supplier_offer_id)
             so_path = _ops_supplier_offer_review_path(link.supplier_offer_id)
             tour_path = _ops_tour_admin_path(link.tour_id)
             reads.append(
@@ -307,9 +334,10 @@ class AdminOpsDashboardService:
                     supplier_offer_admin_path=so_path,
                     tour_admin_path=tour_path,
                     admin_path=so_path,
-                    prepare_conversion_chain_plan_path=supplier_offer_prepare_conversion_chain_plan_path(
-                        link.supplier_offer_id,
-                    ),
+                    prepare_conversion_chain_plan_path=pkg.prepare_conversion_chain_plan_path,
+                    prepare_conversion_chain_plan_status=pkg.prepare_conversion_chain_plan_status,
+                    prepare_conversion_chain_recommended_action=pkg.prepare_conversion_chain_recommended_action,
+                    prepare_conversion_chain_blockers_count=pkg.prepare_conversion_chain_blockers_count,
                 )
             )
         return reads
@@ -320,6 +348,7 @@ class AdminOpsDashboardService:
         *,
         tour_offer_map: dict[int, int],
         open_handoffs: int,
+        prep_pkg: Callable[[int], AdminSupplierOfferReviewPackageRead],
     ) -> list[AdminOpsAttentionItemRead]:
         items: list[AdminOpsAttentionItemRead] = []
 
@@ -332,9 +361,17 @@ class AdminOpsDashboardService:
         )
         for o in session.scalars(hold_stmt).all():
             offer_id = tour_offer_map.get(o.tour_id)
-            plan_path = (
-                supplier_offer_prepare_conversion_chain_plan_path(offer_id) if offer_id is not None else None
-            )
+            if offer_id is not None:
+                pkg = prep_pkg(offer_id)
+                plan_path = pkg.prepare_conversion_chain_plan_path
+                st = pkg.prepare_conversion_chain_plan_status
+                rec = pkg.prepare_conversion_chain_recommended_action
+                bc = pkg.prepare_conversion_chain_blockers_count
+            else:
+                plan_path = None
+                st = None
+                rec = None
+                bc = None
             items.append(
                 AdminOpsAttentionItemRead(
                     kind="payment_pending",
@@ -346,6 +383,9 @@ class AdminOpsDashboardService:
                     related_tour_id=o.tour_id,
                     related_supplier_offer_id=offer_id,
                     prepare_conversion_chain_plan_path=plan_path,
+                    prepare_conversion_chain_plan_status=st,
+                    prepare_conversion_chain_recommended_action=rec,
+                    prepare_conversion_chain_blockers_count=bc,
                 )
             )
 
@@ -358,9 +398,17 @@ class AdminOpsDashboardService:
         )
         for o in session.scalars(ex_stmt).all():
             offer_id = tour_offer_map.get(o.tour_id)
-            plan_path = (
-                supplier_offer_prepare_conversion_chain_plan_path(offer_id) if offer_id is not None else None
-            )
+            if offer_id is not None:
+                pkg = prep_pkg(offer_id)
+                plan_path = pkg.prepare_conversion_chain_plan_path
+                st = pkg.prepare_conversion_chain_plan_status
+                rec = pkg.prepare_conversion_chain_recommended_action
+                bc = pkg.prepare_conversion_chain_blockers_count
+            else:
+                plan_path = None
+                st = None
+                rec = None
+                bc = None
             items.append(
                 AdminOpsAttentionItemRead(
                     kind="hold_expired_unpaid",
@@ -372,6 +420,9 @@ class AdminOpsDashboardService:
                     related_tour_id=o.tour_id,
                     related_supplier_offer_id=offer_id,
                     prepare_conversion_chain_plan_path=plan_path,
+                    prepare_conversion_chain_plan_status=st,
+                    prepare_conversion_chain_recommended_action=rec,
+                    prepare_conversion_chain_blockers_count=bc,
                 )
             )
 
@@ -394,6 +445,7 @@ class AdminOpsDashboardService:
         )
         for a in session.scalars(fail_stmt).all():
             err = (a.error_code or a.error_message or "failed")[:120]
+            pkg = prep_pkg(a.supplier_offer_id)
             items.append(
                 AdminOpsAttentionItemRead(
                     kind="showcase_publish_failed",
@@ -402,9 +454,10 @@ class AdminOpsDashboardService:
                     summary=f"Attempt #{a.id}: {err}",
                     admin_path=_ops_supplier_offer_review_path(a.supplier_offer_id),
                     related_supplier_offer_id=a.supplier_offer_id,
-                    prepare_conversion_chain_plan_path=supplier_offer_prepare_conversion_chain_plan_path(
-                        a.supplier_offer_id,
-                    ),
+                    prepare_conversion_chain_plan_path=pkg.prepare_conversion_chain_plan_path,
+                    prepare_conversion_chain_plan_status=pkg.prepare_conversion_chain_plan_status,
+                    prepare_conversion_chain_recommended_action=pkg.prepare_conversion_chain_recommended_action,
+                    prepare_conversion_chain_blockers_count=pkg.prepare_conversion_chain_blockers_count,
                 )
             )
 

@@ -727,6 +727,9 @@ class AdminPublishingConsoleService:
                 human_summary=_human_summary_offer(rp, status),
                 review_package_path=f"/admin/supplier-offers/{row.id}/review-package",
                 prepare_conversion_chain_plan_path=supplier_offer_prepare_conversion_chain_plan_path(row.id),
+                prepare_conversion_chain_plan_status=rp.prepare_conversion_chain_plan_status,
+                prepare_conversion_chain_recommended_action=rp.prepare_conversion_chain_recommended_action,
+                prepare_conversion_chain_blockers_count=rp.prepare_conversion_chain_blockers_count,
                 admin_tour_path=None,
                 offer_debug=AdminPublishingConsoleOfferDebugRead(
                     supplier_offer_id=row.id,

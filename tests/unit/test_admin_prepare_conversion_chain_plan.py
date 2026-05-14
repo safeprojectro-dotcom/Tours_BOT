@@ -73,3 +73,13 @@ class AdminPrepareConversionChainPlanTests(FoundationDBTestCase):
         )
         self.assertIn("generated_at", body)
         self.assertIsInstance(body["prepare_conversion_chain_eligible"], bool)
+        self.assertIn(
+            body["prepare_conversion_chain_plan_status"],
+            ("ineligible", "blocked", "partial", "already_prepared"),
+        )
+        self.assertIsInstance(body["prepare_conversion_chain_blockers_count"], int)
+        self.assertGreaterEqual(body["prepare_conversion_chain_blockers_count"], 0)
+        self.assertEqual(
+            body.get("prepare_conversion_chain_recommended_action"),
+            body.get("recommended_next_action"),
+        )
