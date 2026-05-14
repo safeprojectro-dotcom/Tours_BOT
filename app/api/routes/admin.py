@@ -234,12 +234,13 @@ def get_admin_ops_dashboard(
     publications_limit: int = Query(default=20, ge=1, le=100),
     conversion_links_limit: int = Query(default=20, ge=1, le=100),
     attention_limit: int = Query(default=20, ge=1, le=100),
+    audit_events_limit: int = Query(default=30, ge=1, le=100),
     include_sections: str | None = Query(
         default=None,
         description=(
             "Comma-separated subset of sections to populate. "
             "Allowed: summary, attention_items, recent_orders, upcoming_tours, "
-            "recent_publications, conversion_links. Omit for all."
+            "recent_publications, conversion_links, audit_events. Omit for all."
         ),
     ),
 ) -> AdminOpsDashboardRead:
@@ -260,6 +261,7 @@ def get_admin_ops_dashboard(
         publications_limit=publications_limit,
         conversion_links_limit=conversion_links_limit,
         attention_limit=attention_limit,
+        audit_events_limit=audit_events_limit,
         include_sections=include,
     )
 

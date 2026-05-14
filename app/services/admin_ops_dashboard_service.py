@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from collections.abc import Callable
 
@@ -13,16 +13,22 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.enums import (
     CancellationStatus,
     PaymentStatus,
+    SupplierExecutionAttemptStatus,
+    SupplierExecutionRequestStatus,
+    SupplierExecutionSourceEntityType,
     SupplierOfferShowcasePublishAttemptStatus,
     TourStatus,
 )
 from app.models.handoff import Handoff
+from app.models.notification_outbox import NotificationOutbox
 from app.models.order import Order
 from app.models.supplier import SupplierOfferExecutionLink
+from app.models.supplier_execution import SupplierExecutionAttempt, SupplierExecutionRequest
 from app.models.supplier_offer_showcase_publish_attempt import SupplierOfferShowcasePublishAttempt
 from app.models.tour import Tour
 from app.schemas.admin_ops_dashboard import (
     AdminOpsAttentionItemRead,
+    AdminOpsAuditEventRead,
     AdminOpsConversionLinkRead,
     AdminOpsDashboardFiltersRead,
     AdminOpsDashboardRead,
@@ -33,6 +39,7 @@ from app.schemas.admin_ops_dashboard import (
     OPS_DASHBOARD_SECTION_KEYS,
     OPS_DASHBOARD_SECTION_KEYS_SET,
 )
+from app.schemas.notification import NotificationOutboxStatus
 from app.schemas.supplier_admin import AdminSupplierOfferReviewPackageRead
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind, sql_predicate_for_lifecycle_kind
 from app.services.admin_read import AdminReadService
@@ -44,6 +51,7 @@ _RECENT_PUBLICATIONS_LIMIT = 20
 _CONVERSION_LINKS_LIMIT = 20
 _MAX_ATTENTION_FROM_HOLDS = 8
 _MAX_ATTENTION_FROM_EXPIRED = 5
+_AUDIT_EVENTS_LIMIT_DEFAULT = 30
 
 _TERMINAL_TOUR_STATUSES = (
     TourStatus.CANCELLED,
@@ -61,6 +69,16 @@ def _ops_tour_admin_path(tour_id: int) -> str:
 
 def _ops_supplier_offer_review_path(supplier_offer_id: int) -> str:
     return f"/admin/supplier-offers/{supplier_offer_id}/review-package"
+
+
+def _ops_custom_request_admin_path(custom_request_id: int) -> str:
+    return f"/admin/custom-requests/{custom_request_id}"
+
+
+def _supplier_execution_request_admin_path(req: SupplierExecutionRequest) -> str:
+    if req.source_entity_type == SupplierExecutionSourceEntityType.CUSTOM_MARKETPLACE_REQUEST:
+        return _ops_custom_request_admin_path(req.source_entity_id)
+    return "/admin/overview"
 
 
 def _pred_closed_orders() -> Any:
@@ -98,6 +116,7 @@ class AdminOpsDashboardService:
         publications_limit: int = _RECENT_PUBLICATIONS_LIMIT,
         conversion_links_limit: int = _CONVERSION_LINKS_LIMIT,
         attention_limit: int = 20,
+        audit_events_limit: int = _AUDIT_EVENTS_LIMIT_DEFAULT,
         include_sections: frozenset[str] | None = None,
     ) -> AdminOpsDashboardRead:
         now_utc = now if now is not None else datetime.now(UTC)
@@ -225,6 +244,14 @@ class AdminOpsDashboardService:
         if "conversion_links" in active:
             conv_read = self._list_conversion_link_reads(session, limit=conversion_links_limit, prep_pkg=prep_pkg)
 
+        audit_read: list[AdminOpsAuditEventRead] = []
+        if "audit_events" in active:
+            audit_read = self._collect_audit_events(
+                session,
+                recent_since=recent_since,
+                limit=audit_events_limit,
+            )
+
         attention_out: list[AdminOpsAttentionItemRead] = (
             attention_full[:attention_limit] if "attention_items" in active else []
         )
@@ -248,6 +275,7 @@ class AdminOpsDashboardService:
             publications_limit=publications_limit,
             conversion_links_limit=conversion_links_limit,
             attention_limit=attention_limit,
+            audit_events_limit=audit_events_limit,
             include_sections=[k for k in OPS_DASHBOARD_SECTION_KEYS if k in active],
         )
 
@@ -258,6 +286,7 @@ class AdminOpsDashboardService:
             upcoming_tours=upcoming_read,
             recent_publications=publications_read,
             conversion_links=conv_read,
+            audit_events=audit_read,
             filters=filters_echo,
             generated_at=now_utc,
         )
@@ -305,6 +334,133 @@ class AdminOpsDashboardService:
             ).limit(limit)
         )
         return list(session.scalars(stmt).all())
+
+    def _collect_audit_events(
+        self,
+        session: Session,
+        *,
+        recent_since: datetime,
+        limit: int,
+    ) -> list[AdminOpsAuditEventRead]:
+        """B16E: merge recent showcase/outbox/supplier-execution signals (read-only)."""
+        per_source = min(100, max(limit, 20))
+        events: list[AdminOpsAuditEventRead] = []
+
+        pub_rows = self._list_recent_publications(
+            session, limit=per_source, created_since=recent_since
+        )
+        for p in pub_rows:
+            is_failed = p.status == SupplierOfferShowcasePublishAttemptStatus.FAILED
+            err = (p.error_code or p.error_message or "").strip()
+            summary = f"Offer #{p.supplier_offer_id} · {p.provider} · {p.status}"
+            if is_failed and err:
+                summary = f"{summary}: {err[:160]}"
+            events.append(
+                AdminOpsAuditEventRead(
+                    kind="showcase_publish_failed" if is_failed else "showcase_publish_attempt",
+                    severity="error" if is_failed else "info",
+                    title="Showcase publish failed" if is_failed else "Showcase publish attempt",
+                    summary=summary,
+                    occurred_at=p.created_at,
+                    admin_path=_ops_supplier_offer_review_path(p.supplier_offer_id),
+                    related_supplier_offer_id=p.supplier_offer_id,
+                    source_record_id=p.id,
+                )
+            )
+
+        ob_stmt = (
+            select(NotificationOutbox)
+            .where(
+                NotificationOutbox.status == NotificationOutboxStatus.FAILED.value,
+                NotificationOutbox.updated_at >= recent_since,
+            )
+            .order_by(NotificationOutbox.updated_at.desc(), NotificationOutbox.id.desc())
+            .limit(per_source)
+        )
+        for row in session.scalars(ob_stmt).all():
+            tail = f" · {row.channel} · {row.event_type}"
+            events.append(
+                AdminOpsAuditEventRead(
+                    kind="notification_outbox_failed",
+                    severity="error",
+                    title="Notification outbox delivery failed",
+                    summary=(row.title[:200] + tail) if row.title else f"Order #{row.order_id}{tail}",
+                    occurred_at=row.updated_at,
+                    admin_path=_ops_order_admin_path(row.order_id),
+                    related_order_id=row.order_id,
+                    source_record_id=row.id,
+                )
+            )
+
+        req_stmt = (
+            select(SupplierExecutionRequest)
+            .where(
+                SupplierExecutionRequest.status.in_(
+                    (
+                        SupplierExecutionRequestStatus.FAILED,
+                        SupplierExecutionRequestStatus.BLOCKED,
+                    )
+                ),
+                SupplierExecutionRequest.updated_at >= recent_since,
+            )
+            .order_by(SupplierExecutionRequest.updated_at.desc(), SupplierExecutionRequest.id.desc())
+            .limit(per_source)
+        )
+        for req in session.scalars(req_stmt).all():
+            sev: Literal["error", "warning"] = (
+                "error" if req.status == SupplierExecutionRequestStatus.FAILED else "warning"
+            )
+            note = (req.validation_error or req.audit_notes or "").strip()
+            summary = f"Request #{req.id} · {req.status} · {req.source_entry_point}"
+            if note:
+                summary = f"{summary}: {note[:160]}"
+            events.append(
+                AdminOpsAuditEventRead(
+                    kind="supplier_execution_request",
+                    severity=sev,
+                    title=f"Supplier execution request ({req.status})",
+                    summary=summary,
+                    occurred_at=req.updated_at,
+                    admin_path=_supplier_execution_request_admin_path(req),
+                    source_record_id=req.id,
+                )
+            )
+
+        att_stmt = (
+            select(SupplierExecutionAttempt, SupplierExecutionRequest)
+            .join(
+                SupplierExecutionRequest,
+                SupplierExecutionRequest.id == SupplierExecutionAttempt.execution_request_id,
+            )
+            .where(
+                SupplierExecutionAttempt.status == SupplierExecutionAttemptStatus.FAILED,
+                SupplierExecutionAttempt.created_at >= recent_since,
+            )
+            .order_by(
+                SupplierExecutionAttempt.created_at.desc(),
+                SupplierExecutionAttempt.id.desc(),
+            )
+            .limit(per_source)
+        )
+        for att, req in session.execute(att_stmt).all():
+            err = (att.error_code or att.error_message or "").strip()
+            summary = f"Attempt #{att.attempt_number} · {att.channel_type}"
+            if err:
+                summary = f"{summary}: {err[:160]}"
+            events.append(
+                AdminOpsAuditEventRead(
+                    kind="supplier_execution_attempt_failed",
+                    severity="error",
+                    title="Supplier execution attempt failed",
+                    summary=summary,
+                    occurred_at=att.created_at,
+                    admin_path=_supplier_execution_request_admin_path(req),
+                    source_record_id=att.id,
+                )
+            )
+
+        events.sort(key=lambda e: (e.occurred_at, e.source_record_id or 0), reverse=True)
+        return events[:limit]
 
     def _list_conversion_link_reads(
         self,

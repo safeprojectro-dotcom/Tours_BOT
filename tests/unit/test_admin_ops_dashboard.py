@@ -11,10 +11,18 @@ from sqlalchemy import update
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
+from app.repositories.notification_outbox import NotificationOutboxRepository
+from app.repositories import supplier_execution as se_repo
+from app.schemas.notification import NotificationOutboxStatus
 from app.models.enums import (
     BookingStatus,
     CancellationStatus,
     PaymentStatus,
+    SupplierExecutionAttemptChannel,
+    SupplierExecutionAttemptStatus,
+    SupplierExecutionRequestStatus,
+    SupplierExecutionSourceEntityType,
+    SupplierExecutionSourceEntryPoint,
     SupplierOfferShowcasePublishAttemptStatus,
     SupplierOfferShowcasePublishActorSurface,
     TourStatus,
@@ -71,6 +79,7 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
         self.assertIsInstance(body["upcoming_tours"], list)
         self.assertIsInstance(body["recent_publications"], list)
         self.assertIsInstance(body["conversion_links"], list)
+        self.assertIsInstance(body["audit_events"], list)
         self.assertIn("generated_at", body)
         self.assertIn("audit_hint", body)
         self.assertIn("Read-only OPS dashboard", body["audit_hint"])
@@ -82,6 +91,7 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
         self.assertEqual(f["publications_limit"], 20)
         self.assertEqual(f["conversion_links_limit"], 20)
         self.assertEqual(f["attention_limit"], 20)
+        self.assertEqual(f["audit_events_limit"], 30)
         self.assertEqual(
             f["include_sections"],
             [
@@ -91,6 +101,7 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
                 "upcoming_tours",
                 "recent_publications",
                 "conversion_links",
+                "audit_events",
             ],
         )
 
@@ -132,6 +143,178 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
             ("ineligible", "blocked", "partial", "already_prepared"),
         )
         self.assertIsInstance(hit.get("prepare_conversion_chain_blockers_count"), int)
+
+    def test_ops_dashboard_b16e_audit_events_merges_signals(self) -> None:
+        user = self.create_user()
+        tour = self.create_tour()
+        bp = self.create_boarding_point(tour)
+        order = self.create_order(user, tour, bp)
+        NotificationOutboxRepository().create(
+            self.session,
+            data={
+                "dispatch_key": "ops-dashboard-audit-e2e-failed",
+                "channel": "telegram_private",
+                "event_type": "payment_pending",
+                "order_id": order.id,
+                "user_id": user.id,
+                "telegram_user_id": user.telegram_user_id,
+                "language_code": "en",
+                "title": "Ops audit outbox",
+                "message": "failed body",
+                "status": NotificationOutboxStatus.FAILED.value,
+            },
+        )
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(supplier)
+        self.session.add(
+            SupplierOfferShowcasePublishAttempt(
+                supplier_offer_id=offer.id,
+                provider="telegram",
+                channel_ref="-1001",
+                status=SupplierOfferShowcasePublishAttemptStatus.PERSISTED,
+                actor_surface=SupplierOfferShowcasePublishActorSurface.HTTP_ADMIN,
+                requested_by="admin:test",
+            )
+        )
+        req_blocked = se_repo.build_execution_request(
+            source_entry_point=SupplierExecutionSourceEntryPoint.ADMIN_EXPLICIT,
+            source_entity_type=SupplierExecutionSourceEntityType.CUSTOM_MARKETPLACE_REQUEST,
+            source_entity_id=901,
+            idempotency_key="ops-dashboard-audit-req-blocked",
+            status=SupplierExecutionRequestStatus.BLOCKED,
+            requested_by_user_id=user.id,
+        )
+        se_repo.add_execution_request(self.session, req_blocked)
+        req_ok = se_repo.build_execution_request(
+            source_entry_point=SupplierExecutionSourceEntryPoint.ADMIN_EXPLICIT,
+            source_entity_type=SupplierExecutionSourceEntityType.CUSTOM_MARKETPLACE_REQUEST,
+            source_entity_id=902,
+            idempotency_key="ops-dashboard-audit-req-attempt",
+            status=SupplierExecutionRequestStatus.VALIDATED,
+            requested_by_user_id=user.id,
+        )
+        se_repo.add_execution_request(self.session, req_ok)
+        att = se_repo.build_execution_attempt(
+            execution_request_id=req_ok.id,
+            attempt_number=1,
+            channel_type=SupplierExecutionAttemptChannel.TELEGRAM,
+            status=SupplierExecutionAttemptStatus.FAILED,
+            error_code="telegram_send_failed",
+        )
+        se_repo.add_execution_attempt(self.session, att)
+        self.session.flush()
+
+        r = self.client.get(
+            "/admin/ops-dashboard",
+            params={"include_sections": "audit_events", "audit_events_limit": 50},
+            headers=self._headers(),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["filters"]["include_sections"], ["audit_events"])
+        kinds = {e["kind"] for e in body["audit_events"]}
+        self.assertIn("showcase_publish_attempt", kinds)
+        self.assertIn("notification_outbox_failed", kinds)
+        self.assertIn("supplier_execution_request", kinds)
+        self.assertIn("supplier_execution_attempt_failed", kinds)
+
+        out_ev = next(e for e in body["audit_events"] if e["kind"] == "notification_outbox_failed")
+        self.assertEqual(out_ev["admin_path"], f"/admin/orders/{order.id}")
+        self.assertEqual(out_ev["related_order_id"], order.id)
+
+        blocked_ev = next(
+            e for e in body["audit_events"] if e["kind"] == "supplier_execution_request" and "blocked" in e["title"]
+        )
+        self.assertEqual(blocked_ev["admin_path"], "/admin/custom-requests/901")
+
+        att_ev = next(e for e in body["audit_events"] if e["kind"] == "supplier_execution_attempt_failed")
+        self.assertEqual(att_ev["admin_path"], "/admin/custom-requests/902")
+
+    def test_ops_dashboard_b16e_audit_events_merges_signals(self) -> None:
+        user = self.create_user()
+        tour = self.create_tour()
+        bp = self.create_boarding_point(tour)
+        order = self.create_order(user, tour, bp)
+        NotificationOutboxRepository().create(
+            self.session,
+            data={
+                "dispatch_key": "ops-dashboard-audit-e2e-failed",
+                "channel": "telegram_private",
+                "event_type": "payment_pending",
+                "order_id": order.id,
+                "user_id": user.id,
+                "telegram_user_id": user.telegram_user_id,
+                "language_code": "en",
+                "title": "Ops audit outbox",
+                "message": "failed body",
+                "status": NotificationOutboxStatus.FAILED.value,
+            },
+        )
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(supplier)
+        self.session.add(
+            SupplierOfferShowcasePublishAttempt(
+                supplier_offer_id=offer.id,
+                provider="telegram",
+                channel_ref="-1001",
+                status=SupplierOfferShowcasePublishAttemptStatus.PERSISTED,
+                actor_surface=SupplierOfferShowcasePublishActorSurface.HTTP_ADMIN,
+                requested_by="admin:test",
+            )
+        )
+        req_blocked = se_repo.build_execution_request(
+            source_entry_point=SupplierExecutionSourceEntryPoint.ADMIN_EXPLICIT,
+            source_entity_type=SupplierExecutionSourceEntityType.CUSTOM_MARKETPLACE_REQUEST,
+            source_entity_id=901,
+            idempotency_key="ops-dashboard-audit-req-blocked",
+            status=SupplierExecutionRequestStatus.BLOCKED,
+            requested_by_user_id=user.id,
+        )
+        se_repo.add_execution_request(self.session, req_blocked)
+        req_ok = se_repo.build_execution_request(
+            source_entry_point=SupplierExecutionSourceEntryPoint.ADMIN_EXPLICIT,
+            source_entity_type=SupplierExecutionSourceEntityType.CUSTOM_MARKETPLACE_REQUEST,
+            source_entity_id=902,
+            idempotency_key="ops-dashboard-audit-req-attempt",
+            status=SupplierExecutionRequestStatus.VALIDATED,
+            requested_by_user_id=user.id,
+        )
+        se_repo.add_execution_request(self.session, req_ok)
+        att = se_repo.build_execution_attempt(
+            execution_request_id=req_ok.id,
+            attempt_number=1,
+            channel_type=SupplierExecutionAttemptChannel.TELEGRAM,
+            status=SupplierExecutionAttemptStatus.FAILED,
+            error_code="telegram_send_failed",
+        )
+        se_repo.add_execution_attempt(self.session, att)
+        self.session.flush()
+
+        r = self.client.get(
+            "/admin/ops-dashboard",
+            params={"include_sections": "audit_events", "audit_events_limit": 50},
+            headers=self._headers(),
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["filters"]["include_sections"], ["audit_events"])
+        kinds = {e["kind"] for e in body["audit_events"]}
+        self.assertIn("showcase_publish_attempt", kinds)
+        self.assertIn("notification_outbox_failed", kinds)
+        self.assertIn("supplier_execution_request", kinds)
+        self.assertIn("supplier_execution_attempt_failed", kinds)
+
+        out_ev = next(e for e in body["audit_events"] if e["kind"] == "notification_outbox_failed")
+        self.assertEqual(out_ev["admin_path"], f"/admin/orders/{order.id}")
+        self.assertEqual(out_ev["related_order_id"], order.id)
+
+        blocked_ev = next(
+            e for e in body["audit_events"] if e["kind"] == "supplier_execution_request" and "blocked" in e["title"]
+        )
+        self.assertEqual(blocked_ev["admin_path"], "/admin/custom-requests/901")
+
+        att_ev = next(e for e in body["audit_events"] if e["kind"] == "supplier_execution_attempt_failed")
+        self.assertEqual(att_ev["admin_path"], "/admin/custom-requests/902")
 
     def test_ops_dashboard_lists_publication_and_conversion(self) -> None:
         supplier = self.create_supplier()
@@ -221,6 +404,7 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
         self.assertEqual(body["upcoming_tours"], [])
         self.assertEqual(body["recent_publications"], [])
         self.assertEqual(body["conversion_links"], [])
+        self.assertEqual(body["audit_events"], [])
 
     def test_ops_dashboard_days_ahead_limits_upcoming(self) -> None:
         self.create_tour(

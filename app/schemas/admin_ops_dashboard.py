@@ -20,6 +20,7 @@ OPS_DASHBOARD_SECTION_KEYS: Final[tuple[str, ...]] = (
     "upcoming_tours",
     "recent_publications",
     "conversion_links",
+    "audit_events",
 )
 OPS_DASHBOARD_SECTION_KEYS_SET: Final[frozenset[str]] = frozenset(OPS_DASHBOARD_SECTION_KEYS)
 
@@ -55,8 +56,28 @@ class AdminOpsDashboardFiltersRead(BaseModel):
     publications_limit: int
     conversion_links_limit: int
     attention_limit: int
+    audit_events_limit: int
     include_sections: list[str] = Field(
         description="Sections with data populated in this response; canonical order when all included.",
+    )
+
+
+class AdminOpsAuditEventRead(BaseModel):
+    """B16E: single read-only audit/ops row (showcase, notifications, supplier execution)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str
+    severity: AdminOpsAttentionSeverity = "info"
+    title: str
+    summary: str
+    occurred_at: datetime
+    admin_path: str
+    related_order_id: int | None = None
+    related_supplier_offer_id: int | None = None
+    source_record_id: int | None = Field(
+        default=None,
+        description="Primary persisted row id for this signal (attempt, outbox entry, execution row).",
     )
 
 
@@ -189,6 +210,7 @@ class AdminOpsDashboardRead(BaseModel):
     upcoming_tours: list[AdminOpsUpcomingTourRead] = Field(default_factory=list)
     recent_publications: list[AdminOpsRecentPublicationRead] = Field(default_factory=list)
     conversion_links: list[AdminOpsConversionLinkRead] = Field(default_factory=list)
+    audit_events: list[AdminOpsAuditEventRead] = Field(default_factory=list)
     filters: AdminOpsDashboardFiltersRead
     generated_at: datetime = Field(description="UTC timestamp when the dashboard was built.")
     audit_hint: str = Field(
@@ -198,6 +220,7 @@ class AdminOpsDashboardRead(BaseModel):
 
 # Re-export for tests / OpenAPI clarity
 __all__ = [
+    "AdminOpsAuditEventRead",
     "AdminOpsAttentionItemRead",
     "AdminOpsAttentionSeverity",
     "AdminOpsConversionLinkRead",
