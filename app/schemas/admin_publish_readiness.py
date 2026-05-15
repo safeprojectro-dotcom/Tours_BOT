@@ -16,6 +16,14 @@ PublishReadinessSummaryStatus = Literal[
     "needs_review",
 ]
 
+PublishReadinessBadge = Literal[
+    "ready_to_suggest",
+    "blocked",
+    "not_applicable",
+    "already_published",
+    "needs_review",
+]
+
 PublishReadinessGateResultStatus = Literal["passed", "failed", "warning", "not_applicable"]
 
 PublishReadinessGateSeverity = Literal["blocker", "warning", "info"]
@@ -50,11 +58,32 @@ class AdminPublishReadinessRead(BaseModel):
     publish_action_path: str | None = None
     prepare_conversion_chain_plan_path: str | None = None
     generated_at: datetime
+    # B15I — compact UX layer (same read model; no extra I/O).
+    summary: str = Field(description="One-line status for admin/OPS UI.")
+    badge: PublishReadinessBadge = Field(description="Display badge key; mirrors status.")
+    next_action_code: str | None = Field(
+        default=None,
+        description="Suggested next admin intent code (not an HTTP action execution).",
+    )
+    next_action_label: str | None = Field(
+        default=None,
+        description="Human-readable label for next_action_code.",
+    )
+    primary_blocker: str | None = Field(
+        default=None,
+        description="First failed blocker gate reason, if any.",
+    )
+    warning_summary: str | None = Field(
+        default=None,
+        description="Compact summary of warning gates (non-blocking).",
+    )
+    gate_summary: str = Field(description="Compact gate outcome counts for UI chrome.")
 
 
 __all__ = [
     "AdminPublishReadinessGateRead",
     "AdminPublishReadinessRead",
+    "PublishReadinessBadge",
     "PublishReadinessGateResultStatus",
     "PublishReadinessGateSeverity",
     "PublishReadinessSummaryStatus",

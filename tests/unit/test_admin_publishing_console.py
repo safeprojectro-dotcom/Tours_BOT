@@ -105,6 +105,9 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             pr = item["publish_readiness"]
             self.assertFalse(pr["can_auto_publish"])
             self.assertEqual(pr["auto_publish_mode"], "disabled")
+            self.assertIn("summary", pr)
+            self.assertIn("badge", pr)
+            self.assertIn("gate_summary", pr)
 
     def test_publishing_console_kind_supplier_offer_only(self) -> None:
         mock_cfg = SimpleNamespace(

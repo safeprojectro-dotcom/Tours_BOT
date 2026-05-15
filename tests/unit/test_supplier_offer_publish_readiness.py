@@ -31,6 +31,10 @@ class SupplierOfferPublishReadinessTests(FoundationDBTestCase):
         self.assertFalse(pr.can_suggest_manual_publish)
         self.assertFalse(pr.can_auto_publish)
         self.assertEqual(pr.auto_publish_mode, "disabled")
+        self.assertEqual(pr.badge, "not_applicable")
+        self.assertEqual(pr.next_action_code, "not_applicable")
+        self.assertIsNotNone(pr.summary)
+        self.assertIsNotNone(pr.gate_summary)
 
     def test_derive_matches_review_package_service_snapshot(self) -> None:
         supplier = self.create_supplier()
@@ -62,6 +66,8 @@ class SupplierOfferPublishReadinessTests(FoundationDBTestCase):
         self.assertEqual(same.status, pkg.publish_readiness.status)
         self.assertEqual(same.can_suggest_manual_publish, pkg.publish_readiness.can_suggest_manual_publish)
         self.assertFalse(same.can_auto_publish)
+        self.assertEqual(same.badge, pkg.publish_readiness.badge)
+        self.assertEqual(same.summary, pkg.publish_readiness.summary)
 
     def test_review_package_get_does_not_create_guarded_action_attempts(self) -> None:
         self.app = create_app()

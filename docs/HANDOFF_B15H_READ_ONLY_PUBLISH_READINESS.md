@@ -16,7 +16,7 @@ B15H — Read-only publish readiness / suggest-only metadata
 - **Schema:** `app/schemas/admin_publish_readiness.py` — `AdminPublishReadinessRead`, gate DTOs; `can_auto_publish` always `False`; `auto_publish_mode` `disabled`.
 - **Service:** `app/services/supplier_offer_publish_readiness.py` — `derive_supplier_offer_publish_readiness`, `publish_readiness_for_tour_promotion`, placeholder stub for assembly.
 - **Navigation:** `supplier_offer_publish_showcase_path` in `app/services/admin_navigation_paths.py` — documents manual POST path only (read models).
-- **Wiring:** `SupplierOfferReviewPackageService` (`app/services/supplier_offer_review_package_service.py`) adds `publish_readiness` to `AdminSupplierOfferReviewPackageRead` (`app/schemas/supplier_admin.py`). `AdminPublishingConsoleService` (`app/services/admin_publishing_console_service.py`) attaches `rp.publish_readiness` for supplier-offer rows and `not_applicable` readiness for `tour_promotion`.
+- **Wiring:** `SupplierOfferReviewPackageService` (`app/services/supplier_offer_review_package_service.py`) adds `publish_readiness` to `AdminSupplierOfferReviewPackageRead` (`app/schemas/supplier_admin.py`). `AdminPublishingConsoleService` (`app/services/admin_publishing_console_service.py`) attaches `rp.publish_readiness` for supplier-offer rows and `not_applicable` readiness for `tour_promotion`. **B15I** adds compact **UX fields** on the same DTO — see [`docs/HANDOFF_B15I_PUBLISH_READINESS_SUGGEST_ONLY_UX.md`](HANDOFF_B15I_PUBLISH_READINESS_SUGGEST_ONLY_UX.md).
 
 ## Boundaries (must hold)
 

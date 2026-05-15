@@ -159,9 +159,14 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
         self.assertEqual(pr["prepare_conversion_chain_plan_path"], body["prepare_conversion_chain_plan_path"])
         gate_codes = {g["code"] for g in pr["gates"]}
         self.assertIn("packaging", gate_codes)
+        for key in ("summary", "badge", "gate_summary", "next_action_code"):
+            self.assertIn(key, pr)
         pkg_gate = next(g for g in pr["gates"] if g["code"] == "packaging")
         self.assertEqual(pkg_gate["status"], "failed")
         self.assertFalse(pr["can_suggest_manual_publish"])
+        self.assertEqual(pr["badge"], "blocked")
+        self.assertEqual(pr["next_action_code"], "resolve_publish_blockers")
+        self.assertIsNotNone(pr["summary"])
         self.assertIn("content_quality_review", body)
         self.assertIn("cover_media_quality_review", body)
         self.assertIn("has_warnings", body["cover_media_quality_review"])
@@ -533,3 +538,6 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
         self.assertFalse(pr["can_suggest_manual_publish"])
         self.assertFalse(pr["can_auto_publish"])
         self.assertIsNone(pr["publish_action_path"])
+        self.assertEqual(pr["badge"], "already_published")
+        self.assertEqual(pr["next_action_code"], "review_conversion_health")
+        self.assertIn("passed", pr["gate_summary"])

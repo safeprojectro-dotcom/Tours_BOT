@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from app.models.enums import SupplierOfferLifecycle, SupplierOfferPackagingStatus
 from app.schemas.admin_publish_readiness import (
     AdminPublishReadinessGateRead,
     AdminPublishReadinessRead,
+    PublishReadinessBadge,
+    PublishReadinessSummaryStatus,
 )
 from app.schemas.supplier_admin import AdminSupplierOfferReviewPackageRead
 from app.services.admin_navigation_paths import (
@@ -16,6 +19,127 @@ from app.services.admin_navigation_paths import (
 )
 from app.services.supplier_offer_cover_media_quality_review import cover_media_publish_blocking_reasons
 from app.services.supplier_offer_publish_safe_vnext import PublishSafeVNextStatus
+
+
+@dataclass(frozen=True, slots=True)
+class _PublishReadinessUxParts:
+    summary: str
+    badge: PublishReadinessBadge
+    next_action_code: str | None
+    next_action_label: str | None
+    primary_blocker: str | None
+    warning_summary: str | None
+    gate_summary: str
+
+
+def _compute_publish_readiness_ux(
+    *,
+    status: PublishReadinessSummaryStatus,
+    gates: list[AdminPublishReadinessGateRead],
+    gates_passed_count: int,
+    gates_failed_count: int,
+    gates_warning_count: int,
+    recommended_action: str,
+) -> _PublishReadinessUxParts:
+    """B15I — compact fields derived from status + gate list (read-only, no I/O)."""
+
+    na_n = sum(1 for g in gates if g.status == "not_applicable")
+    gate_summary = (
+        f"{gates_passed_count} passed · {gates_failed_count} failed · "
+        f"{gates_warning_count} warnings · {na_n} not applicable"
+    )
+
+    blocker_reasons = [
+        (g.reason or g.label or g.code)
+        for g in gates
+        if g.status == "failed" and g.severity == "blocker"
+    ]
+    primary_blocker = blocker_reasons[0] if blocker_reasons else None
+
+    warn_codes = [g.code for g in gates if g.status == "warning"]
+    warning_summary: str | None
+    if not warn_codes:
+        warning_summary = None
+    elif len(warn_codes) <= 4:
+        warning_summary = f"{len(warn_codes)} warning(s): " + ", ".join(warn_codes)
+    else:
+        warning_summary = f"{len(warn_codes)} warning(s): " + ", ".join(warn_codes[:4]) + ", …"
+
+    badge: PublishReadinessBadge = status
+
+    if status == "already_published":
+        summary = "Already published — not a candidate for first-time publish suggestion."
+        next_action_code = "review_conversion_health"
+        next_action_label = "Review conversion health on review-package (avoid duplicate showcase without ops review)."
+    elif status == "ready_to_suggest":
+        summary = "All blocking gates pass — ready to suggest manual showcase publish."
+        next_action_code = "manual_publish_available"
+        next_action_label = "Manual showcase publish available — operator confirms, then POST publish."
+    elif status == "needs_review":
+        summary = "Non-blocking warnings remain — review before suggesting manual publish."
+        next_action_code = "review_warnings"
+        next_action_label = "Review warning gates and operator workflow before manual publish."
+    elif status == "not_applicable":
+        summary = (recommended_action[:240] + "…") if len(recommended_action) > 240 else recommended_action
+        next_action_code = "not_applicable"
+        next_action_label = None
+    else:  # blocked
+        tail = primary_blocker or recommended_action
+        summary = f"Blocked — {tail}" if tail else "Blocked — resolve prerequisites before publish suggestion."
+        next_action_code = "resolve_publish_blockers"
+        next_action_label = "Resolve blocking gates (see primary_blocker and recommended_action)."
+
+    return _PublishReadinessUxParts(
+        summary=summary,
+        badge=badge,
+        next_action_code=next_action_code,
+        next_action_label=next_action_label,
+        primary_blocker=primary_blocker,
+        warning_summary=warning_summary,
+        gate_summary=gate_summary,
+    )
+
+
+def _finalize_publish_readiness(
+    *,
+    status: PublishReadinessSummaryStatus,
+    recommended_action: str,
+    gates_passed_count: int,
+    gates_failed_count: int,
+    gates_warning_count: int,
+    gates: list[AdminPublishReadinessGateRead],
+    can_suggest_manual_publish: bool,
+    publish_action_path: str | None,
+    prepare_conversion_chain_plan_path: str | None,
+    generated_at: datetime,
+) -> AdminPublishReadinessRead:
+    ux = _compute_publish_readiness_ux(
+        status=status,
+        gates=gates,
+        gates_passed_count=gates_passed_count,
+        gates_failed_count=gates_failed_count,
+        gates_warning_count=gates_warning_count,
+        recommended_action=recommended_action,
+    )
+    return AdminPublishReadinessRead(
+        status=status,
+        recommended_action=recommended_action,
+        gates_passed_count=gates_passed_count,
+        gates_failed_count=gates_failed_count,
+        gates_warning_count=gates_warning_count,
+        gates=gates,
+        can_suggest_manual_publish=can_suggest_manual_publish,
+        publish_action_path=publish_action_path,
+        prepare_conversion_chain_plan_path=prepare_conversion_chain_plan_path,
+        generated_at=generated_at,
+        summary=ux.summary,
+        badge=ux.badge,
+        next_action_code=ux.next_action_code,
+        next_action_label=ux.next_action_label,
+        primary_blocker=ux.primary_blocker,
+        warning_summary=ux.warning_summary,
+        gate_summary=ux.gate_summary,
+    )
 
 
 def _publish_safe_status_from_draft(packaging_draft_json: object) -> str | None:
@@ -31,7 +155,7 @@ def _publish_safe_status_from_draft(packaging_draft_json: object) -> str | None:
 def stub_publish_readiness_placeholder(*, offer_id: int, generated_at: datetime) -> AdminPublishReadinessRead:
     """Placeholder until review-package finishes aggregation (replaced before return)."""
 
-    return AdminPublishReadinessRead(
+    return _finalize_publish_readiness(
         status="blocked",
         recommended_action="Recomputing publish readiness…",
         gates_passed_count=0,
@@ -56,7 +180,7 @@ def stub_publish_readiness_placeholder(*, offer_id: int, generated_at: datetime)
 def publish_readiness_for_tour_promotion(*, generated_at: datetime) -> AdminPublishReadinessRead:
     """Publishing-console tour-promotion rows are not supplier-offer showcase candidates."""
 
-    return AdminPublishReadinessRead(
+    return _finalize_publish_readiness(
         status="not_applicable",
         recommended_action="Tour promotion rows are not evaluated for supplier-offer showcase publish readiness.",
         gates_passed_count=0,
@@ -483,7 +607,7 @@ def derive_supplier_offer_publish_readiness(
     )
 
     if lc is SupplierOfferLifecycle.PUBLISHED:
-        return AdminPublishReadinessRead(
+        return _finalize_publish_readiness(
             status="already_published",
             recommended_action=(
                 "Offer is already published. Use review-package for conversion health; "
@@ -502,7 +626,7 @@ def derive_supplier_offer_publish_readiness(
     if has_blocker_failed:
         reason = next((g.reason for g in gates if g.status == "failed"), None)
         ra = pkg.operator_workflow.primary_next_action or reason or "Resolve blocking gates before manual publish."
-        return AdminPublishReadinessRead(
+        return _finalize_publish_readiness(
             status="blocked",
             recommended_action=ra,
             gates_passed_count=passed_n,
@@ -516,7 +640,7 @@ def derive_supplier_offer_publish_readiness(
         )
 
     if has_warning:
-        return AdminPublishReadinessRead(
+        return _finalize_publish_readiness(
             status="needs_review",
             recommended_action=(
                 "Non-blocking warnings remain; review operator_workflow and gates before suggesting manual publish."
@@ -533,7 +657,7 @@ def derive_supplier_offer_publish_readiness(
 
     # Strict ready: publish action must be enabled in workflow (final product check)
     if pub_action is not None and pub_action.enabled:
-        return AdminPublishReadinessRead(
+        return _finalize_publish_readiness(
             status="ready_to_suggest",
             recommended_action=(
                 "Readiness gates pass; operator may execute manual showcase publish (POST) after explicit confirmation."
@@ -548,7 +672,7 @@ def derive_supplier_offer_publish_readiness(
             generated_at=t,
         )
 
-    return AdminPublishReadinessRead(
+    return _finalize_publish_readiness(
         status="blocked",
         recommended_action=pub_action.disabled_reason if pub_action and pub_action.disabled_reason else "Publish affordance disabled; refresh review-package.",
         gates_passed_count=passed_n,
