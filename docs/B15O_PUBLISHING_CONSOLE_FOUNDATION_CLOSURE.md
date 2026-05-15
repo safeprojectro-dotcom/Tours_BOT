@@ -200,7 +200,7 @@ Operator-recorded response highlights:
 
 Requires explicit product, security, and design approval before implementation:
 
-- **Channel editor** / **template editor** UX
+- **Channel editor** / **template editor** UX — design reference: **[`docs/B17_CHANNEL_TEMPLATE_EDITOR_DESIGN_GATE.md`](B17_CHANNEL_TEMPLATE_EDITOR_DESIGN_GATE.md)** (**B17**; **design-only**)
 - **Scheduled publish** (even after approval, needs charter)
 - **Batch approval** workflows
 - **Telegram publish automation** (send, retry policy)
@@ -216,15 +216,15 @@ Design pointers: [`B15G_GUARDED_AUTO_PUBLISH_DESIGN.md`](B15G_GUARDED_AUTO_PUBLI
 
 ## 10. Recommended next track
 
-**Close B15 foundation here (B15O).** Prefer a **conservative** next step:
+**Close B15 foundation here (B15O).** **B15P** ( **`ui_card`** / **`ui_sections`** ) is **delivered** in-repo — see [`HANDOFF_B15P_ADMIN_UI_READ_ONLY_ALIGNMENT.md`](HANDOFF_B15P_ADMIN_UI_READ_ONLY_ALIGNMENT.md). Prefer a **conservative** next step:
 
 | Option | Description |
 |--------|-------------|
-| **A — B15P (suggested)** | Admin **UI polish / read-only frontend alignment**: copy, labels, button affordances, display groups — **no new backend mutation**. |
-| **B — B17** | **Channel/template editor design gate:** **design-only first**; **no** send/publish implementation in the same slice. |
+| **A — B15P** | **Closed** — Admin **read-only** UI alignment on publishing console **GET** surfaces. |
+| **B — B17** | **Channel/template editor design gate** — **[`docs/B17_CHANNEL_TEMPLATE_EDITOR_DESIGN_GATE.md`](B17_CHANNEL_TEMPLATE_EDITOR_DESIGN_GATE.md)** (**design-only**; **no** runtime in that doc). Implementation follows **B17A+** when chartered. |
 | **C — B18** | **Public publish automation** go/no-go — **only if** stakeholders explicitly choose to move toward Telegram automation. |
 
-**Recommendation:** **Option A** or **Option B** next. **Do not** jump straight to **auto-publish** (**C**) without explicit charter and risk review.
+**Recommendation:** **B17A** (read-only editor detail) **or** **B17B** (selection metadata) next — **not** Telegram **publish** (**C** / **B17F**) without explicit charter and risk review.
 
 **Clean checkpoint (git):** record the commit that adds B15O docs after operator review — **pending commit** until committed locally.
 
