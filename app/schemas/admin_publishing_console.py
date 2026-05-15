@@ -47,6 +47,15 @@ PublishingConsoleMediaPolicyStatus = Literal[
     "not_applicable",
 ]
 
+PublishingConsolePreviewStatus = Literal["available", "placeholder", "blocked", "not_applicable"]
+
+PublishingConsoleTemplateFamily = Literal[
+    "supplier_offer_showcase",
+    "tour_promotion",
+    "custom_request_cta",
+    "unknown",
+]
+
 
 class AdminPublishingConsoleFutureCapabilityHintRead(BaseModel):
     """B15F: placeholder rows for template/channel UX not built yet (read-only)."""
@@ -104,6 +113,30 @@ class AdminPublishingConsoleTourDebugRead(BaseModel):
     catalog_customer_visible: bool
 
 
+class AdminPublishingConsolePreviewRead(BaseModel):
+    """B15F2/B15F3: compact template/preview UX layer for console rows (read-only; no publish)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    preview_status: PublishingConsolePreviewStatus
+    template_family: PublishingConsoleTemplateFamily
+    template_id: str | None = None
+    template_version: str | None = None
+    title: str | None = None
+    summary: str | None = None
+    primary_cta_label: str | None = None
+    target_kind: str | None = None
+    target_url: str | None = None
+    media_status: str | None = None
+    channel_status: str | None = None
+    preview_path: str | None = None
+    safety_note: str = Field(
+        description="Why no public side effect occurs from this read-only console endpoint.",
+    )
+    next_action_code: str | None = None
+    next_action_label: str | None = None
+
+
 class AdminPublishingConsoleItemRead(BaseModel):
     """Single publishing candidate card."""
 
@@ -141,6 +174,9 @@ class AdminPublishingConsoleItemRead(BaseModel):
     )
     publish_readiness: AdminPublishReadinessRead = Field(
         description="B15H: suggest-only publish readiness for this row (read-only).",
+    )
+    console_preview: AdminPublishingConsolePreviewRead = Field(
+        description="B15F2/B15F3: template/preview clarity for admin UX (read-only).",
     )
     admin_tour_path: str | None = None
     offer_debug: AdminPublishingConsoleOfferDebugRead | None = None

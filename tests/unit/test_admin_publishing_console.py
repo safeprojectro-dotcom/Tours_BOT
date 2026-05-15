@@ -108,6 +108,14 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             self.assertIn("summary", pr)
             self.assertIn("badge", pr)
             self.assertIn("gate_summary", pr)
+            cp = item["console_preview"]
+            self.assertIn(cp["preview_status"], ("available", "placeholder", "blocked", "not_applicable"))
+            self.assertIn(
+                cp["template_family"],
+                ("supplier_offer_showcase", "tour_promotion", "custom_request_cta", "unknown"),
+            )
+            self.assertTrue(cp["safety_note"])
+            self.assertIn("read-only", cp["safety_note"].lower())
 
     def test_publishing_console_kind_supplier_offer_only(self) -> None:
         mock_cfg = SimpleNamespace(
@@ -146,6 +154,10 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             self.assertEqual(pr["status"], "not_applicable")
             self.assertFalse(pr["can_auto_publish"])
             self.assertEqual(pr["auto_publish_mode"], "disabled")
+            cp = item["console_preview"]
+            self.assertEqual(cp["template_family"], "tour_promotion")
+            self.assertEqual(cp["preview_status"], "placeholder")
+            self.assertIn("placeholder", cp["safety_note"].lower())
 
     def test_b15d_supplier_offer_ready_exact_tour_cta(self) -> None:
         """Ready supplier row: B15C gate green, conversion target is exact tour, CTA safety exact_tour_ready."""
@@ -241,6 +253,11 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
         self.assertEqual(match["channel_kind"], "telegram_showcase_channel")
         self.assertIn("template_actions", match)
         self.assertIn("channel_actions", match)
+        cp = match["console_preview"]
+        self.assertEqual(cp["template_family"], "supplier_offer_showcase")
+        self.assertIn(cp["preview_status"], ("available", "placeholder", "blocked"))
+        self.assertEqual(cp["next_action_code"], match["publish_readiness"]["next_action_code"])
+        self.assertIsNotNone(cp.get("preview_path"))
 
     def test_b15d_supplier_offer_missing_execution_link(self) -> None:
         """Blocked bridge path: no execution link — CTA safety missing_execution_link, next action execution-link."""

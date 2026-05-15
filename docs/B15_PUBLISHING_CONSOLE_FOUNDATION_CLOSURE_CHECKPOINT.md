@@ -1,7 +1,7 @@
 # B15 — Admin Publishing Console foundation closure checkpoint
 
 **Status:** Closed (docs checkpoint).  
-**Scope:** **B15B–B15F** — safe, **read-only** admin publishing console **foundation**; execution-heavy product (auto-publish, console-side mutations, template/channel editors) stays **approval-gated**.  
+**Scope:** **B15B–B15F** plus **B15F2/B15F3** (additive) — safe, **read-only** admin publishing console **foundation** + **template/preview display** metadata on console rows; execution-heavy product (auto-publish, console-side mutations, template/channel editors) stays **approval-gated**.  
 **Handoff:** [`docs/HANDOFF_B15_CLOSE_PUBLISHING_CONSOLE_FOUNDATION_CHECKPOINT_TO_NEXT_STEP.md`](HANDOFF_B15_CLOSE_PUBLISHING_CONSOLE_FOUNDATION_CHECKPOINT_TO_NEXT_STEP.md).  
 **Prompt archive:** [`docs/CURSOR_PROMPT_B15_CLOSE_PUBLISHING_CONSOLE_FOUNDATION_CHECKPOINT.md`](CURSOR_PROMPT_B15_CLOSE_PUBLISHING_CONSOLE_FOUNDATION_CHECKPOINT.md).
 
@@ -21,6 +21,7 @@ The **safe publishing console foundation** delivered across **B15B–B15F** is *
 **B15E2 (implemented):** narrow **POST** **`/admin/publishing-console/supplier-offers/{offer_id}/prepare-conversion-chain`** executes guarded **`prepare_conversion_chain`** only (**[`HANDOFF_B15E2_PUBLISHING_CONSOLE_PREPARE_CHAIN_ACTION_EXECUTION.md`](HANDOFF_B15E2_PUBLISHING_CONSOLE_PREPARE_CHAIN_ACTION_EXECUTION.md)**). Does **not** change **`GET /admin/publishing-console`** semantics (still read-only queue).
 
 - **B15F** — source / template / channel / media metadata plus future-disabled capability hints.
+- **B15F2/B15F3** — read-only **`console_preview`** (`AdminPublishingConsolePreviewRead`): compact template family, preview status, CTA/target hints, **`safety_note`**, and next-action labels for admin UX only (**separate** DTO from `AdminPublishingConsoleItemRead`); **no** Telegram I/O, publish attempts, scheduler, **`prepare_conversion_chain`** execution, Layer A mutation, or migration (**unit tests** extended in **`test_admin_publishing_console`**).
 
 **B15C** remains documented as the **accepted operator conversion order** and production-smoke baseline; see §3–§4.
 
@@ -39,6 +40,7 @@ Single **read-only** endpoint (B15B) extended additively:
 | Read-only action affordances | B15E | per-item `actions[]` — metadata only; mirrors `operator_workflow` / console / future. |
 | Source / template / channel / media metadata | B15F | e.g. `source_*`, `template_*`, `channel_*`, `media_policy_status`, `media_summary`. |
 | Future-disabled capability hints | B15F | `template_actions[]`, `channel_actions[]` (`implemented: false`). |
+| Template / preview display metadata | B15F2/B15F3 | Per-item `console_preview` (`AdminPublishingConsolePreviewRead`): e.g. `preview_status`, `template_family`, optional title/summary/CTA/target/preview path, `safety_note`, `next_action_*`. Supplier-offer rows: showcase-oriented preview where data allows; tour-promotion rows: placeholder/read-only. |
 
 Canonical field lists: [`docs/B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW.md`](B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW.md), [`docs/B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md`](B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md), [`docs/B15F_PUBLISHING_CONSOLE_TEMPLATE_SOURCE_CHANNEL_READ_MODEL.md`](B15F_PUBLISHING_CONSOLE_TEMPLATE_SOURCE_CHANNEL_READ_MODEL.md).
 
@@ -84,19 +86,19 @@ Dangerous automation and execution UX remain **explicitly future-gated** (§7).
 
 ## 6. Tests and evidence pointers
 
-- **Unit:** `tests/unit/test_admin_publishing_console.py` — **8 passed** (covers B15D / B15E / B15F additive read model on the same endpoint).
+- **Unit:** `tests/unit/test_admin_publishing_console.py` — **8 passed** (covers B15D / B15E / B15F / **B15F2–B15F3** `console_preview` additive read model on the same endpoint).
 - **Production / operator smoke:** **B15C** docs (§4 and linked runbooks), not replaced by console unit tests.
 
 ---
 
 ## 7. Future gated options
 
+**B15F2/B15F3 (closed in-repo):** Read-only **`console_preview`** / **`AdminPublishingConsolePreviewRead`** on **`GET /admin/publishing-console`** — **[`docs/HANDOFF_B15F2F3_PUBLISHING_CONSOLE_TEMPLATE_PREVIEW_REFINEMENT.md`](HANDOFF_B15F2F3_PUBLISHING_CONSOLE_TEMPLATE_PREVIEW_REFINEMENT.md)**. **`AdminPublishingConsolePreviewRead`** is **separate** from **`AdminPublishingConsoleItemRead`**; **`supplier_offer_initial`** rows carry showcase-oriented preview metadata; **`tour_promotion`** rows remain placeholder/read-only. **`tests/unit/test_admin_publishing_console.py`** covers **`console_preview`**. **No** Telegram I/O, publish attempts, scheduler/auto-publish, prepare-chain execution, Layer A mutation, migration, commits, or pushes were touched. *(A future **template editor** or **channel selector** would need a new charter.)*
+
 **Only** after explicit product / security / design approval:
 
 | Option | Intent |
 |--------|--------|
-| **B15F2** | Template editor — design / read model. |
-| **B15F3** | Channel selector — design / read model. |
 | **B15E2** | Explicit **action execution** from console or sibling flows (not metadata only). |
 | **B15G** | Guarded **auto-publish** — **design only:** **[`docs/B15G_GUARDED_AUTO_PUBLISH_DESIGN.md`](B15G_GUARDED_AUTO_PUBLISH_DESIGN.md)** (**no** runtime in this gate). |
 | **B15H** | Read-only **publish readiness** on **review-package** + publishing-console supplier-offer rows — **[`docs/HANDOFF_B15H_READ_ONLY_PUBLISH_READINESS.md`](HANDOFF_B15H_READ_ONLY_PUBLISH_READINESS.md)** (**suggest-only**; **no** Telegram I/O). |
@@ -110,7 +112,7 @@ Dangerous automation and execution UX remain **explicitly future-gated** (§7).
 ## 8. Recommended next step
 
 1. **Pause B15** and return to the **broader business plan** / next product block **until** a slice above is chartered, **or**
-2. Open **B15F2**, **B15F3**, or **B15E2** as a **design-only** next slice with an explicit gate (no execution assumptions).
+2. Open a **new** gated slice (e.g. template/channel **editor** UX, or other console execution beyond existing **B15E2**) with an explicit charter — **B15F2/B15F3** read-model preview metadata is already closed; **B15E2** already covers prepare-chain execution from the publishing console.
 
 ---
 
@@ -123,6 +125,7 @@ Dangerous automation and execution UX remain **explicitly future-gated** (§7).
 | B15D | [`docs/B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW.md`](B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW.md) |
 | B15E | [`docs/B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md`](B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md) |
 | B15F | [`docs/B15F_PUBLISHING_CONSOLE_TEMPLATE_SOURCE_CHANNEL_READ_MODEL.md`](B15F_PUBLISHING_CONSOLE_TEMPLATE_SOURCE_CHANNEL_READ_MODEL.md) |
+| B15F2/B15F3 | [`docs/HANDOFF_B15F2F3_PUBLISHING_CONSOLE_TEMPLATE_PREVIEW_REFINEMENT.md`](HANDOFF_B15F2F3_PUBLISHING_CONSOLE_TEMPLATE_PREVIEW_REFINEMENT.md) — read-only `console_preview` |
 | B15G | [`docs/B15G_GUARDED_AUTO_PUBLISH_DESIGN.md`](B15G_GUARDED_AUTO_PUBLISH_DESIGN.md) — design only |
 | B15H | [`docs/HANDOFF_B15H_READ_ONLY_PUBLISH_READINESS.md`](HANDOFF_B15H_READ_ONLY_PUBLISH_READINESS.md) — read-only suggest-only readiness |
 | B15I | [`docs/HANDOFF_B15I_PUBLISH_READINESS_SUGGEST_ONLY_UX.md`](HANDOFF_B15I_PUBLISH_READINESS_SUGGEST_ONLY_UX.md) — compact UX fields on same DTO |

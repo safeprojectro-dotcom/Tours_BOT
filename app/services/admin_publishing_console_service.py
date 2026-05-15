@@ -8,7 +8,7 @@ from typing import Any, Literal, cast
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.enums import SupplierOfferLifecycle, TourStatus
+from app.models.enums import SupplierOfferLifecycle, SupplierOfferPaymentMode, TourStatus
 from app.repositories.supplier import SupplierOfferRepository
 from app.repositories.tour import TourRepository
 from app.schemas.admin_publishing_console import (
@@ -16,6 +16,7 @@ from app.schemas.admin_publishing_console import (
     AdminPublishingConsoleFutureCapabilityHintRead,
     AdminPublishingConsoleItemRead,
     AdminPublishingConsoleOfferDebugRead,
+    AdminPublishingConsolePreviewRead,
     AdminPublishingConsoleRead,
     AdminPublishingConsoleTourDebugRead,
     PublishingConsoleActionDangerLevel,
@@ -26,7 +27,9 @@ from app.schemas.admin_publishing_console import (
     PublishingConsoleCtaSafetyStatusLiteral,
     PublishingConsoleItemStatus,
     PublishingConsoleMediaPolicyStatus,
+    PublishingConsolePreviewStatus,
     PublishingConsoleReadinessLevel,
+    PublishingConsoleTemplateFamily,
     PublishingConsoleTemplateKind,
     PublishingConsoleTemplateSourceStatus,
 )
@@ -624,6 +627,123 @@ def _b15f_tour_promotion(*, tour_id: int, title: str) -> dict[str, Any]:
     }
 
 
+_CONSOLE_PREVIEW_READ_ONLY_SAFETY = (
+    "Publishing console is read-only: no Telegram publish, schedule, channel send, or worker/scheduling. "
+    "Operators use separate GET/POST endpoints for preview and publish."
+)
+
+_CONSOLE_PREVIEW_TOUR_PLACEHOLDER = (
+    " Tour promotion rows use placeholder templates; compose-to-channel is not implemented in this slice."
+)
+
+
+def _console_preview_supplier_offer(
+    *,
+    rp: AdminSupplierOfferReviewPackageRead,
+    item_title: str,
+    b15f: dict[str, Any],
+    b15d: dict[str, Any],
+) -> AdminPublishingConsolePreviewRead:
+    pr = rp.publish_readiness
+    sp = rp.showcase_preview
+    st = rp.showcase_template_preview
+    eff = (st.effective_template_id or "").strip() or None
+
+    tpl_stat = b15f["template_source_status"]
+    media_stat = b15f["media_policy_status"]
+    tpl_preview_avail = b15f["template_preview_available"]
+
+    if media_stat == "media_blocked":
+        pstat: PublishingConsolePreviewStatus = "blocked"
+    elif tpl_stat == "unavailable":
+        pstat = "blocked"
+    elif tpl_stat == "partial" or not tpl_preview_avail:
+        pstat = "placeholder"
+    else:
+        pstat = "available"
+
+    if rp.offer.payment_mode is SupplierOfferPaymentMode.ASSISTED_CLOSURE:
+        tf: PublishingConsoleTemplateFamily = "custom_request_cta"
+    else:
+        tf = "supplier_offer_showcase"
+
+    sales_mode_v = getattr(rp.offer.sales_mode, "value", str(rp.offer.sales_mode))
+    ctk = str(b15d.get("conversion_target_kind", "none"))
+    target_kind = f"{ctk}:{sales_mode_v}"
+
+    primary_cta: str | None = None
+    if (sp.cta_rezerva_href or "").strip():
+        primary_cta = "Rezervă (channel preview)"
+    elif (sp.cta_detalii_href or "").strip():
+        primary_cta = "Detalii (channel preview)"
+
+    summary = (b15f.get("template_source_summary") or "").strip() or None
+
+    return AdminPublishingConsolePreviewRead(
+        preview_status=pstat,
+        template_family=tf,
+        template_id=eff,
+        template_version=(b15f.get("template_version") or None),
+        title=(item_title or "").strip() or None,
+        summary=summary,
+        primary_cta_label=primary_cta,
+        target_kind=target_kind,
+        target_url=b15d.get("conversion_target_url"),
+        media_status=str(media_stat),
+        channel_status=str(b15f["channel_status"]),
+        preview_path=b15f.get("template_preview_path"),
+        safety_note=_CONSOLE_PREVIEW_READ_ONLY_SAFETY,
+        next_action_code=pr.next_action_code,
+        next_action_label=pr.next_action_label,
+    )
+
+
+def _console_preview_tour_promotion(
+    *,
+    tour_title: str,
+    sales_mode: str,
+    b15f: dict[str, Any],
+    b15d: dict[str, Any],
+    human_summary: str,
+    console_status: PublishingConsoleItemStatus,
+) -> AdminPublishingConsolePreviewRead:
+    kind = b15f.get("template_kind", "none")
+    if kind == "tour_promotion_placeholder":
+        pstat: PublishingConsolePreviewStatus = "placeholder"
+    else:
+        pstat = "not_applicable"
+
+    if console_status == "blocked":
+        next_code: str | None = "resolve_tour_blockers"
+        next_label: str | None = "Resolve tour listing, seats, or departure/catalog window before promotion UX."
+    elif console_status == "needs_attention":
+        next_code = "resolve_catalog_window"
+        next_label = "Bring tour into customer-visible catalog window for promotion candidates."
+    else:
+        next_code = "compose_tour_promotion_not_implemented"
+        next_label = "Compose tour promotion draft (not implemented; placeholder template only)."
+
+    summary = (human_summary or "").strip() or None
+
+    return AdminPublishingConsolePreviewRead(
+        preview_status=pstat,
+        template_family="tour_promotion",
+        template_id=None,
+        template_version=b15f.get("template_version"),
+        title=(tour_title or "").strip() or None,
+        summary=summary,
+        primary_cta_label="Exact-tour Mini App link (when listed)" if console_status == "ready" else None,
+        target_kind=f"exact_tour:{sales_mode}",
+        target_url=b15d.get("conversion_target_url"),
+        media_status=str(b15f["media_policy_status"]),
+        channel_status=str(b15f["channel_status"]),
+        preview_path=None,
+        safety_note=_CONSOLE_PREVIEW_READ_ONLY_SAFETY + _CONSOLE_PREVIEW_TOUR_PLACEHOLDER,
+        next_action_code=next_code,
+        next_action_label=next_label,
+    )
+
+
 class AdminPublishingConsoleService:
     """Builds a merged, sorted candidate list for the publishing console (read-only)."""
 
@@ -714,6 +834,12 @@ class AdminPublishingConsoleService:
                 offer_id=row.id,
                 title=item_title,
             )
+            cp = _console_preview_supplier_offer(
+                rp=rp,
+                item_title=item_title,
+                b15f=b15f,
+                b15d=b15d,
+            )
             item = AdminPublishingConsoleItemRead(
                 candidate_key=f"supplier_offer:{row.id}",
                 kind="supplier_offer_initial",
@@ -733,6 +859,7 @@ class AdminPublishingConsoleService:
                 prepare_conversion_chain_blockers_count=rp.prepare_conversion_chain_blockers_count,
                 prepare_conversion_chain_action=rp.prepare_conversion_chain_action,
                 publish_readiness=rp.publish_readiness,
+                console_preview=cp,
                 admin_tour_path=None,
                 offer_debug=AdminPublishingConsoleOfferDebugRead(
                     supplier_offer_id=row.id,
@@ -806,6 +933,15 @@ class AdminPublishingConsoleService:
             t_actions = _tour_promotion_action_affordances(tour_id=t.id)
             tour_title = (t.title_default or t.code or f"Tour #{t.id}").strip()
             b15f = _b15f_tour_promotion(tour_id=t.id, title=tour_title)
+            pr_row = publish_readiness_for_tour_promotion(generated_at=now)
+            cp = _console_preview_tour_promotion(
+                tour_title=tour_title,
+                sales_mode=t.sales_mode.value,
+                b15f=b15f,
+                b15d=b15d,
+                human_summary=human,
+                console_status=status,
+            )
             enriched.append(
                 (
                     t.departure_datetime,
@@ -820,7 +956,8 @@ class AdminPublishingConsoleService:
                         blocked_reasons=br,
                         human_summary=human,
                         review_package_path=None,
-                        publish_readiness=publish_readiness_for_tour_promotion(generated_at=now),
+                        publish_readiness=pr_row,
+                        console_preview=cp,
                         admin_tour_path=f"/admin/tours/{t.id}",
                         offer_debug=None,
                         tour_debug=AdminPublishingConsoleTourDebugRead(
