@@ -1,7 +1,8 @@
 # B15 — Admin Publishing Console foundation closure checkpoint
 
-**Status:** Closed (docs checkpoint).  
-**Scope:** **B15B–B15F** plus **B15F2/B15F3**, **B15K**, **B15L**, and **B15M** (additive) — safe, **read-only** admin publishing console **foundation** + **template/preview display** (`console_preview`) + **template library** (`template_library`) + **preview payload** (`preview_payload`) metadata on console rows + **per-offer detail** (`GET …/supplier-offers/{offer_id}`); execution-heavy product (auto-publish, console-side mutations, template/channel editors) stays **approval-gated**.  
+**Status:** Closed (docs checkpoint). **Final narrative closure:** **[`docs/B15O_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE.md`](docs/B15O_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE.md)** (**B15O** — docs only, **no** runtime changes; commit **pending** until recorded by maintainer).  
+**Scope:** **B15B–B15M** are **closed** as a **read-model** + **guarded internal `prepare_conversion_chain`** foundation (`POST` below Telegram publish); **B15O** closes **foundation documentation** and separates **future product gates** (§7–§8 below, **B15O** §9–§10).  
+**This document** keeps the **historical slice table** (§9) and per-slice notes; **formal closure / smoke / safety / next steps** → **[`docs/B15O_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE.md`](docs/B15O_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE.md)**.  
 **Handoff:** [`docs/HANDOFF_B15_CLOSE_PUBLISHING_CONSOLE_FOUNDATION_CHECKPOINT_TO_NEXT_STEP.md`](HANDOFF_B15_CLOSE_PUBLISHING_CONSOLE_FOUNDATION_CHECKPOINT_TO_NEXT_STEP.md).  
 **Prompt archive:** [`docs/CURSOR_PROMPT_B15_CLOSE_PUBLISHING_CONSOLE_FOUNDATION_CHECKPOINT.md`](CURSOR_PROMPT_B15_CLOSE_PUBLISHING_CONSOLE_FOUNDATION_CHECKPOINT.md).
 
@@ -107,24 +108,25 @@ Dangerous automation and execution UX remain **explicitly future-gated** (§7).
 
 **B15M (closed in-repo):** Read-only **`GET /admin/publishing-console/supplier-offers/{offer_id}`** — **[`docs/HANDOFF_B15M_PUBLISHING_CONSOLE_SUPPLIER_OFFER_DETAIL_READ_VIEW.md`](HANDOFF_B15M_PUBLISHING_CONSOLE_SUPPLIER_OFFER_DETAIL_READ_VIEW.md)**. Schema: **`AdminPublishingConsoleSupplierOfferDetailRead`**; service **`AdminPublishingConsoleService.read_supplier_offer_detail`**. Aggregates **`publish_readiness`**, **`console_preview`**, **`template_library`**, **`preview_payload`**, **`actions`**, path metadata, **`conversion_summary`**, **`linked_tour_summary`**, **`publication_summary`**, **`safety_summary`**; **404** if offer missing; detail **not** filtered like the list queue. **No** Telegram I/O, publish attempts, scheduler, auto-publish, **`prepare_conversion_chain`** execution, Layer A mutation, Mini App/B11 routing changes, migration.
 
-**Only** after explicit product / security / design approval:
+**Only** after explicit product / security / design approval (see also **B15O** §9):
 
 | Option | Intent |
 |--------|--------|
-| **B15E2** | Explicit **action execution** from console or sibling flows (not metadata only). |
 | **B15G** | Guarded **auto-publish** — **design only:** **[`docs/B15G_GUARDED_AUTO_PUBLISH_DESIGN.md`](B15G_GUARDED_AUTO_PUBLISH_DESIGN.md)** (**no** runtime in this gate). |
-| **B15H** | Read-only **publish readiness** on **review-package** + publishing-console supplier-offer rows — **[`docs/HANDOFF_B15H_READ_ONLY_PUBLISH_READINESS.md`](HANDOFF_B15H_READ_ONLY_PUBLISH_READINESS.md)** (**suggest-only**; **no** Telegram I/O). |
-| **B15I** | **UX layer** on **`publish_readiness`** (summary, badge, next-action hints, blockers, gate_summary) — **[`docs/HANDOFF_B15I_PUBLISH_READINESS_SUGGEST_ONLY_UX.md`](HANDOFF_B15I_PUBLISH_READINESS_SUGGEST_ONLY_UX.md)** (**read-only**). |
 | **B16** / **Admin OPS visibility** | If roadmap priority shifts to broader ops surfaces outside this foundation. |
 
-**Related (design record — not implemented by B15B–F):** **[`docs/B16D_OPS_ACTIONS_GUARDED_AUTOMATION_DESIGN.md`](B16D_OPS_ACTIONS_GUARDED_AUTOMATION_DESIGN.md)** — guarded **`prepare_conversion_chain`** (internal bridge / catalog / execution link **without** Telegram); **B15** read-only foundation unchanged until **B16D2** / **B15E2**.
+**Shipped (not “future options”):** **B15H**, **B15I**, **B15E2**, **B16D2C** — **[`docs/B15O_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE.md`](docs/B15O_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE.md)** §2–§4.
+
+**Related (design record — not implemented by B15B–F):** **[`docs/B16D_OPS_ACTIONS_GUARDED_AUTOMATION_DESIGN.md`](B16D_OPS_ACTIONS_GUARDED_AUTOMATION_DESIGN.md)** — guarded **`prepare_conversion_chain`** (internal bridge / catalog / execution link **without** Telegram). **B16D2C** / **B15E2** POST execution is **implemented**; see **[`docs/B15O_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE.md`](docs/B15O_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE.md)**.
 
 ---
 
 ## 8. Recommended next step
 
-1. **Pause B15** and return to the **broader business plan** / next product block **until** a slice above is chartered, **or**
-2. Open a **new** gated slice (e.g. template/channel **editor** UX, or other console execution beyond existing **B15E2**) with an explicit charter — **B15F2/B15F3**, **B15K**, **B15L**, and **B15M** read-model surfaces are already closed; **B15E2** already covers prepare-chain execution from the publishing console.
+**Foundation closed:** follow **[`docs/B15O_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE.md`](docs/B15O_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE.md)** §10 — prefer **B15P** (admin UI polish / read-only frontend alignment) or **B17** (channel/template **editor design gate**, design-only first). **Do not** proceed to **auto-publish** without a **separate** go/no-go (**B15G** remains design-only).
+
+1. **Pause B15** implementation on this foundation line **or**
+2. Charter **B15P** or **B17** explicitly — read-model surfaces (**B15F2/B15F3**, **B15K**, **B15L**, **B15M**) and **B15E2** prepare-chain POST are already closed; **future** automation/editors remain **off** this checkpoint until product approval (**B15O** §9).
 
 ---
 
@@ -132,6 +134,7 @@ Dangerous automation and execution UX remain **explicitly future-gated** (§7).
 
 | Slice | Doc |
 |-------|-----|
+| B15O | [`docs/B15O_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE.md`](docs/B15O_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE.md) — final foundation closure (docs) |
 | B15B | [`docs/B15B_READ_ONLY_ADMIN_PUBLISHING_CONSOLE.md`](B15B_READ_ONLY_ADMIN_PUBLISHING_CONSOLE.md) |
 | B15C | [`docs/B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md`](B15C_SUPPLIER_OFFER_EXACT_TOUR_CTA_GATE.md) |
 | B15D | [`docs/B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW.md`](B15D_ADMIN_PUBLISHING_CONSOLE_RICH_READ_VIEW.md) |
