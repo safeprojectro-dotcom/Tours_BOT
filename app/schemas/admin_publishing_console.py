@@ -1,7 +1,8 @@
-"""B15B/B15D/B15E/B15F/B15K: read-only Admin Publishing Console response DTOs (no publish / schedule / mutations)."""
+"""B15B/B15D/B15E/B15F/B15K/B15L: read-only Admin Publishing Console response DTOs (no publish / schedule / mutations)."""
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -178,6 +179,53 @@ class AdminPublishingConsoleTemplateLibraryRead(BaseModel):
     )
 
 
+PublishingConsolePreviewPayloadStatus = Literal["available", "placeholder", "blocked", "not_applicable"]
+
+PublishingConsolePreviewPayloadSource = Literal[
+    "showcase_preview",
+    "packaging_draft",
+    "supplier_offer_fields",
+    "tour_placeholder",
+    "none",
+]
+
+
+class AdminPublishingConsolePreviewPayloadRead(BaseModel):
+    """B15L: structured supplier-offer showcase preview payload for admin console (read-only; no send)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    payload_status: PublishingConsolePreviewPayloadStatus
+    source: PublishingConsolePreviewPayloadSource
+    title: str | None = None
+    subtitle: str | None = None
+    body_text: str | None = None
+    caption_html: str | None = None
+    primary_cta_label: str | None = None
+    primary_cta_url: str | None = None
+    secondary_cta_label: str | None = None
+    secondary_cta_url: str | None = None
+    media_reference: str | None = None
+    media_status: str | None = None
+    channel_kind: str | None = None
+    channel_status: str | None = None
+    channel_ref: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    blockers: list[str] = Field(default_factory=list)
+    safety_note: str = Field(
+        description="Confirms this GET does not publish, schedule, or send Telegram traffic.",
+    )
+    generated_at: datetime | None = None
+    publish_readiness_note: str | None = Field(
+        default=None,
+        description="How this payload relates to the same row's publish_readiness (read-only hint).",
+    )
+    template_library_note: str | None = Field(
+        default=None,
+        description="How this payload relates to the same row's template_library (read-only hint).",
+    )
+
+
 class AdminPublishingConsoleItemRead(BaseModel):
     """Single publishing candidate card."""
 
@@ -221,6 +269,9 @@ class AdminPublishingConsoleItemRead(BaseModel):
     )
     template_library: AdminPublishingConsoleTemplateLibraryRead = Field(
         description="B15K: possible template variants and selection hints (read-only).",
+    )
+    preview_payload: AdminPublishingConsolePreviewPayloadRead = Field(
+        description="B15L: showcase-oriented preview fields for admin UI (read-only; supplier rows primary).",
     )
     admin_tour_path: str | None = None
     offer_debug: AdminPublishingConsoleOfferDebugRead | None = None

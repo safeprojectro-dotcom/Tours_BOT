@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E/B15F/B15K: GET /admin/publishing-console read-only queue + rich read-model + affordances + template library."""
+"""B15B/B15D/B15E/B15F/B15K/B15L: GET /admin/publishing-console read-only queue + rich read-model + template library + preview payload."""
 
 from __future__ import annotations
 
@@ -125,6 +125,22 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             for ent in tl["available_templates"]:
                 self.assertIn(ent["status"], ("available", "future", "not_applicable", "blocked"))
                 self.assertTrue(ent["template_id"])
+            pay = item["preview_payload"]
+            self.assertIn(pay["payload_status"], ("available", "placeholder", "blocked", "not_applicable"))
+            self.assertIn(
+                pay["source"],
+                ("showcase_preview", "packaging_draft", "supplier_offer_fields", "tour_placeholder", "none"),
+            )
+            self.assertTrue(pay["safety_note"])
+            self.assertIn("read-only", pay["safety_note"].lower())
+            self.assertIsInstance(pay["warnings"], list)
+            self.assertIsInstance(pay["blockers"], list)
+            if pay.get("publish_readiness_note"):
+                self.assertIn("publish_readiness", pay["publish_readiness_note"].lower())
+            if pay.get("template_library_note"):
+                self.assertIn("template_library", pay["template_library_note"].lower())
+            if item["kind"] == "tour_promotion":
+                self.assertEqual(pay["source"], "tour_placeholder")
 
     def test_publishing_console_kind_supplier_offer_only(self) -> None:
         mock_cfg = SimpleNamespace(
@@ -172,6 +188,10 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             self.assertEqual(tl["selected_template_id"], "tour_promotion_placeholder")
             self.assertTrue(any(e["template_id"] == "tour_promotion_placeholder" for e in tl["available_templates"]))
             self.assertTrue(all(e["status"] == "future" for e in tl["available_templates"]))
+            pay = item["preview_payload"]
+            self.assertEqual(pay["payload_status"], "not_applicable")
+            self.assertEqual(pay["source"], "tour_placeholder")
+            self.assertIsNone(pay.get("caption_html"))
 
     def test_b15d_supplier_offer_ready_exact_tour_cta(self) -> None:
         """Ready supplier row: B15C gate green, conversion target is exact tour, CTA safety exact_tour_ready."""
@@ -279,6 +299,13 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
         self.assertEqual(show["status"], "available")
         cr = next(e for e in tl["available_templates"] if e["template_id"] == "custom_request_cta")
         self.assertEqual(cr["status"], "not_applicable")
+        pay = match["preview_payload"]
+        self.assertIn(pay["payload_status"], ("available", "placeholder"))
+        self.assertEqual(pay["source"], "showcase_preview")
+        self.assertIsNotNone(pay.get("caption_html"))
+        self.assertIsNotNone(pay.get("generated_at"))
+        self.assertIn("publish_readiness", (pay.get("publish_readiness_note") or "").lower())
+        self.assertIn("template_library", (pay.get("template_library_note") or "").lower())
 
     def test_b15d_supplier_offer_missing_execution_link(self) -> None:
         """Blocked bridge path: no execution link — CTA safety missing_execution_link, next action execution-link."""
@@ -450,6 +477,7 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
                 "publish_readiness",
                 "console_preview",
                 "template_library",
+                "preview_payload",
                 "admin_tour_path",
             ):
                 self.assertIn(key, item)

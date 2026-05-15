@@ -1,7 +1,8 @@
-"""B15B/B15D/B15E/B15F: read-only publishing console — review-package + tours + readiness + affordances + template/channel read model; no I/O side effects."""
+"""B15B/B15D/B15E/B15F/B15K/B15L: read-only publishing console — review-package + tours + readiness + affordances + template/preview payloads; no I/O side effects."""
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
@@ -17,6 +18,7 @@ from app.schemas.admin_publishing_console import (
     AdminPublishingConsoleItemRead,
     AdminPublishingConsoleOfferDebugRead,
     AdminPublishingConsolePreviewRead,
+    AdminPublishingConsolePreviewPayloadRead,
     AdminPublishingConsoleRead,
     AdminPublishingConsoleTemplateLibraryEntryRead,
     AdminPublishingConsoleTemplateLibraryRead,
@@ -30,6 +32,8 @@ from app.schemas.admin_publishing_console import (
     PublishingConsoleItemStatus,
     PublishingConsoleMediaPolicyStatus,
     PublishingConsolePreviewStatus,
+    PublishingConsolePreviewPayloadSource,
+    PublishingConsolePreviewPayloadStatus,
     PublishingConsoleReadinessLevel,
     PublishingConsoleTemplateFamily,
     PublishingConsoleTemplateKind,
@@ -37,6 +41,7 @@ from app.schemas.admin_publishing_console import (
     PublishingConsoleTemplateLibraryFamily,
     PublishingConsoleTemplateSourceStatus,
 )
+from app.schemas.admin_publish_readiness import AdminPublishReadinessRead
 from app.schemas.supplier_admin import AdminSupplierOfferReviewPackageRead
 from app.services.admin_navigation_paths import supplier_offer_prepare_conversion_chain_plan_path
 from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
@@ -923,6 +928,191 @@ def _template_library_tour_promotion(
     )
 
 
+_PREVIEW_PAYLOAD_SAFETY_SUFFIX = (
+    " preview_payload mirrors the same review-package snapshot for admin UI; it does not call Telegram APIs."
+)
+
+
+def _strip_html_plain(html: str, *, max_len: int = 2000) -> str:
+    t = re.sub(r"<[^>]+>", " ", html)
+    return " ".join(t.split()).strip()[:max_len]
+
+
+def _failed_gate_blocker_messages(pr: AdminPublishReadinessRead) -> list[str]:
+    out: list[str] = []
+    for g in pr.gates:
+        if g.severity == "blocker" and g.status == "failed":
+            r = (g.reason or "").strip()
+            if r:
+                out.append(r)
+    return out
+
+
+def _preview_payload_supplier_offer(
+    *,
+    rp: AdminSupplierOfferReviewPackageRead,
+    b15f: dict[str, Any],
+    item_title: str,
+    blocked_reasons: list[str],
+    cp: AdminPublishingConsolePreviewRead,
+    tl: AdminPublishingConsoleTemplateLibraryRead,
+) -> AdminPublishingConsolePreviewPayloadRead:
+    pr = rp.publish_readiness
+    sp = rp.showcase_preview
+    st = rp.showcase_template_preview
+    offer = rp.offer
+    eff = (st.effective_template_id or "").strip() or None
+    lc = getattr(offer.lifecycle_status, "value", str(offer.lifecycle_status))
+
+    tpl_stat = b15f["template_source_status"]
+    media_stat = b15f["media_policy_status"]
+    tpl_preview_avail = b15f["template_preview_available"]
+
+    if media_stat == "media_blocked":
+        pstat: PublishingConsolePreviewPayloadStatus = "blocked"
+    elif tpl_stat == "unavailable":
+        pstat = "blocked"
+    elif tpl_stat == "partial" or not tpl_preview_avail:
+        pstat = "placeholder"
+    else:
+        pstat = "available"
+
+    cap_html_raw = (sp.caption_html or "").strip()
+    has_caption = bool(cap_html_raw)
+
+    if not has_caption and pstat == "available":
+        pstat = "placeholder"
+
+    body_plain: str | None
+    if has_caption:
+        body_plain = _strip_html_plain(cap_html_raw) or None
+    else:
+        fb = (offer.marketing_summary or offer.description or offer.program_text or "").strip()
+        body_plain = fb[:2000] if fb else None
+
+    if has_caption:
+        src: PublishingConsolePreviewPayloadSource = "showcase_preview"
+    elif body_plain:
+        src = "supplier_offer_fields"
+    else:
+        src = "none"
+
+    subtitle = f"Lifecycle {lc} · B12B template `{eff or 'pending'}` · {sp.publication_mode}"
+
+    rez = (sp.cta_rezerva_href or "").strip() or None
+    det = (sp.cta_detalii_href or "").strip() or None
+    p_label = p_url = None
+    s_label = s_url = None
+    if rez:
+        p_label, p_url = "Rezervă", rez
+        if det:
+            s_label, s_url = "Detalii", det
+    elif det:
+        p_label, p_url = "Detalii", det
+
+    media_ref = (sp.showcase_photo_url or "").strip() or None
+    if not media_ref:
+        cm = (offer.cover_media_reference or "").strip()
+        media_ref = cm or None
+
+    warns_raw: list[str] = []
+    for w in list(sp.warnings or []) + list(rp.warnings or []):
+        ws = (w or "").strip()
+        if ws:
+            warns_raw.append(ws)
+    wsum = (pr.warning_summary or "").strip()
+    if wsum:
+        warns_raw.append(wsum)
+    warns = list(dict.fromkeys(warns_raw))[:24]
+
+    blockers = list(dict.fromkeys(_failed_gate_blocker_messages(pr) + [(b or "").strip() for b in blocked_reasons if (b or "").strip()]))[:24]
+
+    pub_note = (
+        f"Same `publish_readiness` row: status={pr.status}, summary={pr.summary} "
+        f"(badge={pr.badge}; gate_summary={pr.gate_summary})."
+    )
+    tpl_note = (
+        f"Same `template_library` row: family={tl.family}, selected={tl.selected_template_id!r} "
+        f"(recommended={tl.recommended_template_id!r})."
+    )
+
+    return AdminPublishingConsolePreviewPayloadRead(
+        payload_status=pstat,
+        source=src,
+        title=(item_title or "").strip() or None,
+        subtitle=subtitle,
+        body_text=body_plain,
+        caption_html=cap_html_raw if has_caption else None,
+        primary_cta_label=p_label,
+        primary_cta_url=p_url,
+        secondary_cta_label=s_label,
+        secondary_cta_url=s_url,
+        media_reference=media_ref,
+        media_status=str(media_stat),
+        channel_kind=str(b15f.get("channel_kind")),
+        channel_status=str(b15f.get("channel_status")),
+        channel_ref=(b15f.get("channel_ref") or None),
+        warnings=warns,
+        blockers=blockers,
+        safety_note=_CONSOLE_PREVIEW_READ_ONLY_SAFETY + _PREVIEW_PAYLOAD_SAFETY_SUFFIX,
+        generated_at=pr.generated_at,
+        publish_readiness_note=pub_note,
+        template_library_note=tpl_note,
+    )
+
+
+def _preview_payload_tour_promotion(
+    *,
+    tour_title: str,
+    tour_code: str,
+    human_summary: str,
+    blocked_reasons: list[str],
+    b15d: dict[str, Any],
+    b15f: dict[str, Any],
+    pr_row: AdminPublishReadinessRead,
+    tl: AdminPublishingConsoleTemplateLibraryRead,
+) -> AdminPublishingConsolePreviewPayloadRead:
+    warns: list[str] = []
+    if (human_summary or "").strip():
+        warns.append(human_summary.strip())
+    blockers = list(dict.fromkeys([(b or "").strip() for b in blocked_reasons if (b or "").strip()]))[:16]
+    conv = (b15d.get("conversion_target_url") or "").strip() or None
+    p_label = "Exact-tour Mini App" if conv else None
+    pub_note = (
+        f"Same `publish_readiness` row: status={pr_row.status} ({pr_row.summary}). "
+        "Showcase preview payload is not applicable for tour_promotion candidates."
+    )
+    tpl_note = (
+        f"Same `template_library` row: family={tl.family}, selected={tl.selected_template_id!r} "
+        "(tour promotion uses placeholder template variants only)."
+    )
+    return AdminPublishingConsolePreviewPayloadRead(
+        payload_status="not_applicable",
+        source="tour_placeholder",
+        title=(tour_title or "").strip() or None,
+        subtitle=(tour_code or "").strip() or None,
+        body_text=(human_summary or "").strip() or None,
+        caption_html=None,
+        primary_cta_label=p_label,
+        primary_cta_url=conv,
+        secondary_cta_label=None,
+        secondary_cta_url=None,
+        media_reference=None,
+        media_status=str(b15f["media_policy_status"]),
+        channel_kind=str(b15f.get("channel_kind")),
+        channel_status=str(b15f.get("channel_status")),
+        channel_ref=b15f.get("channel_ref"),
+        warnings=warns[:12],
+        blockers=blockers,
+        safety_note=_CONSOLE_PREVIEW_READ_ONLY_SAFETY
+        + _CONSOLE_PREVIEW_TOUR_PLACEHOLDER
+        + _PREVIEW_PAYLOAD_SAFETY_SUFFIX,
+        generated_at=pr_row.generated_at,
+        publish_readiness_note=pub_note,
+        template_library_note=tpl_note,
+    )
+
+
 class AdminPublishingConsoleService:
     """Builds a merged, sorted candidate list for the publishing console (read-only)."""
 
@@ -1020,6 +1210,14 @@ class AdminPublishingConsoleService:
                 b15d=b15d,
             )
             tl = _template_library_supplier_offer(rp=rp, b15f=b15f, cp=cp)
+            pp = _preview_payload_supplier_offer(
+                rp=rp,
+                b15f=b15f,
+                item_title=item_title,
+                blocked_reasons=br,
+                cp=cp,
+                tl=tl,
+            )
             item = AdminPublishingConsoleItemRead(
                 candidate_key=f"supplier_offer:{row.id}",
                 kind="supplier_offer_initial",
@@ -1041,6 +1239,7 @@ class AdminPublishingConsoleService:
                 publish_readiness=rp.publish_readiness,
                 console_preview=cp,
                 template_library=tl,
+                preview_payload=pp,
                 admin_tour_path=None,
                 offer_debug=AdminPublishingConsoleOfferDebugRead(
                     supplier_offer_id=row.id,
@@ -1128,6 +1327,16 @@ class AdminPublishingConsoleService:
                 console_status=status,
                 human_summary=human,
             )
+            pp = _preview_payload_tour_promotion(
+                tour_title=tour_title,
+                tour_code=t.code,
+                human_summary=human,
+                blocked_reasons=br,
+                b15d=b15d,
+                b15f=b15f,
+                pr_row=pr_row,
+                tl=tl,
+            )
             enriched.append(
                 (
                     t.departure_datetime,
@@ -1145,6 +1354,7 @@ class AdminPublishingConsoleService:
                         publish_readiness=pr_row,
                         console_preview=cp,
                         template_library=tl,
+                        preview_payload=pp,
                         admin_tour_path=f"/admin/tours/{t.id}",
                         offer_debug=None,
                         tour_debug=AdminPublishingConsoleTourDebugRead(
