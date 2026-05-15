@@ -16,7 +16,10 @@ from app.models.enums import (
     SupplierServiceComposition,
     TourSalesMode,
 )
-from app.schemas.admin_prepare_conversion_chain_plan import PrepareConversionChainPlanSummaryStatus
+from app.schemas.admin_prepare_conversion_chain_plan import (
+    PrepareConversionChainActionAffordanceRead,
+    PrepareConversionChainPlanSummaryStatus,
+)
 
 
 class SupplierOfferRead(BaseModel):
@@ -497,6 +500,9 @@ class AdminSupplierOfferReviewPackageRead(BaseModel):
     prepare_conversion_chain_blockers_count: int = Field(
         ge=0,
         description="Distinct eligibility + plan blocker count (B16D1.2).",
+    )
+    prepare_conversion_chain_action: PrepareConversionChainActionAffordanceRead = Field(
+        description="B16D2D: read-only POST affordance for guarded prepare_conversion_chain (metadata only).",
     )
     warnings: list[str]
     recommended_next_actions: list[str]

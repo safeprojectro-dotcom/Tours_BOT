@@ -27,7 +27,11 @@ from app.schemas.supplier_admin import (
     SupplierOfferExecutionLinkRead,
 )
 from app.services.admin_navigation_paths import supplier_offer_prepare_conversion_chain_plan_path
-from app.services.prepare_conversion_chain_readiness import derive_prepare_conversion_chain_readiness
+from app.services.prepare_conversion_chain_readiness import (
+    append_prepare_conversion_chain_operator_action,
+    derive_prepare_conversion_chain_action_affordance,
+    derive_prepare_conversion_chain_readiness,
+)
 from app.services.admin_tour_write import AdminTourWriteService, TourCatalogActivationPreview
 from app.services.customer_catalog_visibility import tour_is_customer_catalog_visible
 from app.services.mini_app_supplier_offer_landing import (
@@ -495,15 +499,30 @@ class SupplierOfferReviewPackageService:
             prepare_conversion_chain_plan_status="ineligible",
             prepare_conversion_chain_recommended_action=None,
             prepare_conversion_chain_blockers_count=0,
+            prepare_conversion_chain_action=derive_prepare_conversion_chain_action_affordance(
+                supplier_offer_id=offer_id,
+                plan_status_label="ineligible",
+                recommended_action=None,
+                blockers_count=0,
+            ),
             warnings=warnings,
             recommended_next_actions=actions,
         )
         st, rec, bc = derive_prepare_conversion_chain_readiness(base)
+        aff = derive_prepare_conversion_chain_action_affordance(
+            supplier_offer_id=offer_id,
+            plan_status_label=st,
+            recommended_action=rec,
+            blockers_count=bc,
+        )
+        ow2 = append_prepare_conversion_chain_operator_action(base.operator_workflow, aff)
         return base.model_copy(
             update={
                 "prepare_conversion_chain_plan_status": st,
                 "prepare_conversion_chain_recommended_action": rec,
                 "prepare_conversion_chain_blockers_count": bc,
+                "prepare_conversion_chain_action": aff,
+                "operator_workflow": ow2,
             },
         )
 

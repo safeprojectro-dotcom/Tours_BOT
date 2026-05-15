@@ -237,6 +237,7 @@ class AdminOpsDashboardService:
                         prepare_conversion_chain_plan_status=pkg.prepare_conversion_chain_plan_status,
                         prepare_conversion_chain_recommended_action=pkg.prepare_conversion_chain_recommended_action,
                         prepare_conversion_chain_blockers_count=pkg.prepare_conversion_chain_blockers_count,
+                        prepare_conversion_chain_action=pkg.prepare_conversion_chain_action,
                     )
                 )
 
@@ -494,6 +495,7 @@ class AdminOpsDashboardService:
                     prepare_conversion_chain_plan_status=pkg.prepare_conversion_chain_plan_status,
                     prepare_conversion_chain_recommended_action=pkg.prepare_conversion_chain_recommended_action,
                     prepare_conversion_chain_blockers_count=pkg.prepare_conversion_chain_blockers_count,
+                    prepare_conversion_chain_action=pkg.prepare_conversion_chain_action,
                 )
             )
         return reads
@@ -517,12 +519,14 @@ class AdminOpsDashboardService:
         )
         for o in session.scalars(hold_stmt).all():
             offer_id = tour_offer_map.get(o.tour_id)
+            paff = None
             if offer_id is not None:
                 pkg = prep_pkg(offer_id)
                 plan_path = pkg.prepare_conversion_chain_plan_path
                 st = pkg.prepare_conversion_chain_plan_status
                 rec = pkg.prepare_conversion_chain_recommended_action
                 bc = pkg.prepare_conversion_chain_blockers_count
+                paff = pkg.prepare_conversion_chain_action
             else:
                 plan_path = None
                 st = None
@@ -542,6 +546,7 @@ class AdminOpsDashboardService:
                     prepare_conversion_chain_plan_status=st,
                     prepare_conversion_chain_recommended_action=rec,
                     prepare_conversion_chain_blockers_count=bc,
+                    prepare_conversion_chain_action=paff,
                 )
             )
 
@@ -554,12 +559,14 @@ class AdminOpsDashboardService:
         )
         for o in session.scalars(ex_stmt).all():
             offer_id = tour_offer_map.get(o.tour_id)
+            paff = None
             if offer_id is not None:
                 pkg = prep_pkg(offer_id)
                 plan_path = pkg.prepare_conversion_chain_plan_path
                 st = pkg.prepare_conversion_chain_plan_status
                 rec = pkg.prepare_conversion_chain_recommended_action
                 bc = pkg.prepare_conversion_chain_blockers_count
+                paff = pkg.prepare_conversion_chain_action
             else:
                 plan_path = None
                 st = None
@@ -579,6 +586,7 @@ class AdminOpsDashboardService:
                     prepare_conversion_chain_plan_status=st,
                     prepare_conversion_chain_recommended_action=rec,
                     prepare_conversion_chain_blockers_count=bc,
+                    prepare_conversion_chain_action=paff,
                 )
             )
 
@@ -614,6 +622,7 @@ class AdminOpsDashboardService:
                     prepare_conversion_chain_plan_status=pkg.prepare_conversion_chain_plan_status,
                     prepare_conversion_chain_recommended_action=pkg.prepare_conversion_chain_recommended_action,
                     prepare_conversion_chain_blockers_count=pkg.prepare_conversion_chain_blockers_count,
+                    prepare_conversion_chain_action=pkg.prepare_conversion_chain_action,
                 )
             )
 

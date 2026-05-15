@@ -6,7 +6,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.admin_prepare_conversion_chain_plan import PrepareConversionChainPlanSummaryStatus
+from app.schemas.admin_prepare_conversion_chain_plan import (
+    PrepareConversionChainActionAffordanceRead,
+    PrepareConversionChainPlanSummaryStatus,
+)
 
 PublishingConsoleCandidateKind = Literal["supplier_offer_initial", "tour_promotion"]
 PublishingConsoleItemStatus = Literal["ready", "blocked", "needs_attention"]
@@ -130,6 +133,10 @@ class AdminPublishingConsoleItemRead(BaseModel):
     prepare_conversion_chain_blockers_count: int | None = Field(
         default=None,
         description="When row is supplier-offer scoped: distinct blocker count (B16D1.2).",
+    )
+    prepare_conversion_chain_action: PrepareConversionChainActionAffordanceRead | None = Field(
+        default=None,
+        description="When supplier-offer scoped: B16D2D POST affordance metadata (read-only).",
     )
     admin_tour_path: str | None = None
     offer_debug: AdminPublishingConsoleOfferDebugRead | None = None

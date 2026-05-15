@@ -121,6 +121,31 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
         self.assertIsInstance(body["prepare_conversion_chain_blockers_count"], int)
         self.assertGreaterEqual(body["prepare_conversion_chain_blockers_count"], 0)
         self.assertIn("prepare_conversion_chain_recommended_action", body)
+        action = body["prepare_conversion_chain_action"]
+        self.assertEqual(action["code"], "prepare_conversion_chain")
+        self.assertEqual(action["method"], "POST")
+        self.assertTrue(action["requires_idempotency_key"])
+        self.assertTrue(action["requires_confirm_for_live"])
+        self.assertTrue(action["supports_dry_run"])
+        self.assertTrue(action["requires_admin"])
+        self.assertEqual(
+            action["path"],
+            f"/admin/supplier-offers/{oid}/prepare-conversion-chain",
+        )
+        self.assertEqual(action["plan_path"], body["prepare_conversion_chain_plan_path"])
+        self.assertEqual(action["plan_status"], body["prepare_conversion_chain_plan_status"])
+        self.assertEqual(
+            action["blockers_count"],
+            body["prepare_conversion_chain_blockers_count"],
+        )
+        ow_codes = [a["code"] for a in body["operator_workflow"]["actions"]]
+        self.assertIn("prepare_conversion_chain", ow_codes)
+        pca = next(a for a in body["operator_workflow"]["actions"] if a["code"] == "prepare_conversion_chain")
+        self.assertEqual(pca["method"], "POST")
+        self.assertEqual(pca["endpoint"], action["path"])
+        if body["prepare_conversion_chain_plan_status"] == "ineligible":
+            self.assertFalse(action["enabled"])
+            self.assertIsNotNone(action.get("disabled_reason"))
         self.assertIn("content_quality_review", body)
         self.assertIn("cover_media_quality_review", body)
         self.assertIn("has_warnings", body["cover_media_quality_review"])

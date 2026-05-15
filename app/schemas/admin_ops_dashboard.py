@@ -9,7 +9,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import SupplierOfferShowcasePublishAttemptStatus, TourStatus
 from app.schemas.admin import AdminOrderListItem
-from app.schemas.admin_prepare_conversion_chain_plan import PrepareConversionChainPlanSummaryStatus
+from app.schemas.admin_prepare_conversion_chain_plan import (
+    PrepareConversionChainActionAffordanceRead,
+    PrepareConversionChainPlanSummaryStatus,
+)
 
 AdminOpsAttentionSeverity = Literal["info", "warning", "error"]
 
@@ -127,6 +130,10 @@ class AdminOpsAttentionItemRead(BaseModel):
         default=None,
         description="When related supplier offer is known: distinct blocker count (B16D1.2).",
     )
+    prepare_conversion_chain_action: PrepareConversionChainActionAffordanceRead | None = Field(
+        default=None,
+        description="When related supplier offer is known: B16D2D POST affordance metadata (read-only).",
+    )
 
 
 class AdminOpsUpcomingTourRead(BaseModel):
@@ -168,6 +175,9 @@ class AdminOpsRecentPublicationRead(BaseModel):
         ge=0,
         description="Distinct eligibility + plan blocker count (B16D1.2).",
     )
+    prepare_conversion_chain_action: PrepareConversionChainActionAffordanceRead = Field(
+        description="B16D2D: read-only POST affordance for this supplier offer (metadata only).",
+    )
 
 
 class AdminOpsConversionLinkRead(BaseModel):
@@ -196,6 +206,9 @@ class AdminOpsConversionLinkRead(BaseModel):
     prepare_conversion_chain_blockers_count: int = Field(
         ge=0,
         description="Distinct eligibility + plan blocker count (B16D1.2).",
+    )
+    prepare_conversion_chain_action: PrepareConversionChainActionAffordanceRead = Field(
+        description="B16D2D: read-only POST affordance for this supplier offer (metadata only).",
     )
 
 

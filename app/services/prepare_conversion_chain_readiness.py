@@ -5,10 +5,19 @@ from __future__ import annotations
 from app.models.enums import SupplierOfferLifecycle, SupplierOfferPackagingStatus
 from app.schemas.admin_prepare_conversion_chain_plan import (
     AdminPrepareConversionChainPlanStepRead,
+    PrepareConversionChainActionAffordanceRead,
     PrepareConversionChainPlanStepStatus,
     PrepareConversionChainPlanSummaryStatus,
 )
-from app.schemas.supplier_admin import AdminSupplierOfferReviewPackageRead
+from app.schemas.supplier_admin import (
+    AdminSupplierOfferOperatorWorkflowActionRead,
+    AdminSupplierOfferOperatorWorkflowRead,
+    AdminSupplierOfferReviewPackageRead,
+)
+from app.services.admin_navigation_paths import (
+    supplier_offer_prepare_conversion_chain_execute_path,
+    supplier_offer_prepare_conversion_chain_plan_path,
+)
 
 _STEP_BRIDGE = (
     "ensure_tour_bridge",
@@ -204,9 +213,63 @@ def derive_prepare_conversion_chain_readiness(
     return st, rec, bc
 
 
+def derive_prepare_conversion_chain_action_affordance(
+    *,
+    supplier_offer_id: int,
+    plan_status_label: PrepareConversionChainPlanSummaryStatus,
+    recommended_action: str | None,
+    blockers_count: int,
+) -> PrepareConversionChainActionAffordanceRead:
+    """B16D2D: service-owned enabled/disabled hints from plan summary only (no execution, no audit)."""
+    plan_path = supplier_offer_prepare_conversion_chain_plan_path(supplier_offer_id)
+    exec_path = supplier_offer_prepare_conversion_chain_execute_path(supplier_offer_id)
+    disabled_reason: str | None = None
+    enabled = False
+    if plan_status_label == "ineligible":
+        disabled_reason = "Offer is not eligible for prepare_conversion_chain (packaging/moderation gates)."
+    elif plan_status_label == "blocked":
+        disabled_reason = (
+            "Internal preparation chain is blocked; resolve plan blockers or use step-specific admin endpoints."
+        )
+    elif plan_status_label in ("partial", "already_prepared"):
+        enabled = True
+    else:
+        disabled_reason = "Prepare conversion chain is not available for the current plan state."
+
+    return PrepareConversionChainActionAffordanceRead(
+        path=exec_path,
+        enabled=enabled,
+        disabled_reason=disabled_reason,
+        plan_path=plan_path,
+        plan_status=plan_status_label,
+        recommended_action=recommended_action,
+        blockers_count=blockers_count,
+    )
+
+
+def append_prepare_conversion_chain_operator_action(
+    workflow: AdminSupplierOfferOperatorWorkflowRead,
+    action_affordance: PrepareConversionChainActionAffordanceRead,
+) -> AdminSupplierOfferOperatorWorkflowRead:
+    """Append read-only B16D2C POST hint to operator workflow actions (metadata only)."""
+    extra = AdminSupplierOfferOperatorWorkflowActionRead(
+        code=action_affordance.code,
+        label="Prepare conversion chain",
+        enabled=action_affordance.enabled,
+        danger_level="conversion_enabling",
+        requires_confirmation=True,
+        method="POST",
+        endpoint=action_affordance.path,
+        disabled_reason=action_affordance.disabled_reason,
+    )
+    return workflow.model_copy(update={"actions": [*workflow.actions, extra]})
+
+
 __all__ = [
+    "append_prepare_conversion_chain_operator_action",
     "blockers_count",
     "build_steps",
+    "derive_prepare_conversion_chain_action_affordance",
     "derive_prepare_conversion_chain_readiness",
     "eligibility_tuple",
     "plan_status",

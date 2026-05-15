@@ -143,6 +143,9 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
             ("ineligible", "blocked", "partial", "already_prepared"),
         )
         self.assertIsInstance(hit.get("prepare_conversion_chain_blockers_count"), int)
+        att_act = hit.get("prepare_conversion_chain_action")
+        self.assertIsInstance(att_act, dict)
+        self.assertEqual(att_act.get("method"), "POST")
 
     def test_ops_dashboard_b16e_audit_events_merges_signals(self) -> None:
         user = self.create_user()
@@ -350,6 +353,13 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
             ("ineligible", "blocked", "partial", "already_prepared"),
         )
         self.assertIsInstance(hit_pub["prepare_conversion_chain_blockers_count"], int)
+        pca_pub = hit_pub.get("prepare_conversion_chain_action")
+        self.assertIsInstance(pca_pub, dict)
+        self.assertEqual(pca_pub.get("method"), "POST")
+        self.assertEqual(
+            pca_pub.get("path"),
+            f"/admin/supplier-offers/{offer.id}/prepare-conversion-chain",
+        )
         links = body["conversion_links"]
         hit_link = next(l for l in links if l["tour_id"] == tour.id)
         self.assertEqual(hit_link["supplier_offer_admin_path"], f"/admin/supplier-offers/{offer.id}/review-package")
@@ -364,6 +374,9 @@ class AdminOpsDashboardTests(FoundationDBTestCase):
             hit_link["prepare_conversion_chain_blockers_count"],
             hit_pub["prepare_conversion_chain_blockers_count"],
         )
+        pca_link = hit_link.get("prepare_conversion_chain_action")
+        self.assertIsInstance(pca_link, dict)
+        self.assertEqual(pca_link.get("path"), pca_pub.get("path"))
         self.assertTrue(any(l["execution_link_id"] and l["tour_id"] == tour.id for l in links))
 
     def test_ops_dashboard_invalid_include_sections_422(self) -> None:

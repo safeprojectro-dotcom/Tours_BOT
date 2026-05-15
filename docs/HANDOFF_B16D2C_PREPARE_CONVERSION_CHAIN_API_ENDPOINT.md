@@ -55,13 +55,8 @@ Run at minimum:
 Regression spot-check (optional): `test_admin_ops_dashboard`, `test_admin_publishing_console`.
 
 ## Next block after B16D2C
-B16D2D — Read Model / Action Affordance Integration
+**B16D2D (closed):** **`prepare_conversion_chain_action`** read-model — see **[`docs/HANDOFF_B16D2D_PREPARE_CONVERSION_CHAIN_ACTION_AFFORDANCES.md`](HANDOFF_B16D2D_PREPARE_CONVERSION_CHAIN_ACTION_AFFORDANCES.md)**.
 
-Goal:
-Expose action metadata/read affordances in:
-- review package
-- publishing console
-- ops dashboard
-- operator workflow if appropriate
+Further optional work: publishing-console **execution** wiring (explicit gate only), operator Telegram POST for prepare chain (not in B16D2D scope).
 
-Still no Telegram publish/send/retry.
+Still no Telegram publish/send/retry from these affordances.

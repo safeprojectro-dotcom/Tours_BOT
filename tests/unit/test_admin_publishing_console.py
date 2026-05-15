@@ -214,6 +214,16 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
         )
         self.assertIsInstance(match["prepare_conversion_chain_blockers_count"], int)
         self.assertGreaterEqual(match["prepare_conversion_chain_blockers_count"], 0)
+        pca = match.get("prepare_conversion_chain_action")
+        self.assertIsInstance(pca, dict)
+        self.assertEqual(pca.get("method"), "POST")
+        self.assertEqual(
+            pca.get("path"),
+            f"/admin/supplier-offers/{oid}/prepare-conversion-chain",
+        )
+        self.assertTrue(pca.get("requires_idempotency_key"))
+        self.assertTrue(pca.get("requires_confirm_for_live"))
+        self.assertTrue(pca.get("supports_dry_run"))
         self.assertEqual(match["template_kind"], "supplier_offer_showcase")
         self.assertTrue(match["template_preview_available"])
         self.assertIn("/showcase-preview", match.get("template_preview_path") or "")

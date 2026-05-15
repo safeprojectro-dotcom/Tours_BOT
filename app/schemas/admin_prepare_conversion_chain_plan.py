@@ -21,6 +21,34 @@ PrepareConversionChainExecutionOverallStatus = Literal[
 
 PrepareConversionChainExecutionStepOutcomeStatus = Literal["succeeded", "failed", "skipped"]
 
+_CONSTANT_PREPARE_CONVERSION_CHAIN_PATH_PATTERN: str = (
+    "/admin/supplier-offers/{offer_id}/prepare-conversion-chain"
+)
+
+
+class PrepareConversionChainActionAffordanceRead(BaseModel):
+    """B16D2D: read-only HTTP affordance for guarded prepare_conversion_chain (no execution from read paths)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: Literal["prepare_conversion_chain"] = "prepare_conversion_chain"
+    method: Literal["POST"] = "POST"
+    path: str = Field(description="Resolved POST path for this supplier_offer_id.")
+    path_pattern: str = Field(
+        default=_CONSTANT_PREPARE_CONVERSION_CHAIN_PATH_PATTERN,
+        description="Stable template; substitute {offer_id}.",
+    )
+    requires_admin: Literal[True] = True
+    requires_idempotency_key: Literal[True] = True
+    requires_confirm_for_live: Literal[True] = True
+    supports_dry_run: Literal[True] = True
+    enabled: bool
+    disabled_reason: str | None = None
+    plan_path: str = Field(description="GET plan preview path for this offer (B16D1).")
+    plan_status: PrepareConversionChainPlanSummaryStatus
+    recommended_action: str | None = None
+    blockers_count: int = Field(ge=0)
+
 
 class AdminPrepareConversionChainPlanStepRead(BaseModel):
     """Single ordered step in the internal preparation chain (bridge → catalog → execution link)."""
@@ -147,6 +175,7 @@ __all__ = [
     "AdminPrepareConversionChainExecutionStepResultRead",
     "AdminPrepareConversionChainPlanRead",
     "AdminPrepareConversionChainPlanStepRead",
+    "PrepareConversionChainActionAffordanceRead",
     "PrepareConversionChainExecutionOverallStatus",
     "PrepareConversionChainExecutionStepOutcomeStatus",
     "PrepareConversionChainPlanStepStatus",

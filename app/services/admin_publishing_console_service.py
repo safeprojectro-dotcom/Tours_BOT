@@ -730,6 +730,7 @@ class AdminPublishingConsoleService:
                 prepare_conversion_chain_plan_status=rp.prepare_conversion_chain_plan_status,
                 prepare_conversion_chain_recommended_action=rp.prepare_conversion_chain_recommended_action,
                 prepare_conversion_chain_blockers_count=rp.prepare_conversion_chain_blockers_count,
+                prepare_conversion_chain_action=rp.prepare_conversion_chain_action,
                 admin_tour_path=None,
                 offer_debug=AdminPublishingConsoleOfferDebugRead(
                     supplier_offer_id=row.id,
