@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E/B15F/B15K/B15L/B15M/B15P/B17A/B17A1: read-only Admin Publishing Console response DTOs (no publish / schedule / mutations)."""
+"""B15B/B15D/B15E/B15F/B15K/B15L/B15M/B15P/B17A/B17A1/B17B: read-only Admin Publishing Console response DTOs (no publish / schedule / mutations)."""
 
 from __future__ import annotations
 
@@ -599,6 +599,112 @@ class AdminPublishingConsoleEditorSafetySectionRead(BaseModel):
     no_mini_app_b11_change: Literal[True] = True
 
 
+class AdminPublishingConsoleEditorChannelOptionRead(BaseModel):
+    """B17B: one channel strategy row for editor picker metadata (read-only; no persistence)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    option_key: str = Field(description="Stable key; for MVP equals channel_kind.")
+    channel_kind: PublishingConsoleChannelKind
+    label: str
+    description: str = ""
+    channel_ref: str | None = None
+    channel_status: PublishingConsoleChannelStatus
+    is_configured: bool = Field(description="Runtime config present for this strategy (e.g. channel id in settings).")
+    is_recommended: bool = False
+    is_current_projection: bool = Field(
+        default=False,
+        description="True when this row matches the console row channel_kind projection.",
+    )
+    disabled_reason: str | None = None
+
+
+class AdminPublishingConsoleEditorChannelCurrentRead(BaseModel):
+    """B17B: current channel projection from the publishing console row (read-only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    channel_kind: PublishingConsoleChannelKind
+    channel_status: PublishingConsoleChannelStatus
+    channel_ref: str | None = None
+    summary: str = ""
+
+
+class AdminPublishingConsoleEditorChannelSelectionRead(BaseModel):
+    """B17B: channel picker metadata — options, recommendation, and boundary copy (read-only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    available_options: list[AdminPublishingConsoleEditorChannelOptionRead] = Field(default_factory=list)
+    recommended_option_key: str | None = Field(
+        default=None,
+        description="Matches option_key of the recommended row for this supplier-offer editor context.",
+    )
+    current_projection: AdminPublishingConsoleEditorChannelCurrentRead
+    payload_mirror_note: str | None = Field(
+        default=None,
+        description="When preview_payload channel fields diverge from the row projection.",
+    )
+    global_disabled_reason: str | None = Field(
+        default=None,
+        description="Why interactive channel selection is unavailable (B17B metadata-only slice).",
+    )
+    future_capability_hints: list[AdminPublishingConsoleFutureCapabilityHintRead] = Field(default_factory=list)
+    selection_safety_note: str = ""
+
+
+class AdminPublishingConsoleEditorTemplateOptionRead(BaseModel):
+    """B17B: one template variant row aligned with template_library (read-only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    template_id: str
+    label: str
+    description: str
+    status: PublishingConsoleTemplateLibraryEntryStatus
+    disabled_reason: str | None = None
+    is_recommended: bool = False
+    is_current_projection: bool = Field(
+        default=False,
+        description="True when this variant matches selected and/or console_preview template_id.",
+    )
+
+
+class AdminPublishingConsoleEditorTemplateCurrentRead(BaseModel):
+    """B17B: consolidated template projection for the editor (read-only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    template_id: str | None = None
+    template_family: PublishingConsoleTemplateFamily
+    library_family: PublishingConsoleTemplateLibraryFamily
+    template_source_summary: str = ""
+    selection_reason: str | None = None
+    projection_align_note: str | None = Field(
+        default=None,
+        description="When console_preview template_id and library selection disagree.",
+    )
+
+
+class AdminPublishingConsoleEditorTemplateSelectionRead(BaseModel):
+    """B17B: template picker metadata — library variants and boundary copy (read-only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    library_family: PublishingConsoleTemplateLibraryFamily
+    available_options: list[AdminPublishingConsoleEditorTemplateOptionRead] = Field(default_factory=list)
+    recommended_template_id: str | None = None
+    selected_template_id: str | None = None
+    console_preview_template_id: str | None = None
+    current_projection: AdminPublishingConsoleEditorTemplateCurrentRead
+    global_disabled_reason: str | None = Field(
+        default=None,
+        description="Why interactive template selection is unavailable (B17B metadata-only slice).",
+    )
+    future_capability_hints: list[AdminPublishingConsoleFutureCapabilityHintRead] = Field(default_factory=list)
+    selection_safety_note: str = ""
+
+
 class AdminPublishingConsoleEditorSourceSnapshotRead(BaseModel):
     """B17A: same B15 nested objects as publishing-console detail, for a stable client contract."""
 
@@ -613,7 +719,7 @@ class AdminPublishingConsoleEditorSourceSnapshotRead(BaseModel):
 
 
 class AdminPublishingConsoleEditorDetailRead(BaseModel):
-    """B17A: GET …/editor — read-only editor-oriented projection (no mutation / no publish)."""
+    """B17A/B17B: GET …/editor — read-only editor-oriented projection (no mutation / no publish)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -628,6 +734,12 @@ class AdminPublishingConsoleEditorDetailRead(BaseModel):
     review_package_path: str
     publishing_console_detail_path: str
     prepare_conversion_chain_plan_path: str | None = None
+    channel_selection: AdminPublishingConsoleEditorChannelSelectionRead = Field(
+        description="B17B: read-only channel picker metadata (no selection persistence).",
+    )
+    template_selection: AdminPublishingConsoleEditorTemplateSelectionRead = Field(
+        description="B17B: read-only template picker metadata (no selection persistence).",
+    )
     channel_section: AdminPublishingConsoleEditorChannelSectionRead
     template_section: AdminPublishingConsoleEditorTemplateSectionRead
     preview_section: AdminPublishingConsoleEditorPreviewSectionRead
@@ -643,8 +755,8 @@ class AdminPublishingConsoleEditorDetailRead(BaseModel):
     generated_at: datetime
     editor_notice: str = Field(
         default=(
-            "B17A read-only channel/template editor layout. No selection, draft edits, or publish is performed "
-            "from this endpoint."
+            "B17A/B17B read-only channel/template editor layout. channel_selection and template_selection are "
+            "metadata only; no selection persistence, draft edits, or publish from this endpoint."
         ),
     )
 

@@ -19,7 +19,7 @@ Tours_BOT
 
 **Schemas (additive)**
 
-- **`AdminPublishingConsoleEditorDetailRead`** — editor-oriented layout: `editor_status` / `editor_status_label` / `editor_status_tone`, navigation paths, section DTOs, **`future_actions`**, **`source_snapshot`**, **`generated_at`**, **`editor_notice`**.
+- **`AdminPublishingConsoleEditorDetailRead`** — editor-oriented layout: `editor_status` / `editor_status_label` / `editor_status_tone`, navigation paths, **`channel_selection`** / **`template_selection`** (B17B), section DTOs, **`future_actions`**, **`source_snapshot`**, **`generated_at`**, **`editor_notice`**.
 - Section DTOs: **`channel_section`**, **`template_section`**, **`preview_section`**, **`cta_section`**, **`media_section`**, **`readiness_section`**, **`safety_section`**.
 
 **Aggregation**
@@ -32,6 +32,13 @@ Tours_BOT
 
 - Section DTOs include explicit **`can_*`** / **`preview_available`** booleans and expanded **`safety_section`** flags for frontend safety chrome (still read-only; no behavior change).
 - Prompt: [`docs/CURSOR_PROMPT_B17A1_EDITOR_DETAIL_EXPLICIT_SAFETY_FLAGS.md`](CURSOR_PROMPT_B17A1_EDITOR_DETAIL_EXPLICIT_SAFETY_FLAGS.md)
+
+## B17B (additive — metadata only)
+
+- **`channel_selection`**: MVP channel rows (`telegram_showcase_channel`, `none`) + **`current_projection`**, **`recommended_option_key`**, payload mirror note when `preview_payload.channel_kind` diverges, **`global_disabled_reason`**, duplicated **`channel_actions`** hints, **`selection_safety_note`**.
+- **`template_selection`**: mirrors **`template_library.available_templates`** with **`is_recommended`** / **`is_current_projection`**, ids aligned to library + console preview, **`global_disabled_reason`**, **`template_actions`** hints, **`selection_safety_note`**.
+- **Still no** channel/template selection persistence, POST/PATCH, Telegram, publish, or **`prepare_conversion_chain`** execution from this GET.
+- Prompt: [`docs/CURSOR_PROMPT_B17B_CHANNEL_TEMPLATE_SELECTION_METADATA.md`](CURSOR_PROMPT_B17B_CHANNEL_TEMPLATE_SELECTION_METADATA.md)
 
 ## Explicit non-goals (unchanged)
 
@@ -58,8 +65,7 @@ Tours_BOT
 
 ## Suggested next
 
-- Optional: Railway read-only smoke for **`/editor`**.
-- Product: **B17B** — channel/template selection **metadata** persistence only (separate charter) — **not** Telegram publish without explicit go/no-go.
+- **B17C+** (when chartered): draft copy / approval / guarded persistence — **not** Telegram publish without explicit go/no-go.
 
 ## Related
 

@@ -363,7 +363,44 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             reason = (by_code[pub_code].get("disabled_reason") or "").lower()
             self.assertIn("b17a", reason)
             self.assertTrue("go/no-go" in reason or "go-no-go" in reason or "charter" in reason)
+
+        cs_sel = e["channel_selection"]
+        self.assertEqual(len(cs_sel["available_options"]), 2)
+        self.assertEqual(cs_sel["current_projection"]["channel_kind"], ch["channel_kind"])
+        self.assertEqual(cs_sel["current_projection"]["channel_status"], ch["channel_status"])
+        self.assertEqual(cs_sel["current_projection"]["channel_ref"], ch["channel_ref"])
+        self.assertEqual(cs_sel["current_projection"]["summary"], ch["channel_summary"])
+        self.assertEqual(cs_sel["recommended_option_key"], "telegram_showcase_channel")
+        self.assertTrue((cs_sel.get("selection_safety_note") or "").strip())
+        self.assertTrue((cs_sel.get("global_disabled_reason") or "").strip())
+        self.assertIn("B17B", cs_sel["global_disabled_reason"])
+        self.assertEqual(
+            [h["code"] for h in cs_sel["future_capability_hints"]],
+            [h["code"] for h in ch["future_capability_hints"]],
+        )
+
+        ts_sel = e["template_selection"]
+        self.assertEqual(ts_sel["library_family"], tpl["library_family"])
+        self.assertEqual(ts_sel["recommended_template_id"], tpl["recommended_template_id"])
+        self.assertEqual(ts_sel["selected_template_id"], tpl["selected_template_id"])
+        self.assertEqual(ts_sel["console_preview_template_id"], tpl["console_preview_template_id"])
+        self.assertEqual(
+            len(ts_sel["available_options"]),
+            len(match["template_library"]["available_templates"]),
+        )
+        self.assertTrue((ts_sel.get("selection_safety_note") or "").strip())
+        self.assertTrue((ts_sel.get("global_disabled_reason") or "").strip())
+        self.assertIn("B17B", ts_sel["global_disabled_reason"])
+        self.assertEqual(
+            [h["code"] for h in ts_sel["future_capability_hints"]],
+            [h["code"] for h in tpl["future_capability_hints"]],
+        )
+        for opt in ts_sel["available_options"]:
+            self.assertIn("is_recommended", opt)
+            self.assertIn("is_current_projection", opt)
+
         self.assertIn("B17A", e.get("editor_notice") or "")
+        self.assertIn("B17B", e.get("editor_notice") or "")
         self.assertEqual(snap["publish_readiness"]["generated_at"], e["generated_at"])
 
     def test_publishing_console_smoke_shape(self) -> None:

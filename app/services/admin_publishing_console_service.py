@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E/B15F/B15K/B15L/B15M/B15P/B17A/B17A1: read-only publishing console — review-package + tours + readiness + affordances + template/preview payloads + UI alignment hints + editor projection; no I/O side effects."""
+"""B15B/B15D/B15E/B15F/B15K/B15L/B15M/B15P/B17A/B17A1/B17B: read-only publishing console — review-package + tours + readiness + affordances + template/preview payloads + UI alignment hints + editor projection; no I/O side effects."""
 
 from __future__ import annotations
 
@@ -15,7 +15,10 @@ from app.repositories.supplier import SupplierOfferRepository
 from app.repositories.tour import TourRepository
 from app.schemas.admin_publishing_console import (
     AdminPublishingConsoleActionAffordanceRead,
+    AdminPublishingConsoleEditorChannelCurrentRead,
+    AdminPublishingConsoleEditorChannelOptionRead,
     AdminPublishingConsoleEditorChannelSectionRead,
+    AdminPublishingConsoleEditorChannelSelectionRead,
     AdminPublishingConsoleEditorCtaSectionRead,
     AdminPublishingConsoleEditorDetailRead,
     AdminPublishingConsoleEditorMediaSectionRead,
@@ -23,7 +26,10 @@ from app.schemas.admin_publishing_console import (
     AdminPublishingConsoleEditorReadinessSectionRead,
     AdminPublishingConsoleEditorSafetySectionRead,
     AdminPublishingConsoleEditorSourceSnapshotRead,
+    AdminPublishingConsoleEditorTemplateCurrentRead,
+    AdminPublishingConsoleEditorTemplateOptionRead,
     AdminPublishingConsoleEditorTemplateSectionRead,
+    AdminPublishingConsoleEditorTemplateSelectionRead,
     AdminPublishingConsoleFutureCapabilityHintRead,
     AdminPublishingConsoleItemRead,
     AdminPublishingConsoleOfferDebugRead,
@@ -86,6 +92,20 @@ PublishingConsoleKindQuery = Literal[
 
 _B17A1_FUTURE_PUBLISH_DISABLED_REASON = (
     "Not implemented in B17A; requires explicit product go/no-go and a separate publish/schedule charter."
+)
+
+_B17B_CHANNEL_SELECTION_SAFETY_NOTE = (
+    "B17B: channel targets are read-only metadata from settings and the review package; "
+    "this GET does not persist a channel choice."
+)
+_B17B_CHANNEL_SELECTION_GLOBAL_DISABLED = (
+    "Channel selection persistence is not implemented (B17B adds picker metadata only; no POST/PATCH on this view)."
+)
+_B17B_TEMPLATE_SELECTION_SAFETY_NOTE = (
+    "B17B: template variants mirror template_library; this GET does not persist template selection."
+)
+_B17B_TEMPLATE_SELECTION_GLOBAL_DISABLED = (
+    "Template selection persistence is not implemented (B17B adds picker metadata only; no POST/PATCH on this view)."
 )
 
 
@@ -1456,6 +1476,137 @@ def _editor_future_actions_extended(
     return base + extra
 
 
+def _editor_payload_channel_mirror_note(
+    *,
+    row_kind: PublishingConsoleChannelKind,
+    payload_kind: str | None,
+) -> str | None:
+    pk = (payload_kind or "").strip()
+    if not pk:
+        return None
+    if pk != row_kind:
+        return (
+            f"Preview payload channel_kind ({pk}) differs from the console row projection ({row_kind})."
+        )
+    return None
+
+
+def _editor_channel_selection_read(
+    *,
+    item: AdminPublishingConsoleItemRead,
+    pp: AdminPublishingConsolePreviewPayloadRead,
+) -> AdminPublishingConsoleEditorChannelSelectionRead:
+    showcase_row = AdminPublishingConsoleEditorChannelOptionRead(
+        option_key="telegram_showcase_channel",
+        channel_kind="telegram_showcase_channel",
+        label="Telegram showcase channel",
+        description=(
+            "Discovery/marketing posts to the Telegram showcase channel configured in environment settings."
+        ),
+        channel_ref=item.channel_ref,
+        channel_status=item.channel_status,
+        is_configured=item.channel_status == "configured",
+        is_recommended=item.channel_kind == "telegram_showcase_channel",
+        is_current_projection=item.channel_kind == "telegram_showcase_channel",
+        disabled_reason=None
+        if item.channel_status == "configured"
+        else (
+            "Telegram showcase channel id missing in settings; channel publish cannot succeed until configured."
+            if item.channel_kind == "telegram_showcase_channel"
+            else None
+        ),
+    )
+    none_row = AdminPublishingConsoleEditorChannelOptionRead(
+        option_key="none",
+        channel_kind="none",
+        label="No channel",
+        description=(
+            "No Telegram showcase target; not used for supplier-offer showcase rows in the current read model."
+        ),
+        channel_ref=None,
+        channel_status="not_applicable",
+        is_configured=False,
+        is_recommended=item.channel_kind == "none",
+        is_current_projection=item.channel_kind == "none",
+        disabled_reason=(
+            "Supplier-offer publishing console rows use the Telegram showcase strategy in B15F/B17B; "
+            "this option is a read-model placeholder only."
+        ),
+    )
+    rec_key: str | None = (
+        "telegram_showcase_channel" if item.channel_kind == "telegram_showcase_channel" else "none"
+    )
+    cur = AdminPublishingConsoleEditorChannelCurrentRead(
+        channel_kind=item.channel_kind,
+        channel_status=item.channel_status,
+        channel_ref=item.channel_ref,
+        summary=item.channel_summary,
+    )
+    return AdminPublishingConsoleEditorChannelSelectionRead(
+        available_options=[showcase_row, none_row],
+        recommended_option_key=rec_key,
+        current_projection=cur,
+        payload_mirror_note=_editor_payload_channel_mirror_note(
+            row_kind=item.channel_kind,
+            payload_kind=pp.channel_kind,
+        ),
+        global_disabled_reason=_B17B_CHANNEL_SELECTION_GLOBAL_DISABLED,
+        future_capability_hints=list(item.channel_actions),
+        selection_safety_note=_B17B_CHANNEL_SELECTION_SAFETY_NOTE,
+    )
+
+
+def _editor_template_selection_read(
+    *,
+    item: AdminPublishingConsoleItemRead,
+    tl: AdminPublishingConsoleTemplateLibraryRead,
+    cp: AdminPublishingConsolePreviewRead,
+) -> AdminPublishingConsoleEditorTemplateSelectionRead:
+    options: list[AdminPublishingConsoleEditorTemplateOptionRead] = []
+    for ent in tl.available_templates:
+        is_rec = bool(tl.recommended_template_id and ent.template_id == tl.recommended_template_id)
+        is_proj = bool(
+            (tl.selected_template_id and ent.template_id == tl.selected_template_id)
+            or (cp.template_id and ent.template_id == cp.template_id)
+        )
+        options.append(
+            AdminPublishingConsoleEditorTemplateOptionRead(
+                template_id=ent.template_id,
+                label=ent.label,
+                description=ent.description,
+                status=ent.status,
+                disabled_reason=ent.disabled_reason,
+                is_recommended=is_rec,
+                is_current_projection=is_proj,
+            )
+        )
+    align: str | None = None
+    if tl.selected_template_id and cp.template_id and tl.selected_template_id != cp.template_id:
+        align = (
+            f"Console preview template_id ({cp.template_id}) differs from library selected_template_id "
+            f"({tl.selected_template_id})."
+        )
+    cur = AdminPublishingConsoleEditorTemplateCurrentRead(
+        template_id=tl.selected_template_id or cp.template_id,
+        template_family=cp.template_family,
+        library_family=tl.family,
+        template_source_summary=item.template_source_summary,
+        selection_reason=tl.selection_reason,
+        projection_align_note=align,
+    )
+    return AdminPublishingConsoleEditorTemplateSelectionRead(
+        library_family=tl.family,
+        available_options=options,
+        recommended_template_id=tl.recommended_template_id,
+        selected_template_id=tl.selected_template_id,
+        console_preview_template_id=cp.template_id,
+        current_projection=cur,
+        global_disabled_reason=_B17B_TEMPLATE_SELECTION_GLOBAL_DISABLED,
+        future_capability_hints=list(item.template_actions),
+        selection_safety_note=_B17B_TEMPLATE_SELECTION_SAFETY_NOTE,
+    )
+
+
 def _supplier_offer_editor_detail(
     *,
     detail: AdminPublishingConsoleSupplierOfferDetailRead,
@@ -1474,6 +1625,9 @@ def _supplier_offer_editor_detail(
     editor_status = detail.console_status
     tone = _console_status_to_ui_tone(editor_status)
     label = (pr.summary or "").strip() or (detail.human_summary or "").strip() or str(editor_status)
+
+    channel_selection = _editor_channel_selection_read(item=item, pp=pp)
+    template_selection = _editor_template_selection_read(item=item, tl=tl, cp=cp)
 
     channel_section = AdminPublishingConsoleEditorChannelSectionRead(
         channel_kind=item.channel_kind,
@@ -1575,6 +1729,8 @@ def _supplier_offer_editor_detail(
         review_package_path=detail.review_package_path,
         publishing_console_detail_path=f"/admin/publishing-console/supplier-offers/{oid}",
         prepare_conversion_chain_plan_path=detail.prepare_conversion_chain_plan_path,
+        channel_selection=channel_selection,
+        template_selection=template_selection,
         channel_section=channel_section,
         template_section=template_section,
         preview_section=preview_section,
