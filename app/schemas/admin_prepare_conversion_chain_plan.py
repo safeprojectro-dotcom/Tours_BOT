@@ -11,6 +11,16 @@ PrepareConversionChainPlanStepStatus = Literal["satisfied", "pending", "blocked"
 
 PrepareConversionChainPlanSummaryStatus = Literal["ineligible", "blocked", "partial", "already_prepared"]
 
+PrepareConversionChainExecutionOverallStatus = Literal[
+    "succeeded",
+    "partial_success",
+    "failed",
+    "blocked",
+    "dry_run_preview",
+]
+
+PrepareConversionChainExecutionStepOutcomeStatus = Literal["succeeded", "failed", "skipped"]
+
 
 class AdminPrepareConversionChainPlanStepRead(BaseModel):
     """Single ordered step in the internal preparation chain (bridge → catalog → execution link)."""
@@ -77,9 +87,49 @@ class AdminPrepareConversionChainPlanRead(BaseModel):
     )
 
 
+class AdminPrepareConversionChainExecutionStepResultRead(BaseModel):
+    """Outcome of one chain step during guarded execution (live or replay summary)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    step_code: str
+    step_order: int
+    status: PrepareConversionChainExecutionStepOutcomeStatus
+    error_code: str | None = None
+    error_message: str | None = None
+    detail: dict | None = None
+
+
+class AdminPrepareConversionChainExecutionResultRead(BaseModel):
+    """B16D2B: result of ``prepare_conversion_chain`` execution (no HTTP binding yet)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    supplier_offer_id: int
+    dry_run: bool
+    confirm: bool
+    actor_surface: str
+    idempotency_key: str
+    requested_by: str | None = None
+    attempt_id: int | None = None
+    attempt_status: str | None = None
+    overall_status: PrepareConversionChainExecutionOverallStatus
+    blockers: list[str] = Field(default_factory=list)
+    message: str | None = None
+    tour_id: int | None = None
+    execution_link_id: int | None = None
+    prepare_conversion_chain_plan_status: PrepareConversionChainPlanSummaryStatus | None = None
+    steps: list[AdminPrepareConversionChainExecutionStepResultRead] = Field(default_factory=list)
+    generated_at: datetime
+
+
 __all__ = [
+    "AdminPrepareConversionChainExecutionResultRead",
+    "AdminPrepareConversionChainExecutionStepResultRead",
     "AdminPrepareConversionChainPlanRead",
     "AdminPrepareConversionChainPlanStepRead",
+    "PrepareConversionChainExecutionOverallStatus",
+    "PrepareConversionChainExecutionStepOutcomeStatus",
     "PrepareConversionChainPlanStepStatus",
     "PrepareConversionChainPlanSummaryStatus",
 ]
