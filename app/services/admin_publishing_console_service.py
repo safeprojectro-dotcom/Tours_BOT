@@ -96,6 +96,30 @@ def _affordance_to_ui_action_kind(
     return "safe_read"
 
 
+def _compact_ui_card_safety_fragments(*fragments: str | None) -> str:
+    """Merge overlapping safety_note strings (e.g. shared read-only prefix) without duplicating copy."""
+    parts: list[str] = []
+    for x in fragments:
+        s = (x or "").strip()
+        if not s:
+            continue
+        merged = False
+        for i, e in enumerate(parts):
+            if s == e:
+                merged = True
+                break
+            if s.startswith(e):
+                parts[i] = s
+                merged = True
+                break
+            if e.startswith(s):
+                merged = True
+                break
+        if not merged:
+            parts.append(s)
+    return " · ".join(parts)
+
+
 def _ui_card_for_console_item(item: AdminPublishingConsoleItemRead) -> AdminPublishingConsoleUiCardRead:
     pr = item.publish_readiness
     tone = _console_status_to_ui_tone(item.console_status)
@@ -114,12 +138,10 @@ def _ui_card_for_console_item(item: AdminPublishingConsoleItemRead) -> AdminPubl
         b0 = item.preview_payload.blockers[0]
         blocker = (str(b0) if b0 is not None else "").strip() or None
 
-    safety_parts = [
-        str(x).strip()
-        for x in (item.console_preview.safety_note, item.preview_payload.safety_note)
-        if x is not None and str(x).strip()
-    ]
-    safety = " · ".join(safety_parts)
+    safety = _compact_ui_card_safety_fragments(
+        item.console_preview.safety_note,
+        item.preview_payload.safety_note,
+    )
     if len(safety) > 480:
         safety = safety[:477] + "..."
     if not safety:

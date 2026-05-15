@@ -266,7 +266,13 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             self.assertIn(uc["primary_action_kind"], ("safe_read", "guarded_post", "future", "none"))
             self.assertTrue(uc.get("status_badge"))
             self.assertTrue((uc.get("status_label") or "").strip())
-            self.assertTrue((uc.get("safety_line") or "").strip())
+            safety_line = (uc.get("safety_line") or "").strip()
+            self.assertTrue(safety_line)
+            self.assertLessEqual(
+                safety_line.count("Publishing console is read-only"),
+                1,
+                msg=f"ui_card.safety_line should not duplicate read-only lead-in: {safety_line!r}",
+            )
             self.assertEqual(uc.get("card_title"), item.get("title"))
 
     def test_publishing_console_kind_supplier_offer_only(self) -> None:
