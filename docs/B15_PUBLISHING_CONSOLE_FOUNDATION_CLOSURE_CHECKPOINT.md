@@ -16,7 +16,10 @@ The **safe publishing console foundation** delivered across **B15B–B15F** is *
 - **B15B** — read-only candidate queue API.
 - **B15C** — exact-tour **Rezervă** / conversion safety chain (product + gates; not the console HTTP route itself).
 - **B15D** — richer readiness, blockers, CTA safety, admin/preview paths on the console read model.
-- **B15E** — read-only **`actions[]`** affordance metadata (no execution from the console route).
+- **B15E** — read-only **`actions[]`** affordance metadata (no execution from the console **GET** route **prior** to **B15E2**).
+
+**B15E2 (implemented):** narrow **POST** **`/admin/publishing-console/supplier-offers/{offer_id}/prepare-conversion-chain`** executes guarded **`prepare_conversion_chain`** only (**[`HANDOFF_B15E2_PUBLISHING_CONSOLE_PREPARE_CHAIN_ACTION_EXECUTION.md`](HANDOFF_B15E2_PUBLISHING_CONSOLE_PREPARE_CHAIN_ACTION_EXECUTION.md)**). Does **not** change **`GET /admin/publishing-console`** semantics (still read-only queue).
+
 - **B15F** — source / template / channel / media metadata plus future-disabled capability hints.
 
 **B15C** remains documented as the **accepted operator conversion order** and production-smoke baseline; see §3–§4.

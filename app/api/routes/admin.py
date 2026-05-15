@@ -222,6 +222,57 @@ router = APIRouter(
 )
 
 
+def _handle_prepare_conversion_chain_post(
+    db: Session,
+    offer_id: int,
+    body: AdminPrepareConversionChainExecuteBody,
+    *,
+    actor_surface: str,
+) -> AdminPrepareConversionChainExecutionResultRead:
+    """Shared B16D2C / B15E2 handler: thin gate + PrepareConversionChainExecutionService only."""
+    if not body.dry_run and not body.confirm:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=[
+                {
+                    "loc": ("body", "confirm"),
+                    "msg": "confirm must be true for live execution, or set dry_run=true.",
+                    "type": "value_error",
+                },
+            ],
+        )
+    try:
+        return PrepareConversionChainExecutionService().execute(
+            db,
+            supplier_offer_id=offer_id,
+            idempotency_key=body.idempotency_key,
+            confirm=body.confirm,
+            dry_run=body.dry_run,
+            actor_surface=actor_surface,
+            requested_by=None,
+        )
+    except SupplierOfferReviewPackageNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    except ValueError as exc:
+        db.rollback()
+        msg = str(exc)
+        low = msg.lower()
+        if "confirm must be true" in low:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=[{"loc": ("body", "confirm"), "msg": msg, "type": "value_error"}],
+            ) from None
+        if "still marked running" in low:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=msg) from None
+        if "idempotency_key" in low:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=[{"loc": ("body", "idempotency_key"), "msg": msg, "type": "value_error"}],
+            ) from None
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=msg) from None
+
+
 @router.get("/overview", response_model=AdminOverviewRead)
 def get_admin_overview(
     db: Session = Depends(get_db),
@@ -285,6 +336,21 @@ def get_admin_publishing_console(
 ) -> AdminPublishingConsoleRead:
     """B15B: read-only queue of channel publication candidates (no publish / schedule / mutations)."""
     return AdminPublishingConsoleService().read_console(db, limit=limit, kind=kind)
+
+
+@router.post(
+    "/publishing-console/supplier-offers/{offer_id}/prepare-conversion-chain",
+    response_model=AdminPrepareConversionChainExecutionResultRead,
+)
+def post_publishing_console_supplier_offer_prepare_conversion_chain(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    body: AdminPrepareConversionChainExecuteBody = Body(...),
+) -> AdminPrepareConversionChainExecutionResultRead:
+    """B15E2: publishing-console entry to guarded prepare_conversion_chain — same service as B16D2C; no Telegram."""
+    result = _handle_prepare_conversion_chain_post(db, offer_id, body, actor_surface="publishing_console")
+    db.commit()
+    return result
 
 
 @router.post("/tours", response_model=AdminTourDetailRead, status_code=status.HTTP_201_CREATED)
@@ -1269,47 +1335,7 @@ def post_admin_supplier_offer_prepare_conversion_chain(
     body: AdminPrepareConversionChainExecuteBody = Body(...),
 ) -> AdminPrepareConversionChainExecutionResultRead:
     """B16D2C: guarded prepare-conversion-chain (bridge → catalog → execution link); no Telegram I/O."""
-    if not body.dry_run and not body.confirm:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=[
-                {
-                    "loc": ("body", "confirm"),
-                    "msg": "confirm must be true for live execution, or set dry_run=true.",
-                    "type": "value_error",
-                },
-            ],
-        )
-    try:
-        result = PrepareConversionChainExecutionService().execute(
-            db,
-            supplier_offer_id=offer_id,
-            idempotency_key=body.idempotency_key,
-            confirm=body.confirm,
-            dry_run=body.dry_run,
-            actor_surface="admin_http",
-            requested_by=None,
-        )
-    except SupplierOfferReviewPackageNotFoundError:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
-    except ValueError as exc:
-        db.rollback()
-        msg = str(exc)
-        low = msg.lower()
-        if "confirm must be true" in low:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=[{"loc": ("body", "confirm"), "msg": msg, "type": "value_error"}],
-            ) from None
-        if "still marked running" in low:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=msg) from None
-        if "idempotency_key" in low:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=[{"loc": ("body", "idempotency_key"), "msg": msg, "type": "value_error"}],
-            ) from None
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=msg) from None
+    result = _handle_prepare_conversion_chain_post(db, offer_id, body, actor_surface="admin_http")
     db.commit()
     return result
 
