@@ -4,30 +4,68 @@
 Tours_BOT
 
 ## Block
-B15E2 — Publishing console **execution** entry for **`prepare_conversion_chain`**
+B15E2 — Publishing Console **action execution** for **`prepare_conversion_chain`**
 
 ## Status
-**Implemented.** Parent foundation checkpoint: **[`docs/B15_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE_CHECKPOINT.md`](B15_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE_CHECKPOINT.md)** · **`GET /admin/publishing-console`** remains read-only · execution is a **separate POST**.
+**Closed (implemented).** Continuity: **`docs/CHAT_HANDOFF.md`**.
 
-## Endpoint
+## Prerequisites (checkpoints)
 
-**`POST /admin/publishing-console/supplier-offers/{offer_id}/prepare-conversion-chain`**
+Closed checkpoints (reference):
 
-- **Auth:** same as all `/admin` routes (`Authorization: Bearer` or `X-Admin-Token`).
-- **Body:** **`AdminPrepareConversionChainExecuteBody`** — **`idempotency_key`** (required), **`confirm`**, **`dry_run`** (same rules as B16D2C).
-- **Response:** **`AdminPrepareConversionChainExecutionResultRead`** · **`actor_surface`** = **`publishing_console`**.
+- B16D2C — **`POST /admin/supplier-offers/{offer_id}/prepare-conversion-chain`**
+- B16D2D — read-model **`prepare_conversion_chain_action`** affordances
+- B16D2E — production smoke runbook **[`docs/B16D2E_PREPARE_CONVERSION_CHAIN_PRODUCTION_SMOKE.md`](B16D2E_PREPARE_CONVERSION_CHAIN_PRODUCTION_SMOKE.md)**
 
-## Implementation
+## Goal
 
-- **`app/api/routes/admin.py`**: shared **`_handle_prepare_conversion_chain_post`** used by **B16D2C** (`actor_surface=admin_http`) and **B15E2** (`actor_surface=publishing_console`).
-- **Delegates only to** **`PrepareConversionChainExecutionService.execute`** — no Telegram, no publish service, no Layer A booking/payment mutation.
+Allow operators to run guarded **`prepare_conversion_chain`** from a **publishing-console-scoped** admin entry, without using **`GET /admin/publishing-console`** for mutation (that route stays read-only).
 
-## Tests
+## Action
 
-**`tests/unit/test_admin_publishing_console_prepare_chain_action.py`**
+**`code`:** `prepare_conversion_chain`
 
-Regression: **`test_admin_prepare_conversion_chain_api`**, **`test_admin_publishing_console`**, **`test_prepare_conversion_chain_execution_service`**, **`test_prepare_conversion_chain_d2d_affordance`**.
+## Execution routes (both delegate to the same service)
 
-## Boundaries
+| Surface | Method / path | `actor_surface` in result |
+|--------|----------------|----------------------------|
+| **Primary admin (B16D2C)** | **`POST /admin/supplier-offers/{offer_id}/prepare-conversion-chain`** | **`admin_http`** |
+| **Publishing console (B15E2)** | **`POST /admin/publishing-console/supplier-offers/{offer_id}/prepare-conversion-chain`** | **`publishing_console`** |
 
-Not in scope: generic action framework, **`POST …/publish`**, Mini App / B11 changes, new migrations.
+Shared handler: **`_handle_prepare_conversion_chain_post`** in **`app/api/routes/admin.py`** → **`PrepareConversionChainExecutionService.execute(...)`** only.
+
+**Body / response:** same as B16D2C — **`AdminPrepareConversionChainExecuteBody`**, **`AdminPrepareConversionChainExecutionResultRead`**.
+
+## Required safeguards
+
+- Admin auth (`Authorization: Bearer` or `X-Admin-Token`) on **`/admin`**
+- **`idempotency_key`** required (non-blank after trim)
+- **`confirm=true`** required for live (**`dry_run=false`**), else **422**
+- **`dry_run`** supported (`confirm` may be false)
+- Idempotent replay unchanged (service / audit foundation)
+- Routes thin; business rules in **`PrepareConversionChainExecutionService`**
+
+## Must not happen
+
+- Telegram publish / send / retry
+- Showcase channel post
+- Scheduler / auto-publish
+- Mini App routing / B11 deep-link changes
+- Order / payment / reservation / Layer A booking mutation (outside existing prepare-chain service path)
+- New migration / table for this slice
+
+## Expected verification (local)
+
+- **`python -m compileall app tests`**
+- **`tests/unit/test_admin_publishing_console_prepare_chain_action.py`**
+- Regression: **`test_admin_prepare_conversion_chain_api`**, **`test_admin_publishing_console`**, **`test_prepare_conversion_chain_execution_service`**, **`test_prepare_conversion_chain_d2d_affordance`**
+
+## Next after B15E2
+
+- **B15E2 smoke (ops):** **`docs/CURSOR_PROMPT_B15E2_PUBLISHING_CONSOLE_PREPARE_CHAIN_SMOKE.md`** (or equivalent) — e.g. **dry_run** + safe **already_prepared** / staging **`offer_id`** only.
+- If a bug appears: small scoped fix + tests; no broad action framework.
+
+## Implementation reference
+
+- **Tests:** **`tests/unit/test_admin_publishing_console_prepare_chain_action.py`**
+- **Docs touchpoints:** **`docs/B15_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE_CHECKPOINT.md`** (note: **GET** console read-only; **POST** execute is separate).
