@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E/B15F/B15K/B15L/B15M: read-only Admin Publishing Console response DTOs (no publish / schedule / mutations)."""
+"""B15B/B15D/B15E/B15F/B15K/B15L/B15M/B15P: read-only Admin Publishing Console response DTOs (no publish / schedule / mutations)."""
 
 from __future__ import annotations
 
@@ -69,6 +69,59 @@ PublishingConsoleTemplateLibraryEntryStatus = Literal[
     "not_applicable",
     "blocked",
 ]
+
+PublishingConsoleUiCardStatusTone = Literal["neutral", "success", "warning", "danger", "info"]
+
+PublishingConsoleUiPrimaryActionKind = Literal["safe_read", "guarded_post", "future", "none"]
+
+
+class AdminPublishingConsoleUiCardRead(BaseModel):
+    """B15P: compact read-only presentation hints for a publishing-console list row (no execution)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    card_title: str | None = None
+    card_subtitle: str | None = None
+    status_badge: str
+    status_label: str
+    status_tone: PublishingConsoleUiCardStatusTone
+    primary_line: str | None = None
+    secondary_line: str | None = None
+    primary_action_label: str | None = None
+    primary_action_code: str | None = None
+    primary_action_enabled: bool = False
+    primary_action_kind: PublishingConsoleUiPrimaryActionKind = "none"
+    primary_action_path: str | None = None
+    secondary_action_label: str | None = None
+    secondary_action_code: str | None = None
+    secondary_action_enabled: bool = False
+    warning_line: str | None = None
+    blocker_line: str | None = None
+    safety_line: str = Field(
+        description="Short reminder that this GET is read-only (no publish / Telegram I/O).",
+    )
+
+
+def _placeholder_console_ui_card() -> AdminPublishingConsoleUiCardRead:
+    """Satisfies validation until ``_finalize_console_item`` replaces with real B15P hints."""
+
+    return AdminPublishingConsoleUiCardRead(
+        status_badge="unknown",
+        status_label="",
+        status_tone="neutral",
+        safety_line="",
+    )
+
+
+class AdminPublishingConsoleUiSectionRead(BaseModel):
+    """B15P: suggested grouping for supplier-offer publishing-console detail rendering."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    section_key: str
+    title: str
+    description: str | None = None
+    display_order: int = Field(ge=0)
 
 
 class AdminPublishingConsoleFutureCapabilityHintRead(BaseModel):
@@ -310,6 +363,10 @@ class AdminPublishingConsoleItemRead(BaseModel):
     media_summary: str = ""
     template_actions: list[AdminPublishingConsoleFutureCapabilityHintRead] = Field(default_factory=list)
     channel_actions: list[AdminPublishingConsoleFutureCapabilityHintRead] = Field(default_factory=list)
+    ui_card: AdminPublishingConsoleUiCardRead = Field(
+        default_factory=_placeholder_console_ui_card,
+        description="B15P: read-only UI alignment hints for list cards (replaced when building responses).",
+    )
 
 
 class AdminPublishingConsoleSupplierOfferConversionSummaryRead(BaseModel):
@@ -360,7 +417,7 @@ class AdminPublishingConsoleSupplierOfferSafetySummaryRead(BaseModel):
 
 
 class AdminPublishingConsoleSupplierOfferDetailRead(BaseModel):
-    """B15M: GET /admin/publishing-console/supplier-offers/{offer_id} — single-offer publishing console read view."""
+    """B15M/B15P: GET /admin/publishing-console/supplier-offers/{offer_id} — single-offer publishing console read view."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -391,6 +448,10 @@ class AdminPublishingConsoleSupplierOfferDetailRead(BaseModel):
             "Read-only publishing console detail. No publish, schedule, Telegram send, prepare_conversion_chain "
             "execution, or data mutation occurs from this endpoint."
         ),
+    )
+    ui_sections: list[AdminPublishingConsoleUiSectionRead] = Field(
+        default_factory=list,
+        description="B15P: suggested section order/labels for admin detail layouts (read-only hints).",
     )
 
 

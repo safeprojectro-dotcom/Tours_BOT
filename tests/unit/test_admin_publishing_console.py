@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E/B15F/B15K/B15L/B15M: GET /admin/publishing-console read-only queue + per-offer detail + template library + preview payload."""
+"""B15B/B15D/B15E/B15F/B15K/B15L/B15M/B15P: GET /admin/publishing-console read-only queue + per-offer detail + template library + preview payload + ui_card/ui_sections."""
 
 from __future__ import annotations
 
@@ -189,6 +189,15 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
         self.assertIn("Read-only", d["detail_notice"])
         self.assertTrue(d.get("generated_at"))
 
+        secs = d.get("ui_sections") or []
+        self.assertGreaterEqual(len(secs), 8)
+        keys = {s["section_key"] for s in secs}
+        self.assertIn("publish_readiness", keys)
+        self.assertIn("console_preview", keys)
+        self.assertIn("safety_summary", keys)
+        orders = [s["display_order"] for s in secs]
+        self.assertEqual(orders, sorted(orders))
+
     def test_publishing_console_smoke_shape(self) -> None:
         mock_cfg = SimpleNamespace(
             telegram_bot_username="testbot",
@@ -252,6 +261,13 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
                 self.assertIn("template_library", pay["template_library_note"].lower())
             if item["kind"] == "tour_promotion":
                 self.assertEqual(pay["source"], "tour_placeholder")
+            uc = item["ui_card"]
+            self.assertIn(uc["status_tone"], ("neutral", "success", "warning", "danger", "info"))
+            self.assertIn(uc["primary_action_kind"], ("safe_read", "guarded_post", "future", "none"))
+            self.assertTrue(uc.get("status_badge"))
+            self.assertTrue((uc.get("status_label") or "").strip())
+            self.assertTrue((uc.get("safety_line") or "").strip())
+            self.assertEqual(uc.get("card_title"), item.get("title"))
 
     def test_publishing_console_kind_supplier_offer_only(self) -> None:
         mock_cfg = SimpleNamespace(
@@ -417,6 +433,10 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
         self.assertIsNotNone(pay.get("generated_at"))
         self.assertIn("publish_readiness", (pay.get("publish_readiness_note") or "").lower())
         self.assertIn("template_library", (pay.get("template_library_note") or "").lower())
+        uic = match["ui_card"]
+        self.assertEqual(uic["primary_action_kind"], "guarded_post")
+        self.assertEqual(uic["status_tone"], "success")
+        self.assertEqual(uic["primary_action_code"], "prepare_conversion_chain")
 
     def test_b15d_supplier_offer_missing_execution_link(self) -> None:
         """Blocked bridge path: no execution link — CTA safety missing_execution_link, next action execution-link."""
@@ -577,6 +597,26 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             "source",
         )
         hint_keys = ("code", "label", "implemented", "enabled", "disabled_reason")
+        ui_card_keys = (
+            "card_title",
+            "card_subtitle",
+            "status_badge",
+            "status_label",
+            "status_tone",
+            "primary_line",
+            "secondary_line",
+            "primary_action_label",
+            "primary_action_code",
+            "primary_action_enabled",
+            "primary_action_kind",
+            "primary_action_path",
+            "secondary_action_label",
+            "secondary_action_code",
+            "secondary_action_enabled",
+            "warning_line",
+            "blocker_line",
+            "safety_line",
+        )
         for item in body["items"]:
             for key in (
                 "candidate_key",
@@ -590,8 +630,11 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
                 "template_library",
                 "preview_payload",
                 "admin_tour_path",
+                "ui_card",
             ):
                 self.assertIn(key, item)
+            for uk in ui_card_keys:
+                self.assertIn(uk, item["ui_card"])
             for key in enrich_keys:
                 self.assertIn(key, item)
             self.assertIsInstance(item["actions"], list)

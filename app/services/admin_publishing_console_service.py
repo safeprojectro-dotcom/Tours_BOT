@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E/B15F/B15K/B15L/B15M: read-only publishing console — review-package + tours + readiness + affordances + template/preview payloads; no I/O side effects."""
+"""B15B/B15D/B15E/B15F/B15K/B15L/B15M/B15P: read-only publishing console — review-package + tours + readiness + affordances + template/preview payloads + UI alignment hints; no I/O side effects."""
 
 from __future__ import annotations
 
@@ -29,6 +29,8 @@ from app.schemas.admin_publishing_console import (
     AdminPublishingConsoleTemplateLibraryEntryRead,
     AdminPublishingConsoleTemplateLibraryRead,
     AdminPublishingConsoleTourDebugRead,
+    AdminPublishingConsoleUiCardRead,
+    AdminPublishingConsoleUiSectionRead,
     PublishingConsoleActionDangerLevel,
     PublishingConsoleCandidateKind,
     PublishingConsoleChannelKind,
@@ -46,6 +48,8 @@ from app.schemas.admin_publishing_console import (
     PublishingConsoleTemplateLibraryEntryStatus,
     PublishingConsoleTemplateLibraryFamily,
     PublishingConsoleTemplateSourceStatus,
+    PublishingConsoleUiCardStatusTone,
+    PublishingConsoleUiPrimaryActionKind,
 )
 from app.schemas.admin_publish_readiness import AdminPublishReadinessRead
 from app.schemas.supplier_admin import AdminSupplierOfferReviewPackageRead
@@ -70,6 +74,182 @@ PublishingConsoleKindQuery = Literal[
     "blocked",
     "needs_attention",
 ]
+
+
+def _console_status_to_ui_tone(status: PublishingConsoleItemStatus) -> PublishingConsoleUiCardStatusTone:
+    if status == "ready":
+        return "success"
+    if status == "blocked":
+        return "danger"
+    if status == "needs_attention":
+        return "warning"
+    return "neutral"
+
+
+def _affordance_to_ui_action_kind(
+    a: AdminPublishingConsoleActionAffordanceRead,
+) -> PublishingConsoleUiPrimaryActionKind:
+    if a.method == "POST":
+        return "guarded_post"
+    if not a.implemented or a.source == "future":
+        return "future"
+    return "safe_read"
+
+
+def _ui_card_for_console_item(item: AdminPublishingConsoleItemRead) -> AdminPublishingConsoleUiCardRead:
+    pr = item.publish_readiness
+    tone = _console_status_to_ui_tone(item.console_status)
+    status_badge = str(pr.badge)
+    status_label = (pr.summary or "").strip() or (item.human_summary or "").strip() or item.console_status
+    primary_line = ((item.readiness_summary or "").strip() or None) or ((item.human_summary or "").strip() or None)
+    secondary_line = (item.target_summary or "").strip() or None
+    warn = (pr.warning_summary or "").strip() or None
+    if not warn and item.preview_payload.warnings:
+        w0 = item.preview_payload.warnings[0]
+        warn = (str(w0) if w0 is not None else "").strip() or None
+    blocker = (pr.primary_blocker or "").strip() or None
+    if not blocker:
+        blocker = (item.primary_blocker or "").strip() or None
+    if not blocker and item.preview_payload.blockers:
+        b0 = item.preview_payload.blockers[0]
+        blocker = (str(b0) if b0 is not None else "").strip() or None
+
+    safety_parts = [
+        str(x).strip()
+        for x in (item.console_preview.safety_note, item.preview_payload.safety_note)
+        if x is not None and str(x).strip()
+    ]
+    safety = " · ".join(safety_parts)
+    if len(safety) > 480:
+        safety = safety[:477] + "..."
+    if not safety:
+        safety = "Read-only publishing console row (no publish or Telegram I/O from this API)."
+
+    p_label: str | None = None
+    p_code: str | None = None
+    p_path: str | None = None
+    p_enabled = False
+    p_kind: PublishingConsoleUiPrimaryActionKind = "none"
+    used: set[str] = set()
+
+    pca = item.prepare_conversion_chain_action
+    if pca is not None:
+        p_label = "Prepare conversion chain"
+        p_code = "prepare_conversion_chain"
+        p_path = pca.path
+        p_enabled = bool(pca.enabled)
+        p_kind = "guarded_post"
+        used.add("prepare_conversion_chain")
+
+    if p_kind == "none":
+        for a in item.actions:
+            if a.method == "GET" and a.enabled and a.implemented:
+                p_label, p_code, p_path = a.label, a.code, a.admin_path
+                p_enabled = True
+                p_kind = _affordance_to_ui_action_kind(a)
+                used.add(a.code)
+                break
+
+    if p_kind == "none":
+        for a in item.actions:
+            if _affordance_to_ui_action_kind(a) == "future":
+                p_label, p_code, p_path = a.label, a.code, a.admin_path
+                p_enabled = bool(a.enabled and a.implemented)
+                p_kind = "future"
+                used.add(a.code)
+                break
+
+    s_label: str | None = None
+    s_code: str | None = None
+    s_enabled = False
+    if p_kind != "none":
+        for a in item.actions:
+            if a.code in used:
+                continue
+            if a.method == "GET":
+                s_label, s_code = a.label, a.code
+                s_enabled = bool(a.enabled and a.implemented)
+                break
+
+    return AdminPublishingConsoleUiCardRead(
+        card_title=item.title,
+        card_subtitle=item.subtitle,
+        status_badge=status_badge,
+        status_label=status_label[:500],
+        status_tone=tone,
+        primary_line=primary_line,
+        secondary_line=secondary_line,
+        primary_action_label=p_label,
+        primary_action_code=p_code,
+        primary_action_enabled=p_enabled,
+        primary_action_kind=p_kind,
+        primary_action_path=p_path,
+        secondary_action_label=s_label,
+        secondary_action_code=s_code,
+        secondary_action_enabled=s_enabled,
+        warning_line=warn,
+        blocker_line=blocker,
+        safety_line=safety,
+    )
+
+
+def _ui_sections_for_supplier_offer_detail() -> list[AdminPublishingConsoleUiSectionRead]:
+    return [
+        AdminPublishingConsoleUiSectionRead(
+            section_key="publish_readiness",
+            title="Publish readiness",
+            description="Suggest-only gates and next-action hints (read-only).",
+            display_order=10,
+        ),
+        AdminPublishingConsoleUiSectionRead(
+            section_key="console_preview",
+            title="Console preview",
+            description="Template/preview display metadata.",
+            display_order=20,
+        ),
+        AdminPublishingConsoleUiSectionRead(
+            section_key="template_library",
+            title="Template library",
+            description="Variant list and selection hints (no editor API).",
+            display_order=30,
+        ),
+        AdminPublishingConsoleUiSectionRead(
+            section_key="preview_payload",
+            title="Preview payload",
+            description="Structured showcase-oriented fields for admin review.",
+            display_order=40,
+        ),
+        AdminPublishingConsoleUiSectionRead(
+            section_key="conversion_summary",
+            title="Conversion",
+            display_order=50,
+        ),
+        AdminPublishingConsoleUiSectionRead(
+            section_key="linked_tour_summary",
+            title="Linked tour",
+            display_order=60,
+        ),
+        AdminPublishingConsoleUiSectionRead(
+            section_key="publication_summary",
+            title="Publication",
+            display_order=70,
+        ),
+        AdminPublishingConsoleUiSectionRead(
+            section_key="actions",
+            title="Actions",
+            description="Affordance metadata only (no execution from this GET).",
+            display_order=80,
+        ),
+        AdminPublishingConsoleUiSectionRead(
+            section_key="safety_summary",
+            title="Safety",
+            display_order=90,
+        ),
+    ]
+
+
+def _finalize_console_item(item: AdminPublishingConsoleItemRead) -> AdminPublishingConsoleItemRead:
+    return item.model_copy(update={"ui_card": _ui_card_for_console_item(item)})
 
 
 def _now_utc() -> datetime:
@@ -1185,6 +1365,7 @@ def _supplier_offer_publishing_console_detail(
         publication_summary=pub,
         safety_summary=safety,
         generated_at=rp.publish_readiness.generated_at,
+        ui_sections=_ui_sections_for_supplier_offer_detail(),
     )
 
 
@@ -1240,42 +1421,44 @@ class AdminPublishingConsoleService:
             cp=cp,
             tl=tl,
         )
-        return AdminPublishingConsoleItemRead(
-            candidate_key=f"supplier_offer:{row.id}",
-            kind="supplier_offer_initial",
-            console_status=status,
-            title=item_title,
-            subtitle=f"Lifecycle {row.lifecycle_status}",
-            target_summary=_target_summary_offer(rp),
-            next_best_action=rp.operator_workflow.primary_next_action or (
-                rp.recommended_next_actions[0] if rp.recommended_next_actions else None
+        return _finalize_console_item(
+            AdminPublishingConsoleItemRead(
+                candidate_key=f"supplier_offer:{row.id}",
+                kind="supplier_offer_initial",
+                console_status=status,
+                title=item_title,
+                subtitle=f"Lifecycle {row.lifecycle_status}",
+                target_summary=_target_summary_offer(rp),
+                next_best_action=rp.operator_workflow.primary_next_action or (
+                    rp.recommended_next_actions[0] if rp.recommended_next_actions else None
+                ),
+                blocked_reasons=br,
+                human_summary=_human_summary_offer(rp, status),
+                review_package_path=f"/admin/supplier-offers/{row.id}/review-package",
+                prepare_conversion_chain_plan_path=supplier_offer_prepare_conversion_chain_plan_path(row.id),
+                prepare_conversion_chain_plan_status=rp.prepare_conversion_chain_plan_status,
+                prepare_conversion_chain_recommended_action=rp.prepare_conversion_chain_recommended_action,
+                prepare_conversion_chain_blockers_count=rp.prepare_conversion_chain_blockers_count,
+                prepare_conversion_chain_action=rp.prepare_conversion_chain_action,
+                publish_readiness=rp.publish_readiness,
+                console_preview=cp,
+                template_library=tl,
+                preview_payload=pp,
+                admin_tour_path=None,
+                offer_debug=AdminPublishingConsoleOfferDebugRead(
+                    supplier_offer_id=row.id,
+                    lifecycle_status=row.lifecycle_status,
+                    packaging_status=row.packaging_status,
+                    can_publish_now=rp.showcase_preview.can_publish_now,
+                    next_missing_step=rp.conversion_closure.next_missing_step,
+                    effective_showcase_template_id=rp.showcase_template_preview.effective_template_id,
+                    primary_operator_action=rp.operator_workflow.primary_next_action,
+                ),
+                tour_debug=None,
+                actions=actions,
+                **b15d,
+                **b15f,
             ),
-            blocked_reasons=br,
-            human_summary=_human_summary_offer(rp, status),
-            review_package_path=f"/admin/supplier-offers/{row.id}/review-package",
-            prepare_conversion_chain_plan_path=supplier_offer_prepare_conversion_chain_plan_path(row.id),
-            prepare_conversion_chain_plan_status=rp.prepare_conversion_chain_plan_status,
-            prepare_conversion_chain_recommended_action=rp.prepare_conversion_chain_recommended_action,
-            prepare_conversion_chain_blockers_count=rp.prepare_conversion_chain_blockers_count,
-            prepare_conversion_chain_action=rp.prepare_conversion_chain_action,
-            publish_readiness=rp.publish_readiness,
-            console_preview=cp,
-            template_library=tl,
-            preview_payload=pp,
-            admin_tour_path=None,
-            offer_debug=AdminPublishingConsoleOfferDebugRead(
-                supplier_offer_id=row.id,
-                lifecycle_status=row.lifecycle_status,
-                packaging_status=row.packaging_status,
-                can_publish_now=rp.showcase_preview.can_publish_now,
-                next_missing_step=rp.conversion_closure.next_missing_step,
-                effective_showcase_template_id=rp.showcase_template_preview.effective_template_id,
-                primary_operator_action=rp.operator_workflow.primary_next_action,
-            ),
-            tour_debug=None,
-            actions=actions,
-            **b15d,
-            **b15f,
         )
 
     def _build_supplier_offer_item_pair(
@@ -1441,41 +1624,37 @@ class AdminPublishingConsoleService:
                 pr_row=pr_row,
                 tl=tl,
             )
-            enriched.append(
-                (
-                    t.departure_datetime,
-                    AdminPublishingConsoleItemRead(
-                        candidate_key=f"tour:{t.id}",
-                        kind="tour_promotion",
-                        console_status=status,
-                        title=tour_title,
-                        subtitle=f"{t.code} · {t.sales_mode.value}",
-                        target_summary=f"exact_tour · /mini-app/tours/{t.code} (conceptual; B15D template)",
-                        next_best_action="compose_tour_promotion_draft" if status == "ready" else "resolve_tour_blockers",
-                        blocked_reasons=br,
-                        human_summary=human,
-                        review_package_path=None,
-                        publish_readiness=pr_row,
-                        console_preview=cp,
-                        template_library=tl,
-                        preview_payload=pp,
-                        admin_tour_path=f"/admin/tours/{t.id}",
-                        offer_debug=None,
-                        tour_debug=AdminPublishingConsoleTourDebugRead(
-                            tour_id=t.id,
-                            tour_code=t.code,
-                            tour_status=t.status.value,
-                            sales_mode=t.sales_mode.value,
-                            seats_available=t.seats_available,
-                            seats_total=t.seats_total,
-                            catalog_customer_visible=catalog_visible,
-                        ),
-                        actions=t_actions,
-                        **b15d,
-                        **b15f,
-                    ),
+            row_item = AdminPublishingConsoleItemRead(
+                candidate_key=f"tour:{t.id}",
+                kind="tour_promotion",
+                console_status=status,
+                title=tour_title,
+                subtitle=f"{t.code} · {t.sales_mode.value}",
+                target_summary=f"exact_tour · /mini-app/tours/{t.code} (conceptual; B15D template)",
+                next_best_action="compose_tour_promotion_draft" if status == "ready" else "resolve_tour_blockers",
+                blocked_reasons=br,
+                human_summary=human,
+                review_package_path=None,
+                publish_readiness=pr_row,
+                console_preview=cp,
+                template_library=tl,
+                preview_payload=pp,
+                admin_tour_path=f"/admin/tours/{t.id}",
+                offer_debug=None,
+                tour_debug=AdminPublishingConsoleTourDebugRead(
+                    tour_id=t.id,
+                    tour_code=t.code,
+                    tour_status=t.status.value,
+                    sales_mode=t.sales_mode.value,
+                    seats_available=t.seats_available,
+                    seats_total=t.seats_total,
+                    catalog_customer_visible=catalog_visible,
                 ),
+                actions=t_actions,
+                **b15d,
+                **b15f,
             )
+            enriched.append((t.departure_datetime, _finalize_console_item(row_item)))
         enriched.sort(
             key=lambda pair: (
                 _STATUS_ORDER.get(pair[1].console_status, 9),
