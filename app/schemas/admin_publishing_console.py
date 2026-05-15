@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E/B15F: read-only Admin Publishing Console response DTOs (no publish / schedule / mutations)."""
+"""B15B/B15D/B15E/B15F/B15K: read-only Admin Publishing Console response DTOs (no publish / schedule / mutations)."""
 
 from __future__ import annotations
 
@@ -54,6 +54,19 @@ PublishingConsoleTemplateFamily = Literal[
     "tour_promotion",
     "custom_request_cta",
     "unknown",
+]
+
+PublishingConsoleTemplateLibraryFamily = Literal[
+    "supplier_offer_showcase",
+    "tour_promotion",
+    "unknown",
+]
+
+PublishingConsoleTemplateLibraryEntryStatus = Literal[
+    "available",
+    "future",
+    "not_applicable",
+    "blocked",
 ]
 
 
@@ -137,6 +150,34 @@ class AdminPublishingConsolePreviewRead(BaseModel):
     next_action_label: str | None = None
 
 
+class AdminPublishingConsoleTemplateLibraryEntryRead(BaseModel):
+    """B15K: one possible template variant for a console row (read-only metadata)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    template_id: str
+    label: str
+    description: str
+    status: PublishingConsoleTemplateLibraryEntryStatus
+    disabled_reason: str | None = None
+
+
+class AdminPublishingConsoleTemplateLibraryRead(BaseModel):
+    """B15K: compact template library / variant projection (read-only; no selection API)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    family: PublishingConsoleTemplateLibraryFamily
+    selected_template_id: str | None = None
+    recommended_template_id: str | None = None
+    template_version: str | None = None
+    available_templates: list[AdminPublishingConsoleTemplateLibraryEntryRead] = Field(default_factory=list)
+    selection_reason: str | None = None
+    safety_note: str = Field(
+        description="Why no public publish/send is executed from this read-only console projection.",
+    )
+
+
 class AdminPublishingConsoleItemRead(BaseModel):
     """Single publishing candidate card."""
 
@@ -177,6 +218,9 @@ class AdminPublishingConsoleItemRead(BaseModel):
     )
     console_preview: AdminPublishingConsolePreviewRead = Field(
         description="B15F2/B15F3: template/preview clarity for admin UX (read-only).",
+    )
+    template_library: AdminPublishingConsoleTemplateLibraryRead = Field(
+        description="B15K: possible template variants and selection hints (read-only).",
     )
     admin_tour_path: str | None = None
     offer_debug: AdminPublishingConsoleOfferDebugRead | None = None

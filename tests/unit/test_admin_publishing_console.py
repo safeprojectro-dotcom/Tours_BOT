@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E/B15F: GET /admin/publishing-console read-only queue + rich read-model + affordances + template/channel read model."""
+"""B15B/B15D/B15E/B15F/B15K: GET /admin/publishing-console read-only queue + rich read-model + affordances + template library."""
 
 from __future__ import annotations
 
@@ -116,6 +116,15 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             )
             self.assertTrue(cp["safety_note"])
             self.assertIn("read-only", cp["safety_note"].lower())
+            tl = item["template_library"]
+            self.assertIn(tl["family"], ("supplier_offer_showcase", "tour_promotion", "unknown"))
+            self.assertTrue(tl["safety_note"])
+            self.assertIn("read-only", tl["safety_note"].lower())
+            self.assertIsInstance(tl["available_templates"], list)
+            self.assertGreaterEqual(len(tl["available_templates"]), 1)
+            for ent in tl["available_templates"]:
+                self.assertIn(ent["status"], ("available", "future", "not_applicable", "blocked"))
+                self.assertTrue(ent["template_id"])
 
     def test_publishing_console_kind_supplier_offer_only(self) -> None:
         mock_cfg = SimpleNamespace(
@@ -158,6 +167,11 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             self.assertEqual(cp["template_family"], "tour_promotion")
             self.assertEqual(cp["preview_status"], "placeholder")
             self.assertIn("placeholder", cp["safety_note"].lower())
+            tl = item["template_library"]
+            self.assertEqual(tl["family"], "tour_promotion")
+            self.assertEqual(tl["selected_template_id"], "tour_promotion_placeholder")
+            self.assertTrue(any(e["template_id"] == "tour_promotion_placeholder" for e in tl["available_templates"]))
+            self.assertTrue(all(e["status"] == "future" for e in tl["available_templates"]))
 
     def test_b15d_supplier_offer_ready_exact_tour_cta(self) -> None:
         """Ready supplier row: B15C gate green, conversion target is exact tour, CTA safety exact_tour_ready."""
@@ -258,6 +272,13 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
         self.assertIn(cp["preview_status"], ("available", "placeholder", "blocked"))
         self.assertEqual(cp["next_action_code"], match["publish_readiness"]["next_action_code"])
         self.assertIsNotNone(cp.get("preview_path"))
+        tl = match["template_library"]
+        self.assertEqual(tl["family"], "supplier_offer_showcase")
+        self.assertEqual(tl["selected_template_id"], tl["recommended_template_id"])
+        show = next(e for e in tl["available_templates"] if e["template_id"] == "supplier_offer_showcase")
+        self.assertEqual(show["status"], "available")
+        cr = next(e for e in tl["available_templates"] if e["template_id"] == "custom_request_cta")
+        self.assertEqual(cr["status"], "not_applicable")
 
     def test_b15d_supplier_offer_missing_execution_link(self) -> None:
         """Blocked bridge path: no execution link — CTA safety missing_execution_link, next action execution-link."""
@@ -426,6 +447,10 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
                 "title",
                 "target_summary",
                 "human_summary",
+                "publish_readiness",
+                "console_preview",
+                "template_library",
+                "admin_tour_path",
             ):
                 self.assertIn(key, item)
             for key in enrich_keys:

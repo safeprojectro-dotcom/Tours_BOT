@@ -18,6 +18,8 @@ from app.schemas.admin_publishing_console import (
     AdminPublishingConsoleOfferDebugRead,
     AdminPublishingConsolePreviewRead,
     AdminPublishingConsoleRead,
+    AdminPublishingConsoleTemplateLibraryEntryRead,
+    AdminPublishingConsoleTemplateLibraryRead,
     AdminPublishingConsoleTourDebugRead,
     PublishingConsoleActionDangerLevel,
     PublishingConsoleCandidateKind,
@@ -31,6 +33,8 @@ from app.schemas.admin_publishing_console import (
     PublishingConsoleReadinessLevel,
     PublishingConsoleTemplateFamily,
     PublishingConsoleTemplateKind,
+    PublishingConsoleTemplateLibraryEntryStatus,
+    PublishingConsoleTemplateLibraryFamily,
     PublishingConsoleTemplateSourceStatus,
 )
 from app.schemas.supplier_admin import AdminSupplierOfferReviewPackageRead
@@ -744,6 +748,181 @@ def _console_preview_tour_promotion(
     )
 
 
+_TEMPLATE_ID_SUPPLIER_SHOWCASE = "supplier_offer_showcase"
+_TEMPLATE_ID_CUSTOM_REQUEST_CTA = "custom_request_cta"
+_TEMPLATE_ID_TOUR_PROMO_PLACEHOLDER = "tour_promotion_placeholder"
+_TEMPLATE_ID_TOUR_PROMO_RICH_CARD = "tour_promotion_rich_card"
+
+
+def _library_family_from_preview(tf: PublishingConsoleTemplateFamily) -> PublishingConsoleTemplateLibraryFamily:
+    if tf == "tour_promotion":
+        return "tour_promotion"
+    if tf == "unknown":
+        return "unknown"
+    return "supplier_offer_showcase"
+
+
+def _showcase_variant_status(
+    *,
+    tpl_stat: str,
+    media_stat: str,
+    tpl_preview_avail: bool,
+) -> tuple[PublishingConsoleTemplateLibraryEntryStatus, str | None]:
+    if media_stat == "media_blocked":
+        return "blocked", "Showcase card blocked by cover/media quality policy for this offer."
+    if tpl_stat == "unavailable":
+        return "blocked", "No effective B12B marketing template id; complete packaging or template selection."
+    if tpl_stat == "partial" or not tpl_preview_avail:
+        return "blocked", "Template facts or preview path incomplete (partial template source or preview not usable)."
+    return "available", None
+
+
+def _template_library_supplier_offer(
+    *,
+    rp: AdminSupplierOfferReviewPackageRead,
+    b15f: dict[str, Any],
+    cp: AdminPublishingConsolePreviewRead,
+) -> AdminPublishingConsoleTemplateLibraryRead:
+    tpl_stat = str(b15f["template_source_status"])
+    media_stat = str(b15f["media_policy_status"])
+    tpl_preview_avail = bool(b15f["template_preview_available"])
+    eff = (cp.template_id or "").strip() or None
+    ver = (b15f.get("template_version") or "").strip() or None
+
+    fam = _library_family_from_preview(cp.template_family)
+
+    if rp.offer.payment_mode is SupplierOfferPaymentMode.ASSISTED_CLOSURE:
+        st_show, dr_show = _showcase_variant_status(
+            tpl_stat=tpl_stat,
+            media_stat=media_stat,
+            tpl_preview_avail=tpl_preview_avail,
+        )
+        cr_status: PublishingConsoleTemplateLibraryEntryStatus
+        cr_reason: str | None
+        if st_show == "available":
+            cr_status, cr_reason = "available", None
+        else:
+            cr_status, cr_reason = st_show, dr_show
+        entries = [
+            AdminPublishingConsoleTemplateLibraryEntryRead(
+                template_id=_TEMPLATE_ID_CUSTOM_REQUEST_CTA,
+                label="Custom request / assisted closure CTA",
+                description=(
+                    "Channel card emphasizes custom-request handoff and assisted closure (not platform checkout)."
+                ),
+                status=cr_status,
+                disabled_reason=cr_reason,
+            ),
+            AdminPublishingConsoleTemplateLibraryEntryRead(
+                template_id=_TEMPLATE_ID_SUPPLIER_SHOWCASE,
+                label="Standard supplier-offer showcase",
+                description="Default B12B deterministic showcase track used for platform checkout offers.",
+                status="not_applicable",
+                disabled_reason="Offer is assisted-closure; standard checkout showcase is not the primary template.",
+            ),
+        ]
+        sel = _TEMPLATE_ID_CUSTOM_REQUEST_CTA
+        reason = (
+            "Assisted-closure offers select the custom-request CTA variant; resolve template/media gates before publish."
+        )
+        return AdminPublishingConsoleTemplateLibraryRead(
+            family=fam,
+            selected_template_id=sel,
+            recommended_template_id=sel,
+            template_version=ver,
+            available_templates=entries,
+            selection_reason=reason,
+            safety_note=_CONSOLE_PREVIEW_READ_ONLY_SAFETY,
+        )
+
+    st_sc, dr_sc = _showcase_variant_status(
+        tpl_stat=tpl_stat,
+        media_stat=media_stat,
+        tpl_preview_avail=tpl_preview_avail,
+    )
+    entries = [
+        AdminPublishingConsoleTemplateLibraryEntryRead(
+            template_id=_TEMPLATE_ID_SUPPLIER_SHOWCASE,
+            label="Supplier-offer showcase (B12B)",
+            description=(
+                "Deterministic showcase rendering from packaging + effective template id "
+                + (f"(`{eff}`)." if eff else "(packaging pending).")
+            ),
+            status=st_sc,
+            disabled_reason=dr_sc,
+        ),
+        AdminPublishingConsoleTemplateLibraryEntryRead(
+            template_id=_TEMPLATE_ID_CUSTOM_REQUEST_CTA,
+            label="Custom request / assisted closure CTA",
+            description="Alternate emphasis for assisted-closure offers only.",
+            status="not_applicable",
+            disabled_reason="Platform checkout offer; custom-request CTA template is not applicable.",
+        ),
+    ]
+    sel = eff or _TEMPLATE_ID_SUPPLIER_SHOWCASE
+    reason = (
+        f"Platform checkout uses the B12B showcase track; effective template id is `{eff}`."
+        if eff
+        else "Platform checkout uses the B12B showcase track; set effective marketing template in packaging."
+    )
+    return AdminPublishingConsoleTemplateLibraryRead(
+        family=fam,
+        selected_template_id=sel,
+        recommended_template_id=eff or _TEMPLATE_ID_SUPPLIER_SHOWCASE,
+        template_version=ver,
+        available_templates=entries,
+        selection_reason=reason,
+        safety_note=_CONSOLE_PREVIEW_READ_ONLY_SAFETY,
+    )
+
+
+def _template_library_tour_promotion(
+    *,
+    b15f: dict[str, Any],
+    console_status: PublishingConsoleItemStatus,
+    human_summary: str,
+) -> AdminPublishingConsoleTemplateLibraryRead:
+    ver_raw = b15f.get("template_version")
+    ver = str(ver_raw).strip() if ver_raw is not None else None
+    desc_common = (human_summary or "").strip() or "Tour promotion candidate (read-only console)."
+    placeholder_reason: str | None = None
+    if console_status == "blocked":
+        placeholder_reason = "Tour has blockers (seats, departure, or catalog window) before promotion messaging."
+    elif console_status == "needs_attention":
+        placeholder_reason = "Tour is not in a customer-visible catalog window for promotion candidates."
+    entries = [
+        AdminPublishingConsoleTemplateLibraryEntryRead(
+            template_id=_TEMPLATE_ID_TOUR_PROMO_PLACEHOLDER,
+            label="Tour promotion placeholder",
+            description=desc_common,
+            status="future",
+            disabled_reason=placeholder_reason
+            or "Compose-to-channel promotion templates are not implemented; console is read-only.",
+        ),
+        AdminPublishingConsoleTemplateLibraryEntryRead(
+            template_id=_TEMPLATE_ID_TOUR_PROMO_RICH_CARD,
+            label="Rich tour promotion card",
+            description="Future variant for stylized last-seats / promotion posts tied to catalog tours.",
+            status="future",
+            disabled_reason="Not implemented; forward B15+ design.",
+        ),
+    ]
+    sel = _TEMPLATE_ID_TOUR_PROMO_PLACEHOLDER
+    reason = (
+        "Tour promotion rows only expose placeholder template keys; "
+        "no channel compose or publish from this endpoint."
+    )
+    return AdminPublishingConsoleTemplateLibraryRead(
+        family="tour_promotion",
+        selected_template_id=sel,
+        recommended_template_id=sel,
+        template_version=ver,
+        available_templates=entries,
+        selection_reason=reason,
+        safety_note=_CONSOLE_PREVIEW_READ_ONLY_SAFETY + _CONSOLE_PREVIEW_TOUR_PLACEHOLDER,
+    )
+
+
 class AdminPublishingConsoleService:
     """Builds a merged, sorted candidate list for the publishing console (read-only)."""
 
@@ -840,6 +1019,7 @@ class AdminPublishingConsoleService:
                 b15f=b15f,
                 b15d=b15d,
             )
+            tl = _template_library_supplier_offer(rp=rp, b15f=b15f, cp=cp)
             item = AdminPublishingConsoleItemRead(
                 candidate_key=f"supplier_offer:{row.id}",
                 kind="supplier_offer_initial",
@@ -860,6 +1040,7 @@ class AdminPublishingConsoleService:
                 prepare_conversion_chain_action=rp.prepare_conversion_chain_action,
                 publish_readiness=rp.publish_readiness,
                 console_preview=cp,
+                template_library=tl,
                 admin_tour_path=None,
                 offer_debug=AdminPublishingConsoleOfferDebugRead(
                     supplier_offer_id=row.id,
@@ -942,6 +1123,11 @@ class AdminPublishingConsoleService:
                 human_summary=human,
                 console_status=status,
             )
+            tl = _template_library_tour_promotion(
+                b15f=b15f,
+                console_status=status,
+                human_summary=human,
+            )
             enriched.append(
                 (
                     t.departure_datetime,
@@ -958,6 +1144,7 @@ class AdminPublishingConsoleService:
                         review_package_path=None,
                         publish_readiness=pr_row,
                         console_preview=cp,
+                        template_library=tl,
                         admin_tour_path=f"/admin/tours/{t.id}",
                         offer_debug=None,
                         tour_debug=AdminPublishingConsoleTourDebugRead(
