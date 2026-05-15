@@ -72,8 +72,13 @@ from app.services.admin_order_write import (
     AdminOrderWriteService,
 )
 from app.services.admin_order_lifecycle import AdminOrderLifecycleKind
-from app.schemas.admin_prepare_conversion_chain_plan import AdminPrepareConversionChainPlanRead
+from app.schemas.admin_prepare_conversion_chain_plan import (
+    AdminPrepareConversionChainExecuteBody,
+    AdminPrepareConversionChainExecutionResultRead,
+    AdminPrepareConversionChainPlanRead,
+)
 from app.services.admin_prepare_conversion_chain_plan_service import AdminPrepareConversionChainPlanService
+from app.services.prepare_conversion_chain_execution_service import PrepareConversionChainExecutionService
 from app.services.admin_ops_dashboard_service import AdminOpsDashboardService
 from app.services.admin_publishing_console_service import (
     AdminPublishingConsoleService,
@@ -1252,6 +1257,61 @@ def get_admin_supplier_offer_prepare_conversion_chain_plan(
         return AdminPrepareConversionChainPlanService().read_plan(db, offer_id=offer_id)
     except SupplierOfferReviewPackageNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+
+
+@router.post(
+    "/supplier-offers/{offer_id}/prepare-conversion-chain",
+    response_model=AdminPrepareConversionChainExecutionResultRead,
+)
+def post_admin_supplier_offer_prepare_conversion_chain(
+    offer_id: int,
+    db: Session = Depends(get_db),
+    body: AdminPrepareConversionChainExecuteBody = Body(...),
+) -> AdminPrepareConversionChainExecutionResultRead:
+    """B16D2C: guarded prepare-conversion-chain (bridge → catalog → execution link); no Telegram I/O."""
+    if not body.dry_run and not body.confirm:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=[
+                {
+                    "loc": ("body", "confirm"),
+                    "msg": "confirm must be true for live execution, or set dry_run=true.",
+                    "type": "value_error",
+                },
+            ],
+        )
+    try:
+        result = PrepareConversionChainExecutionService().execute(
+            db,
+            supplier_offer_id=offer_id,
+            idempotency_key=body.idempotency_key,
+            confirm=body.confirm,
+            dry_run=body.dry_run,
+            actor_surface="admin_http",
+            requested_by=None,
+        )
+    except SupplierOfferReviewPackageNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.") from None
+    except ValueError as exc:
+        db.rollback()
+        msg = str(exc)
+        low = msg.lower()
+        if "confirm must be true" in low:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=[{"loc": ("body", "confirm"), "msg": msg, "type": "value_error"}],
+            ) from None
+        if "still marked running" in low:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=msg) from None
+        if "idempotency_key" in low:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=[{"loc": ("body", "idempotency_key"), "msg": msg, "type": "value_error"}],
+            ) from None
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=msg) from None
+    db.commit()
+    return result
 
 
 @router.get("/supplier-offers/{offer_id}/review-package", response_model=AdminSupplierOfferReviewPackageRead)

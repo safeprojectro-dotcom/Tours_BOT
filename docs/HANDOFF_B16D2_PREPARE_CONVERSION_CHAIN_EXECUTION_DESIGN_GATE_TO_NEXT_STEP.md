@@ -4,6 +4,8 @@
 
 **B16D2** is a **design gate** for future guarded execution of **`prepare_conversion_chain`**. Authoritative spec: **[`docs/B16D2_PREPARE_CONVERSION_CHAIN_EXECUTION_DESIGN_GATE.md`](B16D2_PREPARE_CONVERSION_CHAIN_EXECUTION_DESIGN_GATE.md)**. Prompt archive: **[`docs/CURSOR_PROMPT_B16D2_PREPARE_CONVERSION_CHAIN_EXECUTION_DESIGN_GATE.md`](CURSOR_PROMPT_B16D2_PREPARE_CONVERSION_CHAIN_EXECUTION_DESIGN_GATE.md)**. Parent automation framing: **[`docs/B16D_OPS_ACTIONS_GUARDED_AUTOMATION_DESIGN.md`](B16D_OPS_ACTIONS_GUARDED_AUTOMATION_DESIGN.md)**.
 
+**Implementation (checkpoint):** **B16D2A** (audit tables), **B16D2B** (**`PrepareConversionChainExecutionService`**), and **B16D2C** (**`POST /admin/supplier-offers/{offer_id}/prepare-conversion-chain`**, thin route + **`AdminPrepareConversionChainExecuteBody`**) are implemented; **B16D2D** / **B16D2E** remain. See **`docs/CHAT_HANDOFF.md`**.
+
 **No app code** was changed as part of recording this gate.
 
 ---

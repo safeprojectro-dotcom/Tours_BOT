@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 PrepareConversionChainPlanStepStatus = Literal["satisfied", "pending", "blocked", "not_applicable"]
 
@@ -100,8 +100,26 @@ class AdminPrepareConversionChainExecutionStepResultRead(BaseModel):
     detail: dict | None = None
 
 
+class AdminPrepareConversionChainExecuteBody(BaseModel):
+    """B16D2C: POST …/prepare-conversion-chain — thin HTTP binding for guarded execution."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    idempotency_key: str = Field(..., description="Required non-blank idempotency key for this offer + action.")
+    confirm: bool = Field(default=False, description="Must be true for live execution unless dry_run is true.")
+    dry_run: bool = Field(default=False, description="Preview only: no audit rows or chain mutations.")
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def idempotency_key_strip_non_empty(cls, v: str) -> str:
+        key = (v or "").strip()
+        if not key:
+            raise ValueError("idempotency_key must be non-blank")
+        return key
+
+
 class AdminPrepareConversionChainExecutionResultRead(BaseModel):
-    """B16D2B: result of ``prepare_conversion_chain`` execution (no HTTP binding yet)."""
+    """B16D2B/C: result of ``prepare_conversion_chain`` execution (service + HTTP)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -124,6 +142,7 @@ class AdminPrepareConversionChainExecutionResultRead(BaseModel):
 
 
 __all__ = [
+    "AdminPrepareConversionChainExecuteBody",
     "AdminPrepareConversionChainExecutionResultRead",
     "AdminPrepareConversionChainExecutionStepResultRead",
     "AdminPrepareConversionChainPlanRead",
