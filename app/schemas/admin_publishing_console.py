@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E/B15F/B15K/B15L/B15M/B15P: read-only Admin Publishing Console response DTOs (no publish / schedule / mutations)."""
+"""B15B/B15D/B15E/B15F/B15K/B15L/B15M/B15P/B17A: read-only Admin Publishing Console response DTOs (no publish / schedule / mutations)."""
 
 from __future__ import annotations
 
@@ -452,6 +452,175 @@ class AdminPublishingConsoleSupplierOfferDetailRead(BaseModel):
     ui_sections: list[AdminPublishingConsoleUiSectionRead] = Field(
         default_factory=list,
         description="B15P: suggested section order/labels for admin detail layouts (read-only hints).",
+    )
+
+
+class AdminPublishingConsoleEditorChannelSectionRead(BaseModel):
+    """B17A: editor-oriented channel slice (read-only; no persisted selection)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    channel_kind: PublishingConsoleChannelKind
+    channel_status: PublishingConsoleChannelStatus
+    channel_ref: str | None = None
+    channel_summary: str = ""
+    future_capability_hints: list[AdminPublishingConsoleFutureCapabilityHintRead] = Field(default_factory=list)
+    payload_channel_kind: str | None = None
+    payload_channel_status: str | None = None
+    payload_channel_ref: str | None = None
+    console_preview_channel_status: str | None = None
+    editor_note: str = Field(
+        default="Channel targets are read-only projections; this GET does not persist a channel choice.",
+    )
+
+
+class AdminPublishingConsoleEditorTemplateSectionRead(BaseModel):
+    """B17A: editor-oriented template slice (read-only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    template_kind: PublishingConsoleTemplateKind
+    template_family: PublishingConsoleTemplateFamily
+    template_version: str = ""
+    template_source_status: PublishingConsoleTemplateSourceStatus = "not_applicable"
+    template_source_summary: str = ""
+    library_family: PublishingConsoleTemplateLibraryFamily
+    selected_template_id: str | None = None
+    recommended_template_id: str | None = None
+    library_template_version: str | None = None
+    selection_reason: str | None = None
+    available_template_count: int = Field(ge=0, default=0)
+    console_preview_template_id: str | None = None
+    future_capability_hints: list[AdminPublishingConsoleFutureCapabilityHintRead] = Field(default_factory=list)
+    editor_note: str = Field(
+        default="Template variants are hints from the read model; this GET does not persist template selection.",
+    )
+
+
+class AdminPublishingConsoleEditorPreviewSectionRead(BaseModel):
+    """B17A: editor-oriented preview slice (read-only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    console_preview_status: PublishingConsolePreviewStatus
+    payload_status: PublishingConsolePreviewPayloadStatus
+    payload_source: PublishingConsolePreviewPayloadSource
+    template_preview_path: str | None = None
+    console_preview_path: str | None = None
+    title: str | None = None
+    subtitle: str | None = None
+    body_text_excerpt: str | None = Field(
+        default=None,
+        description="Truncated body_text for card layout; full text remains in source_snapshot.preview_payload.",
+    )
+    has_caption_html: bool = False
+
+
+class AdminPublishingConsoleEditorCtaSectionRead(BaseModel):
+    """B17A: conversion / CTA slice for editor layout (read-only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    conversion_target_kind: PublishingConsoleConversionTargetKind
+    conversion_target_url: str | None = None
+    cta_safety_status: PublishingConsoleCtaSafetyStatusLiteral
+    primary_cta_label: str | None = None
+    primary_cta_url: str | None = None
+    secondary_cta_label: str | None = None
+    secondary_cta_url: str | None = None
+    console_primary_cta_label: str | None = None
+    console_target_url: str | None = None
+
+
+class AdminPublishingConsoleEditorMediaSectionRead(BaseModel):
+    """B17A: media policy slice (read-only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    media_policy_status: PublishingConsoleMediaPolicyStatus
+    media_summary: str = ""
+    payload_media_reference: str | None = None
+    payload_media_status: str | None = None
+    console_media_status: str | None = None
+
+
+class AdminPublishingConsoleEditorReadinessSectionRead(BaseModel):
+    """B17A: readiness / gates slice (read-only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    readiness_summary: str = ""
+    readiness_level: PublishingConsoleReadinessLevel = "unknown"
+    console_status: PublishingConsoleItemStatus
+    item_primary_blocker: str | None = None
+    gate_summary: str = ""
+    publish_readiness_summary: str = ""
+    next_action_code: str | None = None
+    next_action_label: str | None = None
+
+
+class AdminPublishingConsoleEditorSafetySectionRead(BaseModel):
+    """B17A: safety / boundary copy for editor chrome (read-only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    detail_notice: str
+    ui_card_safety_line: str
+    editor_boundary_note: str = Field(
+        default=(
+            "B17A editor view is read-only: no draft edits, channel/template persistence, "
+            "prepare_conversion_chain execution, or Telegram publish from this GET."
+        ),
+    )
+
+
+class AdminPublishingConsoleEditorSourceSnapshotRead(BaseModel):
+    """B17A: same B15 nested objects as publishing-console detail, for a stable client contract."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    publish_readiness: AdminPublishReadinessRead
+    console_preview: AdminPublishingConsolePreviewRead
+    template_library: AdminPublishingConsoleTemplateLibraryRead
+    preview_payload: AdminPublishingConsolePreviewPayloadRead
+    ui_card: AdminPublishingConsoleUiCardRead
+    safety_summary: AdminPublishingConsoleSupplierOfferSafetySummaryRead
+
+
+class AdminPublishingConsoleEditorDetailRead(BaseModel):
+    """B17A: GET …/editor — read-only editor-oriented projection (no mutation / no publish)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    supplier_offer_id: int
+    candidate_key: str
+    kind: Literal["supplier_offer_initial"] = "supplier_offer_initial"
+    title: str | None = None
+    editor_status: str = Field(description="Mirrors console row status (ready | blocked | needs_attention).")
+    editor_status_label: str
+    editor_status_tone: PublishingConsoleUiCardStatusTone
+    source_detail_path: str
+    review_package_path: str
+    publishing_console_detail_path: str
+    prepare_conversion_chain_plan_path: str | None = None
+    channel_section: AdminPublishingConsoleEditorChannelSectionRead
+    template_section: AdminPublishingConsoleEditorTemplateSectionRead
+    preview_section: AdminPublishingConsoleEditorPreviewSectionRead
+    cta_section: AdminPublishingConsoleEditorCtaSectionRead
+    media_section: AdminPublishingConsoleEditorMediaSectionRead
+    readiness_section: AdminPublishingConsoleEditorReadinessSectionRead
+    safety_section: AdminPublishingConsoleEditorSafetySectionRead
+    future_actions: list[AdminPublishingConsoleFutureCapabilityHintRead] = Field(
+        default_factory=list,
+        description="Merged template + channel future hints (read-only).",
+    )
+    source_snapshot: AdminPublishingConsoleEditorSourceSnapshotRead
+    generated_at: datetime
+    editor_notice: str = Field(
+        default=(
+            "B17A read-only channel/template editor layout. No selection, draft edits, or publish is performed "
+            "from this endpoint."
+        ),
     )
 
 

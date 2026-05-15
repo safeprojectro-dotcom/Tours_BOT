@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E/B15F/B15K/B15L/B15M/B15P: read-only publishing console — review-package + tours + readiness + affordances + template/preview payloads + UI alignment hints; no I/O side effects."""
+"""B15B/B15D/B15E/B15F/B15K/B15L/B15M/B15P/B17A: read-only publishing console — review-package + tours + readiness + affordances + template/preview payloads + UI alignment hints + editor projection; no I/O side effects."""
 
 from __future__ import annotations
 
@@ -15,6 +15,15 @@ from app.repositories.supplier import SupplierOfferRepository
 from app.repositories.tour import TourRepository
 from app.schemas.admin_publishing_console import (
     AdminPublishingConsoleActionAffordanceRead,
+    AdminPublishingConsoleEditorChannelSectionRead,
+    AdminPublishingConsoleEditorCtaSectionRead,
+    AdminPublishingConsoleEditorDetailRead,
+    AdminPublishingConsoleEditorMediaSectionRead,
+    AdminPublishingConsoleEditorPreviewSectionRead,
+    AdminPublishingConsoleEditorReadinessSectionRead,
+    AdminPublishingConsoleEditorSafetySectionRead,
+    AdminPublishingConsoleEditorSourceSnapshotRead,
+    AdminPublishingConsoleEditorTemplateSectionRead,
     AdminPublishingConsoleFutureCapabilityHintRead,
     AdminPublishingConsoleItemRead,
     AdminPublishingConsoleOfferDebugRead,
@@ -1391,6 +1400,150 @@ def _supplier_offer_publishing_console_detail(
     )
 
 
+def _merge_unique_future_hints(
+    template_hints: list[AdminPublishingConsoleFutureCapabilityHintRead],
+    channel_hints: list[AdminPublishingConsoleFutureCapabilityHintRead],
+) -> list[AdminPublishingConsoleFutureCapabilityHintRead]:
+    seen: set[str] = set()
+    out: list[AdminPublishingConsoleFutureCapabilityHintRead] = []
+    for h in template_hints + channel_hints:
+        if h.code in seen:
+            continue
+        seen.add(h.code)
+        out.append(h)
+    return out
+
+
+def _supplier_offer_editor_detail(
+    *,
+    detail: AdminPublishingConsoleSupplierOfferDetailRead,
+    item: AdminPublishingConsoleItemRead,
+) -> AdminPublishingConsoleEditorDetailRead:
+    pp = detail.preview_payload
+    cp = detail.console_preview
+    tl = detail.template_library
+    pr = detail.publish_readiness
+    oid = detail.supplier_offer_id
+
+    body_excerpt = (pp.body_text or "").strip() or None
+    if body_excerpt and len(body_excerpt) > 400:
+        body_excerpt = body_excerpt[:397].rstrip() + "..."
+
+    editor_status = detail.console_status
+    tone = _console_status_to_ui_tone(editor_status)
+    label = (pr.summary or "").strip() or (detail.human_summary or "").strip() or str(editor_status)
+
+    channel_section = AdminPublishingConsoleEditorChannelSectionRead(
+        channel_kind=item.channel_kind,
+        channel_status=item.channel_status,
+        channel_ref=item.channel_ref,
+        channel_summary=item.channel_summary,
+        future_capability_hints=list(item.channel_actions),
+        payload_channel_kind=pp.channel_kind,
+        payload_channel_status=pp.channel_status,
+        payload_channel_ref=pp.channel_ref,
+        console_preview_channel_status=cp.channel_status,
+    )
+
+    template_section = AdminPublishingConsoleEditorTemplateSectionRead(
+        template_kind=item.template_kind,
+        template_family=cp.template_family,
+        template_version=item.template_version,
+        template_source_status=item.template_source_status,
+        template_source_summary=item.template_source_summary,
+        library_family=tl.family,
+        selected_template_id=tl.selected_template_id,
+        recommended_template_id=tl.recommended_template_id,
+        library_template_version=tl.template_version,
+        selection_reason=tl.selection_reason,
+        available_template_count=len(tl.available_templates),
+        console_preview_template_id=cp.template_id,
+        future_capability_hints=list(item.template_actions),
+    )
+
+    preview_section = AdminPublishingConsoleEditorPreviewSectionRead(
+        console_preview_status=cp.preview_status,
+        payload_status=pp.payload_status,
+        payload_source=pp.source,
+        template_preview_path=item.template_preview_path,
+        console_preview_path=cp.preview_path,
+        title=pp.title or cp.title,
+        subtitle=pp.subtitle,
+        body_text_excerpt=body_excerpt,
+        has_caption_html=bool((pp.caption_html or "").strip()),
+    )
+
+    cta_section = AdminPublishingConsoleEditorCtaSectionRead(
+        conversion_target_kind=item.conversion_target_kind,
+        conversion_target_url=item.conversion_target_url,
+        cta_safety_status=item.cta_safety_status,
+        primary_cta_label=pp.primary_cta_label,
+        primary_cta_url=pp.primary_cta_url,
+        secondary_cta_label=pp.secondary_cta_label,
+        secondary_cta_url=pp.secondary_cta_url,
+        console_primary_cta_label=cp.primary_cta_label,
+        console_target_url=cp.target_url,
+    )
+
+    media_section = AdminPublishingConsoleEditorMediaSectionRead(
+        media_policy_status=item.media_policy_status,
+        media_summary=item.media_summary,
+        payload_media_reference=pp.media_reference,
+        payload_media_status=pp.media_status,
+        console_media_status=cp.media_status,
+    )
+
+    readiness_section = AdminPublishingConsoleEditorReadinessSectionRead(
+        readiness_summary=item.readiness_summary,
+        readiness_level=item.readiness_level,
+        console_status=detail.console_status,
+        item_primary_blocker=item.primary_blocker,
+        gate_summary=pr.gate_summary,
+        publish_readiness_summary=pr.summary,
+        next_action_code=pr.next_action_code,
+        next_action_label=pr.next_action_label,
+    )
+
+    safety_section = AdminPublishingConsoleEditorSafetySectionRead(
+        detail_notice=detail.detail_notice,
+        ui_card_safety_line=item.ui_card.safety_line,
+    )
+
+    future_merged = _merge_unique_future_hints(item.template_actions, item.channel_actions)
+
+    snap = AdminPublishingConsoleEditorSourceSnapshotRead(
+        publish_readiness=detail.publish_readiness,
+        console_preview=detail.console_preview,
+        template_library=detail.template_library,
+        preview_payload=detail.preview_payload,
+        ui_card=item.ui_card,
+        safety_summary=detail.safety_summary,
+    )
+
+    return AdminPublishingConsoleEditorDetailRead(
+        supplier_offer_id=oid,
+        candidate_key=detail.candidate_key,
+        title=detail.title,
+        editor_status=str(editor_status),
+        editor_status_label=label[:500],
+        editor_status_tone=tone,
+        source_detail_path=f"/admin/supplier-offers/{oid}",
+        review_package_path=detail.review_package_path,
+        publishing_console_detail_path=f"/admin/publishing-console/supplier-offers/{oid}",
+        prepare_conversion_chain_plan_path=detail.prepare_conversion_chain_plan_path,
+        channel_section=channel_section,
+        template_section=template_section,
+        preview_section=preview_section,
+        cta_section=cta_section,
+        media_section=media_section,
+        readiness_section=readiness_section,
+        safety_section=safety_section,
+        future_actions=future_merged,
+        source_snapshot=snap,
+        generated_at=detail.generated_at,
+    )
+
+
 class AdminPublishingConsoleService:
     """Builds a merged, sorted candidate list for the publishing console (read-only)."""
 
@@ -1504,6 +1657,20 @@ class AdminPublishingConsoleService:
             return None
         rp, item = self._build_supplier_offer_item_pair(session, row=row)
         return _supplier_offer_publishing_console_detail(rp=rp, item=item)
+
+    def read_supplier_offer_editor_detail(
+        self,
+        session: Session,
+        *,
+        offer_id: int,
+    ) -> AdminPublishingConsoleEditorDetailRead | None:
+        """B17A: read-only editor-oriented projection; reuses the same review-package row as B15M detail."""
+        row = self._offers.get_any(session, offer_id=offer_id)
+        if row is None:
+            return None
+        rp, item = self._build_supplier_offer_item_pair(session, row=row)
+        detail = _supplier_offer_publishing_console_detail(rp=rp, item=item)
+        return _supplier_offer_editor_detail(detail=detail, item=item)
 
     def read_console(
         self,

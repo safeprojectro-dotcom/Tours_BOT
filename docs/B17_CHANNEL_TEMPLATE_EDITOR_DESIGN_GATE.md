@@ -1,11 +1,23 @@
 # B17 — Channel / Template Editor Design Gate
 
-**Status:** Design / documentation only (**no runtime changes** in this gate).  
-**Purpose:** Define a conservative product + technical **gate** before any Channel/Template **Editor** implementation or publish automation.  
+**Status:** **B17** (this file) = design / documentation gate for **B17B+**. **B17A** = read-only **`GET …/editor`** — **shipped** (see record below).  
+**Purpose:** Define conservative boundaries before channel/template **persistence**, draft editing, or publish automation.  
 **Aligned with:** closed **B15** publishing console foundation ([`docs/B15O_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE.md`](B15O_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE.md), [`docs/B15_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE_CHECKPOINT.md`](B15_PUBLISHING_CONSOLE_FOUNDATION_CLOSURE_CHECKPOINT.md)), **B15P** UI hints ([`docs/HANDOFF_B15P_ADMIN_UI_READ_ONLY_ALIGNMENT.md`](HANDOFF_B15P_ADMIN_UI_READ_ONLY_ALIGNMENT.md)), **B15G** auto-publish design-only ([`docs/B15G_GUARDED_AUTO_PUBLISH_DESIGN.md`](B15G_GUARDED_AUTO_PUBLISH_DESIGN.md)), marketplace context ([`docs/IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md`](IMPLEMENTATION_PLAN_V2_SUPPLIER_MARKETPLACE.md), [`docs/TECH_SPEC_TOURS_BOT_v1.1.md`](TECH_SPEC_TOURS_BOT_v1.1.md)).
 
 **References / gaps:** `docs/BUSINESS-план-v2.txt` is **not present** in-repo; use [`docs/BUSINESS_PLAN_V2_COMPLETION_AUDIT_AFTER_CORE_CONVERSION.md`](BUSINESS_PLAN_V2_COMPLETION_AUDIT_AFTER_CORE_CONVERSION.md) and [`docs/SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md`](SUPPLIER_OFFER_TO_TOUR_BUSINESS_PLAN.md) for v2 business-line context.  
 **Terminology alignment (read-only today):** [`app/schemas/admin_publishing_console.py`](app/schemas/admin_publishing_console.py) — e.g. `PublishingConsoleChannelKind`, `PublishingConsoleTemplateFamily`, `PublishingConsoleTemplateLibraryFamily`, B15P `ui_card` / `ui_sections`; [`app/services/admin_publishing_console_service.py`](app/services/admin_publishing_console_service.py) — how list/detail read models are composed (B17 must **extend**, not replace).
+
+### B17A — Implementation record (read-only, in-repo)
+
+**Status:** **Shipped** — HTTP **GET** only; this **B17** markdown file remains the **design gate** for **B17B+** (persistence, drafts, publish).
+
+| Deliverable | Notes |
+|-------------|--------|
+| **`GET /admin/publishing-console/supplier-offers/{offer_id}/editor`** | Response **`AdminPublishingConsoleEditorDetailRead`**; **404** if offer missing; same admin auth as other **`/admin`** routes. |
+| **Section DTOs** | **`channel_section`**, **`template_section`**, **`preview_section`**, **`cta_section`**, **`media_section`**, **`readiness_section`**, **`safety_section`**; **`future_actions`** (merged template/channel capability hints; metadata only / disabled where not implemented); **`source_snapshot`** with **`publish_readiness`**, **`console_preview`**, **`template_library`**, **`preview_payload`**, **`ui_card`**, **`safety_summary`**. |
+| **Boundaries** | **No** channel/template selection persistence; **no** draft edit persistence; **no** frontend; **no** Telegram I/O; **no** publish attempts; **no** scheduler; **no** auto-publish; **no** **`prepare_conversion_chain`** execution from this **GET**; **no** Layer A mutation; **no** Mini App/B11 routing changes; **no** migration. |
+
+**Handoff:** [`docs/HANDOFF_B17A_READ_ONLY_EDITOR_DETAIL_VIEW.md`](HANDOFF_B17A_READ_ONLY_EDITOR_DETAIL_VIEW.md)
 
 ---
 
@@ -13,14 +25,14 @@
 
 | Rule | Applies |
 |------|---------|
-| B17 is **design-only** | Yes |
-| No runtime behavior, schemas, services, routes, or tests changed **by this document** | Yes |
-| No **publish** / **send** / **scheduler** / **auto-publish** implemented here | Yes |
+| The **B17** design gate (**this** markdown) authorizes **B17B+** implementation only when separately chartered | Yes |
+| **B17A** read-only **`GET …/editor`** | **Shipped** in-repo — see **B17A** record above; **not** “implemented by this file alone” |
+| No **publish** / **send** / **scheduler** / **auto-publish** introduced **by B17B+** without explicit go/no-go | Yes |
 | No **migration** | Yes |
 | No **admin web frontend** implementation | Yes |
 | No **Telegram** (or other provider) **API calls** introduced by this gate | Yes |
 
-This document **does not** authorize implementation. It records **requirements and boundaries** for future charters (**B17A+**).
+This document **does not** authorize implementation beyond the **B17A** read-only **GET** already shipped (see record above). It records **requirements and boundaries** for future charters (**B17B+**).
 
 ---
 
@@ -51,7 +63,7 @@ B15 **already** exposes read models and affordances. B17 **builds on** these; it
 | `template_library` | Variants, selection hints, `future` entries | Editor **selects** among variants **after** product approves mutation slice |
 | `preview_payload` | Structured payload mirror for admin UI | Editor **preview** should align with or **supersede display-only** payload (not double-truth) |
 | `ui_card` / `ui_sections` | Presentation hints for a future admin UI | Editor UX **consumes** these as input for grouping/labels |
-| `GET …/publishing-console/supplier-offers/{offer_id}` | Aggregated detail read view | Natural home for **read-only editor shell** (**B17A**) |
+| `GET …/publishing-console/supplier-offers/{offer_id}` | Aggregated detail read view | Natural companion: **B17A** **`GET …/editor`** — section-oriented read-only layout |
 | `prepare_conversion_chain` (POST, guarded) | Internal bridge/catalog/link prep **below** Telegram publish | Editor labels it **guarded internal**, **not** “publish to channel” |
 
 **Principle:** additive APIs and DTOs only in future implementation; **preserve** existing GET contracts and safety flags (`read_only`, `no_telegram_io`, etc.) where they apply.
@@ -186,18 +198,18 @@ Any **public side-effect** publish path **must**:
 
 ---
 
-## 11. API sketch (future — no implementation)
+## 11. API sketch (**B17A** editor GET implemented; remainder future)
 
-*Illustrative only.* Real paths must go through **explicit** API design review.
+*Illustrative for **B17B+**.* **`GET …/supplier-offers/{offer_id}/editor`** is **live** (read-only; see **B17A** record at top of this doc).
 
 **GET (target: safe_read)**
 
 | Endpoint | Intent | Classification |
 |----------|--------|----------------|
-| `GET /admin/publishing-console/channels` | List channel strategies + **configured** flag | safe_read |
-| `GET /admin/publishing-console/templates` | List template families/variants | safe_read |
-| `GET /admin/publishing-console/supplier-offers/{offer_id}/editor` | Editor shell: merges B15 detail + draft state | safe_read (**B17A**) |
-| `GET /admin/publishing-console/supplier-offers/{offer_id}/editor/preview` | Deterministic preview payload | safe_read |
+| `GET /admin/publishing-console/channels` | List channel strategies + **configured** flag | safe_read (**future**) |
+| `GET /admin/publishing-console/templates` | List template families/variants | safe_read (**future**) |
+| `GET /admin/publishing-console/supplier-offers/{offer_id}/editor` | Editor-oriented sections + `source_snapshot` (B15 data) | safe_read (**B17A — implemented**) |
+| `GET /admin/publishing-console/supplier-offers/{offer_id}/editor/preview` | Deterministic preview payload | safe_read (**future**) |
 
 **POST / PATCH (future)**
 
@@ -256,7 +268,7 @@ When implementation exists:
 
 | Phase | Label | Scope |
 |-------|-------|--------|
-| 1 | **B17A** | Read-only **editor detail** view (new GET or extension of detail) — **no** mutation |
+| 1 | **B17A** | Read-only **editor detail** **`GET …/editor`** — **shipped** (no mutation); handoff [`HANDOFF_B17A_READ_ONLY_EDITOR_DETAIL_VIEW.md`](HANDOFF_B17A_READ_ONLY_EDITOR_DETAIL_VIEW.md) |
 | 2 | **B17B** | **Channel/template selection** persisted as **metadata only** — **no** send |
 | 3 | **B17C** | **Draft copy** editor — **no** publish |
 | 4 | **B17D** | **Manual approval** state — **no** provider send |
@@ -268,8 +280,8 @@ When implementation exists:
 
 ## 15. Explicit non-goals (this gate)
 
-- **No** implementation in this document.
-- **No** public **publish** or **schedule** now.
+- **No** further implementation **authorized by this markdown alone** beyond documenting **B17B+** requirements (**B17A** **`GET …/editor`** is a separate shipped slice — see top of this doc).
+- **No** public **publish** or **schedule** from **B17B+** without charter.
 - **No** **auto-publish** now (**B15G** remains design-only for automation modes).
 - **No** provider (**Telegram**, Meta, etc.) **API** integration triggered by this gate.
 - **No** **migration** specified here.
@@ -285,3 +297,4 @@ When implementation exists:
 - [`docs/HANDOFF_B15K_PUBLISHING_CONSOLE_TEMPLATE_LIBRARY_PREVIEW_LAYER.md`](HANDOFF_B15K_PUBLISHING_CONSOLE_TEMPLATE_LIBRARY_PREVIEW_LAYER.md)
 - [`docs/HANDOFF_B15L_SUPPLIER_OFFER_SHOWCASE_PREVIEW_PAYLOAD.md`](HANDOFF_B15L_SUPPLIER_OFFER_SHOWCASE_PREVIEW_PAYLOAD.md)
 - [`docs/HANDOFF_B15M_PUBLISHING_CONSOLE_SUPPLIER_OFFER_DETAIL_READ_VIEW.md`](HANDOFF_B15M_PUBLISHING_CONSOLE_SUPPLIER_OFFER_DETAIL_READ_VIEW.md)
+- [`docs/HANDOFF_B17A_READ_ONLY_EDITOR_DETAIL_VIEW.md`](HANDOFF_B17A_READ_ONLY_EDITOR_DETAIL_VIEW.md)

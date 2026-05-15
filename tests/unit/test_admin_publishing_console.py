@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E/B15F/B15K/B15L/B15M/B15P: GET /admin/publishing-console read-only queue + per-offer detail + template library + preview payload + ui_card/ui_sections."""
+"""B15B/B15D/B15E/B15F/B15K/B15L/B15M/B15P/B17A: GET /admin/publishing-console read-only queue + per-offer detail + editor detail + template library + preview payload + ui_card/ui_sections."""
 
 from __future__ import annotations
 
@@ -85,6 +85,17 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
     def test_supplier_offer_detail_404(self) -> None:
         r = self.client.get(
             "/admin/publishing-console/supplier-offers/999999999",
+            headers=self._headers(),
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_supplier_offer_editor_detail_401_without_token(self) -> None:
+        r = self.client.get("/admin/publishing-console/supplier-offers/1/editor")
+        self.assertEqual(r.status_code, 401)
+
+    def test_supplier_offer_editor_detail_404(self) -> None:
+        r = self.client.get(
+            "/admin/publishing-console/supplier-offers/999999999/editor",
             headers=self._headers(),
         )
         self.assertEqual(r.status_code, 404)
@@ -197,6 +208,125 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
         self.assertIn("safety_summary", keys)
         orders = [s["display_order"] for s in secs]
         self.assertEqual(orders, sorted(orders))
+
+    def test_b17a_editor_detail_read_model(self) -> None:
+        """B17A: editor GET mirrors B15M nested data in source_snapshot and exposes section slices."""
+        supplier = self.create_supplier()
+        dep = datetime(2026, 12, 11, 8, 0, tzinfo=UTC)
+        ret = datetime(2026, 12, 13, 18, 0, tzinfo=UTC)
+        offer = self.create_supplier_offer(
+            supplier,
+            title="B17A Editor Row",
+            program_text="Scenic day.",
+            departure_datetime=dep,
+            return_datetime=ret,
+            seats_total=36,
+            base_price=Decimal("179.00"),
+            currency="EUR",
+            sales_mode=TourSalesMode.PER_SEAT,
+            payment_mode=SupplierOfferPaymentMode.PLATFORM_CHECKOUT,
+            lifecycle_status=SupplierOfferLifecycle.READY_FOR_MODERATION,
+            packaging_status=SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH,
+        )
+        self.session.commit()
+        oid = offer.id
+        h = self._headers()
+
+        self.assertEqual(
+            self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=h).status_code,
+            200,
+        )
+        br = self.client.post(f"/admin/supplier-offers/{oid}/tour-bridge", headers=h, json={})
+        self.assertEqual(br.status_code, 200, br.text)
+        tour_id = br.json()["tour_id"]
+        act = self.client.post(f"/admin/tours/{tour_id}/activate-for-catalog", headers=h, json={})
+        self.assertEqual(act.status_code, 200, act.text)
+        lk = self.client.post(
+            f"/admin/supplier-offers/{oid}/execution-link",
+            headers=h,
+            json={"tour_id": tour_id},
+        )
+        self.assertEqual(lk.status_code, 200, lk.text)
+
+        cfg = self._publishing_console_settings()
+        with self._review_console_settings(cfg):
+            list_r = self.client.get(
+                "/admin/publishing-console?kind=supplier_offer_initial&limit=20",
+                headers=h,
+            )
+            detail_r = self.client.get(
+                f"/admin/publishing-console/supplier-offers/{oid}",
+                headers=h,
+            )
+            editor_r = self.client.get(
+                f"/admin/publishing-console/supplier-offers/{oid}/editor",
+                headers=h,
+            )
+        self.assertEqual(list_r.status_code, 200, list_r.text)
+        self.assertEqual(detail_r.status_code, 200, detail_r.text)
+        self.assertEqual(editor_r.status_code, 200, editor_r.text)
+        match = next((it for it in list_r.json()["items"] if it["candidate_key"] == f"supplier_offer:{oid}"), None)
+        self.assertIsNotNone(match)
+        assert match is not None
+
+        d = detail_r.json()
+        e = editor_r.json()
+
+        self.assertEqual(e["supplier_offer_id"], oid)
+        self.assertEqual(e["candidate_key"], f"supplier_offer:{oid}")
+        self.assertEqual(e["kind"], "supplier_offer_initial")
+        self.assertEqual(e["editor_status"], d["console_status"])
+        self.assertEqual(e["title"], d["title"])
+        self.assertEqual(e["source_detail_path"], f"/admin/supplier-offers/{oid}")
+        self.assertEqual(e["review_package_path"], d["review_package_path"])
+        self.assertEqual(e["publishing_console_detail_path"], f"/admin/publishing-console/supplier-offers/{oid}")
+        self.assertEqual(e["prepare_conversion_chain_plan_path"], d["prepare_conversion_chain_plan_path"])
+        self.assertIn(e["editor_status_tone"], ("neutral", "success", "warning", "danger", "info"))
+        self.assertTrue((e.get("editor_status_label") or "").strip())
+
+        snap = e["source_snapshot"]
+        pr_snap = dict(snap["publish_readiness"])
+        pr_d = dict(d["publish_readiness"])
+        pr_snap.pop("generated_at", None)
+        pr_d.pop("generated_at", None)
+        self.assertEqual(pr_snap, pr_d)
+
+        pay_snap = dict(snap["preview_payload"])
+        pay_d = dict(d["preview_payload"])
+        pay_snap.pop("generated_at", None)
+        pay_d.pop("generated_at", None)
+        self.assertEqual(pay_snap, pay_d)
+
+        self.assertEqual(snap["console_preview"], d["console_preview"])
+        self.assertEqual(snap["template_library"], d["template_library"])
+        self.assertEqual(snap["safety_summary"], d["safety_summary"])
+        self.assertEqual(snap["ui_card"], match["ui_card"])
+
+        ch = e["channel_section"]
+        self.assertEqual(ch["channel_kind"], match["channel_kind"])
+        self.assertEqual(ch["channel_status"], match["channel_status"])
+        tpl = e["template_section"]
+        self.assertEqual(tpl["template_kind"], match["template_kind"])
+        self.assertEqual(tpl["library_family"], match["template_library"]["family"])
+        pv = e["preview_section"]
+        self.assertEqual(pv["payload_status"], match["preview_payload"]["payload_status"])
+        cta = e["cta_section"]
+        self.assertEqual(cta["conversion_target_kind"], match["conversion_target_kind"])
+        self.assertEqual(cta["cta_safety_status"], match["cta_safety_status"])
+        media = e["media_section"]
+        self.assertEqual(media["media_policy_status"], match["media_policy_status"])
+        rd = e["readiness_section"]
+        self.assertEqual(rd["readiness_level"], match["readiness_level"])
+        self.assertEqual(rd["console_status"], d["console_status"])
+        sf = e["safety_section"]
+        self.assertEqual(sf["detail_notice"], d["detail_notice"])
+        self.assertLessEqual(
+            (sf.get("ui_card_safety_line") or "").count("Publishing console is read-only"),
+            1,
+        )
+        self.assertIsInstance(e.get("future_actions"), list)
+        self.assertIn("B17A", e.get("editor_notice") or "")
+        self.assertEqual(snap["publish_readiness"]["generated_at"], e["generated_at"])
 
     def test_publishing_console_smoke_shape(self) -> None:
         mock_cfg = SimpleNamespace(

@@ -19,6 +19,7 @@ from app.models.enums import (
 from app.models.supplier import Supplier
 from app.schemas.admin_ops_dashboard import AdminOpsDashboardRead, parse_include_sections_query
 from app.schemas.admin_publishing_console import (
+    AdminPublishingConsoleEditorDetailRead,
     AdminPublishingConsoleRead,
     AdminPublishingConsoleSupplierOfferDetailRead,
 )
@@ -357,6 +358,24 @@ def get_admin_publishing_console_supplier_offer_detail(
             detail="Supplier offer not found.",
         ) from None
     return detail
+
+
+@router.get(
+    "/publishing-console/supplier-offers/{offer_id}/editor",
+    response_model=AdminPublishingConsoleEditorDetailRead,
+)
+def get_admin_publishing_console_supplier_offer_editor_detail(
+    offer_id: int,
+    db: Session = Depends(get_db),
+) -> AdminPublishingConsoleEditorDetailRead:
+    """B17A: read-only editor-oriented layout for one supplier offer (no mutation / publish / Telegram I/O)."""
+    editor = AdminPublishingConsoleService().read_supplier_offer_editor_detail(db, offer_id=offer_id)
+    if editor is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier offer not found.",
+        ) from None
+    return editor
 
 
 @router.post(
