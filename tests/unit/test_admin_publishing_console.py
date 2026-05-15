@@ -305,16 +305,29 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
         ch = e["channel_section"]
         self.assertEqual(ch["channel_kind"], match["channel_kind"])
         self.assertEqual(ch["channel_status"], match["channel_status"])
+        self.assertIs(ch["can_select_channel"], False)
+        self.assertIs(ch["can_publish_to_channel"], False)
         tpl = e["template_section"]
         self.assertEqual(tpl["template_kind"], match["template_kind"])
         self.assertEqual(tpl["library_family"], match["template_library"]["family"])
+        self.assertIs(tpl["can_select_template"], False)
+        self.assertIs(tpl["can_edit_template"], False)
         pv = e["preview_section"]
         self.assertEqual(pv["payload_status"], match["preview_payload"]["payload_status"])
+        self.assertIsInstance(pv.get("preview_available"), bool)
+        self.assertEqual(
+            pv["preview_available"],
+            pv["console_preview_status"] == "available" or pv["payload_status"] == "available",
+        )
+        self.assertIs(pv["can_edit_copy"], False)
+        self.assertIs(pv["can_refresh_preview"], False)
         cta = e["cta_section"]
         self.assertEqual(cta["conversion_target_kind"], match["conversion_target_kind"])
         self.assertEqual(cta["cta_safety_status"], match["cta_safety_status"])
         media = e["media_section"]
         self.assertEqual(media["media_policy_status"], match["media_policy_status"])
+        self.assertIs(media["can_upload_media"], False)
+        self.assertIs(media["can_generate_card"], False)
         rd = e["readiness_section"]
         self.assertEqual(rd["readiness_level"], match["readiness_level"])
         self.assertEqual(rd["console_status"], d["console_status"])
@@ -324,7 +337,32 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             (sf.get("ui_card_safety_line") or "").count("Publishing console is read-only"),
             1,
         )
+        for key in (
+            "read_only",
+            "no_telegram_io",
+            "no_publish_attempt",
+            "no_scheduler",
+            "no_auto_publish",
+            "no_prepare_chain_execution",
+            "no_layer_a_mutation",
+            "no_mini_app_b11_change",
+        ):
+            self.assertIs(sf[key], True, msg=key)
         self.assertIsInstance(e.get("future_actions"), list)
+        codes = [a["code"] for a in e["future_actions"]]
+        self.assertIn("edit_showcase_template", codes)
+        self.assertIn("select_channel", codes)
+        by_code = {a["code"]: a for a in e["future_actions"]}
+        self.assertIn("confirm_publish", by_code)
+        self.assertIn("schedule_publish", by_code)
+        self.assertIs(by_code["confirm_publish"]["implemented"], False)
+        self.assertIs(by_code["confirm_publish"]["enabled"], False)
+        self.assertIs(by_code["schedule_publish"]["implemented"], False)
+        self.assertIs(by_code["schedule_publish"]["enabled"], False)
+        for pub_code in ("confirm_publish", "schedule_publish"):
+            reason = (by_code[pub_code].get("disabled_reason") or "").lower()
+            self.assertIn("b17a", reason)
+            self.assertTrue("go/no-go" in reason or "go-no-go" in reason or "charter" in reason)
         self.assertIn("B17A", e.get("editor_notice") or "")
         self.assertEqual(snap["publish_readiness"]["generated_at"], e["generated_at"])
 

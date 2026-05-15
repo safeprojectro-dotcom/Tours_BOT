@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E/B15F/B15K/B15L/B15M/B15P/B17A: read-only Admin Publishing Console response DTOs (no publish / schedule / mutations)."""
+"""B15B/B15D/B15E/B15F/B15K/B15L/B15M/B15P/B17A/B17A1: read-only Admin Publishing Console response DTOs (no publish / schedule / mutations)."""
 
 from __future__ import annotations
 
@@ -456,7 +456,7 @@ class AdminPublishingConsoleSupplierOfferDetailRead(BaseModel):
 
 
 class AdminPublishingConsoleEditorChannelSectionRead(BaseModel):
-    """B17A: editor-oriented channel slice (read-only; no persisted selection)."""
+    """B17A/B17A1: editor-oriented channel slice (read-only; no persisted selection)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -464,6 +464,11 @@ class AdminPublishingConsoleEditorChannelSectionRead(BaseModel):
     channel_status: PublishingConsoleChannelStatus
     channel_ref: str | None = None
     channel_summary: str = ""
+    can_select_channel: bool = Field(default=False, description="B17A1: channel picker not available on this GET.")
+    can_publish_to_channel: bool = Field(
+        default=False,
+        description="B17A1: no Telegram publish from this read-only editor endpoint.",
+    )
     future_capability_hints: list[AdminPublishingConsoleFutureCapabilityHintRead] = Field(default_factory=list)
     payload_channel_kind: str | None = None
     payload_channel_status: str | None = None
@@ -475,7 +480,7 @@ class AdminPublishingConsoleEditorChannelSectionRead(BaseModel):
 
 
 class AdminPublishingConsoleEditorTemplateSectionRead(BaseModel):
-    """B17A: editor-oriented template slice (read-only)."""
+    """B17A/B17A1: editor-oriented template slice (read-only)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -491,6 +496,8 @@ class AdminPublishingConsoleEditorTemplateSectionRead(BaseModel):
     selection_reason: str | None = None
     available_template_count: int = Field(ge=0, default=0)
     console_preview_template_id: str | None = None
+    can_select_template: bool = Field(default=False, description="B17A1: template selection API not on this GET.")
+    can_edit_template: bool = Field(default=False, description="B17A1: template editor not on this GET.")
     future_capability_hints: list[AdminPublishingConsoleFutureCapabilityHintRead] = Field(default_factory=list)
     editor_note: str = Field(
         default="Template variants are hints from the read model; this GET does not persist template selection.",
@@ -498,13 +505,16 @@ class AdminPublishingConsoleEditorTemplateSectionRead(BaseModel):
 
 
 class AdminPublishingConsoleEditorPreviewSectionRead(BaseModel):
-    """B17A: editor-oriented preview slice (read-only)."""
+    """B17A/B17A1: editor-oriented preview slice (read-only)."""
 
     model_config = ConfigDict(extra="forbid")
 
     console_preview_status: PublishingConsolePreviewStatus
     payload_status: PublishingConsolePreviewPayloadStatus
     payload_source: PublishingConsolePreviewPayloadSource
+    preview_available: bool = Field(
+        description="True when console or payload preview is in available state (machine-readable).",
+    )
     template_preview_path: str | None = None
     console_preview_path: str | None = None
     title: str | None = None
@@ -514,6 +524,11 @@ class AdminPublishingConsoleEditorPreviewSectionRead(BaseModel):
         description="Truncated body_text for card layout; full text remains in source_snapshot.preview_payload.",
     )
     has_caption_html: bool = False
+    can_edit_copy: bool = Field(default=False, description="B17A1: draft copy edit not on this GET.")
+    can_refresh_preview: bool = Field(
+        default=False,
+        description="B17A1: explicit refresh action not exposed from this GET-only editor.",
+    )
 
 
 class AdminPublishingConsoleEditorCtaSectionRead(BaseModel):
@@ -533,7 +548,7 @@ class AdminPublishingConsoleEditorCtaSectionRead(BaseModel):
 
 
 class AdminPublishingConsoleEditorMediaSectionRead(BaseModel):
-    """B17A: media policy slice (read-only)."""
+    """B17A/B17A1: media policy slice (read-only)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -542,6 +557,8 @@ class AdminPublishingConsoleEditorMediaSectionRead(BaseModel):
     payload_media_reference: str | None = None
     payload_media_status: str | None = None
     console_media_status: str | None = None
+    can_upload_media: bool = Field(default=False, description="B17A1: media upload not on this GET.")
+    can_generate_card: bool = Field(default=False, description="B17A1: card generation not on this GET.")
 
 
 class AdminPublishingConsoleEditorReadinessSectionRead(BaseModel):
@@ -560,7 +577,7 @@ class AdminPublishingConsoleEditorReadinessSectionRead(BaseModel):
 
 
 class AdminPublishingConsoleEditorSafetySectionRead(BaseModel):
-    """B17A: safety / boundary copy for editor chrome (read-only)."""
+    """B17A/B17A1: safety / boundary copy for editor chrome (read-only)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -572,6 +589,14 @@ class AdminPublishingConsoleEditorSafetySectionRead(BaseModel):
             "prepare_conversion_chain execution, or Telegram publish from this GET."
         ),
     )
+    read_only: Literal[True] = True
+    no_telegram_io: Literal[True] = True
+    no_publish_attempt: Literal[True] = True
+    no_scheduler: Literal[True] = True
+    no_auto_publish: Literal[True] = True
+    no_prepare_chain_execution: Literal[True] = True
+    no_layer_a_mutation: Literal[True] = True
+    no_mini_app_b11_change: Literal[True] = True
 
 
 class AdminPublishingConsoleEditorSourceSnapshotRead(BaseModel):
@@ -612,7 +637,7 @@ class AdminPublishingConsoleEditorDetailRead(BaseModel):
     safety_section: AdminPublishingConsoleEditorSafetySectionRead
     future_actions: list[AdminPublishingConsoleFutureCapabilityHintRead] = Field(
         default_factory=list,
-        description="Merged template + channel future hints (read-only).",
+        description="B17A/B17A1: merged template + channel hints plus optional publish placeholders (read-only).",
     )
     source_snapshot: AdminPublishingConsoleEditorSourceSnapshotRead
     generated_at: datetime

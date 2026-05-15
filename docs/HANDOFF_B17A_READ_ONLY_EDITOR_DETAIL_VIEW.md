@@ -26,7 +26,12 @@ Tours_BOT
 
 - Reuses **`AdminPublishingConsoleService`** / existing B15 review-package-backed row build (same data as **`GET …/supplier-offers/{offer_id}`** detail).
 - **`source_snapshot`** embeds: **`publish_readiness`**, **`console_preview`**, **`template_library`**, **`preview_payload`**, **`ui_card`** (from finalized list item), **`safety_summary`**.
-- **`future_actions`**: merged **template** + **channel** future capability hints (metadata only; disabled where not implemented).
+- **`future_actions`**: merged **template** + **channel** future capability hints (metadata only; disabled where not implemented), plus **B17A1** placeholder rows **`confirm_publish`** / **`schedule_publish`** (`implemented=false`, `enabled=false`, explicit `disabled_reason`).
+
+## B17A1 (additive)
+
+- Section DTOs include explicit **`can_*`** / **`preview_available`** booleans and expanded **`safety_section`** flags for frontend safety chrome (still read-only; no behavior change).
+- Prompt: [`docs/CURSOR_PROMPT_B17A1_EDITOR_DETAIL_EXPLICIT_SAFETY_FLAGS.md`](CURSOR_PROMPT_B17A1_EDITOR_DETAIL_EXPLICIT_SAFETY_FLAGS.md)
 
 ## Explicit non-goals (unchanged)
 

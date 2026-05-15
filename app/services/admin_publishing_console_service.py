@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E/B15F/B15K/B15L/B15M/B15P/B17A: read-only publishing console — review-package + tours + readiness + affordances + template/preview payloads + UI alignment hints + editor projection; no I/O side effects."""
+"""B15B/B15D/B15E/B15F/B15K/B15L/B15M/B15P/B17A/B17A1: read-only publishing console — review-package + tours + readiness + affordances + template/preview payloads + UI alignment hints + editor projection; no I/O side effects."""
 
 from __future__ import annotations
 
@@ -83,6 +83,10 @@ PublishingConsoleKindQuery = Literal[
     "blocked",
     "needs_attention",
 ]
+
+_B17A1_FUTURE_PUBLISH_DISABLED_REASON = (
+    "Not implemented in B17A; requires explicit product go/no-go and a separate publish/schedule charter."
+)
 
 
 def _console_status_to_ui_tone(status: PublishingConsoleItemStatus) -> PublishingConsoleUiCardStatusTone:
@@ -1414,6 +1418,44 @@ def _merge_unique_future_hints(
     return out
 
 
+def _editor_preview_available(
+    console_preview_status: PublishingConsolePreviewStatus,
+    payload_status: PublishingConsolePreviewPayloadStatus,
+) -> bool:
+    return console_preview_status == "available" or payload_status == "available"
+
+
+def _editor_future_actions_extended(
+    template_hints: list[AdminPublishingConsoleFutureCapabilityHintRead],
+    channel_hints: list[AdminPublishingConsoleFutureCapabilityHintRead],
+) -> list[AdminPublishingConsoleFutureCapabilityHintRead]:
+    """Merge template/channel hints and append B17A1 publish placeholders (read-only; no execution)."""
+    base = _merge_unique_future_hints(template_hints, channel_hints)
+    codes = {h.code for h in base}
+    extra: list[AdminPublishingConsoleFutureCapabilityHintRead] = []
+    if "confirm_publish" not in codes:
+        extra.append(
+            AdminPublishingConsoleFutureCapabilityHintRead(
+                code="confirm_publish",
+                label="Confirm publish to channel",
+                implemented=False,
+                enabled=False,
+                disabled_reason=_B17A1_FUTURE_PUBLISH_DISABLED_REASON,
+            )
+        )
+    if "schedule_publish" not in codes:
+        extra.append(
+            AdminPublishingConsoleFutureCapabilityHintRead(
+                code="schedule_publish",
+                label="Schedule publish",
+                implemented=False,
+                enabled=False,
+                disabled_reason=_B17A1_FUTURE_PUBLISH_DISABLED_REASON,
+            )
+        )
+    return base + extra
+
+
 def _supplier_offer_editor_detail(
     *,
     detail: AdminPublishingConsoleSupplierOfferDetailRead,
@@ -1461,10 +1503,12 @@ def _supplier_offer_editor_detail(
         future_capability_hints=list(item.template_actions),
     )
 
+    preview_available = _editor_preview_available(cp.preview_status, pp.payload_status)
     preview_section = AdminPublishingConsoleEditorPreviewSectionRead(
         console_preview_status=cp.preview_status,
         payload_status=pp.payload_status,
         payload_source=pp.source,
+        preview_available=preview_available,
         template_preview_path=item.template_preview_path,
         console_preview_path=cp.preview_path,
         title=pp.title or cp.title,
@@ -1509,7 +1553,7 @@ def _supplier_offer_editor_detail(
         ui_card_safety_line=item.ui_card.safety_line,
     )
 
-    future_merged = _merge_unique_future_hints(item.template_actions, item.channel_actions)
+    future_actions = _editor_future_actions_extended(item.template_actions, item.channel_actions)
 
     snap = AdminPublishingConsoleEditorSourceSnapshotRead(
         publish_readiness=detail.publish_readiness,
@@ -1538,7 +1582,7 @@ def _supplier_offer_editor_detail(
         media_section=media_section,
         readiness_section=readiness_section,
         safety_section=safety_section,
-        future_actions=future_merged,
+        future_actions=future_actions,
         source_snapshot=snap,
         generated_at=detail.generated_at,
     )
