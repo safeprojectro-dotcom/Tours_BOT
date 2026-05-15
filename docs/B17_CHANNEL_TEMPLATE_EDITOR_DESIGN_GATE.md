@@ -30,6 +30,10 @@
 
 **Handoff:** [`docs/HANDOFF_B17B_CHANNEL_TEMPLATE_SELECTION_METADATA.md`](HANDOFF_B17B_CHANNEL_TEMPLATE_SELECTION_METADATA.md)
 
+### B17Z — Read-only editor foundation closure (documentation only)
+
+**Status:** **Closed (docs).** Summarizes **B17** + **B17A** + **B17A.1** + **B17B** as a single read-only foundation line; **no** runtime changes in B17Z. See **[`docs/B17Z_EDITOR_READ_ONLY_FOUNDATION_CLOSURE.md`](B17Z_EDITOR_READ_ONLY_FOUNDATION_CLOSURE.md)**. **B17C+** mutations (persistent selection, drafts, publish) remain **future-gated** and separately chartered.
+
 ---
 
 ## 1. Status and scope
@@ -310,3 +314,4 @@ When implementation exists:
 - [`docs/HANDOFF_B15M_PUBLISHING_CONSOLE_SUPPLIER_OFFER_DETAIL_READ_VIEW.md`](HANDOFF_B15M_PUBLISHING_CONSOLE_SUPPLIER_OFFER_DETAIL_READ_VIEW.md)
 - [`docs/HANDOFF_B17A_READ_ONLY_EDITOR_DETAIL_VIEW.md`](HANDOFF_B17A_READ_ONLY_EDITOR_DETAIL_VIEW.md)
 - [`docs/HANDOFF_B17B_CHANNEL_TEMPLATE_SELECTION_METADATA.md`](HANDOFF_B17B_CHANNEL_TEMPLATE_SELECTION_METADATA.md)
+- [`docs/B17Z_EDITOR_READ_ONLY_FOUNDATION_CLOSURE.md`](B17Z_EDITOR_READ_ONLY_FOUNDATION_CLOSURE.md)
