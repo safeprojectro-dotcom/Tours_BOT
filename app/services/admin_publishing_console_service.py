@@ -41,6 +41,7 @@ from app.services.supplier_offer_deep_link import (
     mini_app_tour_detail_url,
     normalize_telegram_mini_app_short_name_for_url,
 )
+from app.services.supplier_offer_publish_readiness import publish_readiness_for_tour_promotion
 from app.services.supplier_offer_review_package_service import SupplierOfferReviewPackageService
 
 
@@ -731,6 +732,7 @@ class AdminPublishingConsoleService:
                 prepare_conversion_chain_recommended_action=rp.prepare_conversion_chain_recommended_action,
                 prepare_conversion_chain_blockers_count=rp.prepare_conversion_chain_blockers_count,
                 prepare_conversion_chain_action=rp.prepare_conversion_chain_action,
+                publish_readiness=rp.publish_readiness,
                 admin_tour_path=None,
                 offer_debug=AdminPublishingConsoleOfferDebugRead(
                     supplier_offer_id=row.id,
@@ -818,6 +820,7 @@ class AdminPublishingConsoleService:
                         blocked_reasons=br,
                         human_summary=human,
                         review_package_path=None,
+                        publish_readiness=publish_readiness_for_tour_promotion(generated_at=now),
                         admin_tour_path=f"/admin/tours/{t.id}",
                         offer_debug=None,
                         tour_debug=AdminPublishingConsoleTourDebugRead(

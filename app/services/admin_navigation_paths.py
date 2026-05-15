@@ -10,4 +10,13 @@ def supplier_offer_prepare_conversion_chain_execute_path(offer_id: int) -> str:
     return f"/admin/supplier-offers/{offer_id}/prepare-conversion-chain"
 
 
-__all__ = ["supplier_offer_prepare_conversion_chain_execute_path", "supplier_offer_prepare_conversion_chain_plan_path"]
+def supplier_offer_publish_showcase_path(offer_id: int) -> str:
+    """Manual showcase publish (public side effect) — not invoked from B15H read paths."""
+    return f"/admin/supplier-offers/{offer_id}/publish"
+
+
+__all__ = [
+    "supplier_offer_prepare_conversion_chain_execute_path",
+    "supplier_offer_prepare_conversion_chain_plan_path",
+    "supplier_offer_publish_showcase_path",
+]

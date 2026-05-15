@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.admin_publish_readiness import AdminPublishReadinessRead
 from app.schemas.admin_prepare_conversion_chain_plan import (
     PrepareConversionChainActionAffordanceRead,
     PrepareConversionChainPlanSummaryStatus,
@@ -137,6 +138,9 @@ class AdminPublishingConsoleItemRead(BaseModel):
     prepare_conversion_chain_action: PrepareConversionChainActionAffordanceRead | None = Field(
         default=None,
         description="When supplier-offer scoped: B16D2D POST affordance metadata (read-only).",
+    )
+    publish_readiness: AdminPublishReadinessRead = Field(
+        description="B15H: suggest-only publish readiness for this row (read-only).",
     )
     admin_tour_path: str | None = None
     offer_debug: AdminPublishingConsoleOfferDebugRead | None = None

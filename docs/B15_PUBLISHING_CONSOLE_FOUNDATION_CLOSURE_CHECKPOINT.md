@@ -99,6 +99,7 @@ Dangerous automation and execution UX remain **explicitly future-gated** (§7).
 | **B15F3** | Channel selector — design / read model. |
 | **B15E2** | Explicit **action execution** from console or sibling flows (not metadata only). |
 | **B15G** | Guarded **auto-publish** — **design only:** **[`docs/B15G_GUARDED_AUTO_PUBLISH_DESIGN.md`](B15G_GUARDED_AUTO_PUBLISH_DESIGN.md)** (**no** runtime in this gate). |
+| **B15H** | Read-only **publish readiness** on **review-package** + publishing-console supplier-offer rows — **[`docs/HANDOFF_B15H_READ_ONLY_PUBLISH_READINESS.md`](HANDOFF_B15H_READ_ONLY_PUBLISH_READINESS.md)** (**suggest-only**; **no** Telegram I/O). |
 | **B16** / **Admin OPS visibility** | If roadmap priority shifts to broader ops surfaces outside this foundation. |
 
 **Related (design record — not implemented by B15B–F):** **[`docs/B16D_OPS_ACTIONS_GUARDED_AUTOMATION_DESIGN.md`](B16D_OPS_ACTIONS_GUARDED_AUTOMATION_DESIGN.md)** — guarded **`prepare_conversion_chain`** (internal bridge / catalog / execution link **without** Telegram); **B15** read-only foundation unchanged until **B16D2** / **B15E2**.
@@ -122,4 +123,5 @@ Dangerous automation and execution UX remain **explicitly future-gated** (§7).
 | B15E | [`docs/B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md`](B15E_ADMIN_PUBLISHING_CONSOLE_ACTION_AFFORDANCES_DESIGN.md) |
 | B15F | [`docs/B15F_PUBLISHING_CONSOLE_TEMPLATE_SOURCE_CHANNEL_READ_MODEL.md`](B15F_PUBLISHING_CONSOLE_TEMPLATE_SOURCE_CHANNEL_READ_MODEL.md) |
 | B15G | [`docs/B15G_GUARDED_AUTO_PUBLISH_DESIGN.md`](B15G_GUARDED_AUTO_PUBLISH_DESIGN.md) — design only |
+| B15H | [`docs/HANDOFF_B15H_READ_ONLY_PUBLISH_READINESS.md`](HANDOFF_B15H_READ_ONLY_PUBLISH_READINESS.md) — read-only suggest-only readiness |
 | B15E2 | [`docs/HANDOFF_B15E2_PUBLISHING_CONSOLE_PREPARE_CHAIN_ACTION_EXECUTION.md`](HANDOFF_B15E2_PUBLISHING_CONSOLE_PREPARE_CHAIN_ACTION_EXECUTION.md) |

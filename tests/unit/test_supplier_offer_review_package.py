@@ -146,6 +146,22 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
         if body["prepare_conversion_chain_plan_status"] == "ineligible":
             self.assertFalse(action["enabled"])
             self.assertIsNotNone(action.get("disabled_reason"))
+        pr = body["publish_readiness"]
+        self.assertIn(
+            pr["status"],
+            ("ready_to_suggest", "blocked", "not_applicable", "already_published", "needs_review"),
+        )
+        self.assertIsInstance(pr["gates"], list)
+        self.assertGreater(len(pr["gates"]), 5)
+        self.assertFalse(pr["can_auto_publish"])
+        self.assertEqual(pr["auto_publish_mode"], "disabled")
+        self.assertIn("prepare_conversion_chain", {g["code"] for g in pr["gates"]})
+        self.assertEqual(pr["prepare_conversion_chain_plan_path"], body["prepare_conversion_chain_plan_path"])
+        gate_codes = {g["code"] for g in pr["gates"]}
+        self.assertIn("packaging", gate_codes)
+        pkg_gate = next(g for g in pr["gates"] if g["code"] == "packaging")
+        self.assertEqual(pkg_gate["status"], "failed")
+        self.assertFalse(pr["can_suggest_manual_publish"])
         self.assertIn("content_quality_review", body)
         self.assertIn("cover_media_quality_review", body)
         self.assertIn("has_warnings", body["cover_media_quality_review"])
@@ -491,3 +507,29 @@ class SupplierOfferReviewPackageTests(FoundationDBTestCase):
         self.assertEqual(cc["next_missing_step"], "create_tour_bridge")
         ow = body["operator_workflow"]
         self.assertEqual(ow["primary_next_action"], "create_tour_bridge")
+
+    def test_review_package_publish_readiness_already_published_no_suggest(self) -> None:
+        _, token = self._bootstrap_supplier_token()
+        oid = self._ready_offer(token)
+        row = self.session.get(SupplierOffer, oid)
+        assert row is not None
+        row.lifecycle_status = SupplierOfferLifecycle.PUBLISHED
+        self.session.flush()
+        headers = {"Authorization": "Bearer test-admin-secret"}
+        mock_cfg = SimpleNamespace(
+            telegram_bot_username="testbot",
+            telegram_mini_app_url="https://example.com/mini",
+            telegram_offer_showcase_channel_id="",
+            telegram_bot_token="",
+        )
+        with patch(
+            "app.services.supplier_offer_moderation_service.get_settings",
+            return_value=mock_cfg,
+        ):
+            r = self.client.get(f"/admin/supplier-offers/{oid}/review-package", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        pr = r.json()["publish_readiness"]
+        self.assertEqual(pr["status"], "already_published")
+        self.assertFalse(pr["can_suggest_manual_publish"])
+        self.assertFalse(pr["can_auto_publish"])
+        self.assertIsNone(pr["publish_action_path"])

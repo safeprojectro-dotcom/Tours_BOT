@@ -16,6 +16,7 @@ from app.models.enums import (
     SupplierServiceComposition,
     TourSalesMode,
 )
+from app.schemas.admin_publish_readiness import AdminPublishReadinessRead
 from app.schemas.admin_prepare_conversion_chain_plan import (
     PrepareConversionChainActionAffordanceRead,
     PrepareConversionChainPlanSummaryStatus,
@@ -503,6 +504,9 @@ class AdminSupplierOfferReviewPackageRead(BaseModel):
     )
     prepare_conversion_chain_action: PrepareConversionChainActionAffordanceRead = Field(
         description="B16D2D: read-only POST affordance for guarded prepare_conversion_chain (metadata only).",
+    )
+    publish_readiness: AdminPublishReadinessRead = Field(
+        description="B15H: suggest-only manual showcase publish readiness (read-only; no Telegram I/O).",
     )
     warnings: list[str]
     recommended_next_actions: list[str]

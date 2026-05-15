@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -54,6 +56,10 @@ from app.services.supplier_offer_operator_workflow import build_operator_workflo
 from app.services.supplier_offer_moderation_service import SupplierOfferModerationService
 from app.services.supplier_offer_showcase_publish_attempt_service import (
     SupplierOfferShowcasePublishAttemptService,
+)
+from app.services.supplier_offer_publish_readiness import (
+    derive_supplier_offer_publish_readiness,
+    stub_publish_readiness_placeholder,
 )
 from app.services.supplier_offer_tour_bridge_service import (
     SupplierOfferBridgeMaterializationReadiness,
@@ -479,6 +485,7 @@ class SupplierOfferReviewPackageService:
             supplier_offer_id=offer_id,
         )
 
+        now_ts = datetime.now(UTC)
         base = AdminSupplierOfferReviewPackageRead(
             offer=offer_read,
             showcase_preview=showcase,
@@ -505,6 +512,7 @@ class SupplierOfferReviewPackageService:
                 recommended_action=None,
                 blockers_count=0,
             ),
+            publish_readiness=stub_publish_readiness_placeholder(offer_id=offer_id, generated_at=now_ts),
             warnings=warnings,
             recommended_next_actions=actions,
         )
@@ -516,7 +524,7 @@ class SupplierOfferReviewPackageService:
             blockers_count=bc,
         )
         ow2 = append_prepare_conversion_chain_operator_action(base.operator_workflow, aff)
-        return base.model_copy(
+        intermediate = base.model_copy(
             update={
                 "prepare_conversion_chain_plan_status": st,
                 "prepare_conversion_chain_recommended_action": rec,
@@ -525,6 +533,8 @@ class SupplierOfferReviewPackageService:
                 "operator_workflow": ow2,
             },
         )
+        pr = derive_supplier_offer_publish_readiness(intermediate, generated_at=now_ts)
+        return intermediate.model_copy(update={"publish_readiness": pr})
 
 
 __all__ = ["SupplierOfferReviewPackageService", "SupplierOfferReviewPackageNotFoundError"]

@@ -101,6 +101,10 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
         self.assertIn("debug_notice", body)
         self.assertIsInstance(body["items"], list)
         self.assertIn("Read-only", body["console_notice"])
+        for item in body["items"]:
+            pr = item["publish_readiness"]
+            self.assertFalse(pr["can_auto_publish"])
+            self.assertEqual(pr["auto_publish_mode"], "disabled")
 
     def test_publishing_console_kind_supplier_offer_only(self) -> None:
         mock_cfg = SimpleNamespace(
@@ -135,6 +139,10 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
             self.assertIsNone(item.get("prepare_conversion_chain_plan_status"))
             self.assertIsNone(item.get("prepare_conversion_chain_recommended_action"))
             self.assertIsNone(item.get("prepare_conversion_chain_blockers_count"))
+            pr = item["publish_readiness"]
+            self.assertEqual(pr["status"], "not_applicable")
+            self.assertFalse(pr["can_auto_publish"])
+            self.assertEqual(pr["auto_publish_mode"], "disabled")
 
     def test_b15d_supplier_offer_ready_exact_tour_cta(self) -> None:
         """Ready supplier row: B15C gate green, conversion target is exact tour, CTA safety exact_tour_ready."""
