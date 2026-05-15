@@ -1,7 +1,7 @@
 # B15 — Admin Publishing Console foundation closure checkpoint
 
 **Status:** Closed (docs checkpoint).  
-**Scope:** **B15B–B15F** plus **B15F2/B15F3**, **B15K**, and **B15L** (additive) — safe, **read-only** admin publishing console **foundation** + **template/preview display** (`console_preview`) + **template library** (`template_library`) + **preview payload** (`preview_payload`) metadata on console rows; execution-heavy product (auto-publish, console-side mutations, template/channel editors) stays **approval-gated**.  
+**Scope:** **B15B–B15F** plus **B15F2/B15F3**, **B15K**, **B15L**, and **B15M** (additive) — safe, **read-only** admin publishing console **foundation** + **template/preview display** (`console_preview`) + **template library** (`template_library`) + **preview payload** (`preview_payload`) metadata on console rows + **per-offer detail** (`GET …/supplier-offers/{offer_id}`); execution-heavy product (auto-publish, console-side mutations, template/channel editors) stays **approval-gated**.  
 **Handoff:** [`docs/HANDOFF_B15_CLOSE_PUBLISHING_CONSOLE_FOUNDATION_CHECKPOINT_TO_NEXT_STEP.md`](HANDOFF_B15_CLOSE_PUBLISHING_CONSOLE_FOUNDATION_CHECKPOINT_TO_NEXT_STEP.md).  
 **Prompt archive:** [`docs/CURSOR_PROMPT_B15_CLOSE_PUBLISHING_CONSOLE_FOUNDATION_CHECKPOINT.md`](CURSOR_PROMPT_B15_CLOSE_PUBLISHING_CONSOLE_FOUNDATION_CHECKPOINT.md).
 
@@ -24,18 +24,20 @@ The **safe publishing console foundation** delivered across **B15B–B15F** is *
 - **B15F2/B15F3** — read-only **`console_preview`** (`AdminPublishingConsolePreviewRead`): compact template family, preview status, CTA/target hints, **`safety_note`**, and next-action labels for admin UX only (**separate** DTO from `AdminPublishingConsoleItemRead`); **no** Telegram I/O, publish attempts, scheduler, **`prepare_conversion_chain`** execution, Layer A mutation, or migration (**unit tests** extended in **`test_admin_publishing_console`**).
 - **B15K** — read-only **`template_library`** (`AdminPublishingConsoleTemplateLibraryRead`): variant list (**`PublishingConsoleTemplateLibraryFamily`**, **`PublishingConsoleTemplateLibraryEntryStatus`**, **`AdminPublishingConsoleTemplateLibraryEntryRead`**), selected/recommended ids, **`selection_reason`**, **`safety_note`**. **`supplier_offer_initial`** rows expose **`supplier_offer_showcase`** metadata; **`custom_request_cta`** as a variant where applicable; **`tour_promotion`** rows remain placeholder/read-only (**`future`** variants). **`console_preview`** preserved. **No** Telegram I/O, publish attempts, scheduler, auto-publish, **`prepare_conversion_chain`** execution, Layer A mutation, Mini App/B11 routing changes, or migration.
 - **B15L** — read-only **`preview_payload`** (`AdminPublishingConsolePreviewPayloadRead`): **`PublishingConsolePreviewPayloadStatus`**, **`PublishingConsolePreviewPayloadSource`**, title/body/caption/CTA/media/channel summaries, **`warnings`**, **`blockers`**, **`safety_note`**, **`generated_at`**; **`publish_readiness_note`** / **`template_library_note`** tie the payload to the same row’s **`publish_readiness`** and **`template_library`**. **`supplier_offer_initial`** rows use **`showcase_preview`** + supplier-offer/review-package data; **`tour_promotion`** rows use **`source=tour_placeholder`**. **No** Telegram I/O, publish attempts, scheduler, auto-publish, **`prepare_conversion_chain`** execution, Layer A mutation, Mini App/B11 routing changes, migration, or Telegram/provider API calls.
+- **B15M** — read-only **`GET /admin/publishing-console/supplier-offers/{offer_id}`** (`AdminPublishingConsoleSupplierOfferDetailRead`): single response aggregates **`publish_readiness`**, **`console_preview`**, **`template_library`**, **`preview_payload`**, **`actions`**, path metadata (**`review_package_path`**, **`prepare_conversion_chain_plan_path`**, **`publish_action_path`**, **`prepare_conversion_chain_action`**), **`conversion_summary`**, **`linked_tour_summary`**, **`publication_summary`**, **`safety_summary`**, **`generated_at`**. **`AdminPublishingConsoleService.read_supplier_offer_detail`**. Any existing supplier offer returns detail (**404** if missing), including offers **not** in the list queue filter. **No** Telegram I/O, publish attempts, scheduler, auto-publish, **`prepare_conversion_chain`** execution, Layer A mutation, Mini App/B11 routing changes, or migration (**[`HANDOFF_B15M_PUBLISHING_CONSOLE_SUPPLIER_OFFER_DETAIL_READ_VIEW.md`](HANDOFF_B15M_PUBLISHING_CONSOLE_SUPPLIER_OFFER_DETAIL_READ_VIEW.md)**).
 
 **B15C** remains documented as the **accepted operator conversion order** and production-smoke baseline; see §3–§4.
 
 ---
 
-## 2. What is now available (`GET /admin/publishing-console`)
+## 2. What is now available (`GET /admin/publishing-console` + supplier-offer detail)
 
-Single **read-only** endpoint (B15B) extended additively:
+Single **read-only** queue endpoint (B15B) extended additively, plus **B15M** per-offer detail:
 
 | Capability | Slice | Notes |
 |------------|-------|--------|
 | Candidate cards (supplier offers, tour promotion) | B15B | `limit` / `kind`; no mutations. |
+| Read-only supplier-offer publishing-console detail | B15M | **`GET /admin/publishing-console/supplier-offers/{offer_id}`** — **`AdminPublishingConsoleSupplierOfferDetailRead`**; same nested objects as list rows + summaries + **`safety_summary`**; **404** if offer missing; **not** limited by list queue filter. |
 | Readiness / blocker summaries | B15D | e.g. `readiness_summary`, `readiness_level`, `primary_blocker`, `blocker_codes`. |
 | Exact CTA safety visibility | B15D | e.g. `cta_safety_status`, conversion target fields, B15C-aligned hints. |
 | Next action hints | B15D | e.g. `next_action_code`, `next_action_label`, `admin_action_path`, `preview_path`, `audit_hint`. |
@@ -72,15 +74,15 @@ Detail: [`docs/B15C5_DIRECT_MINI_APP_LINK_PRODUCTION_SMOKE_RESULT.md`](B15C5_DIR
 
 ---
 
-## 5. Safety boundaries preserved (B15B–B15F)
+## 5. Safety boundaries preserved (B15B–B15F + B15M detail)
 
 The console **foundation** does **not** introduce:
 
-- **Auto-publish** or **scheduler** from `GET /admin/publishing-console`.
+- **Auto-publish** or **scheduler** from `GET /admin/publishing-console` or **`GET /admin/publishing-console/supplier-offers/{offer_id}`** (B15M).
 - **Action execution** endpoint on the console read path (B15E is metadata only).
 - **Template editor** or **channel selector** (B15F hints only; `implemented: false`).
-- **Telegram send / retry** triggered by the console read route.
-- **Layer A** changes, **Mini App routing** / **B11** deep-link behavior, or **migrations** for these slices (including **B15K** / **B15L** read-model additions).
+- **Telegram send / retry** triggered by the console read route(s).
+- **Layer A** changes, **Mini App routing** / **B11** deep-link behavior, or **migrations** for these slices (including **B15K** / **B15L** / **B15M** read-model additions).
 - **Supplier-side publish** (supplier marketplace remains out of scope for this checkpoint).
 - **Fake urgency / availability** copy as a product requirement for the console (console remains observational).
 
@@ -90,7 +92,7 @@ Dangerous automation and execution UX remain **explicitly future-gated** (§7).
 
 ## 6. Tests and evidence pointers
 
-- **Unit:** `tests/unit/test_admin_publishing_console.py` — **8 passed** (covers B15D / B15E / B15F / **B15F2–B15F3** `console_preview` / **B15K** `template_library` / **B15L** `preview_payload` additive read model on the same endpoint).
+- **Unit:** `tests/unit/test_admin_publishing_console.py` — **11 passed** (covers B15D / B15E / B15F / **B15F2–B15F3** `console_preview` / **B15K** `template_library` / **B15L** `preview_payload` on the queue endpoint + **B15M** supplier-offer detail **GET**).
 - **Production / operator smoke:** **B15C** docs (§4 and linked runbooks), not replaced by console unit tests.
 
 ---
@@ -102,6 +104,8 @@ Dangerous automation and execution UX remain **explicitly future-gated** (§7).
 **B15K (closed in-repo):** Read-only **`template_library`** on **`GET /admin/publishing-console`** — **[`docs/HANDOFF_B15K_PUBLISHING_CONSOLE_TEMPLATE_LIBRARY_PREVIEW_LAYER.md`](HANDOFF_B15K_PUBLISHING_CONSOLE_TEMPLATE_LIBRARY_PREVIEW_LAYER.md)**. Schema: **`PublishingConsoleTemplateLibraryFamily`**, **`PublishingConsoleTemplateLibraryEntryStatus`**, **`AdminPublishingConsoleTemplateLibraryEntryRead`**, **`AdminPublishingConsoleTemplateLibraryRead`**; **`AdminPublishingConsoleItemRead.template_library`**. **`supplier_offer_initial`**: **`supplier_offer_showcase`** metadata; **`custom_request_cta`** variant when applicable. **`tour_promotion`**: placeholder/read-only; **`future`** variants only. **`console_preview`** not replaced. **No** Telegram I/O, publish attempts, scheduler, auto-publish, **`prepare_conversion_chain`** execution, Layer A mutation, Mini App/B11 routing changes, migration.
 
 **B15L (closed in-repo):** Read-only **`preview_payload`** on **`GET /admin/publishing-console`** — **[`docs/HANDOFF_B15L_SUPPLIER_OFFER_SHOWCASE_PREVIEW_PAYLOAD.md`](HANDOFF_B15L_SUPPLIER_OFFER_SHOWCASE_PREVIEW_PAYLOAD.md)**. Schema: **`PublishingConsolePreviewPayloadStatus`**, **`PublishingConsolePreviewPayloadSource`**, **`AdminPublishingConsolePreviewPayloadRead`**; **`AdminPublishingConsoleItemRead.preview_payload`**. Supplier-offer rows: **`showcase_preview`** / offer / review-package data; cross-DTO **`publish_readiness_note`** and **`template_library_note`**. Tour rows: **`source=tour_placeholder`**. **No** Telegram I/O, publish attempts, scheduler, auto-publish, **`prepare_conversion_chain`** execution, Layer A mutation, Mini App/B11 routing changes, migration, or provider API calls.
+
+**B15M (closed in-repo):** Read-only **`GET /admin/publishing-console/supplier-offers/{offer_id}`** — **[`docs/HANDOFF_B15M_PUBLISHING_CONSOLE_SUPPLIER_OFFER_DETAIL_READ_VIEW.md`](HANDOFF_B15M_PUBLISHING_CONSOLE_SUPPLIER_OFFER_DETAIL_READ_VIEW.md)**. Schema: **`AdminPublishingConsoleSupplierOfferDetailRead`**; service **`AdminPublishingConsoleService.read_supplier_offer_detail`**. Aggregates **`publish_readiness`**, **`console_preview`**, **`template_library`**, **`preview_payload`**, **`actions`**, path metadata, **`conversion_summary`**, **`linked_tour_summary`**, **`publication_summary`**, **`safety_summary`**; **404** if offer missing; detail **not** filtered like the list queue. **No** Telegram I/O, publish attempts, scheduler, auto-publish, **`prepare_conversion_chain`** execution, Layer A mutation, Mini App/B11 routing changes, migration.
 
 **Only** after explicit product / security / design approval:
 
@@ -120,7 +124,7 @@ Dangerous automation and execution UX remain **explicitly future-gated** (§7).
 ## 8. Recommended next step
 
 1. **Pause B15** and return to the **broader business plan** / next product block **until** a slice above is chartered, **or**
-2. Open a **new** gated slice (e.g. template/channel **editor** UX, or other console execution beyond existing **B15E2**) with an explicit charter — **B15F2/B15F3**, **B15K**, and **B15L** read-model metadata are already closed; **B15E2** already covers prepare-chain execution from the publishing console.
+2. Open a **new** gated slice (e.g. template/channel **editor** UX, or other console execution beyond existing **B15E2**) with an explicit charter — **B15F2/B15F3**, **B15K**, **B15L**, and **B15M** read-model surfaces are already closed; **B15E2** already covers prepare-chain execution from the publishing console.
 
 ---
 
@@ -136,6 +140,7 @@ Dangerous automation and execution UX remain **explicitly future-gated** (§7).
 | B15F2/B15F3 | [`docs/HANDOFF_B15F2F3_PUBLISHING_CONSOLE_TEMPLATE_PREVIEW_REFINEMENT.md`](HANDOFF_B15F2F3_PUBLISHING_CONSOLE_TEMPLATE_PREVIEW_REFINEMENT.md) — read-only `console_preview` |
 | B15K | [`docs/HANDOFF_B15K_PUBLISHING_CONSOLE_TEMPLATE_LIBRARY_PREVIEW_LAYER.md`](HANDOFF_B15K_PUBLISHING_CONSOLE_TEMPLATE_LIBRARY_PREVIEW_LAYER.md) — read-only `template_library` |
 | B15L | [`docs/HANDOFF_B15L_SUPPLIER_OFFER_SHOWCASE_PREVIEW_PAYLOAD.md`](HANDOFF_B15L_SUPPLIER_OFFER_SHOWCASE_PREVIEW_PAYLOAD.md) — read-only `preview_payload` |
+| B15M | [`docs/HANDOFF_B15M_PUBLISHING_CONSOLE_SUPPLIER_OFFER_DETAIL_READ_VIEW.md`](HANDOFF_B15M_PUBLISHING_CONSOLE_SUPPLIER_OFFER_DETAIL_READ_VIEW.md) — read-only supplier-offer detail GET |
 | B15G | [`docs/B15G_GUARDED_AUTO_PUBLISH_DESIGN.md`](B15G_GUARDED_AUTO_PUBLISH_DESIGN.md) — design only |
 | B15H | [`docs/HANDOFF_B15H_READ_ONLY_PUBLISH_READINESS.md`](HANDOFF_B15H_READ_ONLY_PUBLISH_READINESS.md) — read-only suggest-only readiness |
 | B15I | [`docs/HANDOFF_B15I_PUBLISH_READINESS_SUGGEST_ONLY_UX.md`](HANDOFF_B15I_PUBLISH_READINESS_SUGGEST_ONLY_UX.md) — compact UX fields on same DTO |

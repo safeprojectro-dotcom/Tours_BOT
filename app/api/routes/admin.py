@@ -18,7 +18,10 @@ from app.models.enums import (
 )
 from app.models.supplier import Supplier
 from app.schemas.admin_ops_dashboard import AdminOpsDashboardRead, parse_include_sections_query
-from app.schemas.admin_publishing_console import AdminPublishingConsoleRead
+from app.schemas.admin_publishing_console import (
+    AdminPublishingConsoleRead,
+    AdminPublishingConsoleSupplierOfferDetailRead,
+)
 from app.schemas.admin import (
     AdminBoardingPointCreate,
     AdminBoardingPointTranslationUpsert,
@@ -336,6 +339,24 @@ def get_admin_publishing_console(
 ) -> AdminPublishingConsoleRead:
     """B15B: read-only queue of channel publication candidates (no publish / schedule / mutations)."""
     return AdminPublishingConsoleService().read_console(db, limit=limit, kind=kind)
+
+
+@router.get(
+    "/publishing-console/supplier-offers/{offer_id}",
+    response_model=AdminPublishingConsoleSupplierOfferDetailRead,
+)
+def get_admin_publishing_console_supplier_offer_detail(
+    offer_id: int,
+    db: Session = Depends(get_db),
+) -> AdminPublishingConsoleSupplierOfferDetailRead:
+    """B15M: read-only publishing-console detail for one supplier offer (no publish / Telegram I/O / mutations)."""
+    detail = AdminPublishingConsoleService().read_supplier_offer_detail(db, offer_id=offer_id)
+    if detail is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier offer not found.",
+        ) from None
+    return detail
 
 
 @router.post(

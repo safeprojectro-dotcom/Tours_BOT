@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E/B15F/B15K/B15L: read-only Admin Publishing Console response DTOs (no publish / schedule / mutations)."""
+"""B15B/B15D/B15E/B15F/B15K/B15L/B15M: read-only Admin Publishing Console response DTOs (no publish / schedule / mutations)."""
 
 from __future__ import annotations
 
@@ -310,6 +310,88 @@ class AdminPublishingConsoleItemRead(BaseModel):
     media_summary: str = ""
     template_actions: list[AdminPublishingConsoleFutureCapabilityHintRead] = Field(default_factory=list)
     channel_actions: list[AdminPublishingConsoleFutureCapabilityHintRead] = Field(default_factory=list)
+
+
+class AdminPublishingConsoleSupplierOfferConversionSummaryRead(BaseModel):
+    """B15M: compact conversion closure projection for publishing-console detail."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    has_tour_bridge: bool | None = None
+    has_catalog_visible_tour: bool | None = None
+    has_active_execution_link: bool | None = None
+    next_missing_step: str | None = None
+
+
+class AdminPublishingConsoleSupplierOfferLinkedTourSummaryRead(BaseModel):
+    """B15M: linked bridged tour snapshot for publishing-console detail."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tour_id: int | None = None
+    tour_code: str | None = None
+    tour_status: str | None = None
+    catalog_listed_for_mini_app: bool | None = None
+
+
+class AdminPublishingConsoleSupplierOfferPublicationSummaryRead(BaseModel):
+    """B15M: publication / lifecycle snapshot from supplier offer (read-only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    lifecycle_status: str | None = None
+    published_at: datetime | None = None
+    showcase_chat_id: str | None = None
+    showcase_message_id: int | None = None
+    already_published: bool
+
+
+class AdminPublishingConsoleSupplierOfferSafetySummaryRead(BaseModel):
+    """B15M: explicit guard-rail flags for admin/OPS (documentation; all true for this GET)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    read_only: Literal[True] = True
+    no_telegram_io: Literal[True] = True
+    no_publish_attempt: Literal[True] = True
+    no_prepare_chain_execution: Literal[True] = True
+    no_layer_a_mutation: Literal[True] = True
+    note: str
+
+
+class AdminPublishingConsoleSupplierOfferDetailRead(BaseModel):
+    """B15M: GET /admin/publishing-console/supplier-offers/{offer_id} — single-offer publishing console read view."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    supplier_offer_id: int
+    candidate_key: str
+    kind: Literal["supplier_offer_initial"] = "supplier_offer_initial"
+    title: str | None = None
+    subtitle: str | None = None
+    console_status: PublishingConsoleItemStatus
+    human_summary: str | None = None
+    operator_summary: str | None = None
+    review_package_path: str
+    prepare_conversion_chain_plan_path: str | None = None
+    publish_action_path: str | None = None
+    publish_readiness: AdminPublishReadinessRead
+    console_preview: AdminPublishingConsolePreviewRead
+    template_library: AdminPublishingConsoleTemplateLibraryRead
+    preview_payload: AdminPublishingConsolePreviewPayloadRead
+    actions: list[AdminPublishingConsoleActionAffordanceRead] = Field(default_factory=list)
+    prepare_conversion_chain_action: PrepareConversionChainActionAffordanceRead | None = None
+    conversion_summary: AdminPublishingConsoleSupplierOfferConversionSummaryRead
+    linked_tour_summary: AdminPublishingConsoleSupplierOfferLinkedTourSummaryRead
+    publication_summary: AdminPublishingConsoleSupplierOfferPublicationSummaryRead
+    safety_summary: AdminPublishingConsoleSupplierOfferSafetySummaryRead
+    generated_at: datetime
+    detail_notice: str = Field(
+        default=(
+            "Read-only publishing console detail. No publish, schedule, Telegram send, prepare_conversion_chain "
+            "execution, or data mutation occurs from this endpoint."
+        ),
+    )
 
 
 class AdminPublishingConsoleRead(BaseModel):

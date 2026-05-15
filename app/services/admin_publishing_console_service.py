@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E/B15F/B15K/B15L: read-only publishing console — review-package + tours + readiness + affordances + template/preview payloads; no I/O side effects."""
+"""B15B/B15D/B15E/B15F/B15K/B15L/B15M: read-only publishing console — review-package + tours + readiness + affordances + template/preview payloads; no I/O side effects."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Any, Literal, cast
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.models.supplier import SupplierOffer
 from app.models.enums import SupplierOfferLifecycle, SupplierOfferPaymentMode, TourStatus
 from app.repositories.supplier import SupplierOfferRepository
 from app.repositories.tour import TourRepository
@@ -20,6 +21,11 @@ from app.schemas.admin_publishing_console import (
     AdminPublishingConsolePreviewRead,
     AdminPublishingConsolePreviewPayloadRead,
     AdminPublishingConsoleRead,
+    AdminPublishingConsoleSupplierOfferConversionSummaryRead,
+    AdminPublishingConsoleSupplierOfferDetailRead,
+    AdminPublishingConsoleSupplierOfferLinkedTourSummaryRead,
+    AdminPublishingConsoleSupplierOfferPublicationSummaryRead,
+    AdminPublishingConsoleSupplierOfferSafetySummaryRead,
     AdminPublishingConsoleTemplateLibraryEntryRead,
     AdminPublishingConsoleTemplateLibraryRead,
     AdminPublishingConsoleTourDebugRead,
@@ -1113,6 +1119,75 @@ def _preview_payload_tour_promotion(
     )
 
 
+def _supplier_offer_publishing_console_detail(
+    *,
+    rp: AdminSupplierOfferReviewPackageRead,
+    item: AdminPublishingConsoleItemRead,
+) -> AdminPublishingConsoleSupplierOfferDetailRead:
+    cc = rp.conversion_closure
+    conv = AdminPublishingConsoleSupplierOfferConversionSummaryRead(
+        has_tour_bridge=cc.has_tour_bridge,
+        has_catalog_visible_tour=cc.has_catalog_visible_tour,
+        has_active_execution_link=cc.has_active_execution_link,
+        next_missing_step=cc.next_missing_step,
+    )
+    lt = rp.linked_tour_catalog
+    if lt is not None:
+        linked = AdminPublishingConsoleSupplierOfferLinkedTourSummaryRead(
+            tour_id=lt.tour_id,
+            tour_code=lt.tour_code,
+            tour_status=getattr(lt.tour_status, "value", str(lt.tour_status)),
+            catalog_listed_for_mini_app=lt.catalog_listed_for_mini_app,
+        )
+    else:
+        linked = AdminPublishingConsoleSupplierOfferLinkedTourSummaryRead()
+    off = rp.offer
+    lc = getattr(off.lifecycle_status, "value", str(off.lifecycle_status))
+    pub = AdminPublishingConsoleSupplierOfferPublicationSummaryRead(
+        lifecycle_status=lc,
+        published_at=off.published_at,
+        showcase_chat_id=off.showcase_chat_id,
+        showcase_message_id=off.showcase_message_id,
+        already_published=off.lifecycle_status is SupplierOfferLifecycle.PUBLISHED,
+    )
+    ow = rp.operator_workflow
+    op_parts = [f"state={ow.state}"]
+    if ow.primary_next_action:
+        op_parts.append(f"primary_next_action={ow.primary_next_action}")
+    if ow.blocking_reasons:
+        op_parts.append("blocking=" + "; ".join(ow.blocking_reasons[:5]))
+    operator_summary = " | ".join(op_parts)
+    safety = AdminPublishingConsoleSupplierOfferSafetySummaryRead(
+        note=(
+            "This response is derived from existing review-package read models only. "
+            "No Telegram I/O, publish attempts, prepare_conversion_chain execution, or Layer A changes."
+        ),
+    )
+    return AdminPublishingConsoleSupplierOfferDetailRead(
+        supplier_offer_id=off.id,
+        candidate_key=item.candidate_key,
+        title=item.title,
+        subtitle=item.subtitle,
+        console_status=item.console_status,
+        human_summary=item.human_summary,
+        operator_summary=operator_summary,
+        review_package_path=item.review_package_path or f"/admin/supplier-offers/{off.id}/review-package",
+        prepare_conversion_chain_plan_path=item.prepare_conversion_chain_plan_path,
+        publish_action_path=rp.publish_readiness.publish_action_path,
+        publish_readiness=item.publish_readiness,
+        console_preview=item.console_preview,
+        template_library=item.template_library,
+        preview_payload=item.preview_payload,
+        actions=item.actions,
+        prepare_conversion_chain_action=item.prepare_conversion_chain_action,
+        conversion_summary=conv,
+        linked_tour_summary=linked,
+        publication_summary=pub,
+        safety_summary=safety,
+        generated_at=rp.publish_readiness.generated_at,
+    )
+
+
 class AdminPublishingConsoleService:
     """Builds a merged, sorted candidate list for the publishing console (read-only)."""
 
@@ -1126,6 +1201,104 @@ class AdminPublishingConsoleService:
         self._offers = offers or SupplierOfferRepository()
         self._tours = tours or TourRepository()
         self._review = review_pkg or SupplierOfferReviewPackageService()
+
+    def _supplier_offer_item_from_review(
+        self,
+        session: Session,
+        row: SupplierOffer,
+        rp: AdminSupplierOfferReviewPackageRead,
+    ) -> AdminPublishingConsoleItemRead:
+        status = _classify_supplier_offer(rp)
+        br = _blocked_reasons_offer(rp, status)
+        b15d = _b15d_supplier_offer(
+            session,
+            offer_id=row.id,
+            rp=rp,
+            console_status=status,
+            blocked_reasons=br,
+        )
+        actions = _affordances_from_operator_workflow(rp, row.id)
+        item_title = (row.title or f"Offer #{row.id}").strip() or f"Offer #{row.id}"
+        b15f = _b15f_supplier_offer(
+            settings=get_settings(),
+            rp=rp,
+            offer_id=row.id,
+            title=item_title,
+        )
+        cp = _console_preview_supplier_offer(
+            rp=rp,
+            item_title=item_title,
+            b15f=b15f,
+            b15d=b15d,
+        )
+        tl = _template_library_supplier_offer(rp=rp, b15f=b15f, cp=cp)
+        pp = _preview_payload_supplier_offer(
+            rp=rp,
+            b15f=b15f,
+            item_title=item_title,
+            blocked_reasons=br,
+            cp=cp,
+            tl=tl,
+        )
+        return AdminPublishingConsoleItemRead(
+            candidate_key=f"supplier_offer:{row.id}",
+            kind="supplier_offer_initial",
+            console_status=status,
+            title=item_title,
+            subtitle=f"Lifecycle {row.lifecycle_status}",
+            target_summary=_target_summary_offer(rp),
+            next_best_action=rp.operator_workflow.primary_next_action or (
+                rp.recommended_next_actions[0] if rp.recommended_next_actions else None
+            ),
+            blocked_reasons=br,
+            human_summary=_human_summary_offer(rp, status),
+            review_package_path=f"/admin/supplier-offers/{row.id}/review-package",
+            prepare_conversion_chain_plan_path=supplier_offer_prepare_conversion_chain_plan_path(row.id),
+            prepare_conversion_chain_plan_status=rp.prepare_conversion_chain_plan_status,
+            prepare_conversion_chain_recommended_action=rp.prepare_conversion_chain_recommended_action,
+            prepare_conversion_chain_blockers_count=rp.prepare_conversion_chain_blockers_count,
+            prepare_conversion_chain_action=rp.prepare_conversion_chain_action,
+            publish_readiness=rp.publish_readiness,
+            console_preview=cp,
+            template_library=tl,
+            preview_payload=pp,
+            admin_tour_path=None,
+            offer_debug=AdminPublishingConsoleOfferDebugRead(
+                supplier_offer_id=row.id,
+                lifecycle_status=row.lifecycle_status,
+                packaging_status=row.packaging_status,
+                can_publish_now=rp.showcase_preview.can_publish_now,
+                next_missing_step=rp.conversion_closure.next_missing_step,
+                effective_showcase_template_id=rp.showcase_template_preview.effective_template_id,
+                primary_operator_action=rp.operator_workflow.primary_next_action,
+            ),
+            tour_debug=None,
+            actions=actions,
+            **b15d,
+            **b15f,
+        )
+
+    def _build_supplier_offer_item_pair(
+        self,
+        session: Session,
+        *,
+        row: SupplierOffer,
+    ) -> tuple[AdminSupplierOfferReviewPackageRead, AdminPublishingConsoleItemRead]:
+        rp = self._review.review_package(session, offer_id=row.id)
+        item = self._supplier_offer_item_from_review(session, row, rp)
+        return rp, item
+
+    def read_supplier_offer_detail(
+        self,
+        session: Session,
+        *,
+        offer_id: int,
+    ) -> AdminPublishingConsoleSupplierOfferDetailRead | None:
+        row = self._offers.get_any(session, offer_id=offer_id)
+        if row is None:
+            return None
+        rp, item = self._build_supplier_offer_item_pair(session, row=row)
+        return _supplier_offer_publishing_console_detail(rp=rp, item=item)
 
     def read_console(
         self,
@@ -1186,76 +1359,7 @@ class AdminPublishingConsoleService:
             rp = self._review.review_package(session, offer_id=row.id)
             if row.lifecycle_status == SupplierOfferLifecycle.PUBLISHED and rp.conversion_closure.next_missing_step is None:
                 continue
-            status = _classify_supplier_offer(rp)
-            br = _blocked_reasons_offer(rp, status)
-            b15d = _b15d_supplier_offer(
-                session,
-                offer_id=row.id,
-                rp=rp,
-                console_status=status,
-                blocked_reasons=br,
-            )
-            actions = _affordances_from_operator_workflow(rp, row.id)
-            item_title = (row.title or f"Offer #{row.id}").strip() or f"Offer #{row.id}"
-            b15f = _b15f_supplier_offer(
-                settings=get_settings(),
-                rp=rp,
-                offer_id=row.id,
-                title=item_title,
-            )
-            cp = _console_preview_supplier_offer(
-                rp=rp,
-                item_title=item_title,
-                b15f=b15f,
-                b15d=b15d,
-            )
-            tl = _template_library_supplier_offer(rp=rp, b15f=b15f, cp=cp)
-            pp = _preview_payload_supplier_offer(
-                rp=rp,
-                b15f=b15f,
-                item_title=item_title,
-                blocked_reasons=br,
-                cp=cp,
-                tl=tl,
-            )
-            item = AdminPublishingConsoleItemRead(
-                candidate_key=f"supplier_offer:{row.id}",
-                kind="supplier_offer_initial",
-                console_status=status,
-                title=item_title,
-                subtitle=f"Lifecycle {row.lifecycle_status}",
-                target_summary=_target_summary_offer(rp),
-                next_best_action=rp.operator_workflow.primary_next_action or (
-                    rp.recommended_next_actions[0] if rp.recommended_next_actions else None
-                ),
-                blocked_reasons=br,
-                human_summary=_human_summary_offer(rp, status),
-                review_package_path=f"/admin/supplier-offers/{row.id}/review-package",
-                prepare_conversion_chain_plan_path=supplier_offer_prepare_conversion_chain_plan_path(row.id),
-                prepare_conversion_chain_plan_status=rp.prepare_conversion_chain_plan_status,
-                prepare_conversion_chain_recommended_action=rp.prepare_conversion_chain_recommended_action,
-                prepare_conversion_chain_blockers_count=rp.prepare_conversion_chain_blockers_count,
-                prepare_conversion_chain_action=rp.prepare_conversion_chain_action,
-                publish_readiness=rp.publish_readiness,
-                console_preview=cp,
-                template_library=tl,
-                preview_payload=pp,
-                admin_tour_path=None,
-                offer_debug=AdminPublishingConsoleOfferDebugRead(
-                    supplier_offer_id=row.id,
-                    lifecycle_status=row.lifecycle_status,
-                    packaging_status=row.packaging_status,
-                    can_publish_now=rp.showcase_preview.can_publish_now,
-                    next_missing_step=rp.conversion_closure.next_missing_step,
-                    effective_showcase_template_id=rp.showcase_template_preview.effective_template_id,
-                    primary_operator_action=rp.operator_workflow.primary_next_action,
-                ),
-                tour_debug=None,
-                actions=actions,
-                **b15d,
-                **b15f,
-            )
-            out.append(item)
+            out.append(self._supplier_offer_item_from_review(session, row, rp))
         return out[:max_items]
 
 

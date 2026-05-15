@@ -1,4 +1,4 @@
-"""B15B/B15D/B15E/B15F/B15K/B15L: GET /admin/publishing-console read-only queue + rich read-model + template library + preview payload."""
+"""B15B/B15D/B15E/B15F/B15K/B15L/B15M: GET /admin/publishing-console read-only queue + per-offer detail + template library + preview payload."""
 
 from __future__ import annotations
 
@@ -77,6 +77,117 @@ class AdminPublishingConsoleTests(FoundationDBTestCase):
     def test_publishing_console_401_without_token(self) -> None:
         r = self.client.get("/admin/publishing-console")
         self.assertEqual(r.status_code, 401)
+
+    def test_supplier_offer_detail_401_without_token(self) -> None:
+        r = self.client.get("/admin/publishing-console/supplier-offers/1")
+        self.assertEqual(r.status_code, 401)
+
+    def test_supplier_offer_detail_404(self) -> None:
+        r = self.client.get(
+            "/admin/publishing-console/supplier-offers/999999999",
+            headers=self._headers(),
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_supplier_offer_detail_b15m_read_model(self) -> None:
+        """B15M: single-offer detail exposes same nested objects as list rows + summaries + safety flags."""
+        supplier = self.create_supplier()
+        dep = datetime(2026, 12, 10, 8, 0, tzinfo=UTC)
+        ret = datetime(2026, 12, 12, 18, 0, tzinfo=UTC)
+        offer = self.create_supplier_offer(
+            supplier,
+            title="B15M Detail Row",
+            program_text="Day one walk.",
+            departure_datetime=dep,
+            return_datetime=ret,
+            seats_total=40,
+            base_price=Decimal("199.00"),
+            currency="EUR",
+            sales_mode=TourSalesMode.PER_SEAT,
+            payment_mode=SupplierOfferPaymentMode.PLATFORM_CHECKOUT,
+            lifecycle_status=SupplierOfferLifecycle.READY_FOR_MODERATION,
+            packaging_status=SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH,
+        )
+        self.session.commit()
+        oid = offer.id
+        h = self._headers()
+
+        self.assertEqual(
+            self.client.post(f"/admin/supplier-offers/{oid}/moderation/approve", headers=h).status_code,
+            200,
+        )
+        br = self.client.post(f"/admin/supplier-offers/{oid}/tour-bridge", headers=h, json={})
+        self.assertEqual(br.status_code, 200, br.text)
+        tour_id = br.json()["tour_id"]
+        act = self.client.post(f"/admin/tours/{tour_id}/activate-for-catalog", headers=h, json={})
+        self.assertEqual(act.status_code, 200, act.text)
+        lk = self.client.post(
+            f"/admin/supplier-offers/{oid}/execution-link",
+            headers=h,
+            json={"tour_id": tour_id},
+        )
+        self.assertEqual(lk.status_code, 200, lk.text)
+
+        cfg = self._publishing_console_settings()
+        with self._review_console_settings(cfg):
+            list_r = self.client.get(
+                "/admin/publishing-console?kind=supplier_offer_initial&limit=20",
+                headers=h,
+            )
+            detail_r = self.client.get(
+                f"/admin/publishing-console/supplier-offers/{oid}",
+                headers=h,
+            )
+        self.assertEqual(list_r.status_code, 200, list_r.text)
+        self.assertEqual(detail_r.status_code, 200, detail_r.text)
+        match = next((it for it in list_r.json()["items"] if it["candidate_key"] == f"supplier_offer:{oid}"), None)
+        self.assertIsNotNone(match)
+        assert match is not None
+
+        d = detail_r.json()
+        self.assertEqual(d["supplier_offer_id"], oid)
+        self.assertEqual(d["candidate_key"], f"supplier_offer:{oid}")
+        self.assertEqual(d["kind"], "supplier_offer_initial")
+        self.assertEqual(d["console_status"], match["console_status"])
+        self.assertEqual(d["title"], match["title"])
+        self.assertEqual(d["review_package_path"], match["review_package_path"])
+        self.assertEqual(d["prepare_conversion_chain_plan_path"], match["prepare_conversion_chain_plan_path"])
+        self.assertEqual(d["publish_readiness"]["status"], match["publish_readiness"]["status"])
+        self.assertEqual(d["console_preview"]["template_family"], match["console_preview"]["template_family"])
+        self.assertEqual(d["template_library"]["family"], match["template_library"]["family"])
+        self.assertEqual(d["preview_payload"]["source"], match["preview_payload"]["source"])
+        self.assertEqual(len(d["actions"]), len(match["actions"]))
+        pca_d = d.get("prepare_conversion_chain_action")
+        pca_m = match.get("prepare_conversion_chain_action")
+        self.assertEqual((pca_d or {}).get("path"), (pca_m or {}).get("path"))
+
+        cs = d["conversion_summary"]
+        self.assertTrue(cs["has_tour_bridge"])
+        self.assertTrue(cs["has_catalog_visible_tour"])
+        self.assertTrue(cs["has_active_execution_link"])
+        od = match.get("offer_debug") or {}
+        self.assertEqual(cs["next_missing_step"], od.get("next_missing_step"))
+
+        lt = d["linked_tour_summary"]
+        self.assertEqual(lt["tour_id"], tour_id)
+        self.assertTrue((lt.get("tour_code") or "").strip())
+        self.assertIsNotNone(lt.get("tour_status"))
+        self.assertTrue(lt["catalog_listed_for_mini_app"])
+
+        pub = d["publication_summary"]
+        self.assertFalse(pub["already_published"])
+        self.assertIsNotNone(pub.get("lifecycle_status"))
+
+        safe = d["safety_summary"]
+        self.assertTrue(safe["read_only"])
+        self.assertTrue(safe["no_telegram_io"])
+        self.assertTrue(safe["no_publish_attempt"])
+        self.assertTrue(safe["no_prepare_chain_execution"])
+        self.assertTrue(safe["no_layer_a_mutation"])
+        self.assertTrue(safe["note"])
+
+        self.assertIn("Read-only", d["detail_notice"])
+        self.assertTrue(d.get("generated_at"))
 
     def test_publishing_console_smoke_shape(self) -> None:
         mock_cfg = SimpleNamespace(
