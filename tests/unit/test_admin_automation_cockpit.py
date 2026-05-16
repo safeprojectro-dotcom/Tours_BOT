@@ -1,4 +1,4 @@
-"""A1-Block 1: GET /admin/automation-cockpit read-only foundation."""
+"""A1-Block 1/2: GET /admin/automation-cockpit read-only foundation + commercial lanes."""
 
 from __future__ import annotations
 
@@ -127,12 +127,22 @@ class AdminAutomationCockpitTests(FoundationDBTestCase):
             self.assertIn(key, summary)
 
         codes = {q["queue_code"] for q in data["queues"]}
-        self.assertEqual(
-            codes,
-            {"supplier_intake", "missing_info", "offer_readiness", "risk_conflict"},
-        )
+        expected_q = {
+            "supplier_intake",
+            "missing_info",
+            "offer_readiness",
+            "risk_conflict",
+            "marketing_review",
+            "publishing_queue",
+            "catalog_conversion",
+        }
+        self.assertEqual(codes, expected_q)
+        qcounts = data["summary"]["queue_counts"]
+        for k in expected_q:
+            self.assertIn(k, qcounts)
 
         allowed_kinds = {"safe_read", "future_disabled"}
+        commercial_lanes = {"marketing_review", "publishing_queue", "catalog_conversion"}
         for q in data["queues"]:
             self.assertIn("total_count", q)
             self.assertIsInstance(q["cards"], list)
@@ -141,6 +151,12 @@ class AdminAutomationCockpitTests(FoundationDBTestCase):
                 if card["next_best_action_kind"] == "future_disabled":
                     self.assertFalse(card["next_best_action_enabled"])
                 self.assertNotEqual(card["next_best_action_kind"], "public_side_effect")
+                self.assertNotEqual(card["next_best_action_kind"], "guarded_live_action")
+                if q["queue_code"] in commercial_lanes:
+                    self.assertIsNotNone(card.get("commercial_context"))
+                    ctx = card["commercial_context"]
+                    self.assertIn("fact_lock_note", ctx)
+                    self.assertGreater(len(ctx["fact_lock_note"]), 20)
 
         safety = data["safety_summary"]
         for flag in (
@@ -155,6 +171,22 @@ class AdminAutomationCockpitTests(FoundationDBTestCase):
             "no_b11_change",
         ):
             self.assertTrue(safety[flag], flag)
+
+    def test_automation_cockpit_include_queues_commercial_lane(self) -> None:
+        cfg = self._settings()
+        with self._review_console_settings(cfg):
+            r = self.client.get(
+                "/admin/automation-cockpit",
+                headers=self._headers(),
+                params={"include_queues": "marketing_review", "limit": 5},
+            )
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        for q in data["queues"]:
+            if q["queue_code"] == "marketing_review":
+                self.assertLessEqual(len(q["cards"]), 5)
+            else:
+                self.assertEqual(q["cards"], [])
 
     def test_automation_cockpit_include_queues_limits_cards_only(self) -> None:
         cfg = self._settings()

@@ -4,7 +4,9 @@
 
 **A1 is a docs-only design gate.**
 
-**A1-Block 1 (read-only runtime slice):** **`GET /admin/automation-cockpit`** implements the first bounded cockpit snapshot aligned with this gate (publishing-console projection, no mutations). Implementation record: **[`docs/HANDOFF_A1_BLOCK1_COCKPIT_READ_ONLY_FOUNDATION.md`](HANDOFF_A1_BLOCK1_COCKPIT_READ_ONLY_FOUNDATION.md)**.
+**A1-Block 1 (read-only runtime slice):** **`GET /admin/automation-cockpit`** — core operational queues. Record: **[`docs/HANDOFF_A1_BLOCK1_COCKPIT_READ_ONLY_FOUNDATION.md`](HANDOFF_A1_BLOCK1_COCKPIT_READ_ONLY_FOUNDATION.md)**.
+
+**A1-Block 2 (read-only runtime slice):** extends the same **`GET /admin/automation-cockpit`** with **marketing_review**, **publishing_queue**, and **catalog_conversion** lanes plus additive **`commercial_context`** / fact-lock presentation. Record: **[`docs/HANDOFF_A1_BLOCK2_COMMERCIAL_MARKETING_CONVERSION_QUEUES.md`](HANDOFF_A1_BLOCK2_COMMERCIAL_MARKETING_CONVERSION_QUEUES.md)**.
 
 A1 does **not** implement:
 

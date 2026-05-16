@@ -1,4 +1,4 @@
-"""A1-Block 1: read-only Admin Automation Cockpit response DTOs (no mutations / publish / Telegram I/O)."""
+"""A1-Block 1/2: read-only Admin Automation Cockpit response DTOs (no mutations / publish / Telegram I/O)."""
 
 from __future__ import annotations
 
@@ -12,6 +12,9 @@ AutomationCockpitQueueCode = Literal[
     "missing_info",
     "offer_readiness",
     "risk_conflict",
+    "marketing_review",
+    "publishing_queue",
+    "catalog_conversion",
 ]
 
 AUTOMATION_COCKPIT_QUEUE_CODES: Final[tuple[str, ...]] = (
@@ -19,6 +22,9 @@ AUTOMATION_COCKPIT_QUEUE_CODES: Final[tuple[str, ...]] = (
     "missing_info",
     "offer_readiness",
     "risk_conflict",
+    "marketing_review",
+    "publishing_queue",
+    "catalog_conversion",
 )
 AUTOMATION_COCKPIT_QUEUE_CODES_SET: Final[frozenset[str]] = frozenset(AUTOMATION_COCKPIT_QUEUE_CODES)
 
@@ -51,6 +57,37 @@ def parse_include_queues_query(raw: str | None) -> frozenset[str] | None:
             f"Unknown include_queues {invalid!r}; allowed: {list(AUTOMATION_COCKPIT_QUEUE_CODES)}",
         )
     return frozenset(parts)
+
+
+COCKPIT_FACT_LOCK_NOTE: Final[str] = (
+    "Supplier/catalog commercial facts are read-only in this cockpit view. "
+    "Use marketing review flows for packaging and copy only; do not change price, route, inclusions, discounts, "
+    "or capacity from this surface. Factual corrections require supplier clarification or governed source updates."
+)
+
+
+class AdminAutomationCockpitCommercialContextRead(BaseModel):
+    """Safe read-only commercial/marketing signals (no PII/secrets). A1-Block 2."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    supplier_offer_id: int | None = None
+    tour_id: int | None = None
+    tour_code: str | None = None
+    already_published: bool | None = None
+    has_tour_bridge: bool | None = None
+    has_catalog_visible_tour: bool | None = None
+    has_active_execution_link: bool | None = None
+    preview_status: str | None = None
+    payload_status: str | None = None
+    template_family: str | None = None
+    selected_template_id: str | None = None
+    publish_status: str | None = None
+    prepare_chain_status: str | None = None
+    fact_lock_note: str = Field(
+        default=COCKPIT_FACT_LOCK_NOTE,
+        description="Fact-lock copy: marketing vs supplier truth boundaries.",
+    )
 
 
 class AdminAutomationCockpitCardSafetyFlagsRead(BaseModel):
@@ -117,6 +154,10 @@ class AdminAutomationCockpitCardRead(BaseModel):
         default_factory=AdminAutomationCockpitCardSafetyFlagsRead,
     )
     source_paths: dict[str, str] = Field(default_factory=dict)
+    commercial_context: AdminAutomationCockpitCommercialContextRead | None = Field(
+        default=None,
+        description="A1-Block 2: commercial/marketing/conversion context; optional on operational-queue cards.",
+    )
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -178,7 +219,9 @@ class AdminAutomationCockpitRead(BaseModel):
 __all__ = [
     "AUTOMATION_COCKPIT_QUEUE_CODES",
     "AUTOMATION_COCKPIT_QUEUE_CODES_SET",
+    "AdminAutomationCockpitCommercialContextRead",
     "AutomationCockpitQueueTone",
+    "COCKPIT_FACT_LOCK_NOTE",
     "AdminAutomationCockpitCardRead",
     "AdminAutomationCockpitCardSafetyFlagsRead",
     "AdminAutomationCockpitQueueRead",
