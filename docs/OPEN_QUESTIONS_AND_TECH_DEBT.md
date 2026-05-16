@@ -29,6 +29,12 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ---
 
+## Checkpoint Sync — A1V4 card detail standardization (2026-05-16)
+
+**Shipped:** **[`docs/HANDOFF_A1V4_COCKPIT_CARD_DETAIL_STANDARDIZATION.md`](HANDOFF_A1V4_COCKPIT_CARD_DETAIL_STANDARDIZATION.md)** — detail screens use human **Sources** / **Surse** bullets, fixed safety copy (no `read_only=` lines), and **RO** phrase substitutions for common English risk strings when the note body matches; raw **`admin_*_path`** keys are not printed.
+
+---
+
 ## Checkpoint Sync — Admin Offer Review Package — Slice 1 (2026-04-27)
 
 **Docs-only.**

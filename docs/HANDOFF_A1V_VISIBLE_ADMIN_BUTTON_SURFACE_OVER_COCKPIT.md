@@ -52,8 +52,9 @@ python -m pytest tests/unit/test_automation_cockpit_telegram.py -q
 2. Tap **📊 Automation Cockpit** (or `/admin_cockpit`).
 3. Confirm summary: business-readable counts, queue lines with **📥 Intake furnizor**-style labels (no `supplier_intake` codes), one-line **🛡** safe-mode note + short fact-lock; tap **🛡 Safety details** for full flags.
 4. Open **🧩 Marketing Review**, **📣 Publishing**, **🔗 Catalog / Conversion**; confirm first cards list.
-5. Open one card; confirm commercial context + fact-lock + per-card safety flags.
-6. Confirm there is no publish / schedule / supplier-send / prepare-chain action button.
+5. Open one card; confirm **📄 Card detail**: localized status, suggested step, **Sources** bullets (not raw path keys), human **🛡 Safety** lines (not `read_only=True`).
+6. On commercial cards, confirm context + fact-lock.
+7. Confirm there is no publish / schedule / supplier-send / prepare-chain action button.
 
 ## Limitations
 

@@ -1,4 +1,4 @@
-"""A1V / A1V2 / A1V3: format Automation Cockpit read models for Telegram admin (read-only; no mutations)."""
+"""A1V–A1V4: format Automation Cockpit read models for Telegram admin (read-only; no mutations)."""
 
 from __future__ import annotations
 
@@ -76,6 +76,34 @@ _COCKPIT_LIST_ACTION_KEYS: dict[str, str] = {
     "not_applicable": "not_applicable",
     "resolve_publish_blockers": "resolve_publish_blockers",
     "review_package_refresh": "review_package_refresh",
+    "open_tour_admin": "open_tour_admin",
+    "verify_mini_app_catalog": "verify_mini_app_catalog",
+    "open_promotion_context": "open_promotion_context",
+    "review_tour_promotion_readiness": "review_tour_promotion_readiness",
+    "review_catalog_promotion_health": "review_catalog_promotion_health",
+    "review_conversion_after_publish": "review_conversion_after_publish",
+}
+
+_DETAIL_TITLE_MAX = 120
+_DETAIL_NOTE_MAX = 320
+
+_SOURCE_PATH_ORDER: tuple[str, ...] = (
+    "admin_tour_path",
+    "admin_action_path",
+    "review_package_path",
+    "publishing_console_detail_path",
+    "publishing_console_editor_path",
+    "prepare_conversion_chain_plan_path",
+    "preview_path",
+)
+_SOURCE_PATH_LABEL_KEY: dict[str, str] = {
+    "admin_tour_path": "admin_automation_cockpit_detail_src_admin_tour",
+    "admin_action_path": "admin_automation_cockpit_detail_src_admin_action",
+    "review_package_path": "admin_automation_cockpit_detail_src_review_package",
+    "publishing_console_detail_path": "admin_automation_cockpit_detail_src_console_detail",
+    "publishing_console_editor_path": "admin_automation_cockpit_detail_src_console_editor",
+    "prepare_conversion_chain_plan_path": "admin_automation_cockpit_detail_src_conversion_plan",
+    "preview_path": "admin_automation_cockpit_detail_src_preview",
 }
 
 _LIST_CARD_TITLE_MAX = 72
@@ -110,6 +138,74 @@ def _snippet(text: str | None, *, max_len: int) -> str:
     if len(t) <= max_len:
         return t
     return t[: max_len - 1].rstrip() + "…"
+
+
+def _detail_body_note(language_code: str | None, text: str | None, *, max_len: int = _DETAIL_NOTE_MAX) -> str:
+    raw = _snippet(text, max_len=max_len)
+    if raw == "—":
+        return raw
+    if language_code == "ro":
+        mapped = _risk_note_ro_substitutions(raw)
+        if mapped is not None:
+            return mapped
+    return raw
+
+
+def _risk_note_ro_substitutions(text: str) -> str | None:
+    """Replace frequent English risk/note sentences with Romanian catalogue text."""
+    t = text.strip()
+    tl = t.lower()
+    pairs: list[tuple[str, str]] = [
+        ("publish readiness flagged for manual review", "admin_automation_cockpit_risk_ro_publish_manual"),
+        ("ambiguous or non-standard publishing-console posture", "admin_automation_cockpit_risk_ro_ambiguous_posture"),
+        ("tour promotion rows are not evaluated", "admin_automation_cockpit_risk_ro_tour_promo_unevaluated"),
+        ("candidate for tour promotion", "admin_automation_cockpit_risk_ro_candidate_promotion"),
+    ]
+    for needle, msg_key in pairs:
+        if needle in tl:
+            return translate("ro", msg_key)
+    if "cta safety:" in tl:
+        return translate("ro", "admin_automation_cockpit_risk_ro_cta_generic")
+    return None
+
+
+def _format_detail_source_bullets(language_code: str | None, paths: dict[str, str]) -> list[str]:
+    rows: list[str] = []
+    for key in _SOURCE_PATH_ORDER:
+        if key not in paths:
+            continue
+        val = str(paths.get(key) or "").strip()
+        label_key = _SOURCE_PATH_LABEL_KEY.get(key)
+        if label_key is None:
+            continue
+        label = translate(language_code, label_key)
+        if val:
+            state = translate(language_code, "admin_automation_cockpit_detail_link_available")
+        else:
+            state = translate(language_code, "admin_automation_cockpit_detail_link_missing")
+        rows.append(translate(language_code, "admin_automation_cockpit_detail_src_bullet", label=label, state=state))
+    return rows
+
+
+def _format_card_detail_safety_human(language_code: str | None) -> list[str]:
+    keys = (
+        "admin_automation_cockpit_detail_safety_readonly",
+        "admin_automation_cockpit_detail_safety_no_telegram_publish",
+        "admin_automation_cockpit_detail_safety_no_scheduler",
+        "admin_automation_cockpit_detail_safety_no_supplier_notif",
+        "admin_automation_cockpit_detail_safety_no_booking",
+        "admin_automation_cockpit_detail_safety_no_b11",
+    )
+    return [translate(language_code, k) for k in keys]
+
+
+def _cc_bool_phrase(language_code: str | None, v: bool | None) -> str:
+    if v is None:
+        return "—"
+    return translate(
+        language_code,
+        "admin_automation_cockpit_cc_bool_yes" if v else "admin_automation_cockpit_cc_bool_no",
+    )
 
 
 def _list_console_status_message_key(card: AdminAutomationCockpitCardRead) -> str:
@@ -314,123 +410,134 @@ def format_cockpit_queue_text(
     return "\n".join(lines)
 
 
-def _fmt_path_lines(card: AdminAutomationCockpitCardRead) -> list[str]:
-    if not card.source_paths:
-        return []
-    return [f"{k}: {v}" for k, v in sorted(card.source_paths.items())]
-
-
 def format_cockpit_card_detail_text(language_code: str | None, card: AdminAutomationCockpitCardRead) -> str:
-    status_human = (card.status_label or "").strip() or card.status
-    lines = [
+    title = _snippet(card.title, max_len=_DETAIL_TITLE_MAX)
+    source = _card_source_caption(language_code, source_type=card.source_type, source_id=card.source_id)
+    status_phrase = translate(language_code, _list_console_status_message_key(card))
+
+    lines: list[str] = [
         translate(language_code, "admin_automation_cockpit_card_detail_header"),
         "",
-        f"{card.title}",
+        title,
         translate(
             language_code,
-            "admin_automation_cockpit_detail_source",
-            caption=_card_source_caption(language_code, source_type=card.source_type, source_id=card.source_id),
-        ),
-        translate(
-            language_code,
-            "admin_automation_cockpit_detail_status",
-            status=status_human,
+            "admin_automation_cockpit_queue_card_l2",
+            source=source,
+            status=status_phrase,
         ),
         "",
-        translate(
-            language_code,
-            "admin_automation_cockpit_card_next_step_only",
-            label=(card.next_best_action_label or "—"),
-        ),
-        "",
-        translate(
-            language_code,
-            "admin_automation_cockpit_detail_blocker",
-            text=card.blocker_summary or "—",
-        ),
-        translate(
-            language_code,
-            "admin_automation_cockpit_detail_warning",
-            text=card.warning_summary or "—",
-        ),
-        translate(
-            language_code,
-            "admin_automation_cockpit_detail_risk",
-            text=card.risk_summary or "—",
-        ),
-        translate(
-            language_code,
-            "admin_automation_cockpit_detail_owner",
-            text=card.owner_role or "—",
-        ),
-        "",
+        translate(language_code, "admin_automation_cockpit_detail_step_section"),
+        _list_next_step_line(language_code, card),
     ]
-    pl = _fmt_path_lines(card)
-    if pl:
-        lines.append(translate(language_code, "admin_automation_cockpit_paths_header"))
-        lines.extend(pl)
-        lines.append("")
-    lines.append(translate(language_code, "admin_automation_cockpit_card_safety_flags"))
-    lines.append(
-        translate(
-            language_code,
-            "admin_automation_cockpit_card_safety_lines",
-            ro=str(card.safety_flags.read_only),
-            nt=str(card.safety_flags.no_telegram_io),
-            np=str(card.safety_flags.no_publish_attempt),
-            ns=str(card.safety_flags.no_scheduler),
-            nn=str(card.safety_flags.no_supplier_notification_send),
-            nq=str(card.safety_flags.no_qr_token),
-            nl=str(card.safety_flags.no_layer_a_mutation),
-            nb=str(card.safety_flags.no_b11_change),
+
+    blocker = (card.blocker_summary or "").strip()
+    if blocker:
+        lines.extend(
+            [
+                "",
+                translate(language_code, "admin_automation_cockpit_detail_blocker_section"),
+                translate(
+                    language_code,
+                    "admin_automation_cockpit_detail_note_body",
+                    text=_detail_body_note(language_code, blocker),
+                ),
+            ]
         )
-    )
+
+    warning = (card.warning_summary or "").strip()
+    if warning:
+        lines.extend(
+            [
+                "",
+                translate(language_code, "admin_automation_cockpit_detail_warning_section"),
+                translate(
+                    language_code,
+                    "admin_automation_cockpit_detail_note_body_warn",
+                    text=_detail_body_note(language_code, warning),
+                ),
+            ]
+        )
+
+    risk = (card.risk_summary or "").strip()
+    if risk:
+        lines.extend(
+            [
+                "",
+                translate(language_code, "admin_automation_cockpit_detail_risk_section"),
+                translate(
+                    language_code,
+                    "admin_automation_cockpit_detail_note_body_warn",
+                    text=_detail_body_note(language_code, risk),
+                ),
+            ]
+        )
+
+    owner = (card.owner_role or "").strip()
+    if owner and owner != "admin_operator":
+        lines.extend(
+            [
+                "",
+                translate(
+                    language_code,
+                    "admin_automation_cockpit_detail_owner_line",
+                    text=owner,
+                ),
+            ]
+        )
+
+    bullets = _format_detail_source_bullets(language_code, card.source_paths or {})
+    if bullets:
+        lines.extend(["", translate(language_code, "admin_automation_cockpit_detail_sources_section"), *bullets])
+
     if card.commercial_context is not None:
         ctx = card.commercial_context
-        lines.append("")
-        lines.append(translate(language_code, "admin_automation_cockpit_commercial_header"))
-        lines.append(translate(language_code, "admin_automation_cockpit_cc_publish", v=ctx.publish_status or "—"))
-        lines.append(translate(language_code, "admin_automation_cockpit_cc_preview", v=ctx.preview_status or "—"))
-        lines.append(translate(language_code, "admin_automation_cockpit_cc_payload", v=ctx.payload_status or "—"))
-        lines.append(translate(language_code, "admin_automation_cockpit_cc_template_family", v=ctx.template_family or "—"))
-        lines.append(translate(language_code, "admin_automation_cockpit_cc_template_id", v=ctx.selected_template_id or "—"))
-        lines.append(translate(language_code, "admin_automation_cockpit_cc_tour_code", v=ctx.tour_code or "—"))
-        lines.append(
-            translate(
-                language_code,
-                "admin_automation_cockpit_cc_flag",
-                label=translate(language_code, "admin_automation_cockpit_cc_already_published"),
-                v=str(ctx.already_published) if ctx.already_published is not None else "—",
-            )
+        lines.extend(
+            [
+                "",
+                translate(language_code, "admin_automation_cockpit_commercial_header"),
+                translate(language_code, "admin_automation_cockpit_cc_publish", v=ctx.publish_status or "—"),
+                translate(language_code, "admin_automation_cockpit_cc_preview", v=ctx.preview_status or "—"),
+                translate(language_code, "admin_automation_cockpit_cc_payload", v=ctx.payload_status or "—"),
+                translate(language_code, "admin_automation_cockpit_cc_template_family", v=ctx.template_family or "—"),
+                translate(language_code, "admin_automation_cockpit_cc_template_id", v=ctx.selected_template_id or "—"),
+                translate(language_code, "admin_automation_cockpit_cc_tour_code", v=ctx.tour_code or "—"),
+                translate(
+                    language_code,
+                    "admin_automation_cockpit_cc_flag",
+                    label=translate(language_code, "admin_automation_cockpit_cc_already_published"),
+                    v=_cc_bool_phrase(language_code, ctx.already_published),
+                ),
+                translate(
+                    language_code,
+                    "admin_automation_cockpit_cc_flag",
+                    label=translate(language_code, "admin_automation_cockpit_cc_bridge"),
+                    v=_cc_bool_phrase(language_code, ctx.has_tour_bridge),
+                ),
+                translate(
+                    language_code,
+                    "admin_automation_cockpit_cc_flag",
+                    label=translate(language_code, "admin_automation_cockpit_cc_catalog_visible"),
+                    v=_cc_bool_phrase(language_code, ctx.has_catalog_visible_tour),
+                ),
+                translate(
+                    language_code,
+                    "admin_automation_cockpit_cc_flag",
+                    label=translate(language_code, "admin_automation_cockpit_cc_exec_link"),
+                    v=_cc_bool_phrase(language_code, ctx.has_active_execution_link),
+                ),
+            ]
         )
-        lines.append(
-            translate(
-                language_code,
-                "admin_automation_cockpit_cc_flag",
-                label=translate(language_code, "admin_automation_cockpit_cc_bridge"),
-                v=str(ctx.has_tour_bridge) if ctx.has_tour_bridge is not None else "—",
-            )
-        )
-        lines.append(
-            translate(
-                language_code,
-                "admin_automation_cockpit_cc_flag",
-                label=translate(language_code, "admin_automation_cockpit_cc_catalog_visible"),
-                v=str(ctx.has_catalog_visible_tour) if ctx.has_catalog_visible_tour is not None else "—",
-            )
-        )
-        lines.append(
-            translate(
-                language_code,
-                "admin_automation_cockpit_cc_flag",
-                label=translate(language_code, "admin_automation_cockpit_cc_exec_link"),
-                v=str(ctx.has_active_execution_link) if ctx.has_active_execution_link is not None else "—",
-            )
-        )
-        lines.append("")
         note = (ctx.fact_lock_note or "").strip()
         if note:
-            lines.append(note[:500])
+            lines.extend(["", translate(language_code, "admin_automation_cockpit_detail_fact_lock_header"), note[:500]])
+
+    lines.extend(
+        [
+            "",
+            translate(language_code, "admin_automation_cockpit_detail_safety_header"),
+            *_format_card_detail_safety_human(language_code),
+        ]
+    )
     return "\n".join(lines)
 
 

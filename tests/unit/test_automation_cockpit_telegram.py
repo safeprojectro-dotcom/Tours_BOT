@@ -1,4 +1,4 @@
-"""A1V / A1V2 / A1V3: Automation Cockpit Telegram formatters and callback tests (read-only)."""
+"""A1V–A1V4: Automation Cockpit Telegram formatters and callback tests (read-only)."""
 
 from __future__ import annotations
 
@@ -33,7 +33,12 @@ def _sample_safety_summary() -> AdminAutomationCockpitSafetySummaryRead:
     )
 
 
-def _sample_card(*, commercial: bool = False, source_type: str = "supplier_offer") -> AdminAutomationCockpitCardRead:
+def _sample_card(
+    *,
+    commercial: bool = False,
+    source_type: str = "supplier_offer",
+    source_paths: dict[str, str] | None = None,
+) -> AdminAutomationCockpitCardRead:
     ctx = (
         AdminAutomationCockpitCommercialContextRead(
             tour_code="TC1",
@@ -58,6 +63,7 @@ def _sample_card(*, commercial: bool = False, source_type: str = "supplier_offer
         blocker_summary="Package must be approved for publishing.",
         commercial_context=ctx,
         safety_flags=AdminAutomationCockpitCardSafetyFlagsRead(),
+        source_paths=source_paths or {},
         metadata={"console_status": "needs_attention"},
     )
 
@@ -158,11 +164,62 @@ def test_format_cockpit_queue_tour_source_caption() -> None:
 
 
 def test_format_cockpit_card_detail_commercial_and_fact_lock() -> None:
-    c = _sample_card(commercial=True)
+    c = _sample_card(
+        commercial=True,
+        source_paths={"admin_tour_path": "/admin/tours/2", "admin_action_path": ""},
+    )
     body = format_cockpit_card_detail_text("en", c)
-    assert "Commercial context" in body
+    assert "📄 Card detail" in body
+    assert "Suggested next step:" in body
+    assert "Check missing marketing data" in body
+    assert "Blocker:" in body
+    assert "⛔" in body
+    assert "Package must" in body
+    assert "Sources:" in body
+    assert "Tour in admin" in body
+    assert "Not linked" in body
+    assert "Commercial context:" in body
     assert "FACT_LOCK_NOTE_TEST" in body
     assert "Tour code: TC1" in body
+    assert "🔒" in body
+    assert "🛡 Safety:" in body
+    assert "✅ Read-only view" in body
+    assert "read_only=" not in body
+    assert "admin_tour_path" not in body
+    assert "admin_action_path" not in body
+
+
+def test_format_cockpit_card_detail_ro_business_readable() -> None:
+    c = _sample_card(source_paths={"admin_tour_path": "https://example.com/t", "admin_action_path": "https://example.com/a"})
+    body = format_cockpit_card_detail_text("ro", c)
+    assert "📄 Detaliu card" in body
+    assert "Pas sugerat:" in body
+    assert "Surse:" in body
+    assert "Tur admin" in body
+    assert "🛡 Siguranță:" in body
+    assert "✅ Doar citire" in body
+    assert "read_only=" not in body
+    assert "admin_tour_path" not in body
+
+
+def test_format_cockpit_card_detail_tour_promotion_ro() -> None:
+    c = _sample_card(
+        source_type="tour",
+        source_paths={"admin_tour_path": "/admin/tours/2", "admin_action_path": "/admin/tours/2"},
+    )
+    c.source_id = 2
+    c.next_best_action_code = "open_tour_admin"
+    c.next_best_action_label = "Open tour in admin"
+    c.blocker_summary = None
+    c.warning_summary = "Candidate for tour promotion / last-seats style posts."
+    c.risk_summary = None
+    c.metadata = {"console_status": "ready"}
+    body = format_cockpit_card_detail_text("ro", c)
+    assert "Tur #2" in body
+    assert "Deschide turul în admin" in body
+    assert "Open tour in admin" not in body
+    assert "ultimele locuri" in body
+    assert "admin_tour_path" not in body
 
 
 def test_cockpit_keyboards_no_publish_callbacks() -> None:
