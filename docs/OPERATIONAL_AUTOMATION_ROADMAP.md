@@ -162,6 +162,8 @@ Operating principle:
 
 Design the cockpit, queues, action taxonomy, functional-block vs narrow-step rules, exception handling, and safety boundaries.
 
+Design gate created: `docs/A1_ADMIN_AUTOMATION_COCKPIT_DESIGN_GATE.md`.
+
 ### A2 - Supplier Intake Auto-validation
 
 Structured supplier facts, required fields, completeness scoring, and risk scoring.
