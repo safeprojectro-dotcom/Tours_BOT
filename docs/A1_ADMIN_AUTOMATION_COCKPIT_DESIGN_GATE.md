@@ -8,11 +8,13 @@
 
 **A1-Block 2 (read-only runtime slice):** extends the same **`GET /admin/automation-cockpit`** with **marketing_review**, **publishing_queue**, and **catalog_conversion** lanes plus additive **`commercial_context`** / fact-lock presentation. Record: **[`docs/HANDOFF_A1_BLOCK2_COMMERCIAL_MARKETING_CONVERSION_QUEUES.md`](HANDOFF_A1_BLOCK2_COMMERCIAL_MARKETING_CONVERSION_QUEUES.md)**.
 
+**A1V (read-only Telegram slice):** allowlisted-admin **inline UI** only — summary / queue / card navigation over **`read_cockpit`**; **no** mutations. Record: **[`docs/HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md`](HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md)**.
+
 A1 does **not** implement:
 
-- cockpit UI
-- admin buttons
-- routes or endpoints
+- cockpit **web** UI
+- customer-facing buttons
+- new write **HTTP** routes beyond existing admin APIs
 - DB tables or migrations
 - scheduler
 - AI agents

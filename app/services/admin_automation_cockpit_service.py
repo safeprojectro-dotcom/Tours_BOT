@@ -622,6 +622,7 @@ class AdminAutomationCockpitService:
         *,
         limit_per_queue: int = 20,
         include_queues: frozenset[str] | None = None,
+        materialize_cards: bool = True,
     ) -> AdminAutomationCockpitRead:
         per_q = max(1, min(limit_per_queue, 100))
         fetch_limit = min(500, max(120, per_q * 12))
@@ -668,7 +669,7 @@ class AdminAutomationCockpitService:
                 )
 
             cards: list[AdminAutomationCockpitCardRead] = []
-            if include_queues is None or qcode in include_queues:
+            if materialize_cards and (include_queues is None or qcode in include_queues):
                 for it in bucket_sorted[:per_q]:
                     if qcode in OPERATIONAL_QUEUES:
                         c = _build_operational_card(it, qcode)

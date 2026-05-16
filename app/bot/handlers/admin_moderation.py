@@ -44,6 +44,7 @@ from app.bot.constants import (
     ADMIN_OFFERS_NAV_HOME,
     ADMIN_OFFERS_NAV_NEXT,
     ADMIN_OFFERS_NAV_PREV,
+    ADMIN_AUTOMATION_COCKPIT_HOME,
     ADMIN_OPS_ORDER_DETAIL_PREFIX,
     ADMIN_OPS_OW_PKG_APPROVE_CANCEL_PREFIX,
     ADMIN_OPS_OW_PKG_APPROVE_CONFIRM_PREFIX,
@@ -870,6 +871,10 @@ def _detail_keyboard(language_code: str | None, offer: AdminSupplierOfferRead, s
     kb.button(
         text=translate(language_code, "admin_ops_requests_button"),
         callback_data=f"{ADMIN_OPS_REQUESTS_PAGE_PREFIX}0",
+    )
+    kb.button(
+        text=translate(language_code, "admin_automation_cockpit_menu_button"),
+        callback_data=ADMIN_AUTOMATION_COCKPIT_HOME,
     )
     kb.button(text=translate(language_code, "admin_offer_nav_prev"), callback_data=ADMIN_OFFERS_NAV_PREV)
     kb.button(text=translate(language_code, "admin_offer_nav_next"), callback_data=ADMIN_OFFERS_NAV_NEXT)

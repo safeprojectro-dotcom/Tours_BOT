@@ -162,3 +162,11 @@ ADMIN_SUPPLIERS_NAV_NEXT = "admin:suppliers:nav:next"
 ADMIN_SUPPLIERS_NAV_PREV = "admin:suppliers:nav:prev"
 ADMIN_SUPPLIERS_NAV_BACK = "admin:suppliers:nav:back"
 ADMIN_SUPPLIERS_NAV_HOME = "admin:suppliers:nav:home"
+
+# A1V: read-only Automation Cockpit Telegram surface (admin allowlist only)
+ADMIN_AUTOMATION_COCKPIT_HOME = "ac:h"
+ADMIN_AUTOMATION_COCKPIT_REFRESH = "ac:r"
+ADMIN_AUTOMATION_COCKPIT_REFRESH_QUEUE_PREFIX = "ac:rq:"
+ADMIN_AUTOMATION_COCKPIT_CLOSE = "ac:x"
+ADMIN_AUTOMATION_COCKPIT_QUEUE_PREFIX = "ac:q:"
+ADMIN_AUTOMATION_COCKPIT_CARD_PREFIX = "ac:c:"

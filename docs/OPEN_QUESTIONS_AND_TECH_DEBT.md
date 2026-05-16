@@ -7,6 +7,16 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ---
 
+## Checkpoint Sync — A1V Telegram cockpit (2026-05-16)
+
+**Shipped:** read-only admin Telegram surface (`/admin_cockpit` + **📊 Automation Cockpit** button) over **`AdminAutomationCockpitService.read_cockpit`** — see **[`docs/HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md`](HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md)**.
+
+**Accepted shortcut:** summary uses **`materialize_cards=False`** for speed; **`future_disabled_count`** in that summary may not reflect per-card disabled actions until a lighter aggregate is added.
+
+**Future:** queue pagination in Telegram if operators need more than five cards per view without opening HTTP.
+
+---
+
 ## Checkpoint Sync — Admin Offer Review Package — Slice 1 (2026-04-27)
 
 **Docs-only.**
