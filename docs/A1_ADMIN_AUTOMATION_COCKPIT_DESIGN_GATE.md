@@ -4,6 +4,8 @@
 
 **A1 is a docs-only design gate.**
 
+**A1-Block 1 (read-only runtime slice):** **`GET /admin/automation-cockpit`** implements the first bounded cockpit snapshot aligned with this gate (publishing-console projection, no mutations). Implementation record: **[`docs/HANDOFF_A1_BLOCK1_COCKPIT_READ_ONLY_FOUNDATION.md`](HANDOFF_A1_BLOCK1_COCKPIT_READ_ONLY_FOUNDATION.md)**.
+
 A1 does **not** implement:
 
 - cockpit UI
@@ -466,7 +468,7 @@ No-go boundaries for A1:
 - no AI mutation
 - no external provider calls
 - no migrations
-- no endpoint changes
+- no endpoint changes **while authoring this document** (implementation blocks such as **A1-Block 1** add read-only **`GET`** surfaces explicitly scoped in their handoffs)
 
 ## 17. Implementation Roadmap After A1
 
@@ -500,6 +502,8 @@ Future admin experience:
 
 ## 19. Non-goals of A1
 
+Authoring this design gate does **not**, by itself, require shipping runtime code. **A1-Block 1** is an explicit exception: a single **read-only** admin **`GET`** may be introduced under a separate implementation prompt, aligned with §17 and the handoff above.
+
 A1 does not implement:
 
 - cockpit UI
@@ -530,7 +534,8 @@ A1 is complete when:
 - S1/M1/O1 relationships are clear
 - `docs/CHAT_HANDOFF.md` references A1
 - `docs/OPEN_QUESTIONS_AND_TECH_DEBT.md` references A1 future-gated decisions
-- no runtime files changed
+- **A1 design gate** authoring remains complete when no *further* runtime files are required by the specification itself (first read-only cockpit **`GET`** is **A1-Block 1**, not a retroactive requirement on the original A1 prompt).
+- no migrations or mutating endpoints introduced by **this** design document
 
 ## Related
 

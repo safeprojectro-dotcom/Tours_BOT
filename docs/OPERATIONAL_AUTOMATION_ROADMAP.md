@@ -164,6 +164,8 @@ Design the cockpit, queues, action taxonomy, functional-block vs narrow-step rul
 
 Design gate created: `docs/A1_ADMIN_AUTOMATION_COCKPIT_DESIGN_GATE.md`.
 
+**A1-Block 1 (read-only foundation):** `GET /admin/automation-cockpit` — see `docs/HANDOFF_A1_BLOCK1_COCKPIT_READ_ONLY_FOUNDATION.md`.
+
 ### A2 - Supplier Intake Auto-validation
 
 Structured supplier facts, required fields, completeness scoring, and risk scoring.

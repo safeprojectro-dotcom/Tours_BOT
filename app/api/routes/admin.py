@@ -17,6 +17,7 @@ from app.models.enums import (
     TourStatus,
 )
 from app.models.supplier import Supplier
+from app.schemas.admin_automation_cockpit import AdminAutomationCockpitRead, parse_include_queues_query
 from app.schemas.admin_ops_dashboard import AdminOpsDashboardRead, parse_include_sections_query
 from app.schemas.admin_publishing_console import (
     AdminPublishingConsoleEditorDetailRead,
@@ -83,6 +84,7 @@ from app.schemas.admin_prepare_conversion_chain_plan import (
 )
 from app.services.admin_prepare_conversion_chain_plan_service import AdminPrepareConversionChainPlanService
 from app.services.prepare_conversion_chain_execution_service import PrepareConversionChainExecutionService
+from app.services.admin_automation_cockpit_service import AdminAutomationCockpitService
 from app.services.admin_ops_dashboard_service import AdminOpsDashboardService
 from app.services.admin_publishing_console_service import (
     AdminPublishingConsoleService,
@@ -324,6 +326,35 @@ def get_admin_ops_dashboard(
         audit_events_limit=audit_events_limit,
         include_sections=include,
     )
+
+
+@router.get("/automation-cockpit", response_model=AdminAutomationCockpitRead)
+def get_admin_automation_cockpit(
+    db: Session = Depends(get_db),
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+        description="Max cards returned per queue (counts still reflect full publishing-console snapshot).",
+    ),
+    include_queues: str | None = Query(
+        default=None,
+        description=(
+            "Optional comma-separated subset of "
+            "supplier_intake,missing_info,offer_readiness,risk_conflict "
+            "(limits which queues receive card payloads; totals unchanged)."
+        ),
+    ),
+) -> AdminAutomationCockpitRead:
+    """A1-Block 1: read-only automation cockpit snapshot (publishing-console projection only)."""
+    try:
+        inc = parse_include_queues_query(include_queues)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=[{"loc": ("query", "include_queues"), "msg": str(exc), "type": "value_error"}],
+        ) from exc
+    return AdminAutomationCockpitService().read_cockpit(db, limit_per_queue=limit, include_queues=inc)
 
 
 @router.get("/publishing-console", response_model=AdminPublishingConsoleRead)
