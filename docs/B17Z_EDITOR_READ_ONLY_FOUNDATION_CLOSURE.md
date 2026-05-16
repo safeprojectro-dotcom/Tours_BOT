@@ -182,9 +182,10 @@ After this closure, product/tech planning may prioritize:
 ## 12. Recommended next
 
 1. **Treat B17Z as closed** — use this doc as the checkpoint for the read-only editor line.
-2. **Open M1** design gate next when marketing/deep-link capture is the chosen priority.
-3. **Hold O1** until operational secure QR / boarding validation needs a chartered design (can follow M1 or run in parallel if resourcing allows — product decision).
-4. **Do not** jump to publish automation or Telegram send without **B17E/F**-class go/no-go and implementation charter.
+2. Use **[`docs/OPERATIONAL_AUTOMATION_ROADMAP.md`](OPERATIONAL_AUTOMATION_ROADMAP.md)** as the broader planning layer for post-B17 operational automation priorities.
+3. **Open M1** design gate next when marketing/deep-link capture is the chosen priority.
+4. **Hold O1** until operational secure QR / boarding validation needs a chartered design (can follow M1 or run in parallel if resourcing allows — product decision).
+5. **Do not** jump to publish automation or Telegram send without **B17E/F**-class go/no-go and implementation charter.
 
 ---
 
@@ -192,4 +193,5 @@ After this closure, product/tech planning may prioritize:
 
 - **[`docs/HANDOFF_B17A_READ_ONLY_EDITOR_DETAIL_VIEW.md`](HANDOFF_B17A_READ_ONLY_EDITOR_DETAIL_VIEW.md)**
 - **[`docs/HANDOFF_B17B_CHANNEL_TEMPLATE_SELECTION_METADATA.md`](HANDOFF_B17B_CHANNEL_TEMPLATE_SELECTION_METADATA.md)**
+- **[`docs/OPERATIONAL_AUTOMATION_ROADMAP.md`](OPERATIONAL_AUTOMATION_ROADMAP.md)**
 - Prompt (input spec): **[`docs/CURSOR_PROMPT_B17Z_EDITOR_READ_ONLY_FOUNDATION_CLOSURE.md`](CURSOR_PROMPT_B17Z_EDITOR_READ_ONLY_FOUNDATION_CLOSURE.md)**
