@@ -32,4 +32,6 @@ Unchanged: no migrations, writes, channel publish, scheduler, supplier sends, QR
 
 ## Next
 
-**A1-Block 3** or Telegram queue pagination if five cards per lane is too tight in production demos.
+**A1V3** — **[`docs/HANDOFF_A1V3_COCKPIT_QUEUE_LIST_STANDARDIZATION.md`](HANDOFF_A1V3_COCKPIT_QUEUE_LIST_STANDARDIZATION.md)** (standardized queue list cards).
+
+Then **A1-Block 3** or Telegram queue pagination if five cards per lane is too tight in production demos.

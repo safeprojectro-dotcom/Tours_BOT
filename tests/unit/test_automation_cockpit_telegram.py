@@ -1,4 +1,4 @@
-"""A1V / A1V2: Automation Cockpit Telegram formatters and callback encoding (read-only)."""
+"""A1V / A1V2 / A1V3: Automation Cockpit Telegram formatters and callback tests (read-only)."""
 
 from __future__ import annotations
 
@@ -47,17 +47,18 @@ def _sample_card(*, commercial: bool = False, source_type: str = "supplier_offer
         source_type=source_type,
         source_id=42,
         title="Test Offer",
-        status="ready",
-        status_label="Ready",
-        status_tone="success",
+        status="needs_attention",
+        status_label="Needs attention",
+        status_tone="warning",
         priority=1,
-        next_best_action_code="noop",
-        next_best_action_label="Read",
+        next_best_action_code="review_missing_marketing_data",
+        next_best_action_label="Review missing marketing data",
         next_best_action_kind="safe_read",
         next_best_action_enabled=True,
-        blocker_summary=None,
+        blocker_summary="Package must be approved for publishing.",
         commercial_context=ctx,
         safety_flags=AdminAutomationCockpitCardSafetyFlagsRead(),
+        metadata={"console_status": "needs_attention"},
     )
 
 
@@ -129,8 +130,24 @@ def test_format_cockpit_queue_lists_cards_without_technical_junk() -> None:
     assert "🧩 Marketing review" in body
     assert "Test Offer" in body
     assert "Offer #42" in body
+    assert "1) Test Offer" in body
+    assert "Needs attention" in body or "⚠️" in body
+    assert "Next step:" in body
+    assert "Check missing marketing data" in body
+    assert "⛔" in body
+    assert "Package must" in body
     assert "safe_read" not in body
     assert "kind=" not in body
+    assert "Status:" not in body
+
+
+def test_format_cockpit_queue_list_ro_standard_lines() -> None:
+    r = _sample_read()
+    body = format_cockpit_queue_text("ro", r, queue_code="marketing_review")
+    assert "Următorul pas:" in body
+    assert "Necesită atenție" in body
+    assert "Verifică datele marketing lipsă" in body
+    assert "Review missing" not in body
 
 
 def test_format_cockpit_queue_tour_source_caption() -> None:

@@ -23,6 +23,12 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ---
 
+## Checkpoint Sync — A1V3 queue list standardization (2026-05-16)
+
+**Shipped:** **[`docs/HANDOFF_A1V3_COCKPIT_QUEUE_LIST_STANDARDIZATION.md`](HANDOFF_A1V3_COCKPIT_QUEUE_LIST_STANDARDIZATION.md)** — single list-card layout for all cockpit queues; mapped **`next_best_action_code`** labels; **`ro`** avoids unmapped English next-step strings (generic “see card” fallback). Blocker/warning lines remain **truncated backend** snippets (not fully translated).
+
+---
+
 ## Checkpoint Sync — Admin Offer Review Package — Slice 1 (2026-04-27)
 
 **Docs-only.**

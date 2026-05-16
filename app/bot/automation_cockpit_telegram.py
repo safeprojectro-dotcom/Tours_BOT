@@ -1,4 +1,4 @@
-"""A1V / A1V2: format Automation Cockpit read models for Telegram admin (read-only; no mutations)."""
+"""A1V / A1V2 / A1V3: format Automation Cockpit read models for Telegram admin (read-only; no mutations)."""
 
 from __future__ import annotations
 
@@ -47,6 +47,40 @@ _QUEUE_BTN_MESSAGE_KEY: dict[str, str] = {
     "catalog_conversion": "admin_automation_cockpit_btn_catalog",
 }
 
+# List view: map backend next_best_action_code -> messages.py key suffix (admin_automation_cockpit_action_<key>)
+_COCKPIT_LIST_ACTION_KEYS: dict[str, str] = {
+    "review_missing_marketing_data": "review_missing_marketing_data",
+    "review_template": "review_template",
+    "open_marketing_review": "open_marketing_review",
+    "open_preview": "open_preview",
+    "future_edit_marketing_copy": "future_edit_marketing_copy",
+    "review_conversion_health": "review_conversion_health",
+    "review_already_published": "review_already_published",
+    "review_publish_readiness": "review_publish_readiness",
+    "resolve_publish_blocker": "resolve_publish_blocker",
+    "await_publish_go_no_go": "await_publish_go_no_go",
+    "future_confirm_publish": "future_confirm_publish",
+    "review_catalog_visibility": "review_catalog_visibility",
+    "open_prepare_chain_plan": "open_prepare_chain_plan",
+    "run_conversion_dry_run_future": "run_conversion_dry_run_future",
+    "resolve_conversion_blocker": "resolve_conversion_blocker",
+    "review_conversion_context": "review_conversion_context",
+    "review_publishing_context": "review_publishing_context",
+    "guarded_internal_action": "guarded_internal_action",
+    "future_capability": "future_capability",
+    "safe_read": "safe_read",
+    "prepare_conversion_chain": "prepare_conversion_chain",
+    "create_execution_link": "create_execution_link",
+    "manual_publish_available": "manual_publish_available",
+    "review_warnings": "review_warnings",
+    "not_applicable": "not_applicable",
+    "resolve_publish_blockers": "resolve_publish_blockers",
+    "review_package_refresh": "review_package_refresh",
+}
+
+_LIST_CARD_TITLE_MAX = 72
+_LIST_CARD_ISSUE_MAX = 100
+
 
 def cockpit_queue_heading(language_code: str | None, queue_code: str) -> str:
     key = _QUEUE_BTN_MESSAGE_KEY[queue_code]
@@ -69,16 +103,87 @@ def _card_source_caption(language_code: str | None, *, source_type: str, source_
     return translate(language_code, "admin_automation_cockpit_card_source_offer", sid=str(source_id))
 
 
-def _card_issues_line(language_code: str | None, *, blocker: str | None, warning: str | None) -> str | None:
-    b = (blocker or "").strip()
-    w = (warning or "").strip()
-    if not b and not w:
-        return None
-    if b and w:
-        return translate(language_code, "admin_automation_cockpit_card_issues_both", blocker=b, warn=w)
-    if b:
-        return translate(language_code, "admin_automation_cockpit_card_issues_blocker_only", blocker=b)
-    return translate(language_code, "admin_automation_cockpit_card_issues_warn_only", warn=w)
+def _snippet(text: str | None, *, max_len: int) -> str:
+    t = (text or "").strip()
+    if not t:
+        return "—"
+    if len(t) <= max_len:
+        return t
+    return t[: max_len - 1].rstrip() + "…"
+
+
+def _list_console_status_message_key(card: AdminAutomationCockpitCardRead) -> str:
+    meta = card.metadata or {}
+    cs = str(meta.get("console_status") or card.status or "").strip().lower()
+    if cs == "blocked":
+        return "admin_automation_cockpit_list_console_blocked"
+    if cs == "needs_attention":
+        return "admin_automation_cockpit_list_console_needs_attention"
+    if cs == "ready":
+        return "admin_automation_cockpit_list_console_ready"
+    tone = str(card.status_tone or "neutral").lower()
+    if tone == "danger":
+        return "admin_automation_cockpit_list_console_blocked"
+    if tone in ("warning",):
+        return "admin_automation_cockpit_list_console_needs_attention"
+    if tone in ("success",):
+        return "admin_automation_cockpit_list_console_ready"
+    return "admin_automation_cockpit_list_console_neutral"
+
+
+def _list_next_step_line(language_code: str | None, card: AdminAutomationCockpitCardRead) -> str:
+    code = (card.next_best_action_code or "").strip()
+    mid = _COCKPIT_LIST_ACTION_KEYS.get(code)
+    if mid:
+        return translate(language_code, f"admin_automation_cockpit_action_{mid}")
+    if language_code == "ro":
+        return translate(language_code, "admin_automation_cockpit_list_next_see_detail")
+    raw = _snippet(card.next_best_action_label, max_len=100)
+    if raw != "—":
+        return raw
+    return translate(language_code, "admin_automation_cockpit_list_next_see_detail")
+
+
+def _list_issue_line(language_code: str | None, card: AdminAutomationCockpitCardRead) -> str | None:
+    blocker = (card.blocker_summary or "").strip()
+    warning = (card.warning_summary or "").strip()
+    if blocker:
+        return translate(
+            language_code,
+            "admin_automation_cockpit_queue_card_blocker",
+            text=_snippet(blocker, max_len=_LIST_CARD_ISSUE_MAX),
+        )
+    if warning:
+        return translate(
+            language_code,
+            "admin_automation_cockpit_queue_card_warning",
+            text=_snippet(warning, max_len=_LIST_CARD_ISSUE_MAX),
+        )
+    return None
+
+
+def _format_queue_list_card(language_code: str | None, index: int, card: AdminAutomationCockpitCardRead) -> str:
+    title = _snippet(card.title, max_len=_LIST_CARD_TITLE_MAX)
+    source = _card_source_caption(language_code, source_type=card.source_type, source_id=card.source_id)
+    status_phrase = translate(language_code, _list_console_status_message_key(card))
+    lines = [
+        translate(language_code, "admin_automation_cockpit_queue_card_l1", n=str(index), title=title),
+        translate(
+            language_code,
+            "admin_automation_cockpit_queue_card_l2",
+            source=source,
+            status=status_phrase,
+        ),
+        translate(
+            language_code,
+            "admin_automation_cockpit_queue_card_l3",
+            step=_list_next_step_line(language_code, card),
+        ),
+    ]
+    issue = _list_issue_line(language_code, card)
+    if issue:
+        lines.append(issue)
+    return "\n".join(lines)
 
 
 def cockpit_queue_abbrev(queue_code: str) -> str:
@@ -205,21 +310,7 @@ def format_cockpit_queue_text(
         return "\n".join(lines)
     lines.append(translate(language_code, "admin_automation_cockpit_queue_cards_header"))
     for i, c in enumerate(qrow.cards[:5], start=1):
-        status_human = (c.status_label or "").strip() or c.status
-        next_step = (c.next_best_action_label or "").strip() or "—"
-        issues = _card_issues_line(language_code, blocker=c.blocker_summary, warning=c.warning_summary)
-        block = translate(
-            language_code,
-            "admin_automation_cockpit_card_compact",
-            n=str(i),
-            title=c.title,
-            source=_card_source_caption(language_code, source_type=c.source_type, source_id=c.source_id),
-            status=status_human,
-            next_step=next_step,
-        )
-        if issues:
-            block = f"{block}\n{issues}"
-        lines.append(block)
+        lines.append(_format_queue_list_card(language_code, i, c))
     return "\n".join(lines)
 
 
