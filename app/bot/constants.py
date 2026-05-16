@@ -165,6 +165,7 @@ ADMIN_SUPPLIERS_NAV_HOME = "admin:suppliers:nav:home"
 
 # A1V: read-only Automation Cockpit Telegram surface (admin allowlist only)
 ADMIN_AUTOMATION_COCKPIT_HOME = "ac:h"
+ADMIN_AUTOMATION_COCKPIT_SAFETY_DETAIL = "ac:s"
 ADMIN_AUTOMATION_COCKPIT_REFRESH = "ac:r"
 ADMIN_AUTOMATION_COCKPIT_REFRESH_QUEUE_PREFIX = "ac:rq:"
 ADMIN_AUTOMATION_COCKPIT_CLOSE = "ac:x"

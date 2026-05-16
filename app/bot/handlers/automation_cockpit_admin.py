@@ -14,10 +14,12 @@ from app.bot.automation_cockpit_telegram import (
     cockpit_card_keyboard,
     cockpit_queue_from_abbrev,
     cockpit_queue_keyboard,
+    cockpit_safety_detail_keyboard,
     cockpit_summary_keyboard,
     find_card_in_cockpit,
     format_cockpit_card_detail_text,
     format_cockpit_queue_text,
+    format_cockpit_safety_detail_text,
     format_cockpit_summary_text,
     parse_cockpit_card_callback,
 )
@@ -28,6 +30,7 @@ from app.bot.constants import (
     ADMIN_AUTOMATION_COCKPIT_QUEUE_PREFIX,
     ADMIN_AUTOMATION_COCKPIT_REFRESH,
     ADMIN_AUTOMATION_COCKPIT_REFRESH_QUEUE_PREFIX,
+    ADMIN_AUTOMATION_COCKPIT_SAFETY_DETAIL,
 )
 from app.bot.messages import translate
 from app.bot.services import TelegramUserContextService
@@ -169,6 +172,24 @@ async def cb_cockpit_refresh_home(query: CallbackQuery) -> None:
         message=None,
         text=format_cockpit_summary_text(lg, read),
         reply_markup=cockpit_summary_keyboard(lg).as_markup(),
+    )
+    await query.answer()
+
+
+@router.callback_query(F.data == ADMIN_AUTOMATION_COCKPIT_SAFETY_DETAIL)
+async def cb_cockpit_safety_detail(query: CallbackQuery) -> None:
+    if query.from_user is None:
+        return
+    lg = await _resolve_language(query.from_user.id, query.from_user.language_code)
+    if await _deny_if_not_allowed(query, language_code=lg):
+        await query.answer()
+        return
+    read = _load_summary_read()
+    await _edit_or_answer(
+        query=query,
+        message=None,
+        text=format_cockpit_safety_detail_text(lg, read),
+        reply_markup=cockpit_safety_detail_keyboard(lg).as_markup(),
     )
     await query.answer()
 

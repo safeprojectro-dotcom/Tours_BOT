@@ -1,4 +1,4 @@
-"""A1V: format Automation Cockpit read models for Telegram admin (read-only; no mutations)."""
+"""A1V / A1V2: format Automation Cockpit read models for Telegram admin (read-only; no mutations)."""
 
 from __future__ import annotations
 
@@ -11,9 +11,11 @@ from app.bot.constants import (
     ADMIN_AUTOMATION_COCKPIT_QUEUE_PREFIX,
     ADMIN_AUTOMATION_COCKPIT_REFRESH,
     ADMIN_AUTOMATION_COCKPIT_REFRESH_QUEUE_PREFIX,
+    ADMIN_AUTOMATION_COCKPIT_SAFETY_DETAIL,
 )
 from app.bot.messages import translate
 from app.schemas.admin_automation_cockpit import (
+    AUTOMATION_COCKPIT_QUEUE_CODES,
     AdminAutomationCockpitCardRead,
     AdminAutomationCockpitRead,
 )
@@ -35,10 +37,48 @@ SOURCE_TYPE_ABBR: dict[str, str] = {
 }
 SOURCE_TYPE_ABBR_REV: dict[str, str] = {v: k for k, v in SOURCE_TYPE_ABBR.items()}
 
-FACT_LOCK_SHORT = (
-    "Supplier/catalog facts are read-only. Marketing review may change copy only, "
-    "not price/route/inclusions/discounts/capacity."
-)
+_QUEUE_BTN_MESSAGE_KEY: dict[str, str] = {
+    "supplier_intake": "admin_automation_cockpit_btn_supplier_intake",
+    "missing_info": "admin_automation_cockpit_btn_missing_info",
+    "offer_readiness": "admin_automation_cockpit_btn_offer_readiness",
+    "risk_conflict": "admin_automation_cockpit_btn_risk",
+    "marketing_review": "admin_automation_cockpit_btn_marketing",
+    "publishing_queue": "admin_automation_cockpit_btn_publishing",
+    "catalog_conversion": "admin_automation_cockpit_btn_catalog",
+}
+
+
+def cockpit_queue_heading(language_code: str | None, queue_code: str) -> str:
+    key = _QUEUE_BTN_MESSAGE_KEY[queue_code]
+    return translate(language_code, key)
+
+
+def _open_card_button_key(source_type: str) -> str:
+    if source_type == "tour":
+        return "admin_automation_cockpit_open_tour_btn"
+    return "admin_automation_cockpit_open_offer_btn"
+
+
+def cockpit_open_card_label(language_code: str | None, *, source_type: str, source_id: int) -> str:
+    return translate(language_code, _open_card_button_key(source_type), sid=str(source_id))
+
+
+def _card_source_caption(language_code: str | None, *, source_type: str, source_id: int) -> str:
+    if source_type == "tour":
+        return translate(language_code, "admin_automation_cockpit_card_source_tour", sid=str(source_id))
+    return translate(language_code, "admin_automation_cockpit_card_source_offer", sid=str(source_id))
+
+
+def _card_issues_line(language_code: str | None, *, blocker: str | None, warning: str | None) -> str | None:
+    b = (blocker or "").strip()
+    w = (warning or "").strip()
+    if not b and not w:
+        return None
+    if b and w:
+        return translate(language_code, "admin_automation_cockpit_card_issues_both", blocker=b, warn=w)
+    if b:
+        return translate(language_code, "admin_automation_cockpit_card_issues_blocker_only", blocker=b)
+    return translate(language_code, "admin_automation_cockpit_card_issues_warn_only", warn=w)
 
 
 def cockpit_queue_abbrev(queue_code: str) -> str:
@@ -97,43 +137,49 @@ def format_cockpit_summary_text(language_code: str | None, read: AdminAutomation
     lines = [
         translate(language_code, "admin_automation_cockpit_title"),
         "",
-        translate(
-            language_code,
-            "admin_automation_cockpit_summary_counts",
-            total=s.total_cards,
-            urgent=s.urgent_count,
-            needs_attention=s.needs_attention_count,
-            ready=s.ready_count,
-            blocked=s.blocked_count,
-            future_disabled=s.future_disabled_count,
-        ),
+        translate(language_code, "admin_automation_cockpit_summary_total", total=str(s.total_cards)),
+        translate(language_code, "admin_automation_cockpit_summary_urgent", n=str(s.urgent_count)),
+        translate(language_code, "admin_automation_cockpit_summary_needs_attention", n=str(s.needs_attention_count)),
+        translate(language_code, "admin_automation_cockpit_summary_ready", n=str(s.ready_count)),
+        translate(language_code, "admin_automation_cockpit_summary_blocked", n=str(s.blocked_count)),
+        translate(language_code, "admin_automation_cockpit_summary_future_disabled", n=str(s.future_disabled_count)),
         "",
         translate(language_code, "admin_automation_cockpit_queue_counts_header"),
-        f"· supplier_intake: {qc.get('supplier_intake', 0)}",
-        f"· missing_info: {qc.get('missing_info', 0)}",
-        f"· offer_readiness: {qc.get('offer_readiness', 0)}",
-        f"· risk_conflict: {qc.get('risk_conflict', 0)}",
-        f"· marketing_review: {qc.get('marketing_review', 0)}",
-        f"· publishing_queue: {qc.get('publishing_queue', 0)}",
-        f"· catalog_conversion: {qc.get('catalog_conversion', 0)}",
-        "",
-        translate(language_code, "admin_automation_cockpit_safety_header"),
-        translate(
-            language_code,
-            "admin_automation_cockpit_safety_lines",
-            ro=str(read.safety_summary.read_only),
-            nt=str(read.safety_summary.no_telegram_io),
-            np=str(read.safety_summary.no_publish_attempt),
-            ns=str(read.safety_summary.no_scheduler),
-            nn=str(read.safety_summary.no_supplier_notification_send),
-            nq=str(read.safety_summary.no_qr_token),
-            nl=str(read.safety_summary.no_layer_a_mutation),
-            nb=str(read.safety_summary.no_b11_change),
-        ),
-        "",
-        FACT_LOCK_SHORT,
     ]
+    for qcode in AUTOMATION_COCKPIT_QUEUE_CODES:
+        label = translate(language_code, _QUEUE_BTN_MESSAGE_KEY[qcode])
+        lines.append(f"{label}: {qc.get(qcode, 0)}")
+    lines.extend(
+        [
+            "",
+            translate(language_code, "admin_automation_cockpit_safety_compact"),
+            "",
+            translate(language_code, "admin_automation_cockpit_fact_lock_short"),
+        ]
+    )
     return "\n".join(lines)
+
+
+def format_cockpit_safety_detail_text(language_code: str | None, read: AdminAutomationCockpitRead) -> str:
+    ss = read.safety_summary
+    return "\n".join(
+        [
+            translate(language_code, "admin_automation_cockpit_safety_detail_title"),
+            "",
+            translate(
+                language_code,
+                "admin_automation_cockpit_safety_lines",
+                ro=str(ss.read_only),
+                nt=str(ss.no_telegram_io),
+                np=str(ss.no_publish_attempt),
+                ns=str(ss.no_scheduler),
+                nn=str(ss.no_supplier_notification_send),
+                nq=str(ss.no_qr_token),
+                nl=str(ss.no_layer_a_mutation),
+                nb=str(ss.no_b11_change),
+            ),
+        ]
+    )
 
 
 def format_cockpit_queue_text(
@@ -145,12 +191,13 @@ def format_cockpit_queue_text(
     qrow = next((q for q in read.queues if q.queue_code == queue_code), None)
     if qrow is None:
         return translate(language_code, "admin_automation_cockpit_queue_missing")
+    heading = cockpit_queue_heading(language_code, queue_code)
     lines = [
-        f"{qrow.queue_label}",
+        heading,
         "",
-        qrow.description,
+        translate(language_code, "admin_automation_cockpit_queue_lane_note"),
         "",
-        translate(language_code, "admin_automation_cockpit_queue_total", total=qrow.total_count),
+        translate(language_code, "admin_automation_cockpit_queue_total", total=str(qrow.total_count)),
         "",
     ]
     if not qrow.cards:
@@ -158,26 +205,21 @@ def format_cockpit_queue_text(
         return "\n".join(lines)
     lines.append(translate(language_code, "admin_automation_cockpit_queue_cards_header"))
     for i, c in enumerate(qrow.cards[:5], start=1):
-        bl = c.blocker_summary or "—"
-        wl = c.warning_summary or "—"
-        lines.append(
-            translate(
-                language_code,
-                "admin_automation_cockpit_card_compact",
-                n=i,
-                title=c.title,
-                st=c.source_type,
-                sid=c.source_id,
-                status=c.status,
-                tone=c.status_tone,
-                prio=c.priority,
-                act_label=c.next_best_action_label,
-                act_kind=c.next_best_action_kind,
-                act_en=c.next_best_action_enabled,
-                blocker=bl,
-                warn=wl,
-            )
+        status_human = (c.status_label or "").strip() or c.status
+        next_step = (c.next_best_action_label or "").strip() or "—"
+        issues = _card_issues_line(language_code, blocker=c.blocker_summary, warning=c.warning_summary)
+        block = translate(
+            language_code,
+            "admin_automation_cockpit_card_compact",
+            n=str(i),
+            title=c.title,
+            source=_card_source_caption(language_code, source_type=c.source_type, source_id=c.source_id),
+            status=status_human,
+            next_step=next_step,
         )
+        if issues:
+            block = f"{block}\n{issues}"
+        lines.append(block)
     return "\n".join(lines)
 
 
@@ -188,26 +230,48 @@ def _fmt_path_lines(card: AdminAutomationCockpitCardRead) -> list[str]:
 
 
 def format_cockpit_card_detail_text(language_code: str | None, card: AdminAutomationCockpitCardRead) -> str:
+    status_human = (card.status_label or "").strip() or card.status
     lines = [
         translate(language_code, "admin_automation_cockpit_card_detail_header"),
         "",
         f"{card.title}",
-        f"source: {card.source_type} #{card.source_id}",
-        f"status: {card.status} ({card.status_label}) · tone={card.status_tone} · priority={card.priority}",
+        translate(
+            language_code,
+            "admin_automation_cockpit_detail_source",
+            caption=_card_source_caption(language_code, source_type=card.source_type, source_id=card.source_id),
+        ),
+        translate(
+            language_code,
+            "admin_automation_cockpit_detail_status",
+            status=status_human,
+        ),
         "",
         translate(
             language_code,
-            "admin_automation_cockpit_card_action_block",
-            code=card.next_best_action_code,
-            label=card.next_best_action_label,
-            kind=card.next_best_action_kind,
-            enabled=card.next_best_action_enabled,
+            "admin_automation_cockpit_card_next_step_only",
+            label=(card.next_best_action_label or "—"),
         ),
         "",
-        f"blocker: {card.blocker_summary or '—'}",
-        f"warning: {card.warning_summary or '—'}",
-        f"risk: {card.risk_summary or '—'}",
-        f"owner: {card.owner_role or '—'}",
+        translate(
+            language_code,
+            "admin_automation_cockpit_detail_blocker",
+            text=card.blocker_summary or "—",
+        ),
+        translate(
+            language_code,
+            "admin_automation_cockpit_detail_warning",
+            text=card.warning_summary or "—",
+        ),
+        translate(
+            language_code,
+            "admin_automation_cockpit_detail_risk",
+            text=card.risk_summary or "—",
+        ),
+        translate(
+            language_code,
+            "admin_automation_cockpit_detail_owner",
+            text=card.owner_role or "—",
+        ),
         "",
     ]
     pl = _fmt_path_lines(card)
@@ -234,25 +298,56 @@ def format_cockpit_card_detail_text(language_code: str | None, card: AdminAutoma
         ctx = card.commercial_context
         lines.append("")
         lines.append(translate(language_code, "admin_automation_cockpit_commercial_header"))
-        lines.append(f"publish_status: {ctx.publish_status or '—'}")
-        lines.append(f"preview_status: {ctx.preview_status or '—'}")
-        lines.append(f"payload_status: {ctx.payload_status or '—'}")
-        lines.append(f"template_family: {ctx.template_family or '—'}")
-        lines.append(f"selected_template_id: {ctx.selected_template_id or '—'}")
-        lines.append(f"tour_code: {ctx.tour_code or '—'}")
-        lines.append(f"already_published: {ctx.already_published if ctx.already_published is not None else '—'}")
-        lines.append(f"has_tour_bridge: {ctx.has_tour_bridge if ctx.has_tour_bridge is not None else '—'}")
+        lines.append(translate(language_code, "admin_automation_cockpit_cc_publish", v=ctx.publish_status or "—"))
+        lines.append(translate(language_code, "admin_automation_cockpit_cc_preview", v=ctx.preview_status or "—"))
+        lines.append(translate(language_code, "admin_automation_cockpit_cc_payload", v=ctx.payload_status or "—"))
+        lines.append(translate(language_code, "admin_automation_cockpit_cc_template_family", v=ctx.template_family or "—"))
+        lines.append(translate(language_code, "admin_automation_cockpit_cc_template_id", v=ctx.selected_template_id or "—"))
+        lines.append(translate(language_code, "admin_automation_cockpit_cc_tour_code", v=ctx.tour_code or "—"))
         lines.append(
-            f"has_catalog_visible_tour: {ctx.has_catalog_visible_tour if ctx.has_catalog_visible_tour is not None else '—'}"
+            translate(
+                language_code,
+                "admin_automation_cockpit_cc_flag",
+                label=translate(language_code, "admin_automation_cockpit_cc_already_published"),
+                v=str(ctx.already_published) if ctx.already_published is not None else "—",
+            )
         )
         lines.append(
-            f"has_active_execution_link: {ctx.has_active_execution_link if ctx.has_active_execution_link is not None else '—'}"
+            translate(
+                language_code,
+                "admin_automation_cockpit_cc_flag",
+                label=translate(language_code, "admin_automation_cockpit_cc_bridge"),
+                v=str(ctx.has_tour_bridge) if ctx.has_tour_bridge is not None else "—",
+            )
+        )
+        lines.append(
+            translate(
+                language_code,
+                "admin_automation_cockpit_cc_flag",
+                label=translate(language_code, "admin_automation_cockpit_cc_catalog_visible"),
+                v=str(ctx.has_catalog_visible_tour) if ctx.has_catalog_visible_tour is not None else "—",
+            )
+        )
+        lines.append(
+            translate(
+                language_code,
+                "admin_automation_cockpit_cc_flag",
+                label=translate(language_code, "admin_automation_cockpit_cc_exec_link"),
+                v=str(ctx.has_active_execution_link) if ctx.has_active_execution_link is not None else "—",
+            )
         )
         lines.append("")
         note = (ctx.fact_lock_note or "").strip()
         if note:
             lines.append(note[:500])
     return "\n".join(lines)
+
+
+def cockpit_safety_detail_keyboard(language_code: str | None) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=translate(language_code, "admin_automation_cockpit_btn_back_home"), callback_data=ADMIN_AUTOMATION_COCKPIT_HOME)
+    kb.adjust(1)
+    return kb
 
 
 def cockpit_summary_keyboard(language_code: str | None) -> InlineKeyboardBuilder:
@@ -285,6 +380,10 @@ def cockpit_summary_keyboard(language_code: str | None) -> InlineKeyboardBuilder
         text=translate(language_code, "admin_automation_cockpit_btn_catalog"),
         callback_data=f"{ADMIN_AUTOMATION_COCKPIT_QUEUE_PREFIX}{cockpit_queue_abbrev('catalog_conversion')}",
     )
+    kb.button(
+        text=translate(language_code, "admin_automation_cockpit_btn_safety_detail"),
+        callback_data=ADMIN_AUTOMATION_COCKPIT_SAFETY_DETAIL,
+    )
     kb.button(text=translate(language_code, "admin_automation_cockpit_btn_refresh"), callback_data=ADMIN_AUTOMATION_COCKPIT_REFRESH)
     kb.button(text=translate(language_code, "admin_automation_cockpit_btn_close"), callback_data=ADMIN_AUTOMATION_COCKPIT_CLOSE)
     kb.adjust(2)
@@ -301,11 +400,7 @@ def cockpit_queue_keyboard(
     qrow = next((q for q in read.queues if q.queue_code == queue_code), None)
     if qrow:
         for c in qrow.cards[:5]:
-            label = translate(
-                language_code,
-                "admin_automation_cockpit_open_card_btn",
-                sid=c.source_id,
-            )
+            label = cockpit_open_card_label(language_code, source_type=c.source_type, source_id=c.source_id)
             kb.button(text=label, callback_data=cockpit_card_callback(queue_code, c.source_type, c.source_id))
     kb.button(
         text=translate(language_code, "admin_automation_cockpit_btn_refresh"),

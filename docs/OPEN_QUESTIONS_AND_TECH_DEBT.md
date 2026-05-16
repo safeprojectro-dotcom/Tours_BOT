@@ -17,6 +17,12 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ---
 
+## Checkpoint Sync — A1V2 Telegram cockpit UX (2026-05-16)
+
+**Shipped:** **[`docs/HANDOFF_A1V2_COCKPIT_TELEGRAM_UX_POLISH.md`](HANDOFF_A1V2_COCKPIT_TELEGRAM_UX_POLISH.md)** — demo-readable summary/list copy; **`ac:s`** safety detail; no service/API behavior change.
+
+---
+
 ## Checkpoint Sync — Admin Offer Review Package — Slice 1 (2026-04-27)
 
 **Docs-only.**

@@ -1,4 +1,4 @@
-"""A1V: Automation Cockpit Telegram formatters and callback encoding (read-only)."""
+"""A1V / A1V2: Automation Cockpit Telegram formatters and callback encoding (read-only)."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from app.bot.automation_cockpit_telegram import (
     find_card_in_cockpit,
     format_cockpit_card_detail_text,
     format_cockpit_queue_text,
+    format_cockpit_safety_detail_text,
     format_cockpit_summary_text,
     parse_cockpit_card_callback,
 )
@@ -32,7 +33,7 @@ def _sample_safety_summary() -> AdminAutomationCockpitSafetySummaryRead:
     )
 
 
-def _sample_card(*, commercial: bool = False) -> AdminAutomationCockpitCardRead:
+def _sample_card(*, commercial: bool = False, source_type: str = "supplier_offer") -> AdminAutomationCockpitCardRead:
     ctx = (
         AdminAutomationCockpitCommercialContextRead(
             tour_code="TC1",
@@ -43,7 +44,7 @@ def _sample_card(*, commercial: bool = False) -> AdminAutomationCockpitCardRead:
     )
     return AdminAutomationCockpitCardRead(
         card_id="x",
-        source_type="supplier_offer",
+        source_type=source_type,
         source_id=42,
         title="Test Offer",
         status="ready",
@@ -104,22 +105,39 @@ def _sample_read(*, commercial: bool = False) -> AdminAutomationCockpitRead:
     )
 
 
-def test_format_cockpit_summary_includes_queues_and_safety() -> None:
+def test_format_cockpit_summary_demo_ready_no_raw_codes() -> None:
     body = format_cockpit_summary_text("en", _sample_read())
-    assert "Admin Automation Cockpit" in body
-    assert "supplier_intake: 1" in body
-    assert "marketing_review: 3" in body
-    assert "read_only=True" in body
-    assert "Supplier/catalog facts are read-only" in body
+    assert "📊 Admin automation cockpit" in body
+    assert "Total: 3 cards" in body
+    assert "🚨 Urgent: 1" in body
+    assert "🛡 Safe mode" in body
+    assert "supplier_intake" not in body
+    assert "read_only=" not in body
+    assert "📥 Supplier intake: 1" in body
+    assert "🔒 Supplier/catalog facts stay locked" in body
 
 
-def test_format_cockpit_queue_lists_cards_and_actions() -> None:
+def test_format_cockpit_safety_detail_includes_flags() -> None:
+    body = format_cockpit_safety_detail_text("en", _sample_read())
+    assert "Safety flags" in body
+    assert "read_only=" in body
+
+
+def test_format_cockpit_queue_lists_cards_without_technical_junk() -> None:
     r = _sample_read()
     body = format_cockpit_queue_text("en", r, queue_code="marketing_review")
-    assert "Marketing" in body
+    assert "🧩 Marketing review" in body
     assert "Test Offer" in body
-    assert "safe_read" in body
-    assert "next:" in body or "next:" in body.lower()
+    assert "Offer #42" in body
+    assert "safe_read" not in body
+    assert "kind=" not in body
+
+
+def test_format_cockpit_queue_tour_source_caption() -> None:
+    r = _sample_read()
+    r.queues[0].cards = [_sample_card(source_type="tour")]
+    body = format_cockpit_queue_text("en", r, queue_code="marketing_review")
+    assert "Tour #42" in body
 
 
 def test_format_cockpit_card_detail_commercial_and_fact_lock() -> None:
@@ -127,7 +145,7 @@ def test_format_cockpit_card_detail_commercial_and_fact_lock() -> None:
     body = format_cockpit_card_detail_text("en", c)
     assert "Commercial context" in body
     assert "FACT_LOCK_NOTE_TEST" in body
-    assert "tour_code: TC1" in body
+    assert "Tour code: TC1" in body
 
 
 def test_cockpit_keyboards_no_publish_callbacks() -> None:
@@ -138,6 +156,12 @@ def test_cockpit_keyboards_no_publish_callbacks() -> None:
             low = btn.callback_data.lower()
             assert "publish" not in low
             assert "channel" not in low
+
+
+def test_cockpit_summary_keyboard_has_safety_detail() -> None:
+    kb = cockpit_summary_keyboard("en")
+    callbacks = {btn.callback_data for row in kb.export() for btn in row}
+    assert "ac:s" in callbacks
 
 
 def test_cockpit_queue_keyboard_only_navigation_callbacks() -> None:
