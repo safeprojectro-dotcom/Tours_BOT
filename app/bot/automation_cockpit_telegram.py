@@ -26,6 +26,9 @@ from app.schemas.admin_automation_cockpit import (
     AdminAutomationCockpitRead,
 )
 from app.schemas.supplier_clarification_outbox import SupplierClarificationOutboxItemRead
+from app.schemas.supplier_offer_catalog_conversion_readiness import (
+    SupplierOfferCatalogConversionReadinessRead,
+)
 
 _COCKPIT_QUEUE_ABBR: dict[str, str] = {
     "supplier_intake": "si",
@@ -482,6 +485,10 @@ def _format_queue_list_card(language_code: str | None, index: int, card: AdminAu
     issue = _list_issue_line(language_code, card)
     if issue:
         lines.append(issue)
+    snap = card.catalog_conversion_readiness
+    if snap is not None:
+        st = translate(language_code, snap.status_label_message_key)
+        lines.append(translate(language_code, "admin_a6a_queue_hint", status=st))
     return "\n".join(lines)
 
 
@@ -970,6 +977,101 @@ def format_cockpit_queue_text(
     return "\n".join(lines)
 
 
+def _a6a_tour_line_value(language_code: str | None, snap: SupplierOfferCatalogConversionReadinessRead) -> str:
+    ht = snap.has_tour_link
+    if ht is True:
+        return translate(language_code, "admin_a6a_tour_available")
+    if ht is False:
+        return translate(language_code, "admin_a6a_tour_link_missing")
+    return translate(language_code, "admin_ui_human_technical_unknown")
+
+
+def _a6a_mini_cta_line_value(language_code: str | None, snap: SupplierOfferCatalogConversionReadinessRead) -> str:
+    safe = snap.mini_app_cta_safe
+    if safe is True:
+        return translate(language_code, "admin_a6a_mini_cta_verify_before_publish")
+    if safe is False:
+        return translate(language_code, "admin_a6a_mini_cta_not_safe_yet")
+    return translate(language_code, "admin_ui_human_technical_unknown")
+
+
+def _a6a_catalog_line_value(language_code: str | None, snap: SupplierOfferCatalogConversionReadinessRead) -> str | None:
+    vis = snap.catalog_visible
+    if vis is True:
+        return translate(language_code, "admin_a6a_catalog_listed")
+    if vis is False:
+        return translate(language_code, "admin_a6a_catalog_not_listed")
+    return None
+
+
+def _format_catalog_conversion_readiness_detail(
+    language_code: str | None,
+    snap: SupplierOfferCatalogConversionReadinessRead,
+) -> list[str]:
+    lines: list[str] = [
+        "",
+        translate(language_code, "admin_a6a_detail_section_header"),
+        translate(
+            language_code,
+            "admin_a6a_detail_kv",
+            label=translate(language_code, "admin_a6a_label_status"),
+            value=translate(language_code, snap.status_label_message_key),
+        ),
+    ]
+    if snap.main_blocker_message_key:
+        lines.append(
+            translate(
+                language_code,
+                "admin_a6a_detail_kv",
+                label=translate(language_code, "admin_a6a_label_main_blocker"),
+                value=translate(language_code, snap.main_blocker_message_key),
+            )
+        )
+    for wk in snap.warnings_message_keys:
+        lines.append(
+            translate(
+                language_code,
+                "admin_a6a_detail_warn_line",
+                text=translate(language_code, wk),
+            )
+        )
+    lines.append(
+        translate(
+            language_code,
+            "admin_a6a_detail_kv",
+            label=translate(language_code, "admin_a6a_label_tour"),
+            value=_a6a_tour_line_value(language_code, snap),
+        )
+    )
+    cat = _a6a_catalog_line_value(language_code, snap)
+    if cat is not None:
+        lines.append(
+            translate(
+                language_code,
+                "admin_a6a_detail_kv",
+                label=translate(language_code, "admin_a6a_label_catalog"),
+                value=cat,
+            )
+        )
+    lines.append(
+        translate(
+            language_code,
+            "admin_a6a_detail_kv",
+            label=translate(language_code, "admin_a6a_label_mini_cta"),
+            value=_a6a_mini_cta_line_value(language_code, snap),
+        )
+    )
+    lines.append(
+        translate(
+            language_code,
+            "admin_a6a_detail_kv",
+            label=translate(language_code, "admin_a6a_label_next"),
+            value=translate(language_code, snap.next_step_message_key),
+        )
+    )
+    return lines
+
+
 def format_cockpit_card_detail_text(language_code: str | None, card: AdminAutomationCockpitCardRead) -> str:
     title = _snippet(card.title, max_len=_DETAIL_TITLE_MAX)
     source = _card_source_caption(language_code, source_type=card.source_type, source_id=card.source_id)
@@ -1085,6 +1187,10 @@ def format_cockpit_card_detail_text(language_code: str | None, card: AdminAutoma
                 translate(language_code, "admin_automation_cockpit_fact_lock_card_detail"),
             ]
         )
+
+    snap = card.catalog_conversion_readiness
+    if snap is not None:
+        lines.extend(_format_catalog_conversion_readiness_detail(language_code, snap))
 
     lines.extend(
         [

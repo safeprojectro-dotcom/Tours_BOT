@@ -8,6 +8,9 @@ from typing import Any, Final, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.supplier_clarification_draft import SupplierClarificationDraftRead
+from app.schemas.supplier_offer_catalog_conversion_readiness import (
+    SupplierOfferCatalogConversionReadinessRead,
+)
 from app.schemas.supplier_offer_intake_validation import SupplierOfferIntakeValidationRead
 
 AutomationCockpitQueueCode = Literal[
@@ -169,6 +172,10 @@ class AdminAutomationCockpitCardRead(BaseModel):
         default=None,
         description="A3: supplier vs internal clarification drafts (read-only; not auto-sent).",
     )
+    catalog_conversion_readiness: SupplierOfferCatalogConversionReadinessRead | None = Field(
+        default=None,
+        description="A6A: catalog / Mini App conversion readiness snapshot (read-only).",
+    )
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -243,6 +250,7 @@ __all__ = [
     "AutomationCockpitQueueCode",
     "CockpitNextBestActionKind",
     "SupplierClarificationDraftRead",
+    "SupplierOfferCatalogConversionReadinessRead",
     "SupplierOfferIntakeValidationRead",
     "parse_include_queues_query",
 ]

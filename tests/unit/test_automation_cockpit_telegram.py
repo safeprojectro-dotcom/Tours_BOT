@@ -27,6 +27,9 @@ from app.schemas.admin_automation_cockpit import (
 )
 from app.schemas.supplier_clarification_draft import SupplierClarificationDraftRead
 from app.schemas.supplier_offer_intake_validation import SupplierOfferIntakeValidationRead
+from app.schemas.supplier_offer_catalog_conversion_readiness import (
+    SupplierOfferCatalogConversionReadinessRead,
+)
 from app.services.supplier_clarification_draft_service import SupplierClarificationDraftService
 
 
@@ -41,6 +44,8 @@ def _sample_card(
     commercial: bool = False,
     source_type: str = "supplier_offer",
     source_paths: dict[str, str] | None = None,
+    blocker_summary: str | None = None,
+    catalog_conversion_readiness: SupplierOfferCatalogConversionReadinessRead | None = None,
 ) -> AdminAutomationCockpitCardRead:
     ctx = (
         AdminAutomationCockpitCommercialContextRead(
@@ -49,6 +54,9 @@ def _sample_card(
         )
         if commercial
         else None
+    )
+    resolved_blocker = (
+        "Package must be approved for publishing." if blocker_summary is None else blocker_summary
     )
     return AdminAutomationCockpitCardRead(
         card_id="x",
@@ -63,10 +71,11 @@ def _sample_card(
         next_best_action_label="Review missing marketing data",
         next_best_action_kind="safe_read",
         next_best_action_enabled=True,
-        blocker_summary="Package must be approved for publishing.",
+        blocker_summary=resolved_blocker,
         commercial_context=ctx,
         safety_flags=AdminAutomationCockpitCardSafetyFlagsRead(),
         source_paths=source_paths or {},
+        catalog_conversion_readiness=catalog_conversion_readiness,
         metadata={"console_status": "needs_attention"},
     )
 
@@ -180,6 +189,46 @@ def test_format_cockpit_card_detail_catalog_gates_humanized_en() -> None:
     body = format_cockpit_card_detail_text("en", c)
     assert "Not ready for catalog promotion" in body
     assert "gates pass" not in body.lower()
+
+
+def test_format_cockpit_card_detail_a6a_ro_humanized_no_message_keys() -> None:
+    snap = SupplierOfferCatalogConversionReadinessRead(
+        readiness_status="needs_internal_preparation",
+        status_label_message_key="admin_a6a_status_needs_preparation",
+        main_blocker_message_key="admin_a6a_blocker_offer_tour_link",
+        warnings_message_keys=["admin_a6a_warn_prepare_partial"],
+        next_step_message_key="admin_a6a_next_prepare_offer_tour_link",
+        has_tour_link=False,
+        has_execution_link=False,
+        mini_app_cta_safe=False,
+        catalog_visible=False,
+    )
+    c = _sample_card(blocker_summary="", catalog_conversion_readiness=snap, commercial=True)
+    body = format_cockpit_card_detail_text("ro", c)
+    assert "🧭 Catalog / conversie" in body
+    assert "Necesită pregătire" in body
+    assert "admin_a6a_" not in body
+    assert "cta_safety" not in body.lower()
+    assert "prepare_chain:" not in body
+
+
+def test_format_cockpit_queue_includes_a6a_hint_when_present() -> None:
+    snap = SupplierOfferCatalogConversionReadinessRead(
+        readiness_status="ready_for_review",
+        status_label_message_key="admin_a6a_status_ready_for_review",
+        main_blocker_message_key=None,
+        warnings_message_keys=[],
+        next_step_message_key="admin_a6a_next_verify_mini_app",
+        has_tour_link=True,
+        has_execution_link=True,
+        mini_app_cta_safe=True,
+        catalog_visible=True,
+    )
+    r = _sample_read()
+    r.queues[0].cards[0].catalog_conversion_readiness = snap
+    body = format_cockpit_queue_text("en", r, queue_code="marketing_review")
+    assert "🧭 Catalog / conversion" in body
+    assert "Ready for verification" in body
 
 
 def test_format_cockpit_card_detail_dedupes_internal_tasks() -> None:

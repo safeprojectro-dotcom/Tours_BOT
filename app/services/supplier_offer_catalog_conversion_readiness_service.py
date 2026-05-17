@@ -1,0 +1,128 @@
+"""A6A: build catalog/conversion readiness snapshot from existing console reads only."""
+
+from __future__ import annotations
+
+from app.schemas.admin_publishing_console import (
+    AdminPublishingConsoleItemRead,
+    AdminPublishingConsoleSupplierOfferDetailRead,
+)
+from app.schemas.supplier_offer_catalog_conversion_readiness import (
+    SupplierOfferCatalogConversionReadinessRead,
+)
+
+
+class SupplierOfferCatalogConversionReadinessService:
+    """Side-effect free projection for supplier_offer_initial rows."""
+
+    @classmethod
+    def build_from_console_item(
+        cls,
+        item: AdminPublishingConsoleItemRead,
+        *,
+        detail: AdminPublishingConsoleSupplierOfferDetailRead | None = None,
+    ) -> SupplierOfferCatalogConversionReadinessRead | None:
+        if item.kind != "supplier_offer_initial":
+            return None
+
+        cta = item.cta_safety_status
+        mini_safe = cta == "exact_tour_ready"
+        chain_st = item.prepare_conversion_chain_plan_status
+
+        has_tour_link: bool | None
+        has_exec: bool | None
+        catalog_vis: bool | None
+        if detail is not None:
+            cs = detail.conversion_summary
+            has_tour_link = cs.has_tour_bridge
+            has_exec = cs.has_active_execution_link
+            catalog_vis = cs.has_catalog_visible_tour
+        else:
+            has_tour_link, has_exec, catalog_vis = cls._infer_from_item_only(item)
+
+        blocked = (
+            item.console_status == "blocked"
+            or cta == "media_blocked"
+            or chain_st == "blocked"
+        )
+
+        warnings: list[str] = []
+        if chain_st == "partial":
+            warnings.append("admin_a6a_warn_prepare_partial")
+
+        main_blocker: str | None = None
+        next_step: str
+
+        if blocked:
+            readiness = "blocked"
+            status_key = "admin_a6a_status_blocked"
+            if cta == "media_blocked":
+                main_blocker = "admin_a6a_blocker_media_gate"
+                next_step = "admin_a6a_next_fix_media"
+            elif chain_st == "blocked":
+                main_blocker = "admin_a6a_blocker_prepare_chain"
+                next_step = "admin_a6a_next_review_prepare_chain"
+            elif cta == "missing_execution_link":
+                main_blocker = "admin_a6a_blocker_offer_tour_link"
+                next_step = "admin_a6a_next_prepare_offer_tour_link"
+            elif cta == "tour_not_listed":
+                main_blocker = "admin_a6a_blocker_catalog_route"
+                next_step = "admin_a6a_next_check_catalog"
+            elif item.console_status == "blocked":
+                main_blocker = "admin_a6a_blocker_console"
+                next_step = "admin_a6a_next_resolve_console"
+            else:
+                main_blocker = "admin_a6a_blocker_generic"
+                next_step = "admin_a6a_next_internal_review"
+        elif mini_safe and (catalog_vis is not False):
+            readiness = "ready_for_review"
+            status_key = "admin_a6a_status_ready_for_review"
+            main_blocker = None
+            next_step = "admin_a6a_next_verify_mini_app"
+        else:
+            readiness = "needs_internal_preparation"
+            status_key = "admin_a6a_status_needs_preparation"
+            if cta == "missing_execution_link":
+                main_blocker = "admin_a6a_blocker_offer_tour_link"
+                next_step = "admin_a6a_next_prepare_offer_tour_link"
+            elif cta == "tour_not_listed":
+                main_blocker = "admin_a6a_blocker_catalog_route"
+                next_step = "admin_a6a_next_check_catalog"
+            elif item.conversion_target_kind == "none":
+                main_blocker = "admin_a6a_blocker_no_conversion_target"
+                next_step = "admin_a6a_next_prepare_offer_tour_link"
+            else:
+                main_blocker = "admin_a6a_blocker_needs_setup"
+                next_step = "admin_a6a_next_complete_in_admin"
+
+        return SupplierOfferCatalogConversionReadinessRead(
+            readiness_status=readiness,
+            status_label_message_key=status_key,
+            main_blocker_message_key=main_blocker,
+            warnings_message_keys=warnings[:2],
+            next_step_message_key=next_step,
+            has_tour_link=has_tour_link,
+            has_execution_link=has_exec,
+            mini_app_cta_safe=mini_safe,
+            catalog_visible=catalog_vis,
+        )
+
+    @staticmethod
+    def _infer_from_item_only(
+        item: AdminPublishingConsoleItemRead,
+    ) -> tuple[bool | None, bool | None, bool | None]:
+        """Best-effort booleans when supplier-offer detail was not loaded."""
+        cta = item.cta_safety_status
+        if cta == "exact_tour_ready":
+            return True, True, None
+        if cta == "missing_execution_link":
+            return False, False, None
+        if cta == "tour_not_listed":
+            return True, None, False
+        if item.conversion_target_kind == "exact_tour":
+            return None, None, None
+        if item.conversion_target_kind == "none":
+            return False, False, None
+        return None, None, None
+
+
+__all__ = ["SupplierOfferCatalogConversionReadinessService"]

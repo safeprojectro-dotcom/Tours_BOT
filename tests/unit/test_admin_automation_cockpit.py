@@ -171,9 +171,14 @@ class AdminAutomationCockpitTests(FoundationDBTestCase):
                     self.assertEqual(cd.get("draft_version"), "a3b_v1")
                     self.assertIn("supplier_facing_asks", cd)
                     self.assertIn("internal_admin_tasks", cd)
+                    self.assertIn("catalog_conversion_readiness", card)
+                    cr = card["catalog_conversion_readiness"]
+                    self.assertIsNotNone(cr)
+                    self.assertEqual(cr.get("version"), "a6a_v1")
                 if meta.get("kind") == "tour_promotion":
                     self.assertIsNone(card.get("intake_validation"))
                     self.assertIsNone(card.get("clarification_draft"))
+                    self.assertIsNone(card.get("catalog_conversion_readiness"))
 
         safety = data["safety_summary"]
         for flag in (

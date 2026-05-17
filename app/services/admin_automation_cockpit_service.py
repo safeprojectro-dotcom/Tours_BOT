@@ -29,6 +29,9 @@ from app.schemas.admin_publishing_console import (
 )
 from app.services.admin_publishing_console_service import AdminPublishingConsoleService
 from app.services.supplier_clarification_draft_service import SupplierClarificationDraftService
+from app.services.supplier_offer_catalog_conversion_readiness_service import (
+    SupplierOfferCatalogConversionReadinessService,
+)
 from app.services.supplier_offer_intake_validation_service import SupplierOfferIntakeValidationService
 
 _CARD_SAFETY = AdminAutomationCockpitCardSafetyFlagsRead()
@@ -490,6 +493,10 @@ def _build_operational_card(
         if intake_validation is not None
         else None
     )
+    catalog_conversion_readiness = SupplierOfferCatalogConversionReadinessService.build_from_console_item(
+        item,
+        detail=None,
+    )
 
     return AdminAutomationCockpitCardRead(
         card_id=f"{queue}:{item.candidate_key}",
@@ -517,6 +524,7 @@ def _build_operational_card(
         commercial_context=_operational_commercial_stub(item),
         intake_validation=intake_validation,
         clarification_draft=clarification_draft,
+        catalog_conversion_readiness=catalog_conversion_readiness,
         metadata=meta,
     )
 
@@ -560,6 +568,10 @@ def _build_commercial_card(
         if intake_validation is not None
         else None
     )
+    catalog_conversion_readiness = SupplierOfferCatalogConversionReadinessService.build_from_console_item(
+        item,
+        detail=detail,
+    )
 
     return AdminAutomationCockpitCardRead(
         card_id=f"{lane}:{item.candidate_key}",
@@ -587,6 +599,7 @@ def _build_commercial_card(
         commercial_context=_commercial_context(item, detail),
         intake_validation=intake_validation,
         clarification_draft=clarification_draft,
+        catalog_conversion_readiness=catalog_conversion_readiness,
         metadata=meta,
     )
 
