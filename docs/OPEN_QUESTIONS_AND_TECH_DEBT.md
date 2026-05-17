@@ -97,6 +97,25 @@ Track future-gated decisions:
 
 ---
 
+## Checkpoint Sync — S1C-4 supplier notification enqueue after customer reservation/order (2026-05-17)
+
+**Shipped:** after successful **`TemporaryReservationService.create_temporary_reservation`**, **`enqueue_supplier_order_created`** with **`actor_surface="s1c4_after_layer_a_temporary_reservation"`** **`;`** **S1C-1** idempotency **`;`** enqueue errors logged and **not** re-raised **`;`** supplier DM delivery remains **`POST …/deliver`** (**S1C-2**) only **`;`** **no** direct supplier send **`;`** **no** scheduler **`/`** payment-confirmation hook **.**
+
+Track future-gated decisions:
+
+- Whether supplier order notification should fire at temporary reservation time **or** only after payment confirmation **`.**
+- Whether suppliers should see reserved **`/`** unpaid orders **`.**
+- Whether suppliers should receive a second notification after payment confirmation later **`.**
+- Whether customer **`/`** admin surfaces should expose supplier notification queue status **`.**
+- Whether **`skipped`** **`/`** no-contact order notification rows should surface in admin **`.**
+- Whether RFQ **`/`** custom-request reservations need separate supplier notification copy **`.**
+- Whether enqueue failure after successful Layer A order creation needs admin alerting **`.**
+- Whether outbox order-notification payload should include boarding-point aggregates later **`.**
+- **No** direct supplier send shortcut after order creation **`.**
+- **No** customer personal data before a separate privacy **`/`** security gate **`.**
+
+---
+
 ## Checkpoint Sync — A1V Telegram cockpit (2026-05-16)
 
 **Shipped:** read-only admin Telegram surface (`/admin_cockpit` + **📊 Automation Cockpit** button) over **`AdminAutomationCockpitService.read_cockpit`** — see **[`docs/HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md`](HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md)**.

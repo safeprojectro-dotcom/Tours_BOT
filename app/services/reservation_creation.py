@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
@@ -9,6 +10,24 @@ from app.models.enums import BookingStatus, CancellationStatus, PaymentStatus, T
 from app.repositories.order import OrderRepository
 from app.repositories.tour import BoardingPointRepository, TourRepository
 from app.schemas.order import OrderRead
+from app.services.supplier_notification_outbox_service import SupplierNotificationOutboxService
+
+logger = logging.getLogger(__name__)
+
+
+def _enqueue_supplier_order_created_notification(session: Session, *, order_id: int) -> None:
+    """S1C-4: after successful Layer A hold/order row, persist supplier outbox intent (no supplier DM here)."""
+    try:
+        SupplierNotificationOutboxService().enqueue_supplier_order_created(
+            session,
+            order_id=order_id,
+            actor_surface="s1c4_after_layer_a_temporary_reservation",
+        )
+    except Exception:
+        logger.exception(
+            "s1c4_supplier_notification_outbox_enqueue_failed_after_order_created",
+            extra={"order_id": order_id},
+        )
 
 
 class TemporaryReservationService:
@@ -79,6 +98,7 @@ class TemporaryReservationService:
                 "source_channel": source_channel,
             },
         )
+        _enqueue_supplier_order_created_notification(session, order_id=order.id)
         return OrderRead.model_validate(order)
 
     def calculate_reservation_expiration(self, tour, *, now: datetime | None = None) -> datetime | None:

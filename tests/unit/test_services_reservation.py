@@ -3,7 +3,18 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import patch
 
-from app.models.enums import BookingStatus, PaymentStatus, TourSalesMode, TourStatus
+from sqlalchemy import select
+
+from app.models.enums import (
+    BookingStatus,
+    PaymentStatus,
+    SupplierOfferTourBridgeKind,
+    SupplierOfferTourBridgeStatus,
+    TourSalesMode,
+    TourStatus,
+)
+from app.models.supplier_notification_outbox import SupplierNotificationOutbox
+from app.models.supplier_offer_tour_bridge import SupplierOfferTourBridge
 from app.services.reservation_creation import TemporaryReservationService
 from tests.unit.base import FoundationDBTestCase
 
@@ -197,3 +208,57 @@ class TemporaryReservationServiceTests(FoundationDBTestCase):
         )
 
         self.assertEqual(expires_at, datetime(2026, 4, 1, 8, 20, tzinfo=UTC))
+
+    @patch("app.services.reservation_creation.get_settings")
+    def test_create_temporary_reservation_enqueues_supplier_order_created_outbox_s1c4(self, mock_get_settings) -> None:
+        mock_get_settings.return_value.temp_reservation_ttl_minutes = None
+        supplier = self.create_supplier()
+        supplier.primary_telegram_user_id = 888001
+        offer = self.create_supplier_offer(supplier)
+        user = self.create_user()
+        tour = self.create_tour(
+            code="S1C4-RES-BRIDGE",
+            seats_available=5,
+            departure_datetime=datetime(2026, 4, 10, 8, 0, tzinfo=UTC),
+            sales_deadline=datetime(2026, 4, 9, 8, 0, tzinfo=UTC),
+            status=TourStatus.OPEN_FOR_SALE,
+        )
+        point = self.create_boarding_point(tour, city="TestCity")
+        self.session.add(
+            SupplierOfferTourBridge(
+                supplier_offer_id=offer.id,
+                tour_id=tour.id,
+                status=SupplierOfferTourBridgeStatus.ACTIVE.value,
+                bridge_kind=SupplierOfferTourBridgeKind.LINKED_EXISTING_TOUR.value,
+                created_by="test",
+                source_packaging_status=offer.packaging_status.value,
+                source_lifecycle_status=offer.lifecycle_status.value,
+                packaging_snapshot_json={},
+            ),
+        )
+        self.session.commit()
+
+        order_read = TemporaryReservationService().create_temporary_reservation(
+            self.session,
+            user_id=user.id,
+            tour_id=tour.id,
+            boarding_point_id=point.id,
+            seats_count=2,
+            source_channel="mini_app",
+            now=datetime(2026, 4, 1, 8, 0, tzinfo=UTC),
+        )
+
+        self.assertIsNotNone(order_read)
+        assert order_read is not None
+        oid = order_read.id
+        row = self.session.scalar(
+            select(SupplierNotificationOutbox).where(
+                SupplierNotificationOutbox.idempotency_key == f"s1c1:supplier_order_created:order:{oid}",
+            ),
+        )
+        self.assertIsNotNone(row)
+        assert row is not None
+        self.assertEqual(row.event_type, "supplier_order_created")
+        self.assertEqual(row.order_id, oid)
+        self.assertEqual(row.actor_surface, "s1c4_after_layer_a_temporary_reservation")
+        self.assertEqual(row.dispatch_status, "pending_dispatch")
