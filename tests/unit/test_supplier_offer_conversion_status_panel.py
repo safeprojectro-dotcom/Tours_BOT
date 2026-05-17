@@ -56,6 +56,22 @@ class ConversionStatusPanelTelegramFormatTests(unittest.TestCase):
         text = format_conversion_status_panel_for_telegram(panel, language_code="ro", translate_fn=translate)
         self.assertIn("conversie", text.lower())
 
+    def test_dedupes_repeated_detail_lines(self) -> None:
+        same = "opaque_detail_token_xyz_001"
+        panel = AdminSupplierOfferConversionStatusPanelRead(
+            showcase=AdminSupplierOfferConversionStatusPanelLayerRead(
+                status="blocked", summary="…", detail=same
+            ),
+            tour_bridge=AdminSupplierOfferConversionStatusPanelLayerRead(
+                status="missing", summary="…", detail=same
+            ),
+            catalog=AdminSupplierOfferConversionStatusPanelLayerRead(status="not_listed", summary="…"),
+            booking_link=AdminSupplierOfferConversionStatusPanelLayerRead(status="missing", summary="…"),
+            customer_action=AdminSupplierOfferConversionStatusPanelLayerRead(status="not_bookable_yet", summary="…"),
+        )
+        text = format_conversion_status_panel_for_telegram(panel, language_code="en", translate_fn=translate)
+        self.assertEqual(text.count("Requires internal verification"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

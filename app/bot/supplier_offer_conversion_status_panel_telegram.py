@@ -29,12 +29,15 @@ def format_conversion_status_panel_for_telegram(
         ("customer_action", panel.customer_action),
     )
     lines: list[str] = [translate_fn(language_code, "admin_conversion_panel_header")]
+    seen_detail_lines: set[str] = set()
     for layer, row in layers:
         key = _row_key(layer, row.status)
         line = translate_fn(language_code, key)
         if row.detail:
-            detail_h = humanize_admin_text(language_code, row.detail)
-            line = f"{line}\n  · {detail_h}"
+            detail_h = humanize_admin_text(language_code, row.detail).strip()
+            if detail_h and detail_h not in seen_detail_lines:
+                line = f"{line}\n  · {detail_h}"
+                seen_detail_lines.add(detail_h)
         lines.append(line)
 
     footer = translate_fn(language_code, "admin_conversion_panel_footer")

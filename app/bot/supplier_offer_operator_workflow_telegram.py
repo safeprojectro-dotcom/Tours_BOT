@@ -106,8 +106,13 @@ def format_operator_workflow_for_telegram(
                 count=str(len(ow.blocking_reasons)),
             ),
         )
+        seen_block: set[str] = set()
         for br in ow.blocking_reasons[:3]:
-            lines.append(f"• {_truncate_blocking(br, language_code)}")
+            bline = _truncate_blocking(br, language_code)
+            if bline in seen_block:
+                continue
+            seen_block.add(bline)
+            lines.append(f"• {bline}")
 
     if ow.warnings:
         lines.append(
@@ -117,8 +122,13 @@ def format_operator_workflow_for_telegram(
                 count=str(len(ow.warnings)),
             ),
         )
+        seen_warn: set[str] = set()
         for w in ow.warnings[:3]:
-            lines.append(f"• {_compact_warning_line(w, language_code)}")
+            wline = _compact_warning_line(w, language_code)
+            if wline in seen_warn:
+                continue
+            seen_warn.add(wline)
+            lines.append(f"• {wline}")
 
     footer = translate_fn(language_code, "admin_offer_operator_workflow_footer_compact")
     body = "\n".join(lines)

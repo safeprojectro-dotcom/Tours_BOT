@@ -62,3 +62,26 @@ class OperatorWorkflowTelegramFormatTests(unittest.TestCase):
         self.assertNotIn("Technical English", text)
         self.assertIn("Promo or discount", text)
         self.assertIn("Awaiting moderation", text)
+
+    def test_duplicate_warning_lines_are_deduped(self) -> None:
+        ow = AdminSupplierOfferOperatorWorkflowRead(
+            state="awaiting_moderation",
+            primary_next_action=None,
+            actions=[],
+            blocking_reasons=[],
+            warnings=["orphan_promo_code", "orphan_promo_code", "discount_deadline_without_value"],
+        )
+        text = format_operator_workflow_for_telegram(ow, language_code="en", translate_fn=translate)
+        self.assertEqual(text.count("Promo or discount"), 1)
+
+    def test_duplicate_blocking_lines_are_deduped(self) -> None:
+        br = "opaque_blocking_reason_abc_001"
+        ow = AdminSupplierOfferOperatorWorkflowRead(
+            state="awaiting_moderation",
+            primary_next_action=None,
+            actions=[],
+            blocking_reasons=[br, br, br],
+            warnings=[],
+        )
+        text = format_operator_workflow_for_telegram(ow, language_code="en", translate_fn=translate)
+        self.assertEqual(text.count("Requires internal verification"), 1)

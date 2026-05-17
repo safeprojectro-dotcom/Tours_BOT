@@ -85,7 +85,7 @@ from app.bot.constants import (
     ADMIN_OPS_REQUEST_OP_INTENT_SUPPLIER_PREFIX,
     ADMIN_OPS_REQUESTS_PAGE_PREFIX,
 )
-from app.bot.messages import translate
+from app.bot.messages import TRANSLATIONS, translate
 from app.bot.supplier_offer_conversion_status_panel_telegram import (
     format_conversion_status_panel_for_telegram,
 )
@@ -316,7 +316,10 @@ def _generate_packaging_draft_confirmation_keyboard(language_code: str | None, *
 
 
 def _showcase_template_label(language_code: str | None, template_id: str) -> str:
-    return translate(language_code, f"admin_offer_showcase_tpl_{template_id}")
+    key = f"admin_offer_showcase_tpl_{template_id}"
+    if key not in TRANSLATIONS["en"]:
+        return translate(language_code, "admin_offer_showcase_tpl_unknown_fallback")
+    return translate(language_code, key)
 
 
 def _operator_workflow_b12c_template_open_callback(
@@ -1215,21 +1218,28 @@ def _showcase_template_preview_telegram_compact(
     language_code: str | None,
     stp: AdminSupplierOfferShowcaseTemplatePreviewRead,
 ) -> str:
+    inf_l = _showcase_template_label(language_code, stp.inferred_template_id)
+    eff_l = _showcase_template_label(language_code, stp.effective_template_id)
     lines = [
         translate(language_code, "admin_offer_showcase_template_b12b_header"),
         translate(
             language_code,
-            "admin_offer_showcase_template_b12b_inference",
-            inferred=stp.inferred_template_id,
-            effective=stp.effective_template_id,
+            "admin_offer_showcase_template_b12b_inferred_line",
+            label=inf_l,
+        ),
+        translate(
+            language_code,
+            "admin_offer_showcase_template_b12b_effective_line",
+            label=eff_l,
         ),
     ]
     if stp.selected_template_id:
+        sel_l = _showcase_template_label(language_code, stp.selected_template_id)
         lines.append(
             translate(
                 language_code,
                 "admin_offer_showcase_template_b12b_selected",
-                tid=stp.selected_template_id,
+                label=sel_l,
             ),
         )
     if stp.selection_overrides_inference:

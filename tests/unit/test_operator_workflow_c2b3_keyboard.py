@@ -126,8 +126,8 @@ class OperatorWorkflowC2b3KeyboardTests(unittest.TestCase):
         texts, callbacks = _flat_markup(kb.as_markup())
 
         ix = {t: n for n, t in enumerate(texts)}
-        self.assertLess(ix["Actualizează"], ix["Preview"])
-        self.assertLess(ix["Preview"], ix["OK poză"])
+        self.assertLess(ix["Actualizează"], ix["Previzualizare showcase"])
+        self.assertLess(ix["Previzualizare showcase"], ix["OK poză"])
         self.assertLess(ix["OK poză"], ix["Cere poză"])
         self.assertLess(ix["Cere poză"], ix["Pregătește"])
         self.assertLess(ix["Pregătește"], ix["Aprobă text"])
@@ -137,7 +137,7 @@ class OperatorWorkflowC2b3KeyboardTests(unittest.TestCase):
         self.assertLess(ix["Respinge oferta"], ix["📦 Comenzi"])
 
         joined_lc = " ".join(texts).lower()
-        for needle in ("review-package", "showcase", "approve_packaging", "generate_packaging"):
+        for needle in ("review-package", "approve_packaging", "generate_packaging"):
             self.assertNotIn(needle, joined_lc)
         self.assertNotIn("_", "".join(texts))
 
