@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
@@ -43,7 +44,10 @@ from app.services.supplier_offer_showcase_message import (
     showcase_photo_send_argument_from_offer,
 )
 from app.services.supplier_offer_showcase_publish_attempt_service import SupplierOfferShowcasePublishAttemptService
+from app.services.supplier_notification_outbox_service import SupplierNotificationOutboxService
 from app.services.telegram_showcase_client import TelegramShowcaseSendError, delete_channel_message
+
+logger = logging.getLogger(__name__)
 
 
 def _showcase_publish_payload_fingerprint(publication: ShowcasePublication) -> str:
@@ -358,8 +362,25 @@ class SupplierOfferModerationService:
             showcase_chat_id=channel_id,
             showcase_message_id=message_id,
         )
+        session.flush()
+        self._enqueue_supplier_offer_published_notification(session, offer_id=offer_id)
         session.refresh(row)
         return self._to_read(row), message_id
+
+    @staticmethod
+    def _enqueue_supplier_offer_published_notification(session: Session, *, offer_id: int) -> None:
+        """S1C-3: after successful showcase channel send, persist supplier outbox intent (no supplier DM here)."""
+        try:
+            SupplierNotificationOutboxService().enqueue_supplier_offer_published(
+                session,
+                offer_id=offer_id,
+                actor_surface="s1c3_after_showcase_channel_publish",
+            )
+        except Exception:
+            logger.exception(
+                "s1c3_supplier_notification_outbox_enqueue_failed_after_showcase_publish",
+                extra={"supplier_offer_id": offer_id},
+            )
 
     def retract_published(
         self,

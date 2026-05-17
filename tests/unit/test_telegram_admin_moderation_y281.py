@@ -862,7 +862,7 @@ class TelegramAdminModerationY281Tests(FoundationDBTestCase):
         self.assertIn("publish", approved_buttons)
         self.assertNotIn("retract", approved_buttons)
         self.assertIn("retract", published_buttons)
-        self.assertIn("execution link", published_buttons)
+        self.assertIn("booking link", published_buttons)
         self.assertNotIn("publish", published_buttons)
 
     def test_admin_can_view_execution_link_status_and_history(self) -> None:

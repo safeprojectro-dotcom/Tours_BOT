@@ -20,6 +20,7 @@ from app.models.enums import (
 )
 from app.models.supplier import SupplierOfferExecutionLink
 from app.models.supplier import Supplier, SupplierOffer
+from app.models.supplier_notification_outbox import SupplierNotificationOutbox
 from app.models.supplier_offer_showcase_publish_attempt import SupplierOfferShowcasePublishAttempt
 from app.models.supplier_offer_tour_bridge import SupplierOfferTourBridge
 from app.models.tour import Tour
@@ -250,6 +251,17 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertIsNotNone(attempt.payload_fingerprint)
         self.assertEqual(attempt.requested_by, "http_admin")
 
+        ob = self.session.scalar(
+            select(SupplierNotificationOutbox).where(
+                SupplierNotificationOutbox.idempotency_key
+                == f"s1c1:supplier_offer_published:supplier_offer:{oid}",
+            ),
+        )
+        self.assertIsNotNone(ob)
+        assert ob is not None
+        self.assertEqual(ob.event_type, "supplier_offer_published")
+        self.assertEqual(ob.actor_surface, "s1c3_after_showcase_channel_publish")
+
         dup = self.client.post(f"/admin/supplier-offers/{oid}/publish", headers=headers)
         self.assertEqual(dup.status_code, 400)
 
@@ -317,6 +329,13 @@ class SupplierOfferTrack3ModerationTests(FoundationDBTestCase):
         self.assertEqual(attempt.actor_surface, SupplierOfferShowcasePublishActorSurface.HTTP_ADMIN)
         self.assertEqual(attempt.error_code, "telegram_showcase_send")
         self.assertEqual(attempt.requested_by, "http_admin")
+
+        ob_failed = self.session.scalar(
+            select(SupplierNotificationOutbox).where(
+                SupplierNotificationOutbox.supplier_offer_id == oid,
+            ),
+        )
+        self.assertIsNone(ob_failed)
 
     def test_approve_is_not_auto_publish_and_retract_is_separate_action(self) -> None:
         _, token = self._bootstrap_supplier_token()

@@ -78,6 +78,25 @@ Track future-gated decisions:
 
 ---
 
+## Checkpoint Sync — S1C-3 supplier notification enqueue after channel publish (2026-05-17)
+
+**Shipped:** after successful **`SupplierOfferModerationService`** showcase/channel publish **`/`** **`mark_persisted`**, **`enqueue_supplier_offer_published`** with **`actor_surface="s1c3_after_showcase_channel_publish"`** **`;`** **S1C-1** idempotency **`;`** enqueue errors logged and **not** re-raised **`;`** supplier DM delivery remains **`POST …/deliver`** (**S1C-2**) only **`;`** **no** direct supplier send **`;`** **no** scheduler **`;`** **no** order hook **.**
+
+Track future-gated decisions:
+
+- Whether publish **HTTP** response should expose supplier notification enqueue **`/`** outbox status **`.**
+- Whether Telegram admin publish confirmation should show queued **`/`** skipped supplier notification status **`.**
+- Whether admin UI should add a manual “deliver queued supplier notification” action later **`.**
+- Whether enqueue failure after successful public publish needs admin alerting **`.**
+- Whether **`skipped`** **`/`** no-contact records should be surfaced in admin **`.**
+- Whether channel publish replay should show outbox replay status **`.**
+- Whether actual supplier delivery should remain manual or become worker-driven later **`.**
+- **No** direct supplier send shortcut after publish **`.**
+- **No** supplier notification delivery outside outbox **`.**
+- **No** customer personal data before a separate privacy **`/`** security gate **`.**
+
+---
+
 ## Checkpoint Sync — A1V Telegram cockpit (2026-05-16)
 
 **Shipped:** read-only admin Telegram surface (`/admin_cockpit` + **📊 Automation Cockpit** button) over **`AdminAutomationCockpitService.read_cockpit`** — see **[`docs/HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md`](HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md)**.
