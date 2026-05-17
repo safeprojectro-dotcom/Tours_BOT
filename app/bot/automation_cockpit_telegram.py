@@ -472,6 +472,38 @@ def format_cockpit_card_detail_text(language_code: str | None, card: AdminAutoma
             ]
         )
 
+    iv = card.intake_validation
+    if iv is not None:
+        lines.extend(
+            [
+                "",
+                translate(language_code, "admin_automation_cockpit_detail_intake_header"),
+                _snippet(iv.headline, max_len=240),
+            ]
+        )
+        if iv.facts_missing_required:
+            lines.append(translate(language_code, "admin_automation_cockpit_detail_intake_missing"))
+            for x in iv.facts_missing_required[:5]:
+                lines.append(f"• {_snippet(str(x), max_len=200)}")
+        if iv.suggested_supplier_requests:
+            lines.append("")
+            lines.append(translate(language_code, "admin_automation_cockpit_detail_intake_ask_next"))
+            for x in iv.suggested_supplier_requests[:5]:
+                lines.append(f"• {_snippet(str(x), max_len=220)}")
+        lines.extend(
+            [
+                "",
+                translate(
+                    language_code,
+                    "admin_automation_cockpit_detail_note_body_warn",
+                    text=_detail_body_note(
+                        language_code,
+                        translate(language_code, "admin_automation_cockpit_detail_intake_note"),
+                    ),
+                ),
+            ]
+        )
+
     owner = (card.owner_role or "").strip()
     if owner and owner != "admin_operator":
         lines.extend(

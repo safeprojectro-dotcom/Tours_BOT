@@ -28,6 +28,7 @@ from app.schemas.admin_publishing_console import (
     PublishingConsoleUiPrimaryActionKind,
 )
 from app.services.admin_publishing_console_service import AdminPublishingConsoleService
+from app.services.supplier_offer_intake_validation_service import SupplierOfferIntakeValidationService
 
 _CARD_SAFETY = AdminAutomationCockpitCardSafetyFlagsRead()
 
@@ -482,6 +483,8 @@ def _build_operational_card(
         "cockpit_queue": queue,
     }
 
+    intake_validation = SupplierOfferIntakeValidationService.build_from_console_item(item)
+
     return AdminAutomationCockpitCardRead(
         card_id=f"{queue}:{item.candidate_key}",
         source_type=item.source_kind,
@@ -506,6 +509,7 @@ def _build_operational_card(
         safety_flags=_CARD_SAFETY,
         source_paths=_source_paths(item),
         commercial_context=_operational_commercial_stub(item),
+        intake_validation=intake_validation,
         metadata=meta,
     )
 
@@ -543,6 +547,8 @@ def _build_commercial_card(
         "publish_readiness_status": item.publish_readiness.status,
     }
 
+    intake_validation = SupplierOfferIntakeValidationService.build_from_console_item(item)
+
     return AdminAutomationCockpitCardRead(
         card_id=f"{lane}:{item.candidate_key}",
         source_type=item.source_kind,
@@ -567,6 +573,7 @@ def _build_commercial_card(
         safety_flags=_CARD_SAFETY,
         source_paths=_source_paths(item),
         commercial_context=_commercial_context(item, detail),
+        intake_validation=intake_validation,
         metadata=meta,
     )
 

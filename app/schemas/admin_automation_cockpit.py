@@ -7,6 +7,8 @@ from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.supplier_offer_intake_validation import SupplierOfferIntakeValidationRead
+
 AutomationCockpitQueueCode = Literal[
     "supplier_intake",
     "missing_info",
@@ -158,6 +160,10 @@ class AdminAutomationCockpitCardRead(BaseModel):
         default=None,
         description="A1-Block 2: commercial/marketing/conversion context; optional on operational-queue cards.",
     )
+    intake_validation: SupplierOfferIntakeValidationRead | None = Field(
+        default=None,
+        description="A2: supplier intake auto-validation (read-only; derived from publishing console row).",
+    )
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -231,5 +237,6 @@ __all__ = [
     "AdminAutomationCockpitSummaryRead",
     "AutomationCockpitQueueCode",
     "CockpitNextBestActionKind",
+    "SupplierOfferIntakeValidationRead",
     "parse_include_queues_query",
 ]

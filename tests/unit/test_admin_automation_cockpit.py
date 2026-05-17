@@ -157,6 +157,16 @@ class AdminAutomationCockpitTests(FoundationDBTestCase):
                     ctx = card["commercial_context"]
                     self.assertIn("fact_lock_note", ctx)
                     self.assertGreater(len(ctx["fact_lock_note"]), 20)
+                meta = card.get("metadata") or {}
+                if meta.get("kind") == "supplier_offer_initial":
+                    self.assertIn("intake_validation", card)
+                    self.assertIsNotNone(card["intake_validation"])
+                    iv = card["intake_validation"]
+                    self.assertIn("supplier_offer_id", iv)
+                    self.assertIn("headline", iv)
+                    self.assertEqual(iv.get("validation_version"), "a2_v1")
+                if meta.get("kind") == "tour_promotion":
+                    self.assertIsNone(card.get("intake_validation"))
 
         safety = data["safety_summary"]
         for flag in (
