@@ -42,6 +42,26 @@ Future-gated decisions:
 
 ---
 
+## Checkpoint Sync — S1C-1 supplier notification outbox foundation (2026-05-17)
+
+**Shipped:** **`supplier_notification_outbox`** **`;`** **`SupplierNotificationOutboxService`** enqueue for **`supplier_offer_published`** **`/`** **`supplier_order_created`** **`;`** **S1B** contact resolution **`;`** idempotency keys **`;`** **`pending_dispatch`** **`/`** **`skipped_no_target`** **`;`** payloads **without** customer **PII** **`;`** **no** Telegram send **`/`** channel publish **`/`** scheduler **`/`** worker **`/`** automatic publish **`/`** order hooks **`/`** Layer A **`/`** payment **`/`** reconciliation **`/`** seat mutation **`.**
+
+Track future-gated decisions:
+
+- Actual supplier Telegram delivery must go **through** outbox **`;`** **no** direct service shortcut **`.**
+- Retry policy for failed supplier notification delivery **`.**
+- Idempotency-key policy for future event types **`.**
+- Delivery audit visibility in admin **`.**
+- Localization of supplier notification messages **`.**
+- Supplier consent **`/`** contractual basis **`.**
+- Whether **`skipped`** **`/`** missing-contact rows should remain persisted long-term **`.**
+- Whether order notification fires at reservation creation **or** only after payment **`.**
+- Whether order notification payload should include boarding-point aggregates later **`.**
+- Production go **`/`** no-go for actual supplier Telegram sends **`.`**
+- **No** customer personal data before a separate privacy **`/`** security gate **`.**
+
+---
+
 ## Checkpoint Sync — A1V Telegram cockpit (2026-05-16)
 
 **Shipped:** read-only admin Telegram surface (`/admin_cockpit` + **📊 Automation Cockpit** button) over **`AdminAutomationCockpitService.read_cockpit`** — see **[`docs/HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md`](HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md)**.

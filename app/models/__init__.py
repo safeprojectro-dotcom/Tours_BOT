@@ -8,6 +8,7 @@ from app.models.handoff import Handoff
 from app.models.knowledge_base import KnowledgeBaseEntry
 from app.models.message import Message
 from app.models.notification_outbox import NotificationOutbox
+from app.models.supplier_notification_outbox import SupplierNotificationOutbox
 from app.models.order import Order
 from app.models.payment import Payment
 from app.models.tour import BoardingPoint, BoardingPointTranslation, Tour, TourTranslation
@@ -36,6 +37,7 @@ __all__ = [
     "KnowledgeBaseEntry",
     "Message",
     "NotificationOutbox",
+    "SupplierNotificationOutbox",
     "Order",
     "Payment",
     "Supplier",
