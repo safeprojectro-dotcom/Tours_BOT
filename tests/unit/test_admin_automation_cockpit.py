@@ -168,7 +168,7 @@ class AdminAutomationCockpitTests(FoundationDBTestCase):
                     self.assertIn("clarification_draft", card)
                     self.assertIsNotNone(card["clarification_draft"])
                     cd = card["clarification_draft"]
-                    self.assertEqual(cd.get("draft_version"), "a3_v1")
+                    self.assertEqual(cd.get("draft_version"), "a3b_v1")
                     self.assertIn("supplier_facing_asks", cd)
                     self.assertIn("internal_admin_tasks", cd)
                 if meta.get("kind") == "tour_promotion":

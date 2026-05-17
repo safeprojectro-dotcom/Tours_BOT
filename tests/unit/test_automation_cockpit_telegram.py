@@ -179,8 +179,9 @@ def test_format_cockpit_card_detail_clarification_drafts_block() -> None:
     body = format_cockpit_card_detail_text("ro", c)
     assert "Ciorne clarificare" in body
     assert "Pentru furnizor" in body
-    assert "programul" in body.lower()
-    assert "Doar intern" in body or "intern" in body
+    assert "Bună ziua" in body
+    assert "descriere" in body.lower()
+    assert "Doar intern" in body or "intern" in body.lower()
     assert "prepare_chain" in body
 
 

@@ -494,9 +494,16 @@ def format_cockpit_card_detail_text(language_code: str | None, card: AdminAutoma
                     translate(language_code, "admin_automation_cockpit_detail_clarification_draft_note"),
                 ]
             )
-            if cd.supplier_facing_asks:
+            if cd.supplier_facing_message_ro:
+                lines.append("")
                 lines.append(translate(language_code, "admin_automation_cockpit_detail_clarification_supplier"))
-                for x in cd.supplier_facing_asks[:7]:
+                msg = (cd.supplier_facing_message_ro or "").strip()
+                if len(msg) > 3500:
+                    msg = msg[:3497].rstrip() + "…"
+                lines.append(msg)
+            elif cd.supplier_facing_asks:
+                lines.append(translate(language_code, "admin_automation_cockpit_detail_clarification_supplier"))
+                for x in cd.supplier_facing_asks[:5]:
                     lines.append(f"• {_snippet(str(x), max_len=380)}")
             if cd.internal_admin_tasks:
                 lines.append("")

@@ -1,4 +1,4 @@
-"""A3: derive supplier-safe clarification drafts vs internal tasks from A2 intake validation (read-only)."""
+"""A3B: whitelist-only supplier clarification drafts; hard technical filter (read-only)."""
 
 from __future__ import annotations
 
@@ -7,71 +7,83 @@ import re
 from app.schemas.supplier_clarification_draft import SupplierClarificationDraftRead
 from app.schemas.supplier_offer_intake_validation import SupplierOfferIntakeValidationRead
 
-# Substrings (lowercase) that must never be echoed to suppliers as-is.
-_INTERNAL_MARKERS: tuple[str, ...] = (
+# Exact catalogue (order fixed; indices 0..16).
+_ALLOWED_RO_ASKS: tuple[str, ...] = (
+    "Vă rugăm să trimiteți o fotografie clară pentru ofertă.",
+    "Vă rugăm să confirmați prețul pentru această ofertă.",
+    "Vă rugăm să confirmați moneda prețului.",
+    "Vă rugăm să confirmați data și ora plecării.",
+    "Vă rugăm să confirmați data și ora întoarcerii.",
+    "Vă rugăm să confirmați ruta și destinația.",
+    "Vă rugăm să confirmați locul de îmbarcare.",
+    "Vă rugăm să confirmați durata aproximativă a drumului.",
+    "Vă rugăm să confirmați câte locuri sunt disponibile.",
+    "Vă rugăm să confirmați tipul vehiculului.",
+    "Vă rugăm să confirmați ce este inclus în preț.",
+    "Vă rugăm să confirmați ce nu este inclus în preț.",
+    "Vă rugăm să trimiteți o descriere scurtă a excursiei.",
+    "Vă rugăm să confirmați dacă există reducere pentru această ofertă.",
+    "Dacă există reducere, vă rugăm să confirmați valoarea, perioada și condițiile reducerii.",
+    "Vă rugăm să confirmați condițiile de plată.",
+    "Vă rugăm să confirmați condițiile de anulare.",
+)
+
+_MAX_SUPPLIER_ASKS = 5
+
+# Substrings (case-insensitive) that disqualify any candidate line from supplier-facing copy.
+_FORBIDDEN_SUPPLIER_SUBSTRINGS: tuple[str, ...] = (
     "execution link",
     "execution_link",
+    "conversion chain",
+    "exact-tour",
+    "exact_tour",
+    "mini app",
+    "mini_app",
+    "mini-app",
+    "blockers_count",
     "prepare_chain",
     "prepare chain",
     "prepare_conversion",
-    "conversion chain",
-    "conversion_chain",
-    "conversion target",
-    " mini app",
-    "mini_app",
-    "mini-app",
-    "b11",
-    "layer a",
-    "layer_a",
+    "prepare_conversion_chain",
     "cta_safety",
-    "exact_tour",
-    "tour_not_listed",
-    "missing_execution",
-    "ineligible",
-    "media_review_replacement",
+    "publish_readiness",
+    "offer_debug",
+    "flags_publish_not_ready",
+    "content_quality",
+    "orphan_promo_code",
+    "description_thin",
+    "media_review_replacement_requested",
     "publish_safe",
+    "showcase_media",
+    "showcase_preview",
     "catalog gate",
     "gate:",
-    "gate_failed",
+    "b7",
+    "b10",
+    "b11",
+    "b15",
+    "layer a",
+    "layer_a",
+    "internal path",
+    "admin_action_path",
+    "admin_tour_path",
+    "route key",
+    "payload",
+    "debug",
+    "blocker code",
     "console_",
     "preview_payload",
-    "offer_debug",
-    "cta:",
-    "blockers_count",
+    "ineligible",
+    "tour_not_listed",
+    "missing_execution",
+    "wire payment",
     "/admin/",
     "/mini",
-    "wire payment",
+    "qr",
 )
-
 
 class SupplierClarificationDraftService:
     """Builds ``SupplierClarificationDraftRead`` from ``SupplierOfferIntakeValidationRead``."""
-
-    _ASK_TITLE = (
-        "Ne puteți ajuta cu un titlu foarte clar pentru excursie, ca toată lumea să înțeleagă destinația?"
-    )
-    _ASK_PROGRAM = (
-        "Vă rugăm să ne trimiteți pe scurt programul excursiei: ce se vizitează și ordinea aproximativă a opririlor."
-    )
-    _ASK_PROGRAM_MORE = (
-        "Dacă puteți, completați câteva detalii în plus despre program (timpii și opririle principale)."
-    )
-    _ASK_BOOKING_CONTACT = (
-        "Cum preferați să fie contactul pentru rezervări: telefon, mesaj sau alt mod simplu pentru clienți?"
-    )
-    _ASK_PHOTO = (
-        "Aveți o fotografie clară cu excursia sau autocarul? Dacă da, o putem folosi ca imagine principală."
-    )
-    _ASK_LIFECYCLE_DRAFT = (
-        "Oferta este încă în lucru? Vă rugăm să ne confirmați când este gata pentru verificare."
-    )
-    _ASK_FINAL_DESCRIPTION = (
-        "Vă rugăm să verificați descrierea ofertei: lipsește ceva important pentru clienți "
-        "(loc de plecare, ore, ce este inclus)?"
-    )
-    _ASK_GENERIC_FOLLOWUP = (
-        "Aveți alte clarificări practice despre tur (preț pentru un loc, locul de îmbarcare, durata drumului)?"
-    )
 
     @staticmethod
     def _push_unique(bucket: list[str], value: str) -> None:
@@ -80,110 +92,139 @@ class SupplierClarificationDraftService:
             bucket.append(v)
 
     @classmethod
-    def _text_sounds_internal(cls, text: str) -> bool:
+    def _forbidden_supplier_copy(cls, text: str) -> bool:
         t = (text or "").lower()
         if not t:
             return False
+        if "[" in text and "]" in text and re.search(r"\[[a-z0-9_]+\]", text, re.I):
+            return True
+        if re.search(r"\b[b](7|10|11|15)\b", t):
+            return True
+        if re.search(r"\b[a-z]{2,}_[a-z][a-z0-9_]*", t):
+            return True
         if re.search(r"\bcta\b", t):
             return True
-        if re.search(r"\bqr\b", t):
-            return True
-        for m in _INTERNAL_MARKERS:
+        for m in _FORBIDDEN_SUPPLIER_SUBSTRINGS:
             if m in t:
                 return True
         return False
 
     @classmethod
-    def _supplier_prompt_for_missing_fact(cls, fact_key: str) -> str | None:
-        if fact_key == "offer_list_title":
-            return cls._ASK_TITLE
-        if fact_key == "preview_customer_body":
-            return cls._ASK_PROGRAM
-        if fact_key == "preview_primary_cta":
-            return cls._ASK_BOOKING_CONTACT
-        return None
+    def _text_sounds_internal(cls, text: str) -> bool:
+        return cls._forbidden_supplier_copy(text)
 
     @classmethod
-    def _supplier_prompt_for_weak(cls, entry: str) -> tuple[str | None, bool]:
-        """Returns (supplier_line, is_internal_only)."""
+    def _collect_internal_from_intake(cls, intake: SupplierOfferIntakeValidationRead) -> list[str]:
+        internal: list[str] = []
+        for raw in intake.blocks_catalog_conversion:
+            cls._push_unique(internal, str(raw))
+        for raw in intake.blocks_publication:
+            cls._push_unique(internal, str(raw))
+        for w in intake.facts_weak_or_unclear:
+            cls._push_unique(internal, str(w))
+        for line in intake.suggested_supplier_requests:
+            cls._push_unique(internal, str(line).strip())
+        return internal
+
+    @classmethod
+    def _indices_from_missing_fact(cls, fact_key: str) -> set[int]:
+        fk = (fact_key or "").strip()
+        if fk == "offer_list_title":
+            return {5}
+        if fk == "preview_customer_body":
+            return {12}
+        if fk == "preview_primary_cta":
+            return {15}
+        return set()
+
+    @classmethod
+    def _indices_from_weak(cls, entry: str) -> tuple[set[int], bool]:
+        """Return (whitelist indices, raw_is_internal_copy)."""
         e = (entry or "").strip()
         lower = e.lower()
-        if lower.startswith("offer_title_descriptive"):
-            return cls._ASK_TITLE, False
+        idx: set[int] = set()
+        if lower.startswith("preview_media_reference") or lower.startswith("preview_media"):
+            idx.add(0)
+        if lower.startswith("offer_title_descriptive") or lower.startswith("offer_list_title"):
+            idx.add(5)
         if lower.startswith("preview_customer_body_depth"):
-            return cls._ASK_PROGRAM_MORE, False
-        if lower.startswith("preview_media_reference"):
-            return cls._ASK_PHOTO, False
-        if lower.startswith("lifecycle:"):
-            sub = lower.removeprefix("lifecycle:").strip()
-            if sub in ("draft", "rejected"):
-                return cls._ASK_LIFECYCLE_DRAFT, False
-            return None, True
-        if lower.startswith("publish_readiness:") or lower.startswith("gate_warning:"):
-            return None, True
+            idx.add(12)
         if lower.startswith("packaging:"):
-            return cls._ASK_FINAL_DESCRIPTION, False
+            return {12}, False
         if lower.startswith("preview_warning:"):
-            rest = e.split(":", 1)[-1].strip()
-            if cls._text_sounds_internal(rest):
-                return None, True
-            return cls._ASK_GENERIC_FOLLOWUP, False
-        if cls._text_sounds_internal(e):
-            return None, True
-        return None, False
+            rest = e.split(":", 1)[-1].lower()
+            if "reducere" in rest or "discount" in rest or "promo" in rest or "orphan_promo" in rest:
+                idx.update({13, 14})
+            if "description" in rest or "thin" in rest or "content_quality" in rest:
+                idx.add(12)
+            if cls._forbidden_supplier_copy(rest) and not idx:
+                return set(), True
+        if lower.startswith("lifecycle:") or lower.startswith("publish_readiness:"):
+            return set(), True
+        if lower.startswith("gate_warning:"):
+            return set(), True
+        if cls._forbidden_supplier_copy(e):
+            return set(), True
+        return idx, False
+
+    @classmethod
+    def _indices_from_publication_line(cls, line: str) -> set[int]:
+        s = str(line).lower()
+        idx: set[int] = set()
+        if "media_policy:media_blocked" in s or "media_blocked" in s:
+            idx.add(0)
+        return idx
+
+    @classmethod
+    def _merge_supplier_indices(cls, intake: SupplierOfferIntakeValidationRead) -> list[int]:
+        collected: set[int] = set()
+        for k in intake.facts_missing_required:
+            collected |= cls._indices_from_missing_fact(k)
+        for w in intake.facts_weak_or_unclear:
+            add, _ = cls._indices_from_weak(str(w))
+            collected |= add
+        for pub in intake.blocks_publication:
+            collected |= cls._indices_from_publication_line(str(pub))
+        ordered = sorted(collected)
+        return ordered[:_MAX_SUPPLIER_ASKS]
+
+    @classmethod
+    def _build_whitelist_strings(cls, indices: list[int]) -> list[str]:
+        out: list[str] = []
+        for i in indices:
+            if 0 <= i < len(_ALLOWED_RO_ASKS):
+                s = _ALLOWED_RO_ASKS[i]
+                if not cls._forbidden_supplier_copy(s):
+                    cls._push_unique(out, s)
+        return out[:_MAX_SUPPLIER_ASKS]
+
+    @classmethod
+    def _format_supplier_message_ro(cls, asks: list[str]) -> str | None:
+        if not asks:
+            return None
+        body_lines = [
+            "Bună ziua! Pentru ofertă avem nevoie de câteva clarificări:",
+            "",
+        ]
+        for n, q in enumerate(asks[:_MAX_SUPPLIER_ASKS], start=1):
+            body_lines.append(f"{n}. {q}")
+        body_lines.extend(["", "Mulțumim!"])
+        return "\n".join(body_lines)
 
     @classmethod
     def build_from_intake_validation(
         cls,
         intake: SupplierOfferIntakeValidationRead,
     ) -> SupplierClarificationDraftRead:
-        supplier: list[str] = []
-        internal: list[str] = []
-
-        for raw in intake.blocks_catalog_conversion:
-            cls._push_unique(internal, str(raw))
-
-        for raw in intake.blocks_publication:
-            cls._push_unique(internal, str(raw))
-
-        for key in intake.facts_missing_required:
-            line = cls._supplier_prompt_for_missing_fact(key)
-            if line:
-                cls._push_unique(supplier, line)
-
-        for w in intake.facts_weak_or_unclear:
-            w_str = str(w)
-            if w_str.lower().startswith("packaging:"):
-                cls._push_unique(internal, w_str)
-            s_line, force_internal = cls._supplier_prompt_for_weak(w_str)
-            if force_internal:
-                cls._push_unique(internal, w_str)
-            if s_line:
-                cls._push_unique(supplier, s_line)
-            elif not force_internal and cls._text_sounds_internal(w_str):
-                cls._push_unique(internal, w_str)
-
-        for pub_line in intake.blocks_publication:
-            if "media_policy:media_blocked" in str(pub_line):
-                cls._push_unique(supplier, cls._ASK_PHOTO)
-
-        for line in intake.suggested_supplier_requests:
-            s = str(line).strip()
-            if not s:
-                continue
-            if cls._text_sounds_internal(s):
-                cls._push_unique(internal, s)
-            else:
-                # Plain-language free text may still confuse suppliers; keep internal unless obviously human.
-                if len(s) > 220 or "http" in s.lower() or "/" in s:
-                    cls._push_unique(internal, s)
-                else:
-                    cls._push_unique(supplier, s)
-
+        internal = cls._collect_internal_from_intake(intake)
+        idx_list = cls._merge_supplier_indices(intake)
+        supplier = cls._build_whitelist_strings(idx_list)
+        msg = cls._format_supplier_message_ro(supplier)
         return SupplierClarificationDraftRead(
             supplier_offer_id=intake.supplier_offer_id,
-            supplier_facing_asks=supplier[:15],
-            internal_admin_tasks=internal[:40],
+            supplier_facing_asks=supplier,
+            supplier_facing_message_ro=msg,
+            internal_admin_tasks=internal[:80],
         )
 
 

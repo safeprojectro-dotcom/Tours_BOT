@@ -1,4 +1,4 @@
-"""A3: supplier clarification drafts vs internal tasks (read-only)."""
+"""A3/A3B: supplier clarification drafts — whitelist only, technical routing internal."""
 
 from __future__ import annotations
 
@@ -9,33 +9,47 @@ from app.services.supplier_clarification_draft_service import SupplierClarificat
 
 
 class SupplierClarificationDraftServiceTests(TestCase):
-    def test_technical_requests_go_internal_ro_supplier_for_program(self) -> None:
+    def test_technical_signals_never_in_supplier_copy(self) -> None:
         intake = SupplierOfferIntakeValidationRead(
             supplier_offer_id=7,
             headline="test",
             facts_missing_required=["preview_customer_body"],
             facts_weak_or_unclear=[],
-            blocks_publication=["gate:media:media_review_replacement_requested"],
-            blocks_catalog_conversion=["prepare_chain:blocked:ineligible"],
+            blocks_publication=[
+                "gate:showcase_media:media_review_replacement_requested",
+                "publish_readiness:blocked",
+            ],
+            blocks_catalog_conversion=["prepare_chain:blocked:create_tour_bridge"],
             suggested_supplier_requests=[
-                "Wire payment instructions",
                 "CTA target not verified.",
-                "Hook is generic.",
+                "Touch the Mini App once.",
+                "Wire payment instructions",
             ],
         )
         d = SupplierClarificationDraftService.build_from_intake_validation(intake)
-        self.assertEqual(d.draft_version, "a3_v1")
-        self.assertEqual(d.supplier_offer_id, 7)
-        supplier_joined = " ".join(d.supplier_facing_asks).lower()
-        self.assertIn("programul", supplier_joined)
-        self.assertNotIn("prepare_chain", supplier_joined)
-        self.assertNotIn("cta", supplier_joined)
-        self.assertNotIn("wire payment", supplier_joined)
+        self.assertEqual(d.draft_version, "a3b_v1")
+        joined_supplier = "\n".join(d.supplier_facing_asks).lower()
+        msg = (d.supplier_facing_message_ro or "").lower()
+        for bad in (
+            "prepare_chain",
+            "gate:",
+            "cta",
+            "mini app",
+            "publish_readiness",
+            "execution",
+            "wire payment",
+            "showcase_media",
+        ):
+            self.assertNotIn(bad, joined_supplier, bad)
+            self.assertNotIn(bad, msg, bad)
+        self.assertTrue(all(x in _WHITELIST for x in d.supplier_facing_asks), d.supplier_facing_asks)
+        self.assertIn("descriere", (d.supplier_facing_message_ro or "").lower())
+        self.assertIn("bună ziua", (d.supplier_facing_message_ro or "").lower())
+        self.assertIn("mulțumim", (d.supplier_facing_message_ro or "").lower())
         internal_joined = " ".join(d.internal_admin_tasks).lower()
         self.assertIn("prepare_chain", internal_joined)
-        self.assertIn("gate:", internal_joined)
 
-    def test_packaging_weak_adds_internal_row_and_simple_supplier_line(self) -> None:
+    def test_packaging_weak_maps_to_description_ask_only(self) -> None:
         intake = SupplierOfferIntakeValidationRead(
             supplier_offer_id=1,
             headline="x",
@@ -46,5 +60,29 @@ class SupplierClarificationDraftServiceTests(TestCase):
             suggested_supplier_requests=[],
         )
         d = SupplierClarificationDraftService.build_from_intake_validation(intake)
-        self.assertTrue(any("packaging:" in x for x in d.internal_admin_tasks))
-        self.assertTrue(any("descrierea" in x.lower() for x in d.supplier_facing_asks))
+        self.assertEqual(len(d.supplier_facing_asks), 1)
+        self.assertIn("descriere scurtă", d.supplier_facing_asks[0].lower())
+        self.assertTrue(any("packaging" in x.lower() for x in d.internal_admin_tasks))
+
+
+_WHITELIST = frozenset(
+    (
+        "Vă rugăm să trimiteți o fotografie clară pentru ofertă.",
+        "Vă rugăm să confirmați prețul pentru această ofertă.",
+        "Vă rugăm să confirmați moneda prețului.",
+        "Vă rugăm să confirmați data și ora plecării.",
+        "Vă rugăm să confirmați data și ora întoarcerii.",
+        "Vă rugăm să confirmați ruta și destinația.",
+        "Vă rugăm să confirmați locul de îmbarcare.",
+        "Vă rugăm să confirmați durata aproximativă a drumului.",
+        "Vă rugăm să confirmați câte locuri sunt disponibile.",
+        "Vă rugăm să confirmați tipul vehiculului.",
+        "Vă rugăm să confirmați ce este inclus în preț.",
+        "Vă rugăm să confirmați ce nu este inclus în preț.",
+        "Vă rugăm să trimiteți o descriere scurtă a excursiei.",
+        "Vă rugăm să confirmați dacă există reducere pentru această ofertă.",
+        "Dacă există reducere, vă rugăm să confirmați valoarea, perioada și condițiile reducerii.",
+        "Vă rugăm să confirmați condițiile de plată.",
+        "Vă rugăm să confirmați condițiile de anulare.",
+    )
+)

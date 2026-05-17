@@ -1,4 +1,4 @@
-"""A3: read-only clarification drafts — supplier-safe asks vs internal admin tasks (nothing is sent)."""
+"""A3/A3B: read-only clarification drafts — supplier-safe asks vs internal admin tasks (nothing is sent)."""
 
 from __future__ import annotations
 
@@ -13,14 +13,18 @@ class SupplierClarificationDraftRead(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     supplier_offer_id: int = Field(description="Supplier offer these drafts refer to.")
-    draft_version: Literal["a3_v1"] = "a3_v1"
+    draft_version: Literal["a3b_v1"] = "a3b_v1"
     projection_note: str = Field(
         default="Ciorne numai pentru echipa internă; nu s-a trimis nimic către furnizor.",
         description="Plain-language reminder (RO) that these lines are not auto-sent.",
     )
     supplier_facing_asks: list[str] = Field(
         default_factory=list,
-        description="Short, polite Romanian lines suitable for eventual supplier messages (no platform jargon).",
+        description="At most 5 whitelist-only Romanian questions (exact catalogue strings).",
+    )
+    supplier_facing_message_ro: str | None = Field(
+        default=None,
+        description="Pre-formatted Romanian supplier message (header, numbered asks, closing).",
     )
     internal_admin_tasks: list[str] = Field(
         default_factory=list,
