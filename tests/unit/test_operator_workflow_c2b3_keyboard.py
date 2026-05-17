@@ -126,8 +126,8 @@ class OperatorWorkflowC2b3KeyboardTests(unittest.TestCase):
         texts, callbacks = _flat_markup(kb.as_markup())
 
         ix = {t: n for n, t in enumerate(texts)}
-        self.assertLess(ix["Actualizează"], ix["Previzualizare showcase"])
-        self.assertLess(ix["Previzualizare showcase"], ix["OK poză"])
+        self.assertLess(ix["Actualizează"], ix["Previzualizare"])
+        self.assertLess(ix["Previzualizare"], ix["OK poză"])
         self.assertLess(ix["OK poză"], ix["Cere poză"])
         self.assertLess(ix["Cere poză"], ix["Pregătește"])
         self.assertLess(ix["Pregătește"], ix["Aprobă text"])

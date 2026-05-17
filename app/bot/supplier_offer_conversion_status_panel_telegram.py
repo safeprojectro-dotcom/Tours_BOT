@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from app.bot.automation_cockpit_telegram import humanize_admin_text
+from app.bot.automation_cockpit_telegram import humanize_admin_text, is_admin_generic_internal_message
 from app.schemas.supplier_admin import AdminSupplierOfferConversionStatusPanelRead
 
 
@@ -30,15 +30,22 @@ def format_conversion_status_panel_for_telegram(
     )
     lines: list[str] = [translate_fn(language_code, "admin_conversion_panel_header")]
     seen_detail_lines: set[str] = set()
+    had_generic_only_tail = False
     for layer, row in layers:
         key = _row_key(layer, row.status)
         line = translate_fn(language_code, key)
         if row.detail:
             detail_h = humanize_admin_text(language_code, row.detail).strip()
-            if detail_h and detail_h not in seen_detail_lines:
-                line = f"{line}\n  · {detail_h}"
-                seen_detail_lines.add(detail_h)
+            if detail_h:
+                if is_admin_generic_internal_message(language_code, detail_h):
+                    had_generic_only_tail = True
+                elif detail_h not in seen_detail_lines:
+                    line = f"{line}\n  · {detail_h}"
+                    seen_detail_lines.add(detail_h)
         lines.append(line)
+
+    if had_generic_only_tail:
+        lines.append(translate_fn(language_code, "admin_conversion_panel_verification_footer"))
 
     footer = translate_fn(language_code, "admin_conversion_panel_footer")
     body = "\n".join(lines)

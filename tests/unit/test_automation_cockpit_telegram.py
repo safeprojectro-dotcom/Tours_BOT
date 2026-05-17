@@ -11,6 +11,7 @@ from app.bot.automation_cockpit_telegram import (
     cockpit_queue_keyboard,
     cockpit_summary_keyboard,
     find_card_in_cockpit,
+    format_admin_datetime_compact,
     format_cockpit_card_detail_text,
     format_cockpit_queue_text,
     format_cockpit_safety_detail_text,
@@ -128,6 +129,11 @@ def _sample_read(*, commercial: bool = False) -> AdminAutomationCockpitRead:
     )
 
 
+def test_format_admin_datetime_compact_iso() -> None:
+    assert format_admin_datetime_compact("en", "2026-04-28T18:00:00+00:00") == "28.04.2026, 18:00"
+    assert format_admin_datetime_compact("ro", "2026-04-28 18:00+00:00") == "28.04.2026, 18:00"
+
+
 def test_format_cockpit_summary_demo_ready_no_raw_codes() -> None:
     body = format_cockpit_summary_text("en", _sample_read())
     assert "📊 Admin automation cockpit" in body
@@ -154,9 +160,9 @@ def test_format_cockpit_queue_lists_cards_without_technical_junk() -> None:
     assert "Offer #42" in body
     assert "1) Test Offer" in body
     assert "Needs attention" in body or "⚠️" in body
-    assert "Next step:" in body
+    assert "Reason:" in body
+    assert "Step:" in body
     assert "Check missing marketing data" in body
-    assert "⛔" in body
     assert "Package must" in body
     assert "safe_read" not in body
     assert "kind=" not in body
@@ -166,7 +172,8 @@ def test_format_cockpit_queue_lists_cards_without_technical_junk() -> None:
 def test_format_cockpit_queue_list_ro_standard_lines() -> None:
     r = _sample_read()
     body = format_cockpit_queue_text("ro", r, queue_code="marketing_review")
-    assert "Următorul pas:" in body
+    assert "Motiv:" in body
+    assert "Pas:" in body
     assert "Necesită atenție" in body
     assert "Verifică datele marketing lipsă" in body
     assert "Review missing" not in body
@@ -299,8 +306,9 @@ def test_format_cockpit_queue_includes_a6a_hint_when_present() -> None:
     r = _sample_read()
     r.queues[0].cards[0].catalog_conversion_readiness = snap
     body = format_cockpit_queue_text("en", r, queue_code="marketing_review")
-    assert "🧭 Catalog / conversion" in body
-    assert "Ready for verification" in body
+    assert "Step:" in body
+    assert "Verify the tour in the Mini App before publishing" in body
+    assert body.count("🧭") == 0
 
 
 def test_format_cockpit_card_detail_dedupes_internal_tasks() -> None:
@@ -463,9 +471,9 @@ def test_format_cockpit_card_detail_commercial_and_fact_lock() -> None:
     )
     body = format_cockpit_card_detail_text("en", c)
     assert "📄 Card detail" in body
-    assert "Suggested next step:" in body
+    assert "In short:" in body
+    assert "➡" in body or "Next:" in body
     assert "Check missing marketing data" in body
-    assert "Main blocker:" in body
     assert "Package must" in body
     assert "Commercial data:" in body
     assert "Tour code: TC1" in body
@@ -484,7 +492,8 @@ def test_format_cockpit_card_detail_ro_business_readable() -> None:
     c = _sample_card(source_paths={"admin_tour_path": "https://example.com/t", "admin_action_path": "https://example.com/a"})
     body = format_cockpit_card_detail_text("ro", c)
     assert "📄 Detaliu card" in body
-    assert "Pas sugerat:" in body
+    assert "Pe scurt:" in body
+    assert "➡" in body or "Pas:" in body
     assert "Surse:" not in body
     assert "🛡 Siguranță:" in body
     assert "✅ Doar citire" in body
