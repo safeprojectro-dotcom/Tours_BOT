@@ -30,6 +30,41 @@ _ALLOWED_RO_ASKS: tuple[str, ...] = (
 
 _MAX_SUPPLIER_ASKS = 5
 
+# Substrings for deduping internal_admin_tasks before capping (same line family -> one entry).
+_INTERNAL_TASK_SIGNATURE_MARKERS: tuple[str, ...] = (
+    "prepare_chain",
+    "prepare chain",
+    "prepare_conversion",
+    "media_review",
+    "cta_safety",
+    "gate:",
+    "publish_readiness",
+    "showcase_media",
+    "showcase_preview",
+    "missing_execution",
+    "execution link",
+    "execution_link",
+    "conversion_target",
+    "console_",
+    "preview_payload",
+    "offer_debug",
+    "catalog gate",
+    "create_tour_bridge",
+    "flags_publish_not_ready",
+    "content_quality",
+    "description_thin",
+    "orphan_promo",
+    "publish_safe",
+    "ineligible",
+    "mini app",
+    "mini_app",
+    "media_blocked",
+    "packaging:",
+    "preview_warning:",
+    "lifecycle:",
+    "gate_warning:",
+)
+
 # Substrings (case-insensitive) that disqualify any candidate line from supplier-facing copy.
 _FORBIDDEN_SUPPLIER_SUBSTRINGS: tuple[str, ...] = (
     "execution link",
@@ -84,6 +119,28 @@ _FORBIDDEN_SUPPLIER_SUBSTRINGS: tuple[str, ...] = (
 
 class SupplierClarificationDraftService:
     """Builds ``SupplierClarificationDraftRead`` from ``SupplierOfferIntakeValidationRead``."""
+
+    @classmethod
+    def _internal_task_signature(cls, line: str) -> str:
+        tl = (line or "").strip().lower()
+        if not tl:
+            return ""
+        for m in _INTERNAL_TASK_SIGNATURE_MARKERS:
+            if m in tl:
+                return m
+        return tl[:200]
+
+    @classmethod
+    def _dedupe_internal_tasks(cls, lines: list[str]) -> list[str]:
+        seen: set[str] = set()
+        out: list[str] = []
+        for line in lines:
+            sig = cls._internal_task_signature(line)
+            if not sig or sig in seen:
+                continue
+            seen.add(sig)
+            out.append((line or "").strip())
+        return out
 
     @staticmethod
     def _push_unique(bucket: list[str], value: str) -> None:
@@ -224,7 +281,7 @@ class SupplierClarificationDraftService:
             supplier_offer_id=intake.supplier_offer_id,
             supplier_facing_asks=supplier,
             supplier_facing_message_ro=msg,
-            internal_admin_tasks=internal[:80],
+            internal_admin_tasks=internal[:40],
         )
 
 

@@ -142,35 +142,6 @@ def _snippet(text: str | None, *, max_len: int) -> str:
     return t[: max_len - 1].rstrip() + "…"
 
 
-def _detail_body_note(language_code: str | None, text: str | None, *, max_len: int = _DETAIL_NOTE_MAX) -> str:
-    raw = _snippet(text, max_len=max_len)
-    if raw == "—":
-        return raw
-    if language_code == "ro":
-        mapped = _risk_note_ro_substitutions(raw)
-        if mapped is not None:
-            return mapped
-    return raw
-
-
-def _risk_note_ro_substitutions(text: str) -> str | None:
-    """Replace frequent English risk/note sentences with Romanian catalogue text."""
-    t = text.strip()
-    tl = t.lower()
-    pairs: list[tuple[str, str]] = [
-        ("publish readiness flagged for manual review", "admin_automation_cockpit_risk_ro_publish_manual"),
-        ("ambiguous or non-standard publishing-console posture", "admin_automation_cockpit_risk_ro_ambiguous_posture"),
-        ("tour promotion rows are not evaluated", "admin_automation_cockpit_risk_ro_tour_promo_unevaluated"),
-        ("candidate for tour promotion", "admin_automation_cockpit_risk_ro_candidate_promotion"),
-    ]
-    for needle, msg_key in pairs:
-        if needle in tl:
-            return translate("ro", msg_key)
-    if "cta safety:" in tl:
-        return translate("ro", "admin_automation_cockpit_risk_ro_cta_generic")
-    return None
-
-
 _HUMANIZE_RULES: tuple[tuple[str, str], ...] = (
     ("media_review_replacement", "admin_automation_cockpit_human_media_replace"),
     ("create_tour_bridge", "admin_automation_cockpit_human_tour_bridge"),
@@ -212,21 +183,65 @@ def _detail_line_is_technical(tl: str) -> bool:
     return False
 
 
-def _humanize_admin_detail_line(language_code: str | None, raw: str | None) -> str:
-    t = (raw or "").strip()
+def _strip_admin_debug_suffixes(text: str) -> str:
+    """Remove parenthetical debug hints (e.g. routing codes, 'does not send') from admin-facing copy."""
+    s = (text or "").strip()
+    if not s:
+        return ""
+    s = re.sub(r"\s*\([^)]*does\s+not\s+send[^)]*\)", "", s, flags=re.I)
+    s = re.sub(r"\s*\([^)]*\bB1[0-9][A-Z0-9.]*\b[^)]*\)", "", s, flags=re.I)
+    return s.strip()
+
+
+# Order matters: more specific needles first. Keys must exist for EN and RO in messages.py.
+_ADMIN_CANNED_PHRASES: tuple[tuple[str, str], ...] = (
+    ("ambiguous or non-standard publishing-console posture", "admin_automation_cockpit_risk_ro_ambiguous_posture"),
+    ("tour promotion rows are not evaluated", "admin_automation_cockpit_risk_ro_tour_promo_unevaluated"),
+    ("publish readiness flagged for manual review", "admin_automation_cockpit_risk_ro_publish_manual"),
+    ("not ideal for catalog promotion", "admin_automation_cockpit_admin_phrase_catalog_gates"),
+    ("until gates pass", "admin_automation_cockpit_admin_phrase_catalog_gates"),
+    ("departure is in the past", "admin_automation_cockpit_admin_phrase_departure_past"),
+    ("candidate for tour promotion", "admin_automation_cockpit_admin_phrase_tour_promo_last_seats"),
+    ("last-seats style", "admin_automation_cockpit_admin_phrase_tour_promo_last_seats"),
+    ("last seats style", "admin_automation_cockpit_admin_phrase_tour_promo_last_seats"),
+    ("cta safety:", "admin_automation_cockpit_risk_ro_cta_generic"),
+)
+
+
+def humanize_admin_text(language_code: str | None, raw: str | None) -> str:
+    """Cross-module humanization for admin Telegram UI (cockpit, operator workflow, panels)."""
+    t = _strip_admin_debug_suffixes(raw or "")
     if not t:
         return ""
     tl = t.lower()
-    if language_code == "ro":
-        mapped = _risk_note_ro_substitutions(t)
-        if mapped is not None:
-            return mapped
+    for needle, msg_key in _ADMIN_CANNED_PHRASES:
+        if needle in tl:
+            return translate(language_code, msg_key)
     for needle, msg_key in _HUMANIZE_RULES:
         if needle in tl:
             return translate(language_code, msg_key)
     if _detail_line_is_technical(tl):
-        return translate(language_code, "admin_automation_cockpit_human_generic_internal")
+        return translate(language_code, "admin_ui_human_technical_unknown")
     return t
+
+
+def _humanize_admin_blocker(language_code: str | None, raw: str | None) -> str:
+    return humanize_admin_text(language_code, raw)
+
+
+def _humanize_admin_warning(language_code: str | None, raw: str | None) -> str:
+    return humanize_admin_text(language_code, raw)
+
+
+def _humanize_admin_task(language_code: str | None, raw: str | None) -> str:
+    return humanize_admin_text(language_code, raw)
+
+
+def _detail_body_note(language_code: str | None, text: str | None, *, max_len: int = _DETAIL_NOTE_MAX) -> str:
+    t = (text or "").strip()
+    if not t:
+        return "—"
+    return _snippet(humanize_admin_text(language_code, t), max_len=max_len)
 
 
 def _humanize_intake_headline_for_admin(language_code: str | None, headline: str | None) -> str:
@@ -421,16 +436,22 @@ def _list_issue_line(language_code: str | None, card: AdminAutomationCockpitCard
     blocker = (card.blocker_summary or "").strip()
     warning = (card.warning_summary or "").strip()
     if blocker:
+        hb = _humanize_admin_blocker(language_code, blocker)
+        if not hb:
+            return None
         return translate(
             language_code,
             "admin_automation_cockpit_queue_card_blocker",
-            text=_snippet(blocker, max_len=_LIST_CARD_ISSUE_MAX),
+            text=_snippet(hb, max_len=_LIST_CARD_ISSUE_MAX),
         )
     if warning:
+        hw = _humanize_admin_warning(language_code, warning)
+        if not hw:
+            return None
         return translate(
             language_code,
             "admin_automation_cockpit_queue_card_warning",
-            text=_snippet(warning, max_len=_LIST_CARD_ISSUE_MAX),
+            text=_snippet(hw, max_len=_LIST_CARD_ISSUE_MAX),
         )
     return None
 
@@ -605,17 +626,17 @@ def format_cockpit_card_detail_text(language_code: str | None, card: AdminAutoma
     ]
 
     blocker = (card.blocker_summary or "").strip()
-    hb = _humanize_admin_detail_line(language_code, blocker) if blocker else ""
+    hb = _humanize_admin_blocker(language_code, blocker) if blocker else ""
     if hb:
         lines.extend(["", translate(language_code, "admin_automation_cockpit_detail_a3c_main_blocker"), hb])
 
     warn_bits: list[str] = []
     if (card.warning_summary or "").strip():
-        w = _humanize_admin_detail_line(language_code, card.warning_summary)
+        w = _humanize_admin_warning(language_code, card.warning_summary)
         if w:
             warn_bits.append(w)
     if (card.risk_summary or "").strip():
-        r = _humanize_admin_detail_line(language_code, card.risk_summary)
+        r = _humanize_admin_warning(language_code, card.risk_summary)
         if r:
             warn_bits.append(r)
     if warn_bits:
@@ -661,10 +682,19 @@ def format_cockpit_card_detail_text(language_code: str | None, card: AdminAutoma
     if cd is not None and cd.internal_admin_tasks:
         lines.append("")
         lines.append(translate(language_code, "admin_automation_cockpit_detail_a3c_internal"))
-        for x in cd.internal_admin_tasks[:12]:
-            h = _humanize_admin_detail_line(language_code, x)
-            if h:
-                lines.append(f"• {h}")
+        seen_human: set[str] = set()
+        humanized_unique: list[str] = []
+        for x in cd.internal_admin_tasks:
+            h = _humanize_admin_task(language_code, x)
+            if not h or h in seen_human:
+                continue
+            seen_human.add(h)
+            humanized_unique.append(h)
+        _internal_cap = 5
+        for h in humanized_unique[:_internal_cap]:
+            lines.append(f"• {h}")
+        if len(humanized_unique) > _internal_cap:
+            lines.append(translate(language_code, "admin_automation_cockpit_detail_internal_tasks_overflow"))
 
     owner = (card.owner_role or "").strip()
     if owner and owner != "admin_operator":

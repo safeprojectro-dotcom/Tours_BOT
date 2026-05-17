@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Callable
 
+from app.bot.automation_cockpit_telegram import humanize_admin_text
 from app.schemas.supplier_admin import AdminSupplierOfferConversionStatusPanelRead
 
 
@@ -32,7 +33,8 @@ def format_conversion_status_panel_for_telegram(
         key = _row_key(layer, row.status)
         line = translate_fn(language_code, key)
         if row.detail:
-            line = f"{line}\n  · {row.detail}"
+            detail_h = humanize_admin_text(language_code, row.detail)
+            line = f"{line}\n  · {detail_h}"
         lines.append(line)
 
     footer = translate_fn(language_code, "admin_conversion_panel_footer")

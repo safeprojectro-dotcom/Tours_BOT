@@ -25,6 +25,7 @@ from app.schemas.admin_automation_cockpit import (
     AdminAutomationCockpitSafetySummaryRead,
     AdminAutomationCockpitSummaryRead,
 )
+from app.schemas.supplier_clarification_draft import SupplierClarificationDraftRead
 from app.schemas.supplier_offer_intake_validation import SupplierOfferIntakeValidationRead
 from app.services.supplier_clarification_draft_service import SupplierClarificationDraftService
 
@@ -156,6 +157,155 @@ def test_format_cockpit_queue_list_ro_standard_lines() -> None:
     assert "Necesită atenție" in body
     assert "Verifică datele marketing lipsă" in body
     assert "Review missing" not in body
+
+
+def test_format_cockpit_queue_humanizes_blocker_and_strips_debug_paren() -> None:
+    r = _sample_read()
+    r.queues[0].cards[0].blocker_summary = "Departure is in the past."
+    body = format_cockpit_queue_text("en", r, queue_code="marketing_review")
+    assert "Departure date is in the past" in body
+    r2 = _sample_read()
+    r2.queues[0].cards[0].blocker_summary = ""
+    r2.queues[0].cards[0].warning_summary = (
+        "Candidate for tour promotion / last-seats style posts (B15B does not send)."
+    )
+    body2 = format_cockpit_queue_text("en", r2, queue_code="marketing_review")
+    assert "B15B" not in body2
+    assert "does not send" not in body2.lower()
+
+
+def test_format_cockpit_card_detail_catalog_gates_humanized_en() -> None:
+    c = _sample_card()
+    c.blocker_summary = "Not ideal for catalog promotion until gates pass."
+    body = format_cockpit_card_detail_text("en", c)
+    assert "Not ready for catalog promotion" in body
+    assert "gates pass" not in body.lower()
+
+
+def test_format_cockpit_card_detail_dedupes_internal_tasks() -> None:
+    from app.schemas.supplier_clarification_draft import SupplierClarificationDraftRead
+
+    c = _sample_card()
+    c.clarification_draft = SupplierClarificationDraftRead(
+        supplier_offer_id=42,
+        supplier_facing_asks=[],
+        supplier_facing_message_ro=None,
+        internal_admin_tasks=[
+            "gate:showcase_media:media_review_replacement_requested",
+            "preview: media_review_replacement extra",
+            "media_review_replacement_requested:foo",
+        ],
+    )
+    body = format_cockpit_card_detail_text("en", c)
+    assert body.count("• ") == 1
+    assert "showcase photo" in body.lower()
+
+
+def test_humanize_admin_technical_unknown_short_fallback() -> None:
+    from app.bot.automation_cockpit_telegram import humanize_admin_text
+
+    assert humanize_admin_text("en", "totally_opaque_debug_token_xyz") == "Requires internal verification."
+    assert humanize_admin_text("ro", "totally_opaque_debug_token_xyz") == "Necesită verificare internă."
+
+
+def test_format_cockpit_card_detail_internal_tasks_cap_five_overflow_en() -> None:
+    from app.schemas.supplier_clarification_draft import SupplierClarificationDraftRead
+
+    tasks = [
+        "prepare_chain:blocked",
+        "cta_safety:warn",
+        "gate:showcase_media:x",
+        "missing_execution:1",
+        "content_quality:y",
+        "description_thin:z",
+    ]
+    c = _sample_card()
+    c.clarification_draft = SupplierClarificationDraftRead(
+        supplier_offer_id=1,
+        supplier_facing_asks=[],
+        supplier_facing_message_ro=None,
+        internal_admin_tasks=tasks,
+    )
+    body = format_cockpit_card_detail_text("en", c)
+    assert body.count("• ") == 6
+    assert "Additional internal tasks exist" in body
+    assert "prepare_chain" not in body.lower()
+    assert "cta_safety" not in body.lower()
+
+
+def test_format_cockpit_card_detail_internal_tasks_no_overflow_at_five_ro() -> None:
+    from app.schemas.supplier_clarification_draft import SupplierClarificationDraftRead
+
+    tasks = [
+        "prepare_chain:a",
+        "cta_safety:b",
+        "gate:c",
+        "missing_execution:d",
+        "content_quality:e",
+    ]
+    c = _sample_card()
+    c.clarification_draft = SupplierClarificationDraftRead(
+        supplier_offer_id=1,
+        supplier_facing_asks=[],
+        supplier_facing_message_ro=None,
+        internal_admin_tasks=tasks,
+    )
+    body = format_cockpit_card_detail_text("ro", c)
+    assert body.count("• ") == 5
+    assert "Mai există sarcini" not in body
+
+
+def test_format_cockpit_card_detail_internal_tasks_overflow_ro_message() -> None:
+    from app.schemas.supplier_clarification_draft import SupplierClarificationDraftRead
+
+    tasks = [
+        "prepare_chain:a",
+        "cta_safety:b",
+        "gate:showcase_media:x",
+        "missing_execution:d",
+        "content_quality:e",
+        "description_thin:z",
+    ]
+    c = _sample_card()
+    c.clarification_draft = SupplierClarificationDraftRead(
+        supplier_offer_id=1,
+        supplier_facing_asks=[],
+        supplier_facing_message_ro=None,
+        internal_admin_tasks=tasks,
+    )
+    body = format_cockpit_card_detail_text("ro", c)
+    assert "Mai există sarcini interne suplimentare" in body
+
+
+def test_supplier_clarification_draft_unchanged_when_rendering_many_internals() -> None:
+    iv = SupplierOfferIntakeValidationRead(
+        supplier_offer_id=42,
+        headline="missing:1; publication blocked",
+        facts_missing_required=["preview_customer_body"],
+        suggested_supplier_requests=["prepare_chain:blocked"],
+    )
+    cd = SupplierClarificationDraftService.build_from_intake_validation(iv)
+    cd2 = SupplierClarificationDraftService.build_from_intake_validation(iv)
+    assert cd.supplier_facing_asks == cd2.supplier_facing_asks
+    assert cd.supplier_facing_message_ro == cd2.supplier_facing_message_ro
+    extra = list(cd.internal_admin_tasks) + [
+        "cta_safety:x",
+        "gate:showcase_media:y",
+        "missing_execution:z",
+        "content_quality:w",
+        "description_thin:q",
+        "offer_debug:r",
+    ]
+    c = _sample_card()
+    c.clarification_draft = SupplierClarificationDraftRead(
+        supplier_offer_id=cd.supplier_offer_id,
+        supplier_facing_asks=list(cd.supplier_facing_asks),
+        supplier_facing_message_ro=cd.supplier_facing_message_ro,
+        internal_admin_tasks=extra,
+    )
+    body = format_cockpit_card_detail_text("ro", c)
+    assert "Bună ziua" in body
+    assert "prepare_chain" not in body.lower()
 
 
 def test_format_cockpit_queue_tour_source_caption() -> None:

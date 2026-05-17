@@ -5,28 +5,28 @@ from __future__ import annotations
 import re
 from typing import Callable
 
+from app.bot.automation_cockpit_telegram import humanize_admin_text
 from app.schemas.supplier_admin import AdminSupplierOfferOperatorWorkflowRead
 
 _WARNING_CODE_RE = re.compile(r"^\s*\[([^\]]+)\]")
 
 
-def _compact_warning_line(raw: str, *, max_len: int = 48) -> str:
+def _compact_warning_line(raw: str, language_code: str | None, *, max_len: int = 48) -> str:
     """Prefer stable warning codes (``[code] message`` or plain codes); trim noise for mobile."""
     s = raw.strip()
     m = _WARNING_CODE_RE.match(s)
-    if m:
-        return m.group(1)
-    one = s.split("\n", 1)[0].strip()
-    if len(one) <= max_len:
-        return one
-    return one[: max_len - 1].rstrip() + "…"
+    core = m.group(1) if m else s.split("\n", 1)[0].strip()
+    h = humanize_admin_text(language_code, core)
+    if len(h) <= max_len:
+        return h
+    return h[: max_len - 1].rstrip() + "…"
 
 
-def _truncate_blocking(raw: str, *, max_len: int = 52) -> str:
-    s = raw.strip().replace("\n", " ")
-    if len(s) <= max_len:
-        return s
-    return s[: max_len - 1].rstrip() + "…"
+def _truncate_blocking(raw: str, language_code: str | None, *, max_len: int = 52) -> str:
+    h = humanize_admin_text(language_code, raw.strip().replace("\n", " "))
+    if len(h) <= max_len:
+        return h
+    return h[: max_len - 1].rstrip() + "…"
 
 
 def _risk_label_key(danger_level: str) -> str:
@@ -81,7 +81,7 @@ def format_operator_workflow_for_telegram(
             ),
         )
         for br in ow.blocking_reasons[:3]:
-            lines.append(f"• {_truncate_blocking(br)}")
+            lines.append(f"• {_truncate_blocking(br, language_code)}")
 
     if ow.warnings:
         lines.append(
@@ -92,7 +92,7 @@ def format_operator_workflow_for_telegram(
             ),
         )
         for w in ow.warnings[:3]:
-            lines.append(f"• {_compact_warning_line(w)}")
+            lines.append(f"• {_compact_warning_line(w, language_code)}")
 
     footer = translate_fn(language_code, "admin_offer_operator_workflow_footer_compact")
     body = "\n".join(lines)

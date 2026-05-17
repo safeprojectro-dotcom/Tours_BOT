@@ -42,7 +42,8 @@ class ConversionStatusPanelTelegramFormatTests(unittest.TestCase):
         text = format_conversion_status_panel_for_telegram(panel, language_code="en", translate_fn=translate)
         self.assertIn("Conversion status", text)
         self.assertIn("Showcase: Published", text)
-        self.assertIn("tour_code=X", text)
+        self.assertNotIn("tour_code=X", text)
+        self.assertIn("Requires internal verification", text)
 
     def test_ro_panel_header(self) -> None:
         panel = AdminSupplierOfferConversionStatusPanelRead(
