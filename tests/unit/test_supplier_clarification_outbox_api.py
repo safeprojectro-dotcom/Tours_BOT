@@ -196,6 +196,95 @@ class SupplierClarificationOutboxApiTests(FoundationDBTestCase):
         r = self.client.get("/admin/supplier-clarification-outbox/999999999", headers=self._headers())
         self.assertEqual(r.status_code, 404)
 
+    def test_patch_outbox_draft_to_ready_for_review(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(supplier)
+        created = self._post_draft(offer.id)
+        item_id = created["item"]["id"]
+        r = self.client.patch(
+            f"/admin/supplier-clarification-outbox/{item_id}",
+            headers=self._headers(),
+            json={
+                "workflow_status": "ready_for_review",
+                "review_note": "LGTM",
+                "reviewed_by_telegram_user_id": 777001,
+            },
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        self.assertEqual(data["workflow_status"], "ready_for_review")
+        self.assertEqual(data["review_note"], "LGTM")
+        self.assertIsNotNone(data["last_reviewed_at"])
+        self.assertEqual(data["last_reviewed_by_telegram_user_id"], 777001)
+
+    def test_patch_outbox_ready_to_sent_externally_later(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(supplier)
+        item_id = self._post_draft(offer.id)["item"]["id"]
+        self.client.patch(
+            f"/admin/supplier-clarification-outbox/{item_id}",
+            headers=self._headers(),
+            json={"workflow_status": "ready_for_review"},
+        )
+        r = self.client.patch(
+            f"/admin/supplier-clarification-outbox/{item_id}",
+            headers=self._headers(),
+            json={"workflow_status": "sent_externally_later", "review_note": "Emailed supplier"},
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["workflow_status"], "sent_externally_later")
+
+    def test_patch_outbox_draft_cancelled(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(supplier)
+        item_id = self._post_draft(offer.id)["item"]["id"]
+        r = self.client.patch(
+            f"/admin/supplier-clarification-outbox/{item_id}",
+            headers=self._headers(),
+            json={"workflow_status": "cancelled"},
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["workflow_status"], "cancelled")
+
+    def test_patch_outbox_invalid_transition_422(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(supplier)
+        item_id = self._post_draft(offer.id)["item"]["id"]
+        r = self.client.patch(
+            f"/admin/supplier-clarification-outbox/{item_id}",
+            headers=self._headers(),
+            json={"workflow_status": "sent_externally_later"},
+        )
+        self.assertEqual(r.status_code, 422)
+        self.client.patch(
+            f"/admin/supplier-clarification-outbox/{item_id}",
+            headers=self._headers(),
+            json={"workflow_status": "cancelled"},
+        )
+        r2 = self.client.patch(
+            f"/admin/supplier-clarification-outbox/{item_id}",
+            headers=self._headers(),
+            json={"workflow_status": "ready_for_review"},
+        )
+        self.assertEqual(r2.status_code, 422)
+
+    def test_patch_outbox_review_note_omit_unchanged(self) -> None:
+        supplier = self.create_supplier()
+        offer = self.create_supplier_offer(supplier)
+        item_id = self._post_draft(offer.id)["item"]["id"]
+        self.client.patch(
+            f"/admin/supplier-clarification-outbox/{item_id}",
+            headers=self._headers(),
+            json={"workflow_status": "ready_for_review", "review_note": "keep-me"},
+        )
+        self.client.patch(
+            f"/admin/supplier-clarification-outbox/{item_id}",
+            headers=self._headers(),
+            json={"workflow_status": "sent_externally_later"},
+        )
+        r = self.client.get(f"/admin/supplier-clarification-outbox/{item_id}", headers=self._headers())
+        self.assertEqual(r.json()["review_note"], "keep-me")
+
 
 if __name__ == "__main__":
     unittest.main()

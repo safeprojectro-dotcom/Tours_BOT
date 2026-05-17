@@ -21,6 +21,7 @@ from app.schemas.admin_automation_cockpit import AdminAutomationCockpitRead, par
 from app.schemas.supplier_clarification_outbox import (
     SupplierClarificationOutboxCreateRequest,
     SupplierClarificationOutboxItemRead,
+    SupplierClarificationOutboxStatusPatchRequest,
     SupplierClarificationOutboxUpsertRead,
 )
 from app.schemas.admin_ops_dashboard import AdminOpsDashboardRead, parse_include_sections_query
@@ -91,6 +92,7 @@ from app.services.admin_prepare_conversion_chain_plan_service import AdminPrepar
 from app.services.prepare_conversion_chain_execution_service import PrepareConversionChainExecutionService
 from app.services.admin_automation_cockpit_service import AdminAutomationCockpitService
 from app.services.supplier_clarification_outbox_service import (
+    SupplierClarificationOutboxInvalidTransitionError,
     SupplierClarificationOutboxItemNotFoundError,
     SupplierClarificationOutboxOfferNotFoundError,
     SupplierClarificationOutboxService,
@@ -431,6 +433,38 @@ def get_supplier_clarification_outbox_item(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Outbox item not found.",
+        ) from exc
+
+
+@router.patch(
+    "/supplier-clarification-outbox/{item_id}",
+    response_model=SupplierClarificationOutboxItemRead,
+)
+def patch_supplier_clarification_outbox_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    body: SupplierClarificationOutboxStatusPatchRequest = Body(...),
+) -> SupplierClarificationOutboxItemRead:
+    """A5: internal admin workflow transition (no supplier send)."""
+    try:
+        item = SupplierClarificationOutboxService().apply_status_patch(
+            db,
+            item_id=item_id,
+            body=body,
+        )
+        db.commit()
+        return item
+    except SupplierClarificationOutboxItemNotFoundError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Outbox item not found.",
+        ) from exc
+    except SupplierClarificationOutboxInvalidTransitionError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=exc.detail,
         ) from exc
 
 

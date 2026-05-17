@@ -406,6 +406,76 @@ def test_cockpit_outbox_callbacks_roundtrip() -> None:
     assert parse_cockpit_outbox_list_callback(list_cb) == ("missing_info", "supplier_offer", 99)
 
 
+def test_cockpit_outbox_item_and_status_callbacks_roundtrip() -> None:
+    from app.bot.automation_cockpit_telegram import (
+        OUTBOX_STATUS_VERB_CANCEL,
+        OUTBOX_STATUS_VERB_READY,
+        cockpit_outbox_item_open_callback,
+        cockpit_outbox_status_callback,
+        parse_cockpit_outbox_item_callback,
+        parse_cockpit_outbox_status_callback,
+    )
+
+    oi = cockpit_outbox_item_open_callback("marketing_review", "supplier_offer", 12, 34)
+    assert parse_cockpit_outbox_item_callback(oi) == ("marketing_review", "supplier_offer", 12, 34)
+
+    ox = cockpit_outbox_status_callback("marketing_review", "supplier_offer", 12, 34, OUTBOX_STATUS_VERB_READY)
+    assert parse_cockpit_outbox_status_callback(ox) == (
+        "marketing_review",
+        "supplier_offer",
+        12,
+        34,
+        OUTBOX_STATUS_VERB_READY,
+    )
+    ox2 = cockpit_outbox_status_callback("missing_info", "supplier_offer", 5, 6, OUTBOX_STATUS_VERB_CANCEL)
+    assert parse_cockpit_outbox_status_callback(ox2) == ("missing_info", "supplier_offer", 5, 6, OUTBOX_STATUS_VERB_CANCEL)
+
+
+def test_cockpit_outbox_list_and_detail_keyboards_no_publish() -> None:
+    from app.bot.automation_cockpit_telegram import (
+        cockpit_card_callback,
+        cockpit_outbox_item_detail_keyboard,
+        cockpit_outbox_list_callback,
+        cockpit_outbox_list_keyboard,
+    )
+
+    from app.schemas.supplier_clarification_outbox import SupplierClarificationOutboxItemRead
+
+    refresh = cockpit_card_callback("marketing_review", "supplier_offer", 1)
+    item = SupplierClarificationOutboxItemRead(
+        id=9,
+        supplier_offer_id=1,
+        workflow_status="draft",
+        draft_snapshot={},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    list_kb = cockpit_outbox_list_keyboard(
+        "en",
+        queue_code="marketing_review",
+        source_type="supplier_offer",
+        supplier_offer_id=1,
+        items=[item],
+        card_refresh_callback=refresh,
+    )
+    detail_kb = cockpit_outbox_item_detail_keyboard(
+        "en",
+        queue_code="marketing_review",
+        card_source_type="supplier_offer",
+        supplier_offer_id=1,
+        item=item,
+        list_callback=cockpit_outbox_list_callback("marketing_review", "supplier_offer", 1),
+        card_refresh_callback=refresh,
+    )
+    for kb in (list_kb, detail_kb):
+        for row in kb.export():
+            for btn in row:
+                assert btn.callback_data is not None
+                low = btn.callback_data.lower()
+                assert "publish" not in low
+                assert "channel" not in low
+
+
 def test_cockpit_card_keyboard_outbox_buttons_when_clarification_draft() -> None:
     from app.bot.automation_cockpit_telegram import cockpit_card_callback, cockpit_card_keyboard
 

@@ -1,4 +1,4 @@
-"""A4: admin API DTOs for supplier clarification outbox."""
+"""A4/A5: admin API DTOs for supplier clarification outbox."""
 
 from __future__ import annotations
 
@@ -7,6 +7,10 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.supplier_clarification_draft import SupplierClarificationDraftRead
+
+CLARIFICATION_OUTBOX_WORKFLOW_STATUSES: frozenset[str] = frozenset(
+    {"draft", "ready_for_review", "cancelled", "sent_externally_later"},
+)
 
 
 class SupplierClarificationOutboxItemRead(BaseModel):
@@ -19,6 +23,9 @@ class SupplierClarificationOutboxItemRead(BaseModel):
     created_by_telegram_user_id: int | None = None
     created_at: datetime
     updated_at: datetime
+    last_reviewed_at: datetime | None = None
+    last_reviewed_by_telegram_user_id: int | None = None
+    review_note: str | None = None
 
 
 class SupplierClarificationOutboxUpsertRead(BaseModel):
@@ -44,8 +51,29 @@ class SupplierClarificationOutboxCreateRequest(BaseModel):
     )
 
 
+class SupplierClarificationOutboxStatusPatchRequest(BaseModel):
+    """A5: transition workflow_status with optional review note (internal admin only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    workflow_status: str = Field(
+        description="Target status; must be a valid transition from the item's current status.",
+    )
+    review_note: str | None = Field(
+        default=None,
+        max_length=4000,
+        description="Optional note for this review action. Omit to leave review_note unchanged; send null to clear.",
+    )
+    reviewed_by_telegram_user_id: int | None = Field(
+        default=None,
+        description="Optional Telegram user id recorded as reviewer (last_reviewed_by_telegram_user_id).",
+    )
+
+
 __all__ = [
+    "CLARIFICATION_OUTBOX_WORKFLOW_STATUSES",
     "SupplierClarificationOutboxCreateRequest",
     "SupplierClarificationOutboxItemRead",
+    "SupplierClarificationOutboxStatusPatchRequest",
     "SupplierClarificationOutboxUpsertRead",
 ]

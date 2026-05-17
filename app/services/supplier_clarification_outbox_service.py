@@ -1,18 +1,29 @@
-"""A4: business rules for supplier clarification outbox (persistence only; no supplier I/O)."""
+"""A4/A5: business rules for supplier clarification outbox (persistence only; no supplier I/O)."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
 from app.repositories.supplier import SupplierOfferRepository
 from app.repositories.supplier_clarification_outbox import SupplierClarificationOutboxRepository
 from app.schemas.supplier_clarification_draft import SupplierClarificationDraftRead
-from app.schemas.supplier_clarification_outbox import SupplierClarificationOutboxItemRead
+from app.schemas.supplier_clarification_outbox import (
+    CLARIFICATION_OUTBOX_WORKFLOW_STATUSES,
+    SupplierClarificationOutboxItemRead,
+    SupplierClarificationOutboxStatusPatchRequest,
+)
 
 _offer_repo = SupplierOfferRepository()
 _outbox_repo = SupplierClarificationOutboxRepository()
+
+# current_status -> allowed target statuses
+_OUTBOX_TRANSITIONS: dict[str, frozenset[str]] = {
+    "draft": frozenset({"ready_for_review", "cancelled"}),
+    "ready_for_review": frozenset({"cancelled", "sent_externally_later"}),
+}
 
 
 class SupplierClarificationOutboxOfferNotFoundError(Exception):
@@ -21,6 +32,12 @@ class SupplierClarificationOutboxOfferNotFoundError(Exception):
 
 class SupplierClarificationOutboxItemNotFoundError(Exception):
     pass
+
+
+class SupplierClarificationOutboxInvalidTransitionError(Exception):
+    def __init__(self, *, detail: str) -> None:
+        self.detail = detail
+        super().__init__(detail)
 
 
 @dataclass(frozen=True)
@@ -40,6 +57,9 @@ class SupplierClarificationOutboxService:
             created_by_telegram_user_id=row.created_by_telegram_user_id,
             created_at=row.created_at,
             updated_at=row.updated_at,
+            last_reviewed_at=getattr(row, "last_reviewed_at", None),
+            last_reviewed_by_telegram_user_id=getattr(row, "last_reviewed_by_telegram_user_id", None),
+            review_note=getattr(row, "review_note", None),
         )
 
     def upsert_from_draft(
@@ -75,6 +95,52 @@ class SupplierClarificationOutboxService:
             replayed_existing=False,
         )
 
+    def apply_status_patch(
+        self,
+        session: Session,
+        *,
+        item_id: int,
+        body: SupplierClarificationOutboxStatusPatchRequest,
+        reviewed_by_telegram_user_id: int | None = None,
+    ) -> SupplierClarificationOutboxItemRead:
+        """Validated workflow transition + optional review note (A5)."""
+        row = _outbox_repo.get_by_id(session, item_id=item_id)
+        if row is None:
+            raise SupplierClarificationOutboxItemNotFoundError()
+        target = body.workflow_status.strip()
+        if target not in CLARIFICATION_OUTBOX_WORKFLOW_STATUSES:
+            raise SupplierClarificationOutboxInvalidTransitionError(
+                detail="Unknown workflow_status value.",
+            )
+        allowed = _OUTBOX_TRANSITIONS.get(row.workflow_status, frozenset())
+        if target not in allowed:
+            raise SupplierClarificationOutboxInvalidTransitionError(
+                detail=f"Cannot transition from {row.workflow_status!r} to {target!r}.",
+            )
+        update_note = "review_note" in body.model_fields_set
+        note_val: str | None = body.review_note
+        if note_val is not None:
+            note_val = note_val.strip() or None
+
+        reviewer = (
+            reviewed_by_telegram_user_id
+            if reviewed_by_telegram_user_id is not None
+            else body.reviewed_by_telegram_user_id
+        )
+
+        now = datetime.now(UTC)
+        updated = _outbox_repo.apply_workflow_update(
+            session,
+            item_id=item_id,
+            workflow_status=target,
+            review_note=note_val,
+            update_review_note=update_note,
+            last_reviewed_at=now,
+            last_reviewed_by_telegram_user_id=reviewer,
+        )
+        assert updated is not None
+        return self.to_read(updated)
+
     def list_for_supplier_offer(
         self,
         session: Session,
@@ -97,6 +163,7 @@ class SupplierClarificationOutboxService:
 
 
 __all__ = [
+    "SupplierClarificationOutboxInvalidTransitionError",
     "SupplierClarificationOutboxItemNotFoundError",
     "SupplierClarificationOutboxOfferNotFoundError",
     "SupplierClarificationOutboxService",

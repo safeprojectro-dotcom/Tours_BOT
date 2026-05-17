@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
@@ -65,6 +67,29 @@ class SupplierClarificationOutboxRepository:
             created_by_telegram_user_id=created_by_telegram_user_id,
         )
         session.add(row)
+        session.flush()
+        session.refresh(row)
+        return row
+
+    def apply_workflow_update(
+        self,
+        session: Session,
+        *,
+        item_id: int,
+        workflow_status: str,
+        review_note: str | None,
+        update_review_note: bool,
+        last_reviewed_at: datetime,
+        last_reviewed_by_telegram_user_id: int | None,
+    ) -> SupplierClarificationOutboxItem | None:
+        row = self.get_by_id(session, item_id=item_id)
+        if row is None:
+            return None
+        row.workflow_status = workflow_status
+        if update_review_note:
+            row.review_note = review_note
+        row.last_reviewed_at = last_reviewed_at
+        row.last_reviewed_by_telegram_user_id = last_reviewed_by_telegram_user_id
         session.flush()
         session.refresh(row)
         return row

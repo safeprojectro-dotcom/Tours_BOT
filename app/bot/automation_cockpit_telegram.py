@@ -11,7 +11,9 @@ from app.bot.constants import (
     ADMIN_AUTOMATION_COCKPIT_CLOSE,
     ADMIN_AUTOMATION_COCKPIT_HOME,
     ADMIN_AUTOMATION_COCKPIT_OUTBOX_LIST_PREFIX,
+    ADMIN_AUTOMATION_COCKPIT_OUTBOX_ITEM_PREFIX,
     ADMIN_AUTOMATION_COCKPIT_OUTBOX_SAVE_PREFIX,
+    ADMIN_AUTOMATION_COCKPIT_OUTBOX_STATUS_PREFIX,
     ADMIN_AUTOMATION_COCKPIT_QUEUE_PREFIX,
     ADMIN_AUTOMATION_COCKPIT_REFRESH,
     ADMIN_AUTOMATION_COCKPIT_REFRESH_QUEUE_PREFIX,
@@ -581,6 +583,238 @@ def parse_cockpit_outbox_list_callback(data: str) -> tuple[str, str, int] | None
     return _parse_cockpit_outbox_triplet(ADMIN_AUTOMATION_COCKPIT_OUTBOX_LIST_PREFIX, data)
 
 
+def cockpit_outbox_item_open_callback(
+    queue_code: str,
+    source_type: str,
+    supplier_offer_id: int,
+    item_id: int,
+) -> str:
+    q = _COCKPIT_QUEUE_ABBR[queue_code]
+    st = SOURCE_TYPE_ABBR.get(source_type, source_type[:2])
+    return f"{ADMIN_AUTOMATION_COCKPIT_OUTBOX_ITEM_PREFIX}{q}:{st}:{supplier_offer_id}:{item_id}"
+
+
+def parse_cockpit_outbox_item_callback(data: str) -> tuple[str, str, int, int] | None:
+    if not data.startswith(ADMIN_AUTOMATION_COCKPIT_OUTBOX_ITEM_PREFIX):
+        return None
+    rest = data.removeprefix(ADMIN_AUTOMATION_COCKPIT_OUTBOX_ITEM_PREFIX)
+    parts = rest.split(":")
+    if len(parts) != 4:
+        return None
+    q_abbrev, st_abbrev, offer_s, item_s = parts
+    q = cockpit_queue_from_abbrev(q_abbrev)
+    st = SOURCE_TYPE_ABBR_REV.get(st_abbrev)
+    if q is None or st is None:
+        return None
+    try:
+        offer_id = int(offer_s)
+        item_id = int(item_s)
+    except ValueError:
+        return None
+    return q, st, offer_id, item_id
+
+
+OUTBOX_STATUS_VERB_READY = "rfr"
+OUTBOX_STATUS_VERB_CANCEL = "can"
+OUTBOX_STATUS_VERB_SENT = "sel"
+
+
+def cockpit_outbox_status_callback(
+    queue_code: str,
+    source_type: str,
+    supplier_offer_id: int,
+    item_id: int,
+    verb: str,
+) -> str:
+    q = _COCKPIT_QUEUE_ABBR[queue_code]
+    st = SOURCE_TYPE_ABBR.get(source_type, source_type[:2])
+    return f"{ADMIN_AUTOMATION_COCKPIT_OUTBOX_STATUS_PREFIX}{q}:{st}:{supplier_offer_id}:{item_id}:{verb}"
+
+
+def parse_cockpit_outbox_status_callback(data: str) -> tuple[str, str, int, int, str] | None:
+    if not data.startswith(ADMIN_AUTOMATION_COCKPIT_OUTBOX_STATUS_PREFIX):
+        return None
+    rest = data.removeprefix(ADMIN_AUTOMATION_COCKPIT_OUTBOX_STATUS_PREFIX)
+    parts = rest.split(":")
+    if len(parts) != 5:
+        return None
+    q_abbrev, st_abbrev, offer_s, item_s, verb = parts
+    q = cockpit_queue_from_abbrev(q_abbrev)
+    st = SOURCE_TYPE_ABBR_REV.get(st_abbrev)
+    if q is None or st is None:
+        return None
+    try:
+        offer_id = int(offer_s)
+        item_id = int(item_s)
+    except ValueError:
+        return None
+    return q, st, offer_id, item_id, verb
+
+
+def outbox_status_verb_to_workflow(verb: str) -> str | None:
+    if verb == OUTBOX_STATUS_VERB_READY:
+        return "ready_for_review"
+    if verb == OUTBOX_STATUS_VERB_CANCEL:
+        return "cancelled"
+    if verb == OUTBOX_STATUS_VERB_SENT:
+        return "sent_externally_later"
+    return None
+
+
+def format_cockpit_clarification_outbox_item_detail_text(
+    language_code: str | None,
+    *,
+    supplier_offer_id: int,
+    item: SupplierClarificationOutboxItemRead,
+) -> str:
+    status_key = f"admin_automation_cockpit_outbox_status_{item.workflow_status}"
+    status_label = translate(language_code, status_key)
+    lines = [
+        translate(language_code, "admin_automation_cockpit_outbox_detail_header", oid=str(item.id)),
+        translate(language_code, "admin_automation_cockpit_outbox_detail_offer", sid=str(supplier_offer_id)),
+        translate(language_code, "admin_automation_cockpit_outbox_detail_status", status=status_label),
+        translate(
+            language_code,
+            "admin_automation_cockpit_outbox_detail_updated",
+            ts=item.updated_at.isoformat(timespec="seconds"),
+        ),
+    ]
+    if item.last_reviewed_at is not None:
+        lines.append(
+            translate(
+                language_code,
+                "admin_automation_cockpit_outbox_detail_last_review",
+                ts=item.last_reviewed_at.isoformat(timespec="seconds"),
+            )
+        )
+    if item.review_note:
+        lines.append(
+            translate(
+                language_code,
+                "admin_automation_cockpit_outbox_detail_note",
+                note=item.review_note[:600],
+            )
+        )
+    lines.extend(
+        [
+            "",
+            translate(language_code, "admin_automation_cockpit_outbox_detail_no_send"),
+            "",
+            translate(language_code, "admin_automation_cockpit_outbox_detail_body_hint"),
+        ]
+    )
+    return "\n".join(lines)
+
+
+def cockpit_outbox_list_keyboard(
+    language_code: str | None,
+    *,
+    queue_code: str,
+    source_type: str,
+    supplier_offer_id: int,
+    items: list[SupplierClarificationOutboxItemRead],
+    card_refresh_callback: str,
+) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    for it in items[:15]:
+        status_key = f"admin_automation_cockpit_outbox_status_{it.workflow_status}"
+        status_short = translate(language_code, status_key)
+        kb.button(
+            text=translate(
+                language_code,
+                "admin_automation_cockpit_outbox_list_open_btn",
+                oid=str(it.id),
+                status=status_short,
+            ),
+            callback_data=cockpit_outbox_item_open_callback(
+                queue_code,
+                source_type,
+                supplier_offer_id,
+                it.id,
+            ),
+        )
+    kb.button(
+        text=translate(language_code, "admin_automation_cockpit_outbox_back_to_card"),
+        callback_data=card_refresh_callback,
+    )
+    kb.button(
+        text=translate(language_code, "admin_automation_cockpit_btn_back_home"),
+        callback_data=ADMIN_AUTOMATION_COCKPIT_HOME,
+    )
+    kb.adjust(1)
+    return kb
+
+
+def cockpit_outbox_item_detail_keyboard(
+    language_code: str | None,
+    *,
+    queue_code: str,
+    card_source_type: str,
+    supplier_offer_id: int,
+    item: SupplierClarificationOutboxItemRead,
+    list_callback: str,
+    card_refresh_callback: str,
+) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    st = item.workflow_status
+    if st == "draft":
+        kb.button(
+            text=translate(language_code, "admin_automation_cockpit_outbox_btn_ready_review"),
+            callback_data=cockpit_outbox_status_callback(
+                queue_code,
+                card_source_type,
+                supplier_offer_id,
+                item.id,
+                OUTBOX_STATUS_VERB_READY,
+            ),
+        )
+        kb.button(
+            text=translate(language_code, "admin_automation_cockpit_outbox_btn_cancel"),
+            callback_data=cockpit_outbox_status_callback(
+                queue_code,
+                card_source_type,
+                supplier_offer_id,
+                item.id,
+                OUTBOX_STATUS_VERB_CANCEL,
+            ),
+        )
+    elif st == "ready_for_review":
+        kb.button(
+            text=translate(language_code, "admin_automation_cockpit_outbox_btn_sent_external"),
+            callback_data=cockpit_outbox_status_callback(
+                queue_code,
+                card_source_type,
+                supplier_offer_id,
+                item.id,
+                OUTBOX_STATUS_VERB_SENT,
+            ),
+        )
+        kb.button(
+            text=translate(language_code, "admin_automation_cockpit_outbox_btn_cancel"),
+            callback_data=cockpit_outbox_status_callback(
+                queue_code,
+                card_source_type,
+                supplier_offer_id,
+                item.id,
+                OUTBOX_STATUS_VERB_CANCEL,
+            ),
+        )
+    kb.button(
+        text=translate(language_code, "admin_automation_cockpit_outbox_back_to_list"),
+        callback_data=list_callback,
+    )
+    kb.button(
+        text=translate(language_code, "admin_automation_cockpit_outbox_back_to_card"),
+        callback_data=card_refresh_callback,
+    )
+    kb.button(
+        text=translate(language_code, "admin_automation_cockpit_btn_back_home"),
+        callback_data=ADMIN_AUTOMATION_COCKPIT_HOME,
+    )
+    kb.adjust(1)
+    return kb
+
+
 def format_cockpit_clarification_outbox_list_text(
     language_code: str | None,
     *,
@@ -592,12 +826,14 @@ def format_cockpit_clarification_outbox_list_text(
         return "\n".join([header, "", translate(language_code, "admin_automation_cockpit_outbox_list_empty")])
     lines: list[str] = [header, ""]
     for it in items[:15]:
+        status_key = f"admin_automation_cockpit_outbox_status_{it.workflow_status}"
+        status_label = translate(language_code, status_key)
         lines.append(
             translate(
                 language_code,
                 "admin_automation_cockpit_outbox_list_line",
                 oid=str(it.id),
-                status=it.workflow_status,
+                status=status_label,
                 created=it.created_at.isoformat(timespec="seconds"),
             )
         )

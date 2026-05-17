@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, String
+from datetime import datetime
+
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -33,3 +35,6 @@ class SupplierClarificationOutboxItem(TimestampMixin, Base):
     workflow_status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="draft")
     draft_snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
     created_by_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    last_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    last_reviewed_by_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
