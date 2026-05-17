@@ -6,6 +6,7 @@ import re
 from typing import Callable
 
 from app.bot.automation_cockpit_telegram import humanize_admin_text
+from app.bot.messages import TRANSLATIONS
 from app.schemas.supplier_admin import AdminSupplierOfferOperatorWorkflowRead
 
 _WARNING_CODE_RE = re.compile(r"^\s*\[([^\]]+)\]")
@@ -38,6 +39,28 @@ def _risk_label_key(danger_level: str) -> str:
     }.get(danger_level, "admin_offer_operator_workflow_risk_unknown")
 
 
+def _humanize_workflow_state(
+    language_code: str | None,
+    state: str,
+    translate_fn: Callable[..., str],
+) -> str:
+    key = f"admin_offer_ow_state_{state}"
+    if key not in TRANSLATIONS["en"]:
+        return humanize_admin_text(language_code, state.replace("_", " "))
+    return translate_fn(language_code, key)
+
+
+def _humanize_action_code(
+    language_code: str | None,
+    code: str,
+    translate_fn: Callable[..., str],
+) -> str:
+    key = f"admin_offer_ow_action_{code}"
+    if key not in TRANSLATIONS["en"]:
+        return humanize_admin_text(language_code, code.replace("_", " "))
+    return translate_fn(language_code, key)
+
+
 def format_operator_workflow_for_telegram(
     ow: AdminSupplierOfferOperatorWorkflowRead,
     *,
@@ -45,19 +68,21 @@ def format_operator_workflow_for_telegram(
     translate_fn: Callable[..., str],
     max_chars: int = 1400,
 ) -> str:
-    """Compact operator hints from ``GET …/review-package`` — formatting only, no API calls.
+    """Compact operator hints from review-package — formatting only, no API calls.
 
     Caps: up to 3 blocking snippets and 3 warning codes (full review-package remains source of truth).
     """
+    state_h = _humanize_workflow_state(language_code, ow.state, translate_fn)
     lines: list[str] = [translate_fn(language_code, "admin_offer_operator_workflow_header")]
-    lines.append(translate_fn(language_code, "admin_offer_operator_workflow_line_state", state=ow.state))
+    lines.append(translate_fn(language_code, "admin_offer_operator_workflow_line_state", state=state_h))
 
     pa = None
     if ow.primary_next_action:
         pa = next((a for a in ow.actions if a.code == ow.primary_next_action), None)
 
     if pa is not None:
-        lines.append(translate_fn(language_code, "admin_offer_operator_workflow_line_next", code=pa.code))
+        step_h = _humanize_action_code(language_code, pa.code, translate_fn)
+        lines.append(translate_fn(language_code, "admin_offer_operator_workflow_line_next", step=step_h))
         risk_human = translate_fn(language_code, _risk_label_key(pa.danger_level))
         lines.append(translate_fn(language_code, "admin_offer_operator_workflow_line_risk", risk=risk_human))
         yes = translate_fn(language_code, "admin_offer_operator_workflow_yes")
@@ -67,7 +92,8 @@ def format_operator_workflow_for_telegram(
         if pa.danger_level == "public_dangerous":
             lines.append(translate_fn(language_code, "admin_offer_operator_workflow_public_hint_short"))
     elif ow.primary_next_action:
-        lines.append(translate_fn(language_code, "admin_offer_operator_workflow_line_next", code=ow.primary_next_action))
+        step_h = _humanize_action_code(language_code, ow.primary_next_action, translate_fn)
+        lines.append(translate_fn(language_code, "admin_offer_operator_workflow_line_next", step=step_h))
         lines.append(translate_fn(language_code, "admin_offer_operator_workflow_line_next_detail_missing"))
     else:
         lines.append(translate_fn(language_code, "admin_offer_operator_workflow_line_next_none"))

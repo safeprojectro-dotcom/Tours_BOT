@@ -40,7 +40,7 @@ class ConversionStatusPanelTelegramFormatTests(unittest.TestCase):
             ),
         )
         text = format_conversion_status_panel_for_telegram(panel, language_code="en", translate_fn=translate)
-        self.assertIn("Conversion status", text)
+        self.assertIn("Catalog / conversion", text)
         self.assertIn("Showcase: Published", text)
         self.assertNotIn("tour_code=X", text)
         self.assertIn("Requires internal verification", text)

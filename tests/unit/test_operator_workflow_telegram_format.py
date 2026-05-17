@@ -36,16 +36,18 @@ class OperatorWorkflowTelegramFormatTests(unittest.TestCase):
             ],
         )
         text = format_operator_workflow_for_telegram(ow, language_code="en", translate_fn=translate)
-        self.assertIn("ready_to_publish_showcase", text)
-        self.assertIn("publish_showcase_channel", text)
+        self.assertIn("Ready to publish showcase", text)
+        self.assertIn("Publish showcase to channel", text)
         self.assertNotIn("orphan_promo_code", text)
         self.assertNotIn("description_thin", text)
         self.assertIn("Promo or discount", text)
         self.assertIn("Description looks too short", text)
         self.assertNotIn("public_dangerous", text)
-        self.assertIn("public channel", text)
+        self.assertIn("Public channel", text)
         self.assertIn("Confirm before publishing", text)
-        self.assertIn("Warnings (3):", text)
+        self.assertIn("Notes (3):", text)
+        self.assertNotIn("Admin API", text)
+        self.assertNotIn("review-package", text.lower())
 
     def test_warning_bracket_extracts_code_only(self) -> None:
         ow = AdminSupplierOfferOperatorWorkflowRead(
@@ -59,3 +61,4 @@ class OperatorWorkflowTelegramFormatTests(unittest.TestCase):
         self.assertNotIn("orphan_promo_code", text)
         self.assertNotIn("Technical English", text)
         self.assertIn("Promo or discount", text)
+        self.assertIn("Awaiting moderation", text)
