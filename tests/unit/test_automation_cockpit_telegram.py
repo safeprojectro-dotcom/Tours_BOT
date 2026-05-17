@@ -177,12 +177,12 @@ def test_format_cockpit_card_detail_clarification_drafts_block() -> None:
     c.intake_validation = iv
     c.clarification_draft = cd
     body = format_cockpit_card_detail_text("ro", c)
-    assert "Ciorne clarificare" in body
+    assert "📋 Validare" in body
     assert "Pentru furnizor" in body
     assert "Bună ziua" in body
     assert "descriere" in body.lower()
-    assert "Doar intern" in body or "intern" in body.lower()
-    assert "prepare_chain" in body
+    assert "Sarcini interne" in body
+    assert "prepare_chain" not in body.lower()
 
 
 def test_format_cockpit_card_detail_commercial_and_fact_lock() -> None:
@@ -194,20 +194,18 @@ def test_format_cockpit_card_detail_commercial_and_fact_lock() -> None:
     assert "📄 Card detail" in body
     assert "Suggested next step:" in body
     assert "Check missing marketing data" in body
-    assert "Blocker:" in body
-    assert "⛔" in body
+    assert "Main blocker:" in body
     assert "Package must" in body
-    assert "Sources:" in body
-    assert "Tour in admin" in body
-    assert "Not linked" in body
-    assert "Commercial context:" in body
-    assert "FACT_LOCK_NOTE_TEST" in body
+    assert "Commercial data:" in body
     assert "Tour code: TC1" in body
+    assert "FACT_LOCK_NOTE_TEST" not in body
+    assert "Prices, route" in body or "wording" in body.lower()
     assert "🔒" in body
     assert "🛡 Safety:" in body
     assert "✅ Read-only view" in body
     assert "read_only=" not in body
     assert "admin_tour_path" not in body
+    assert "No scheduler jobs" not in body
     assert "admin_action_path" not in body
 
 
@@ -216,12 +214,12 @@ def test_format_cockpit_card_detail_ro_business_readable() -> None:
     body = format_cockpit_card_detail_text("ro", c)
     assert "📄 Detaliu card" in body
     assert "Pas sugerat:" in body
-    assert "Surse:" in body
-    assert "Tur admin" in body
+    assert "Surse:" not in body
     assert "🛡 Siguranță:" in body
     assert "✅ Doar citire" in body
     assert "read_only=" not in body
     assert "admin_tour_path" not in body
+    assert "Fără planificator" not in body
 
 
 def test_format_cockpit_card_detail_tour_promotion_ro() -> None:
