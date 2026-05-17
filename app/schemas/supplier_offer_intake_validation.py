@@ -44,7 +44,10 @@ class SupplierOfferIntakeValidationRead(BaseModel):
     )
     suggested_supplier_requests: list[str] = Field(
         default_factory=list,
-        description="Concrete clarifications to request from the supplier next (ordered, deduplicated heuristics).",
+        description=(
+            "Heuristic follow-ups from console diagnostics; may include internal/platform wording. "
+            "For supplier-facing copy use clarification_draft.supplier_facing_asks (A3)."
+        ),
     )
 
 

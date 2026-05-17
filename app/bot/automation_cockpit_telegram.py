@@ -485,11 +485,24 @@ def format_cockpit_card_detail_text(language_code: str | None, card: AdminAutoma
             lines.append(translate(language_code, "admin_automation_cockpit_detail_intake_missing"))
             for x in iv.facts_missing_required[:5]:
                 lines.append(f"• {_snippet(str(x), max_len=200)}")
-        if iv.suggested_supplier_requests:
-            lines.append("")
-            lines.append(translate(language_code, "admin_automation_cockpit_detail_intake_ask_next"))
-            for x in iv.suggested_supplier_requests[:5]:
-                lines.append(f"• {_snippet(str(x), max_len=220)}")
+        cd = card.clarification_draft
+        if cd is not None:
+            lines.extend(
+                [
+                    "",
+                    translate(language_code, "admin_automation_cockpit_detail_clarification_header"),
+                    translate(language_code, "admin_automation_cockpit_detail_clarification_draft_note"),
+                ]
+            )
+            if cd.supplier_facing_asks:
+                lines.append(translate(language_code, "admin_automation_cockpit_detail_clarification_supplier"))
+                for x in cd.supplier_facing_asks[:7]:
+                    lines.append(f"• {_snippet(str(x), max_len=380)}")
+            if cd.internal_admin_tasks:
+                lines.append("")
+                lines.append(translate(language_code, "admin_automation_cockpit_detail_clarification_internal"))
+                for x in cd.internal_admin_tasks[:7]:
+                    lines.append(f"• {_snippet(str(x), max_len=380)}")
         lines.extend(
             [
                 "",

@@ -25,6 +25,8 @@ from app.schemas.admin_automation_cockpit import (
     AdminAutomationCockpitSafetySummaryRead,
     AdminAutomationCockpitSummaryRead,
 )
+from app.schemas.supplier_offer_intake_validation import SupplierOfferIntakeValidationRead
+from app.services.supplier_clarification_draft_service import SupplierClarificationDraftService
 
 
 def _sample_safety_summary() -> AdminAutomationCockpitSafetySummaryRead:
@@ -161,6 +163,25 @@ def test_format_cockpit_queue_tour_source_caption() -> None:
     r.queues[0].cards = [_sample_card(source_type="tour")]
     body = format_cockpit_queue_text("en", r, queue_code="marketing_review")
     assert "Tour #42" in body
+
+
+def test_format_cockpit_card_detail_clarification_drafts_block() -> None:
+    iv = SupplierOfferIntakeValidationRead(
+        supplier_offer_id=42,
+        headline="missing:1; publication blocked",
+        facts_missing_required=["preview_customer_body"],
+        suggested_supplier_requests=["prepare_chain:blocked"],
+    )
+    cd = SupplierClarificationDraftService.build_from_intake_validation(iv)
+    c = _sample_card()
+    c.intake_validation = iv
+    c.clarification_draft = cd
+    body = format_cockpit_card_detail_text("ro", c)
+    assert "Ciorne clarificare" in body
+    assert "Pentru furnizor" in body
+    assert "programul" in body.lower()
+    assert "Doar intern" in body or "intern" in body
+    assert "prepare_chain" in body
 
 
 def test_format_cockpit_card_detail_commercial_and_fact_lock() -> None:

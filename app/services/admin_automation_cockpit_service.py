@@ -28,6 +28,7 @@ from app.schemas.admin_publishing_console import (
     PublishingConsoleUiPrimaryActionKind,
 )
 from app.services.admin_publishing_console_service import AdminPublishingConsoleService
+from app.services.supplier_clarification_draft_service import SupplierClarificationDraftService
 from app.services.supplier_offer_intake_validation_service import SupplierOfferIntakeValidationService
 
 _CARD_SAFETY = AdminAutomationCockpitCardSafetyFlagsRead()
@@ -484,6 +485,11 @@ def _build_operational_card(
     }
 
     intake_validation = SupplierOfferIntakeValidationService.build_from_console_item(item)
+    clarification_draft = (
+        SupplierClarificationDraftService.build_from_intake_validation(intake_validation)
+        if intake_validation is not None
+        else None
+    )
 
     return AdminAutomationCockpitCardRead(
         card_id=f"{queue}:{item.candidate_key}",
@@ -510,6 +516,7 @@ def _build_operational_card(
         source_paths=_source_paths(item),
         commercial_context=_operational_commercial_stub(item),
         intake_validation=intake_validation,
+        clarification_draft=clarification_draft,
         metadata=meta,
     )
 
@@ -548,6 +555,11 @@ def _build_commercial_card(
     }
 
     intake_validation = SupplierOfferIntakeValidationService.build_from_console_item(item)
+    clarification_draft = (
+        SupplierClarificationDraftService.build_from_intake_validation(intake_validation)
+        if intake_validation is not None
+        else None
+    )
 
     return AdminAutomationCockpitCardRead(
         card_id=f"{lane}:{item.candidate_key}",
@@ -574,6 +586,7 @@ def _build_commercial_card(
         source_paths=_source_paths(item),
         commercial_context=_commercial_context(item, detail),
         intake_validation=intake_validation,
+        clarification_draft=clarification_draft,
         metadata=meta,
     )
 
