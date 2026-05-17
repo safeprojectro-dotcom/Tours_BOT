@@ -535,6 +535,42 @@ def find_card_in_cockpit(
     return None
 
 
+def find_cockpit_card_for_clarification_outbox(
+    read: AdminAutomationCockpitRead,
+    *,
+    queue_code: str,
+    supplier_offer_id: int,
+) -> AdminAutomationCockpitCardRead | None:
+    """Resolve the card row that owns this clarification/outbox supplier_offer id."""
+    for q in read.queues:
+        if q.queue_code != queue_code:
+            continue
+        for card in q.cards:
+            if card.source_type != "supplier_offer":
+                continue
+            cd = card.clarification_draft
+            if cd is not None and cd.supplier_offer_id == supplier_offer_id:
+                return card
+    return None
+
+
+def cockpit_refresh_callback_for_outbox_card(
+    read: AdminAutomationCockpitRead,
+    *,
+    queue_code: str,
+    supplier_offer_id: int,
+) -> str:
+    """``ac:c:…`` for navigation back to the owning card (fallback: treat id as supplier_offer source_id)."""
+    card = find_cockpit_card_for_clarification_outbox(
+        read,
+        queue_code=queue_code,
+        supplier_offer_id=supplier_offer_id,
+    )
+    if card is not None:
+        return cockpit_card_callback(queue_code, card.source_type, card.source_id)
+    return cockpit_card_callback(queue_code, "supplier_offer", supplier_offer_id)
+
+
 def cockpit_clarification_outbox_save_eligible(card: AdminAutomationCockpitCardRead | None) -> bool:
     if card is None or card.source_type != "supplier_offer":
         return False
@@ -1138,13 +1174,16 @@ def cockpit_card_keyboard(
     kb = InlineKeyboardBuilder()
     q_abbrev = cockpit_queue_abbrev(queue_code)
     if card is not None and cockpit_clarification_outbox_save_eligible(card):
+        cd = card.clarification_draft
+        assert cd is not None
+        out_offer_id = cd.supplier_offer_id
         kb.button(
             text=translate(language_code, "admin_automation_cockpit_btn_clarification_save_outbox"),
-            callback_data=cockpit_outbox_save_callback(queue_code, card.source_type, card.source_id),
+            callback_data=cockpit_outbox_save_callback(queue_code, "supplier_offer", out_offer_id),
         )
         kb.button(
             text=translate(language_code, "admin_automation_cockpit_btn_clarification_outbox_list"),
-            callback_data=cockpit_outbox_list_callback(queue_code, card.source_type, card.source_id),
+            callback_data=cockpit_outbox_list_callback(queue_code, "supplier_offer", out_offer_id),
         )
     kb.button(
         text=translate(language_code, "admin_automation_cockpit_btn_back_queue"),

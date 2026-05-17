@@ -431,6 +431,47 @@ def test_cockpit_outbox_item_and_status_callbacks_roundtrip() -> None:
     assert parse_cockpit_outbox_status_callback(ox2) == ("missing_info", "supplier_offer", 5, 6, OUTBOX_STATUS_VERB_CANCEL)
 
 
+def test_outbox_save_list_callbacks_use_draft_supplier_offer_id_when_card_source_differs() -> None:
+    """Save + list must encode clarification_draft.supplier_offer_id (DB/outbox key), not card.source_id."""
+    from app.bot.automation_cockpit_telegram import (
+        cockpit_card_keyboard,
+        cockpit_refresh_callback_for_outbox_card,
+        find_cockpit_card_for_clarification_outbox,
+        parse_cockpit_card_callback,
+        parse_cockpit_outbox_list_callback,
+        parse_cockpit_outbox_save_callback,
+    )
+
+    c = _sample_card()
+    c.source_type = "supplier_offer"
+    c.source_id = 999
+    c.clarification_draft = SupplierClarificationDraftRead(
+        supplier_offer_id=42,
+        supplier_facing_asks=["x"],
+    )
+    r = _sample_read()
+    r.queues[0].cards = [c]
+
+    refresh = parse_cockpit_card_callback(
+        cockpit_refresh_callback_for_outbox_card(r, queue_code="marketing_review", supplier_offer_id=42)
+    )
+    assert refresh == ("marketing_review", "supplier_offer", 999)
+
+    assert find_cockpit_card_for_clarification_outbox(r, queue_code="marketing_review", supplier_offer_id=42) is c
+
+    kb = cockpit_card_keyboard(
+        "en",
+        queue_code="marketing_review",
+        card_refresh_callback="ac:c:x",
+        card=c,
+    )
+    cbs = [btn.callback_data for row in kb.export() for btn in row if btn.callback_data]
+    save_cb = next(x for x in cbs if str(x).startswith("ac:os:"))
+    list_cb = next(x for x in cbs if str(x).startswith("ac:ol:"))
+    assert parse_cockpit_outbox_save_callback(save_cb)[2] == 42
+    assert parse_cockpit_outbox_list_callback(list_cb)[2] == 42
+
+
 def test_cockpit_outbox_list_and_detail_keyboards_no_publish() -> None:
     from app.bot.automation_cockpit_telegram import (
         cockpit_card_callback,
@@ -549,6 +590,7 @@ def test_outbox_save_callback_toast_new_vs_replay() -> None:
 
     draft = SupplierClarificationDraftRead(supplier_offer_id=7, supplier_facing_asks=["q"])
     card = MagicMock()
+    card.source_type = "supplier_offer"
     card.clarification_draft = draft
     item = SupplierClarificationOutboxItemRead(
         id=99,
@@ -582,7 +624,10 @@ def test_outbox_save_callback_toast_new_vs_replay() -> None:
                 return_value=False,
             ),
             patch("app.bot.handlers.automation_cockpit_admin._load_card_read", return_value=MagicMock()),
-            patch("app.bot.handlers.automation_cockpit_admin.find_card_in_cockpit", return_value=card),
+            patch(
+                "app.bot.handlers.automation_cockpit_admin.find_cockpit_card_for_clarification_outbox",
+                return_value=card,
+            ),
             patch("app.bot.handlers.automation_cockpit_admin.SessionLocal") as SL,
             patch.object(
                 SupplierClarificationOutboxService,

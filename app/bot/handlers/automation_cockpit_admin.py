@@ -17,9 +17,11 @@ from app.bot.automation_cockpit_telegram import (
     cockpit_outbox_item_detail_keyboard,
     cockpit_queue_from_abbrev,
     cockpit_queue_keyboard,
+    cockpit_refresh_callback_for_outbox_card,
     cockpit_safety_detail_keyboard,
     cockpit_summary_keyboard,
     find_card_in_cockpit,
+    find_cockpit_card_for_clarification_outbox,
     format_cockpit_card_detail_text,
     format_cockpit_clarification_outbox_item_detail_text,
     format_cockpit_clarification_outbox_list_text,
@@ -157,8 +159,13 @@ async def _present_outbox_item_detail(
     item_id: int,
 ) -> bool:
     """Render item detail; returns False if the item is missing or does not belong to the offer."""
-    refresh_cb = cockpit_card_callback(queue_code, card_source_type, supplier_offer_id)
-    list_cb = cockpit_outbox_list_callback(queue_code, card_source_type, supplier_offer_id)
+    read = _load_card_read(queue_code)
+    refresh_cb = cockpit_refresh_callback_for_outbox_card(
+        read,
+        queue_code=queue_code,
+        supplier_offer_id=supplier_offer_id,
+    )
+    list_cb = cockpit_outbox_list_callback(queue_code, "supplier_offer", supplier_offer_id)
     with SessionLocal() as session:
         try:
             item = SupplierClarificationOutboxService().get_by_id(session, item_id=item_id)
@@ -362,7 +369,11 @@ async def cb_cockpit_clarification_outbox_save(query: CallbackQuery) -> None:
         return
     queue_code, source_type, source_id = parsed
     read = _load_card_read(queue_code)
-    card = find_card_in_cockpit(read, queue_code=queue_code, source_type=source_type, source_id=source_id)
+    card = find_cockpit_card_for_clarification_outbox(
+        read,
+        queue_code=queue_code,
+        supplier_offer_id=source_id,
+    )
     if card is None or card.clarification_draft is None:
         await query.answer(translate(lg, "admin_automation_cockpit_outbox_save_failed"), show_alert=True)
         return
@@ -398,7 +409,12 @@ async def cb_cockpit_clarification_outbox_list(query: CallbackQuery) -> None:
         await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
         return
     queue_code, _source_type, source_id = parsed
-    refresh_cb = cockpit_card_callback(queue_code, "supplier_offer", source_id)
+    read = _load_card_read(queue_code)
+    refresh_cb = cockpit_refresh_callback_for_outbox_card(
+        read,
+        queue_code=queue_code,
+        supplier_offer_id=source_id,
+    )
     with SessionLocal() as session:
         items = SupplierClarificationOutboxService().list_for_supplier_offer(
             session,
