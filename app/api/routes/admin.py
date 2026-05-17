@@ -29,6 +29,7 @@ from app.schemas.admin_departure_passenger_counts import (
     AdminDeparturePassengerCountsRead,
 )
 from app.schemas.admin_supplier_telegram_contact_resolution import AdminSupplierTelegramContactResolutionRead
+from app.schemas.supplier_notification_outbox import SupplierNotificationOutboxDeliveryResultRead
 from app.schemas.admin_ops_dashboard import AdminOpsDashboardRead, parse_include_sections_query
 from app.schemas.admin_publishing_console import (
     AdminPublishingConsoleEditorDetailRead,
@@ -99,6 +100,11 @@ from app.services.admin_automation_cockpit_service import AdminAutomationCockpit
 from app.services.admin_departure_passenger_counts_service import AdminDeparturePassengerCountsService
 from app.services.admin_supplier_telegram_contact_resolution_service import (
     AdminSupplierTelegramContactResolutionService,
+)
+from app.services.supplier_notification_outbox_delivery_service import (
+    SupplierNotificationOutboxDeliveryStateConflictError,
+    SupplierNotificationOutboxDeliveryService,
+    SupplierNotificationOutboxNotFoundError,
 )
 from app.services.supplier_clarification_outbox_service import (
     SupplierClarificationOutboxInvalidTransitionError,
@@ -1561,6 +1567,31 @@ def get_admin_supplier_offer_telegram_contact_resolution(
     if payload is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.")
     return payload
+
+
+@router.post(
+    "/supplier-notification-outbox/{outbox_id}/deliver",
+    response_model=SupplierNotificationOutboxDeliveryResultRead,
+)
+async def post_admin_deliver_supplier_notification_outbox(
+    outbox_id: int,
+    db: Session = Depends(get_db),
+) -> SupplierNotificationOutboxDeliveryResultRead:
+    """S1C-2: deliver one Telegram DM from ``supplier_notification_outbox`` — no scheduler, hooks, or Layer A writes."""
+
+    svc = SupplierNotificationOutboxDeliveryService()
+    try:
+        result = await svc.deliver_one_by_id(db, outbox_id=outbox_id)
+        db.commit()
+        return result
+    except SupplierNotificationOutboxNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier notification outbox row not found.")
+    except SupplierNotificationOutboxDeliveryStateConflictError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.detail)
+    finally:
+        await svc.close()
 
 
 @router.put("/supplier-offers/{offer_id}/cover", response_model=AdminSupplierOfferRead)

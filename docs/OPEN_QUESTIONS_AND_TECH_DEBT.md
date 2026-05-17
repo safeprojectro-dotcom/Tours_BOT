@@ -62,6 +62,22 @@ Track future-gated decisions:
 
 ---
 
+## Checkpoint Sync — S1C-2 supplier notification Telegram delivery from outbox (2026-05-17)
+
+**Shipped:** **`20260617_35`** (**`supplier_notification_outbox`** delivery statuses **`+`** audit columns**) **`;`** **`SupplierNotificationOutboxDeliveryService`** **`/`** **`POST /admin/supplier-notification-outbox/{outbox_id}/deliver`** **`;`** Telegram private DM only (**`title`** **`+`** **`message`**) **`;`** outbox-only source **`;`** **`pending_dispatch`** **`→`** **`delivery_in_progress`** **`→`** **`delivered`** **`/`** **`send_failed`** **`;`** contact drift check **`;`** **`delivered`** idempotent (**no** re-send**) **`;`** **no** **`publish`** **`/`** order hooks **`;`** **no** scheduler **`;`** **no** channel **`/`** passenger manifest **`;`** **no** Layer A **`/`** payment mutation **`/`** customer PII **`;`** **`TELEGRAM_BOT_TOKEN`** dependency for runtime sends **`.**
+
+Track future-gated decisions:
+
+- **Ops **`/`** DR **`:`** reconcile **`delivery_in_progress`** (**crash mid-flight**) **`;`** whether admin may force-reset **`/`** reconcile vs DB-only playbook **`.**
+- **`send_failed`** **`/`** retry policy (**new intent **`/`** PATCH status **`/`** manual-only**) **`.**
+- Whether **`python -m pytest tests -k "supplier_notification_telegram_delivery or supplier_notification_outbox or supplier"`** should become default CI vs selective **`.`** **(** **Current **`:`** **`458`** **`passed`** **`/`** **`928`** **`deselected`** **.)**
+- **`GET`** **`/`** list **`/`** filter supplier outbox rows in admin for operators **vs** telemetry-only **`.`**
+- Linkage from publishing **`/`** order surfaces to enqueue **`/`** deliver (**`S1C-3`**) **`/`** RBAC **`/`** idempotency for new triggers **`.**
+- Production rollout **`/`** consent **`/`** template **`/`** localization **`/`** noisy content policy before broad enablement **`.**
+- **Still no** customer personal data in supplier payloads before privacy **`/`** security gate **`.**
+
+---
+
 ## Checkpoint Sync — A1V Telegram cockpit (2026-05-16)
 
 **Shipped:** read-only admin Telegram surface (`/admin_cockpit` + **📊 Automation Cockpit** button) over **`AdminAutomationCockpitService.read_cockpit`** — see **[`docs/HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md`](HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md)**.

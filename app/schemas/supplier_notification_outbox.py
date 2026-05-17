@@ -9,7 +9,15 @@ from pydantic import BaseModel, ConfigDict
 
 SupplierNotificationEventType = Literal["supplier_offer_published", "supplier_order_created"]
 
-SupplierNotificationDispatchStatus = Literal["pending_dispatch", "skipped_no_target"]
+SupplierNotificationDispatchStatus = Literal[
+    "pending_dispatch",
+    "skipped_no_target",
+    "delivery_in_progress",
+    "delivered",
+    "send_failed",
+]
+
+SupplierNotificationDeliveryOutcome = Literal["delivered", "already_delivered", "send_failed"]
 
 
 class SupplierNotificationOutboxRead(BaseModel):
@@ -30,6 +38,17 @@ class SupplierNotificationOutboxRead(BaseModel):
     payload_metadata: dict | None = None
     readiness_warnings: list[str] | None = None
     dispatch_status: str
+    telegram_message_id: str | None = None
+    last_delivery_error: str | None = None
+    delivered_at: datetime | None = None
     actor_surface: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class SupplierNotificationOutboxDeliveryResultRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    outcome: SupplierNotificationDeliveryOutcome
+    supplier_notification_outbox: SupplierNotificationOutboxRead
+    error_detail: str | None = None

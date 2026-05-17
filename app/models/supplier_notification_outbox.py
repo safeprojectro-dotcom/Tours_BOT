@@ -1,8 +1,10 @@
-"""S1C-1: persisted intents for future supplier Telegram notifications (no send in this slice)."""
+"""S1C-1 / S1C-2: persisted supplier Telegram notification intents plus delivery audit columns."""
 
 from __future__ import annotations
 
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, String, Text, UniqueConstraint
+from datetime import datetime
+
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,7 +30,10 @@ class SupplierNotificationOutbox(TimestampMixin, Base):
             name="ck_supplier_notification_outbox_contact_resolution_status",
         ),
         CheckConstraint(
-            "dispatch_status IN ('pending_dispatch', 'skipped_no_target')",
+            "dispatch_status IN ("
+            "'pending_dispatch', 'skipped_no_target', 'delivery_in_progress', "
+            "'delivered', 'send_failed'"
+            ")",
             name="ck_supplier_notification_outbox_dispatch_status",
         ),
         CheckConstraint("char_length(btrim(idempotency_key)) > 0", name="ck_supplier_notification_outbox_idem_nonempty"),
@@ -57,4 +62,7 @@ class SupplierNotificationOutbox(TimestampMixin, Base):
     readiness_warnings: Mapped[list | dict | None] = mapped_column(JSONB, nullable=True)
 
     dispatch_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending_dispatch")
+    telegram_message_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_delivery_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     actor_surface: Mapped[str | None] = mapped_column(String(64), nullable=True)
