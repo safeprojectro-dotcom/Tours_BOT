@@ -7,6 +7,28 @@ This file is for items that are acceptable **now**, but should not be forgotten 
 
 ---
 
+## Checkpoint Sync — S1A departure passenger counts (2026-05-17)
+
+**Shipped:** read-only Layer A aggregates via **`AdminDeparturePassengerCountsService`** **`;`** admin **`GET`** **`/admin/tours/{tour_id}/departure-passenger-counts`**, **`/admin/supplier-offers/{offer_id}/departure-passenger-counts`**, **`/admin/suppliers/{supplier_id}/departure-passenger-counts`**. **Does not:** supplier notifications **`;`** passenger manifest **`;`** personal customer data **`;`** seat inventory mutation **`;`** payment **`/`** reconciliation mutation **.**
+
+### S1 supplier departure operations open decisions
+
+Future-gated follow-ups:
+
+- Exact supplier visibility permissions (who may consume future supplier-facing surfaces).
+- Whether suppliers may see **reserved unpaid** counts vs **paid/confirmed-only** aggregates.
+- Whether suppliers may see **boarding-point-level** aggregates (vs tour-level only).
+- Whether supplier departure **list** endpoints need **pagination** when many tours link to one supplier.
+- Production semantics for **`paid_confirmed_*`** — currently driven by Layer A **`payment_status == PAID`** (confirm contract vs reconciliation nuances before supplier exposure).
+- Whether **`other_active_*`** buckets need explicit admin/operator action / playbook rules.
+- How to handle **`s1a_inventory_vs_active_order_seats_mismatch`** (investigate workflow vs alerting vs documentation-only).
+- How to handle **`s1a_expired_temporary_hold_not_released`** (lazy expiry placement vs worker vs operator playbook).
+- Supplier notification send remains gated behind future **outbox / audit / idempotency** design (**S1C**) — not implied by S1A.
+- Passenger manifest remains future-gated behind **privacy/security** design (**S1E**).
+- **No** personal customer data in supplier-facing flows before a separate **privacy/security** gate.
+
+---
+
 ## Checkpoint Sync — A1V Telegram cockpit (2026-05-16)
 
 **Shipped:** read-only admin Telegram surface (`/admin_cockpit` + **📊 Automation Cockpit** button) over **`AdminAutomationCockpitService.read_cockpit`** — see **[`docs/HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md`](HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md)**.

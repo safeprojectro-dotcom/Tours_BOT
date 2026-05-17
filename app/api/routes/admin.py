@@ -16,13 +16,17 @@ from app.models.enums import (
     SupplierOfferMediaReviewStatus,
     TourStatus,
 )
-from app.models.supplier import Supplier
+from app.models.supplier import Supplier, SupplierOffer
 from app.schemas.admin_automation_cockpit import AdminAutomationCockpitRead, parse_include_queues_query
 from app.schemas.supplier_clarification_outbox import (
     SupplierClarificationOutboxCreateRequest,
     SupplierClarificationOutboxItemRead,
     SupplierClarificationOutboxStatusPatchRequest,
     SupplierClarificationOutboxUpsertRead,
+)
+from app.schemas.admin_departure_passenger_counts import (
+    AdminDeparturePassengerCountsListRead,
+    AdminDeparturePassengerCountsRead,
 )
 from app.schemas.admin_ops_dashboard import AdminOpsDashboardRead, parse_include_sections_query
 from app.schemas.admin_publishing_console import (
@@ -91,6 +95,7 @@ from app.schemas.admin_prepare_conversion_chain_plan import (
 from app.services.admin_prepare_conversion_chain_plan_service import AdminPrepareConversionChainPlanService
 from app.services.prepare_conversion_chain_execution_service import PrepareConversionChainExecutionService
 from app.services.admin_automation_cockpit_service import AdminAutomationCockpitService
+from app.services.admin_departure_passenger_counts_service import AdminDeparturePassengerCountsService
 from app.services.supplier_clarification_outbox_service import (
     SupplierClarificationOutboxInvalidTransitionError,
     SupplierClarificationOutboxItemNotFoundError,
@@ -850,6 +855,21 @@ def get_admin_tour_detail(
     return detail
 
 
+@router.get(
+    "/tours/{tour_id}/departure-passenger-counts",
+    response_model=AdminDeparturePassengerCountsRead,
+)
+def get_admin_tour_departure_passenger_counts(
+    tour_id: int,
+    db: Session = Depends(get_db),
+) -> AdminDeparturePassengerCountsRead:
+    """S1A: read-only Layer A aggregates for one tour departure (orders + inventory; no manifest)."""
+    payload = AdminDeparturePassengerCountsService().read_for_tour(db, tour_id=tour_id)
+    if payload is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour not found.")
+    return payload
+
+
 @router.get("/orders", response_model=AdminOrderListRead)
 def list_admin_orders(
     db: Session = Depends(get_db),
@@ -1421,6 +1441,20 @@ def get_admin_supplier_offers(
     return AdminSupplierOfferListRead(items=items, total_returned=len(items))
 
 
+@router.get(
+    "/suppliers/{supplier_id}/departure-passenger-counts",
+    response_model=AdminDeparturePassengerCountsListRead,
+)
+def list_admin_supplier_departure_passenger_counts(
+    supplier_id: int,
+    db: Session = Depends(get_db),
+) -> AdminDeparturePassengerCountsListRead:
+    """S1A: distinct Layer A tours linked to this supplier via active bridges / execution links."""
+    if db.get(Supplier, supplier_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found.")
+    return AdminDeparturePassengerCountsService().list_for_supplier(db, supplier_id=supplier_id)
+
+
 @router.get("/supplier-offers", response_model=AdminSupplierOfferListRead)
 def list_admin_supplier_offers_moderation(
     db: Session = Depends(get_db),
@@ -1443,6 +1477,26 @@ def get_admin_supplier_offer_by_id(offer_id: int, db: Session = Depends(get_db))
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.")
     return AdminSupplierOfferRead.model_validate(row, from_attributes=True)
+
+
+@router.get(
+    "/supplier-offers/{offer_id}/departure-passenger-counts",
+    response_model=AdminDeparturePassengerCountsRead,
+)
+def get_admin_supplier_offer_departure_passenger_counts(
+    offer_id: int,
+    db: Session = Depends(get_db),
+) -> AdminDeparturePassengerCountsRead:
+    """S1A: aggregates for the tour resolved from active execution link (preferred) or active tour bridge."""
+    if db.get(SupplierOffer, offer_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.")
+    payload = AdminDeparturePassengerCountsService().read_for_supplier_offer(db, supplier_offer_id=offer_id)
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active execution link or tour bridge for this supplier offer.",
+        )
+    return payload
 
 
 @router.put("/supplier-offers/{offer_id}/cover", response_model=AdminSupplierOfferRead)
