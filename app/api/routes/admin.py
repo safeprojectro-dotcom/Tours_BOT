@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,11 @@ from app.models.enums import (
 )
 from app.models.supplier import Supplier
 from app.schemas.admin_automation_cockpit import AdminAutomationCockpitRead, parse_include_queues_query
+from app.schemas.supplier_clarification_outbox import (
+    SupplierClarificationOutboxCreateRequest,
+    SupplierClarificationOutboxItemRead,
+    SupplierClarificationOutboxUpsertRead,
+)
 from app.schemas.admin_ops_dashboard import AdminOpsDashboardRead, parse_include_sections_query
 from app.schemas.admin_publishing_console import (
     AdminPublishingConsoleEditorDetailRead,
@@ -85,6 +90,11 @@ from app.schemas.admin_prepare_conversion_chain_plan import (
 from app.services.admin_prepare_conversion_chain_plan_service import AdminPrepareConversionChainPlanService
 from app.services.prepare_conversion_chain_execution_service import PrepareConversionChainExecutionService
 from app.services.admin_automation_cockpit_service import AdminAutomationCockpitService
+from app.services.supplier_clarification_outbox_service import (
+    SupplierClarificationOutboxItemNotFoundError,
+    SupplierClarificationOutboxOfferNotFoundError,
+    SupplierClarificationOutboxService,
+)
 from app.services.admin_ops_dashboard_service import AdminOpsDashboardService
 from app.services.admin_publishing_console_service import (
     AdminPublishingConsoleService,
@@ -355,6 +365,73 @@ def get_admin_automation_cockpit(
             detail=[{"loc": ("query", "include_queues"), "msg": str(exc), "type": "value_error"}],
         ) from exc
     return AdminAutomationCockpitService().read_cockpit(db, limit_per_queue=limit, include_queues=inc)
+
+
+@router.post(
+    "/supplier-clarification-outbox",
+    response_model=SupplierClarificationOutboxUpsertRead,
+)
+def post_supplier_clarification_outbox(
+    response: Response,
+    db: Session = Depends(get_db),
+    body: SupplierClarificationOutboxCreateRequest = Body(...),
+) -> SupplierClarificationOutboxUpsertRead:
+    """A4: persist an internal clarification draft snapshot (does not message the supplier)."""
+    try:
+        result = SupplierClarificationOutboxService().upsert_from_draft(
+            db,
+            draft=body.draft,
+            created_by_telegram_user_id=body.created_by_telegram_user_id,
+        )
+        db.commit()
+        response.status_code = (
+            status.HTTP_200_OK if result.replayed_existing else status.HTTP_201_CREATED
+        )
+        return SupplierClarificationOutboxUpsertRead(
+            item=result.item,
+            replayed_existing=result.replayed_existing,
+        )
+    except SupplierClarificationOutboxOfferNotFoundError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier offer not found.",
+        ) from exc
+
+
+@router.get(
+    "/supplier-clarification-outbox",
+    response_model=list[SupplierClarificationOutboxItemRead],
+)
+def list_supplier_clarification_outbox(
+    db: Session = Depends(get_db),
+    supplier_offer_id: int = Query(..., ge=1),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[SupplierClarificationOutboxItemRead]:
+    """A4: list persisted outbox rows for one supplier offer (newest first)."""
+    return SupplierClarificationOutboxService().list_for_supplier_offer(
+        db,
+        supplier_offer_id=supplier_offer_id,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/supplier-clarification-outbox/{item_id}",
+    response_model=SupplierClarificationOutboxItemRead,
+)
+def get_supplier_clarification_outbox_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+) -> SupplierClarificationOutboxItemRead:
+    """A4: fetch one outbox item by id."""
+    try:
+        return SupplierClarificationOutboxService().get_by_id(db, item_id=item_id)
+    except SupplierClarificationOutboxItemNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Outbox item not found.",
+        ) from exc
 
 
 @router.get("/publishing-console", response_model=AdminPublishingConsoleRead)

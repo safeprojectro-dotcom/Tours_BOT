@@ -16,6 +16,7 @@ from app.models.supplier import Supplier, SupplierApiCredential, SupplierOffer, 
 from app.models.supplier_offer_showcase_publish_attempt import SupplierOfferShowcasePublishAttempt
 from app.models.supplier_offer_tour_bridge import SupplierOfferTourBridge
 from app.models.supplier_offer_recurrence_generated_tour import SupplierOfferRecurrenceGeneratedTour
+from app.models.supplier_clarification_outbox import SupplierClarificationOutboxItem
 from app.models.supplier_execution import (
     SupplierExecutionAttempt,
     SupplierExecutionAttemptTelegramIdempotency,
@@ -48,6 +49,7 @@ __all__ = [
     "SupplierOfferShowcasePublishAttempt",
     "SupplierOfferTourBridge",
     "SupplierOfferRecurrenceGeneratedTour",
+    "SupplierClarificationOutboxItem",
     "Tour",
     "TourTranslation",
     "User",

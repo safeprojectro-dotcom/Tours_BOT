@@ -601,6 +601,20 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "admin_automation_cockpit_btn_safety_detail": "🛡 Safety details",
         "admin_automation_cockpit_btn_refresh": "🔄 Refresh",
         "admin_automation_cockpit_btn_close": "✖ Close",
+        "admin_automation_cockpit_btn_clarification_save_outbox": "💾 Save clarification (internal outbox)",
+        "admin_automation_cockpit_btn_clarification_outbox_list": "📋 Clarification outbox (this offer)",
+        "admin_automation_cockpit_outbox_saved_new": (
+            "💾 Draft saved for supplier clarification (internal)."
+        ),
+        "admin_automation_cockpit_outbox_saved_replay": (
+            "ℹ️ An active draft already exists for this offer."
+        ),
+        "admin_automation_cockpit_outbox_save_failed": "Could not save to outbox.",
+        "admin_automation_cockpit_outbox_list_header": "Clarification outbox — offer #{sid}",
+        "admin_automation_cockpit_outbox_list_empty": "No saved items yet.",
+        "admin_automation_cockpit_outbox_list_line": "#{oid} · {status} · {created}",
+        "admin_automation_cockpit_outbox_list_footer": "Read-only list; use admin API or future flows to change status.",
+        "admin_automation_cockpit_outbox_back_to_card": "⬅ Back to card",
         "admin_automation_cockpit_btn_back_home": "📊 Cockpit home",
         "admin_automation_cockpit_btn_back_queue": "⬅️ Back to queue",
         "admin_automation_cockpit_open_offer_btn": "Open offer #{sid}",
@@ -1261,6 +1275,18 @@ TRANSLATIONS: dict[str, TemplateMap] = {
         "admin_automation_cockpit_btn_safety_detail": "🛡 Detalii siguranță",
         "admin_automation_cockpit_btn_refresh": "🔄 Reîmprospătare",
         "admin_automation_cockpit_btn_close": "✖ Închide",
+        "admin_automation_cockpit_btn_clarification_save_outbox": "💾 Salvează clarificare (outbox intern)",
+        "admin_automation_cockpit_btn_clarification_outbox_list": "📋 Outbox clarificări (această ofertă)",
+        "admin_automation_cockpit_outbox_saved_new": "💾 Ciornă salvată pentru clarificare furnizor",
+        "admin_automation_cockpit_outbox_saved_replay": (
+            "ℹ️ Există deja o ciornă activă pentru această ofertă."
+        ),
+        "admin_automation_cockpit_outbox_save_failed": "Nu s-a putut salva în outbox.",
+        "admin_automation_cockpit_outbox_list_header": "Outbox clarificări — ofertă #{sid}",
+        "admin_automation_cockpit_outbox_list_empty": "Încă nu există înregistrări.",
+        "admin_automation_cockpit_outbox_list_line": "#{oid} · {status} · {created}",
+        "admin_automation_cockpit_outbox_list_footer": "Listă doar citire; pentru status folosiți API admin sau fluxuri viitoare.",
+        "admin_automation_cockpit_outbox_back_to_card": "⬅ Înapoi la card",
         "admin_automation_cockpit_btn_back_home": "📊 Acasă cockpit",
         "admin_automation_cockpit_btn_back_queue": "⬅️ Înapoi la coadă",
         "admin_automation_cockpit_open_offer_btn": "Deschide ofertă #{sid}",

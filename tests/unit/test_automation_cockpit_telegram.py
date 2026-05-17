@@ -392,6 +392,41 @@ def test_format_cockpit_card_detail_tour_promotion_ro() -> None:
     assert "admin_tour_path" not in body
 
 
+def test_cockpit_outbox_callbacks_roundtrip() -> None:
+    from app.bot.automation_cockpit_telegram import (
+        cockpit_outbox_list_callback,
+        cockpit_outbox_save_callback,
+        parse_cockpit_outbox_list_callback,
+        parse_cockpit_outbox_save_callback,
+    )
+
+    save_cb = cockpit_outbox_save_callback("marketing_review", "supplier_offer", 7)
+    assert parse_cockpit_outbox_save_callback(save_cb) == ("marketing_review", "supplier_offer", 7)
+    list_cb = cockpit_outbox_list_callback("missing_info", "supplier_offer", 99)
+    assert parse_cockpit_outbox_list_callback(list_cb) == ("missing_info", "supplier_offer", 99)
+
+
+def test_cockpit_card_keyboard_outbox_buttons_when_clarification_draft() -> None:
+    from app.bot.automation_cockpit_telegram import cockpit_card_callback, cockpit_card_keyboard
+
+    iv = SupplierOfferIntakeValidationRead(
+        supplier_offer_id=42,
+        headline="x",
+        facts_missing_required=["preview_customer_body"],
+        suggested_supplier_requests=[],
+    )
+    cd = SupplierClarificationDraftService.build_from_intake_validation(iv)
+    c = _sample_card()
+    c.source_type = "supplier_offer"
+    c.source_id = iv.supplier_offer_id
+    c.clarification_draft = cd
+    refresh = cockpit_card_callback("marketing_review", "supplier_offer", c.source_id)
+    kb = cockpit_card_keyboard("en", queue_code="marketing_review", card_refresh_callback=refresh, card=c)
+    cbs = {btn.callback_data for row in kb.export() for btn in row}
+    assert any(str(cb).startswith("ac:os:") for cb in cbs)
+    assert any(str(cb).startswith("ac:ol:") for cb in cbs)
+
+
 def test_cockpit_keyboards_no_publish_callbacks() -> None:
     kb = cockpit_summary_keyboard("en")
     for row in kb.export():
@@ -428,3 +463,74 @@ def test_find_card_in_cockpit() -> None:
     c = find_card_in_cockpit(r, queue_code="marketing_review", source_type="supplier_offer", source_id=42)
     assert c is not None
     assert c.title == "Test Offer"
+
+
+def test_outbox_save_callback_toast_new_vs_replay() -> None:
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.bot.automation_cockpit_telegram import cockpit_outbox_save_callback
+    from app.bot.handlers.automation_cockpit_admin import cb_cockpit_clarification_outbox_save
+    from app.schemas.supplier_clarification_outbox import SupplierClarificationOutboxItemRead
+    from app.services.supplier_clarification_outbox_service import (
+        SupplierClarificationOutboxService,
+        SupplierClarificationOutboxUpsertResult,
+    )
+
+    draft = SupplierClarificationDraftRead(supplier_offer_id=7, supplier_facing_asks=["q"])
+    card = MagicMock()
+    card.clarification_draft = draft
+    item = SupplierClarificationOutboxItemRead(
+        id=99,
+        supplier_offer_id=7,
+        workflow_status="draft",
+        draft_snapshot={},
+        created_by_telegram_user_id=1,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    async def run_once(*, replayed: bool, language: str, expected_substr: str) -> None:
+        query = MagicMock()
+        query.from_user = MagicMock()
+        query.from_user.id = 1
+        query.from_user.language_code = language
+        query.data = cockpit_outbox_save_callback("marketing_review", "supplier_offer", 7)
+        query.answer = AsyncMock()
+        result = SupplierClarificationOutboxUpsertResult(item=item, replayed_existing=replayed)
+
+        with (
+            patch("app.bot.handlers.automation_cockpit_admin._is_admin_allowed", return_value=True),
+            patch(
+                "app.bot.handlers.automation_cockpit_admin._resolve_language",
+                new_callable=AsyncMock,
+                return_value=language,
+            ),
+            patch(
+                "app.bot.handlers.automation_cockpit_admin._deny_if_not_allowed",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
+            patch("app.bot.handlers.automation_cockpit_admin._load_card_read", return_value=MagicMock()),
+            patch("app.bot.handlers.automation_cockpit_admin.find_card_in_cockpit", return_value=card),
+            patch("app.bot.handlers.automation_cockpit_admin.SessionLocal") as SL,
+            patch.object(
+                SupplierClarificationOutboxService,
+                "upsert_from_draft",
+                return_value=result,
+            ),
+        ):
+            cm = MagicMock()
+            cm.__enter__.return_value = MagicMock()
+            cm.__exit__.return_value = None
+            SL.return_value = cm
+            await cb_cockpit_clarification_outbox_save(query)
+
+        query.answer.assert_called_once()
+        toast = query.answer.call_args[0][0]
+        assert expected_substr in toast
+
+    asyncio.run(run_once(replayed=False, language="ro", expected_substr="Ciornă salvată"))
+    asyncio.run(run_once(replayed=True, language="ro", expected_substr="Există deja"))
+    asyncio.run(run_once(replayed=False, language="en", expected_substr="Draft saved"))
+    asyncio.run(run_once(replayed=True, language="en", expected_substr="active draft"))

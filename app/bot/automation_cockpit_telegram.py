@@ -10,6 +10,8 @@ from app.bot.constants import (
     ADMIN_AUTOMATION_COCKPIT_CARD_PREFIX,
     ADMIN_AUTOMATION_COCKPIT_CLOSE,
     ADMIN_AUTOMATION_COCKPIT_HOME,
+    ADMIN_AUTOMATION_COCKPIT_OUTBOX_LIST_PREFIX,
+    ADMIN_AUTOMATION_COCKPIT_OUTBOX_SAVE_PREFIX,
     ADMIN_AUTOMATION_COCKPIT_QUEUE_PREFIX,
     ADMIN_AUTOMATION_COCKPIT_REFRESH,
     ADMIN_AUTOMATION_COCKPIT_REFRESH_QUEUE_PREFIX,
@@ -21,6 +23,7 @@ from app.schemas.admin_automation_cockpit import (
     AdminAutomationCockpitCardRead,
     AdminAutomationCockpitRead,
 )
+from app.schemas.supplier_clarification_outbox import SupplierClarificationOutboxItemRead
 
 _COCKPIT_QUEUE_ABBR: dict[str, str] = {
     "supplier_intake": "si",
@@ -530,6 +533,93 @@ def find_card_in_cockpit(
     return None
 
 
+def cockpit_clarification_outbox_save_eligible(card: AdminAutomationCockpitCardRead | None) -> bool:
+    if card is None or card.source_type != "supplier_offer":
+        return False
+    cd = card.clarification_draft
+    if cd is None:
+        return False
+    return bool(cd.supplier_facing_message_ro or cd.supplier_facing_asks or cd.internal_admin_tasks)
+
+
+def cockpit_outbox_save_callback(queue_code: str, source_type: str, source_id: int) -> str:
+    q = _COCKPIT_QUEUE_ABBR[queue_code]
+    st = SOURCE_TYPE_ABBR.get(source_type, source_type[:2])
+    return f"{ADMIN_AUTOMATION_COCKPIT_OUTBOX_SAVE_PREFIX}{q}:{st}:{source_id}"
+
+
+def cockpit_outbox_list_callback(queue_code: str, source_type: str, source_id: int) -> str:
+    q = _COCKPIT_QUEUE_ABBR[queue_code]
+    st = SOURCE_TYPE_ABBR.get(source_type, source_type[:2])
+    return f"{ADMIN_AUTOMATION_COCKPIT_OUTBOX_LIST_PREFIX}{q}:{st}:{source_id}"
+
+
+def _parse_cockpit_outbox_triplet(prefix: str, data: str) -> tuple[str, str, int] | None:
+    if not data.startswith(prefix):
+        return None
+    rest = data.removeprefix(prefix)
+    parts = rest.split(":")
+    if len(parts) != 3:
+        return None
+    q_abbrev, st_abbrev, sid_s = parts
+    q = cockpit_queue_from_abbrev(q_abbrev)
+    st = SOURCE_TYPE_ABBR_REV.get(st_abbrev)
+    if q is None or st is None:
+        return None
+    try:
+        sid = int(sid_s)
+    except ValueError:
+        return None
+    return q, st, sid
+
+
+def parse_cockpit_outbox_save_callback(data: str) -> tuple[str, str, int] | None:
+    return _parse_cockpit_outbox_triplet(ADMIN_AUTOMATION_COCKPIT_OUTBOX_SAVE_PREFIX, data)
+
+
+def parse_cockpit_outbox_list_callback(data: str) -> tuple[str, str, int] | None:
+    return _parse_cockpit_outbox_triplet(ADMIN_AUTOMATION_COCKPIT_OUTBOX_LIST_PREFIX, data)
+
+
+def format_cockpit_clarification_outbox_list_text(
+    language_code: str | None,
+    *,
+    supplier_offer_id: int,
+    items: list[SupplierClarificationOutboxItemRead],
+) -> str:
+    header = translate(language_code, "admin_automation_cockpit_outbox_list_header", sid=str(supplier_offer_id))
+    if not items:
+        return "\n".join([header, "", translate(language_code, "admin_automation_cockpit_outbox_list_empty")])
+    lines: list[str] = [header, ""]
+    for it in items[:15]:
+        lines.append(
+            translate(
+                language_code,
+                "admin_automation_cockpit_outbox_list_line",
+                oid=str(it.id),
+                status=it.workflow_status,
+                created=it.created_at.isoformat(timespec="seconds"),
+            )
+        )
+    lines.extend(["", translate(language_code, "admin_automation_cockpit_outbox_list_footer")])
+    return "\n".join(lines)
+
+
+def cockpit_outbox_list_back_keyboard(
+    language_code: str | None,
+    *,
+    card_refresh_callback: str,
+) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    kb.button(
+        text=translate(language_code, "admin_automation_cockpit_outbox_back_to_card"),
+        callback_data=card_refresh_callback,
+    )
+    kb.button(text=translate(language_code, "admin_automation_cockpit_btn_back_home"), callback_data=ADMIN_AUTOMATION_COCKPIT_HOME)
+    kb.adjust(1)
+    return kb
+
+
 def format_cockpit_summary_text(language_code: str | None, read: AdminAutomationCockpitRead) -> str:
     s = read.summary
     qc = s.queue_counts
@@ -807,9 +897,19 @@ def cockpit_card_keyboard(
     *,
     queue_code: str,
     card_refresh_callback: str,
+    card: AdminAutomationCockpitCardRead | None = None,
 ) -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     q_abbrev = cockpit_queue_abbrev(queue_code)
+    if card is not None and cockpit_clarification_outbox_save_eligible(card):
+        kb.button(
+            text=translate(language_code, "admin_automation_cockpit_btn_clarification_save_outbox"),
+            callback_data=cockpit_outbox_save_callback(queue_code, card.source_type, card.source_id),
+        )
+        kb.button(
+            text=translate(language_code, "admin_automation_cockpit_btn_clarification_outbox_list"),
+            callback_data=cockpit_outbox_list_callback(queue_code, card.source_type, card.source_id),
+        )
     kb.button(
         text=translate(language_code, "admin_automation_cockpit_btn_back_queue"),
         callback_data=f"{ADMIN_AUTOMATION_COCKPIT_QUEUE_PREFIX}{q_abbrev}",

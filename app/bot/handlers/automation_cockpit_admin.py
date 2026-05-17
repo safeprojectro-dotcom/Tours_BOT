@@ -18,15 +18,21 @@ from app.bot.automation_cockpit_telegram import (
     cockpit_summary_keyboard,
     find_card_in_cockpit,
     format_cockpit_card_detail_text,
+    format_cockpit_clarification_outbox_list_text,
     format_cockpit_queue_text,
     format_cockpit_safety_detail_text,
     format_cockpit_summary_text,
     parse_cockpit_card_callback,
+    parse_cockpit_outbox_list_callback,
+    parse_cockpit_outbox_save_callback,
+    cockpit_outbox_list_back_keyboard,
 )
 from app.bot.constants import (
     ADMIN_AUTOMATION_COCKPIT_CARD_PREFIX,
     ADMIN_AUTOMATION_COCKPIT_CLOSE,
     ADMIN_AUTOMATION_COCKPIT_HOME,
+    ADMIN_AUTOMATION_COCKPIT_OUTBOX_LIST_PREFIX,
+    ADMIN_AUTOMATION_COCKPIT_OUTBOX_SAVE_PREFIX,
     ADMIN_AUTOMATION_COCKPIT_QUEUE_PREFIX,
     ADMIN_AUTOMATION_COCKPIT_REFRESH,
     ADMIN_AUTOMATION_COCKPIT_REFRESH_QUEUE_PREFIX,
@@ -37,6 +43,10 @@ from app.bot.services import TelegramUserContextService
 from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.services.admin_automation_cockpit_service import AdminAutomationCockpitService
+from app.services.supplier_clarification_outbox_service import (
+    SupplierClarificationOutboxOfferNotFoundError,
+    SupplierClarificationOutboxService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -284,6 +294,78 @@ async def cb_cockpit_card(query: CallbackQuery) -> None:
             lg,
             queue_code=queue_code,
             card_refresh_callback=refresh_cb,
+            card=card,
         ).as_markup(),
+    )
+    await query.answer()
+
+
+@router.callback_query(F.data.startswith(ADMIN_AUTOMATION_COCKPIT_OUTBOX_SAVE_PREFIX))
+async def cb_cockpit_clarification_outbox_save(query: CallbackQuery) -> None:
+    if query.from_user is None or query.data is None:
+        return
+    lg = await _resolve_language(query.from_user.id, query.from_user.language_code)
+    if await _deny_if_not_allowed(query, language_code=lg):
+        await query.answer()
+        return
+    parsed = parse_cockpit_outbox_save_callback(query.data)
+    if parsed is None:
+        await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+        return
+    queue_code, source_type, source_id = parsed
+    read = _load_card_read(queue_code)
+    card = find_card_in_cockpit(read, queue_code=queue_code, source_type=source_type, source_id=source_id)
+    if card is None or card.clarification_draft is None:
+        await query.answer(translate(lg, "admin_automation_cockpit_outbox_save_failed"), show_alert=True)
+        return
+    try:
+        with SessionLocal() as session:
+            result = SupplierClarificationOutboxService().upsert_from_draft(
+                session,
+                draft=card.clarification_draft,
+                created_by_telegram_user_id=query.from_user.id,
+            )
+            session.commit()
+    except SupplierClarificationOutboxOfferNotFoundError:
+        await query.answer(translate(lg, "admin_automation_cockpit_outbox_save_failed"), show_alert=True)
+        return
+    msg_key = (
+        "admin_automation_cockpit_outbox_saved_replay"
+        if result.replayed_existing
+        else "admin_automation_cockpit_outbox_saved_new"
+    )
+    await query.answer(translate(lg, msg_key), show_alert=False)
+
+
+@router.callback_query(F.data.startswith(ADMIN_AUTOMATION_COCKPIT_OUTBOX_LIST_PREFIX))
+async def cb_cockpit_clarification_outbox_list(query: CallbackQuery) -> None:
+    if query.from_user is None or query.data is None:
+        return
+    lg = await _resolve_language(query.from_user.id, query.from_user.language_code)
+    if await _deny_if_not_allowed(query, language_code=lg):
+        await query.answer()
+        return
+    parsed = parse_cockpit_outbox_list_callback(query.data)
+    if parsed is None or parsed[1] != "supplier_offer":
+        await query.answer(translate(lg, "admin_offer_no_current"), show_alert=True)
+        return
+    queue_code, _source_type, source_id = parsed
+    refresh_cb = cockpit_card_callback(queue_code, "supplier_offer", source_id)
+    with SessionLocal() as session:
+        items = SupplierClarificationOutboxService().list_for_supplier_offer(
+            session,
+            supplier_offer_id=source_id,
+            limit=20,
+        )
+    body = format_cockpit_clarification_outbox_list_text(
+        lg,
+        supplier_offer_id=source_id,
+        items=items,
+    )
+    await _edit_or_answer(
+        query=query,
+        message=None,
+        text=body,
+        reply_markup=cockpit_outbox_list_back_keyboard(lg, card_refresh_callback=refresh_cb).as_markup(),
     )
     await query.answer()
