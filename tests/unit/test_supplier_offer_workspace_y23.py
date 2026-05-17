@@ -13,9 +13,13 @@ from app.models.enums import (
     CancellationStatus,
     PaymentStatus,
     SupplierOfferLifecycle,
+    SupplierOfferPackagingStatus,
+    SupplierOfferTourBridgeKind,
+    SupplierOfferTourBridgeStatus,
     SupplierOnboardingStatus,
     SupplierServiceComposition,
 )
+from app.models.supplier_offer_tour_bridge import SupplierOfferTourBridge
 from app.services.supplier_offer_execution_link_service import SupplierOfferExecutionLinkService
 from app.services.supplier_offer_service import SupplierOfferService
 from tests.unit.base import FoundationDBTestCase
@@ -214,9 +218,23 @@ class SupplierOfferWorkspaceY23Tests(FoundationDBTestCase):
             title="Linked Offer",
             description="Desc",
             lifecycle_status=SupplierOfferLifecycle.PUBLISHED,
+            packaging_status=SupplierOfferPackagingStatus.APPROVED_FOR_PUBLISH,
             seats_total=999,  # should be ignored in favor of linked tour truth
         )
         tour = self.create_tour(seats_total=40, seats_available=32)
+        self.session.add(
+            SupplierOfferTourBridge(
+                supplier_offer_id=offer.id,
+                tour_id=tour.id,
+                status=SupplierOfferTourBridgeStatus.ACTIVE.value,
+                bridge_kind=SupplierOfferTourBridgeKind.LINKED_EXISTING_TOUR.value,
+                created_by="unit-test-y23-booking-aggregates",
+                source_packaging_status=offer.packaging_status.value,
+                source_lifecycle_status=offer.lifecycle_status.value,
+                packaging_snapshot_json={},
+            ),
+        )
+        self.session.flush()
         point = self.create_boarding_point(tour)
         user_a = self.create_user()
         self.create_order(

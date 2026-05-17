@@ -28,6 +28,7 @@ from app.schemas.admin_departure_passenger_counts import (
     AdminDeparturePassengerCountsListRead,
     AdminDeparturePassengerCountsRead,
 )
+from app.schemas.admin_supplier_telegram_contact_resolution import AdminSupplierTelegramContactResolutionRead
 from app.schemas.admin_ops_dashboard import AdminOpsDashboardRead, parse_include_sections_query
 from app.schemas.admin_publishing_console import (
     AdminPublishingConsoleEditorDetailRead,
@@ -96,6 +97,9 @@ from app.services.admin_prepare_conversion_chain_plan_service import AdminPrepar
 from app.services.prepare_conversion_chain_execution_service import PrepareConversionChainExecutionService
 from app.services.admin_automation_cockpit_service import AdminAutomationCockpitService
 from app.services.admin_departure_passenger_counts_service import AdminDeparturePassengerCountsService
+from app.services.admin_supplier_telegram_contact_resolution_service import (
+    AdminSupplierTelegramContactResolutionService,
+)
 from app.services.supplier_clarification_outbox_service import (
     SupplierClarificationOutboxInvalidTransitionError,
     SupplierClarificationOutboxItemNotFoundError,
@@ -870,6 +874,21 @@ def get_admin_tour_departure_passenger_counts(
     return payload
 
 
+@router.get(
+    "/tours/{tour_id}/supplier-telegram-contact-resolution",
+    response_model=AdminSupplierTelegramContactResolutionRead,
+)
+def get_admin_tour_supplier_telegram_contact_resolution(
+    tour_id: int,
+    db: Session = Depends(get_db),
+) -> AdminSupplierTelegramContactResolutionRead:
+    """S1B: read-only — resolve supplier Telegram DM target via active execution links / tour bridges (no send)."""
+    payload = AdminSupplierTelegramContactResolutionService().resolve_for_tour(db, tour_id=tour_id)
+    if payload is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour not found.")
+    return payload
+
+
 @router.get("/orders", response_model=AdminOrderListRead)
 def list_admin_orders(
     db: Session = Depends(get_db),
@@ -898,6 +917,21 @@ def get_admin_order_detail(
     if detail is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.")
     return detail
+
+
+@router.get(
+    "/orders/{order_id}/supplier-telegram-contact-resolution",
+    response_model=AdminSupplierTelegramContactResolutionRead,
+)
+def get_admin_order_supplier_telegram_contact_resolution(
+    order_id: int,
+    db: Session = Depends(get_db),
+) -> AdminSupplierTelegramContactResolutionRead:
+    """S1B: read-only — same as tour resolution for the order's ``tour_id`` (no customer PII, no send)."""
+    payload = AdminSupplierTelegramContactResolutionService().resolve_for_order(db, order_id=order_id)
+    if payload is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.")
+    return payload
 
 
 @router.post("/orders/{order_id}/mark-cancelled-by-operator", response_model=AdminOrderDetailRead)
@@ -1427,6 +1461,21 @@ def get_admin_supplier(supplier_id: int, db: Session = Depends(get_db)) -> Admin
     return AdminSupplierRead.model_validate(row)
 
 
+@router.get(
+    "/suppliers/{supplier_id}/supplier-telegram-contact-resolution",
+    response_model=AdminSupplierTelegramContactResolutionRead,
+)
+def get_admin_supplier_telegram_contact_resolution(
+    supplier_id: int,
+    db: Session = Depends(get_db),
+) -> AdminSupplierTelegramContactResolutionRead:
+    """S1B: read-only — ``suppliers.primary_telegram_user_id`` presence for future supplier DMs (no send)."""
+    payload = AdminSupplierTelegramContactResolutionService().resolve_for_supplier(db, supplier_id=supplier_id)
+    if payload is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found.")
+    return payload
+
+
 @router.get("/suppliers/{supplier_id}/offers", response_model=AdminSupplierOfferListRead)
 def get_admin_supplier_offers(
     supplier_id: int,
@@ -1496,6 +1545,21 @@ def get_admin_supplier_offer_departure_passenger_counts(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No active execution link or tour bridge for this supplier offer.",
         )
+    return payload
+
+
+@router.get(
+    "/supplier-offers/{offer_id}/supplier-telegram-contact-resolution",
+    response_model=AdminSupplierTelegramContactResolutionRead,
+)
+def get_admin_supplier_offer_telegram_contact_resolution(
+    offer_id: int,
+    db: Session = Depends(get_db),
+) -> AdminSupplierTelegramContactResolutionRead:
+    """S1B: read-only — owner supplier's Telegram contact mapping (no send)."""
+    payload = AdminSupplierTelegramContactResolutionService().resolve_for_supplier_offer(db, offer_id=offer_id)
+    if payload is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.")
     return payload
 
 

@@ -29,6 +29,19 @@ Future-gated follow-ups:
 
 ---
 
+## Checkpoint Sync — S1B supplier Telegram contact mapping (2026-05-17)
+
+**Shipped:** read-only **`AdminSupplierTelegramContactResolutionService`** and **`AdminSupplierTelegramContactResolutionRead`** **`;`** admin **`GET`** **`…/supplier-telegram-contact-resolution`** for supplier **`/`** supplier-offer **`/`** tour **`/`** order **`;`** uses **`Supplier.primary_telegram_user_id`** **`;`** **does not** Telegram send **`/`** channel publish **`/`** scheduler **`/`** manifest **`/`** customer PII **`/`** Layer A mutation **.**
+
+Future-gated decisions:
+
+- Final production source of supplier Telegram identity **`;`** whether **`Supplier.primary_telegram_user_id`** suffices long-term or a dedicated supplier-contact model is needed **`;`** whether admin, supplier, or linked user may edit contact **`.`**
+- Supplier notification consent and contractual basis **`;`** **outbox **`/`** audit **`/`** idempotency** before any real send (**S1C**)** **.**
+- Inactive suppliers with a configured Telegram id **`;`** ambiguous tour **`/`** order **`→`** supplier mappings **(** including admin-resolution tooling**)** **`;`** exposing contact status on supplier-facing APIs **`.`**
+- Demo **`/`** staging notification behavior must not become silent production behavior **`;`** **no** customer personal data in supplier notifications before a privacy **`/`** security gate **`;`** **S1C** must not become an unsafe Telegram-send shortcut **`.`**
+
+---
+
 ## Checkpoint Sync — A1V Telegram cockpit (2026-05-16)
 
 **Shipped:** read-only admin Telegram surface (`/admin_cockpit` + **📊 Automation Cockpit** button) over **`AdminAutomationCockpitService.read_cockpit`** — see **[`docs/HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md`](HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md)**.
