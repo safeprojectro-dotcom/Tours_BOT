@@ -1,18 +1,77 @@
-"""A6A: build catalog/conversion readiness snapshot from existing console reads only."""
+"""A6A/A6B: build catalog/conversion readiness + guided actions from existing console reads only."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
+from app.bot.constants import ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX
 from app.schemas.admin_publishing_console import (
     AdminPublishingConsoleItemRead,
     AdminPublishingConsoleSupplierOfferDetailRead,
 )
 from app.schemas.supplier_offer_catalog_conversion_readiness import (
+    CatalogConversionGuidedActionRead,
+    CatalogConversionReadinessStatus,
     SupplierOfferCatalogConversionReadinessRead,
 )
 
 
+@dataclass(frozen=True)
+class CatalogConversionReadinessContext:
+    """Optional I/O-free hints from the cockpit assembler (e.g. Mini App base URL)."""
+
+    mini_app_open_url: str | None = None
+
+
 class SupplierOfferCatalogConversionReadinessService:
     """Side-effect free projection for supplier_offer_initial rows."""
+
+    @staticmethod
+    def _supplier_offer_id(item: AdminPublishingConsoleItemRead) -> int | None:
+        if item.kind != "supplier_offer_initial":
+            return None
+        if item.offer_debug is not None:
+            return int(item.offer_debug.supplier_offer_id)
+        if item.source_kind == "supplier_offer" and item.source_id:
+            return int(item.source_id)
+        return None
+
+    @classmethod
+    def _guided_actions(
+        cls,
+        item: AdminPublishingConsoleItemRead,
+        *,
+        readiness_status: CatalogConversionReadinessStatus,
+        context: CatalogConversionReadinessContext | None,
+    ) -> list[CatalogConversionGuidedActionRead]:
+        oid = cls._supplier_offer_id(item)
+        if oid is None:
+            return []
+        ow_cb = f"{ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX}{oid}"
+        actions: list[CatalogConversionGuidedActionRead] = []
+        if readiness_status == "ready_for_review":
+            actions.append(
+                CatalogConversionGuidedActionRead(
+                    label_message_key="admin_a6b_btn_verify_in_operator_workflow",
+                    callback_data=ow_cb,
+                )
+            )
+            url = (context.mini_app_open_url or "").strip() if context else ""
+            if url:
+                actions.append(
+                    CatalogConversionGuidedActionRead(
+                        label_message_key="admin_a6b_btn_open_mini_app",
+                        url=url,
+                    )
+                )
+        elif readiness_status in ("blocked", "needs_internal_preparation"):
+            actions.append(
+                CatalogConversionGuidedActionRead(
+                    label_message_key="admin_a6b_btn_continue_in_operator_workflow",
+                    callback_data=ow_cb,
+                )
+            )
+        return actions
 
     @classmethod
     def build_from_console_item(
@@ -20,6 +79,7 @@ class SupplierOfferCatalogConversionReadinessService:
         item: AdminPublishingConsoleItemRead,
         *,
         detail: AdminPublishingConsoleSupplierOfferDetailRead | None = None,
+        context: CatalogConversionReadinessContext | None = None,
     ) -> SupplierOfferCatalogConversionReadinessRead | None:
         if item.kind != "supplier_offer_initial":
             return None
@@ -51,6 +111,7 @@ class SupplierOfferCatalogConversionReadinessService:
 
         main_blocker: str | None = None
         next_step: str
+        readiness: CatalogConversionReadinessStatus
 
         if blocked:
             readiness = "blocked"
@@ -94,6 +155,8 @@ class SupplierOfferCatalogConversionReadinessService:
                 main_blocker = "admin_a6a_blocker_needs_setup"
                 next_step = "admin_a6a_next_complete_in_admin"
 
+        guided = cls._guided_actions(item, readiness_status=readiness, context=context)
+
         return SupplierOfferCatalogConversionReadinessRead(
             readiness_status=readiness,
             status_label_message_key=status_key,
@@ -104,6 +167,7 @@ class SupplierOfferCatalogConversionReadinessService:
             has_execution_link=has_exec,
             mini_app_cta_safe=mini_safe,
             catalog_visible=catalog_vis,
+            guided_actions=guided,
         )
 
     @staticmethod
@@ -125,4 +189,7 @@ class SupplierOfferCatalogConversionReadinessService:
         return None, None, None
 
 
-__all__ = ["SupplierOfferCatalogConversionReadinessService"]
+__all__ = [
+    "CatalogConversionReadinessContext",
+    "SupplierOfferCatalogConversionReadinessService",
+]

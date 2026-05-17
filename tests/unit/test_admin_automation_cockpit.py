@@ -175,6 +175,15 @@ class AdminAutomationCockpitTests(FoundationDBTestCase):
                     cr = card["catalog_conversion_readiness"]
                     self.assertIsNotNone(cr)
                     self.assertEqual(cr.get("version"), "a6a_v1")
+                    gas = cr.get("guided_actions")
+                    self.assertIsInstance(gas, list)
+                    self.assertGreaterEqual(len(gas), 1)
+                    self.assertIn("callback_data", gas[0])
+                    self.assertIsNotNone(gas[0].get("callback_data"))
+                    self.assertTrue(
+                        str(gas[0]["callback_data"]).startswith("ao:ow:r:"),
+                        gas[0]["callback_data"],
+                    )
                 if meta.get("kind") == "tour_promotion":
                     self.assertIsNone(card.get("intake_validation"))
                     self.assertIsNone(card.get("clarification_draft"))

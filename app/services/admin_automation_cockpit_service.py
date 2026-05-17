@@ -7,6 +7,7 @@ from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.enums import SupplierOfferLifecycle
 from app.schemas.admin_automation_cockpit import (
     AdminAutomationCockpitCardRead,
@@ -30,11 +31,17 @@ from app.schemas.admin_publishing_console import (
 from app.services.admin_publishing_console_service import AdminPublishingConsoleService
 from app.services.supplier_clarification_draft_service import SupplierClarificationDraftService
 from app.services.supplier_offer_catalog_conversion_readiness_service import (
+    CatalogConversionReadinessContext,
     SupplierOfferCatalogConversionReadinessService,
 )
 from app.services.supplier_offer_intake_validation_service import SupplierOfferIntakeValidationService
 
 _CARD_SAFETY = AdminAutomationCockpitCardSafetyFlagsRead()
+
+
+def _cockpit_catalog_readiness_context() -> CatalogConversionReadinessContext:
+    raw = (get_settings().telegram_mini_app_url or "").strip()
+    return CatalogConversionReadinessContext(mini_app_open_url=raw or None)
 
 OPERATIONAL_QUEUES: tuple[AutomationCockpitQueueCode, ...] = (
     "supplier_intake",
@@ -496,6 +503,7 @@ def _build_operational_card(
     catalog_conversion_readiness = SupplierOfferCatalogConversionReadinessService.build_from_console_item(
         item,
         detail=None,
+        context=_cockpit_catalog_readiness_context(),
     )
 
     return AdminAutomationCockpitCardRead(
@@ -571,6 +579,7 @@ def _build_commercial_card(
     catalog_conversion_readiness = SupplierOfferCatalogConversionReadinessService.build_from_console_item(
         item,
         detail=detail,
+        context=_cockpit_catalog_readiness_context(),
     )
 
     return AdminAutomationCockpitCardRead(

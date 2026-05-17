@@ -20,7 +20,9 @@ from app.schemas.admin_publishing_console import (
     AdminPublishingConsoleTourDebugRead,
     AdminPublishingConsoleUiCardRead,
 )
+from app.bot.constants import ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX
 from app.services.supplier_offer_catalog_conversion_readiness_service import (
+    CatalogConversionReadinessContext,
     SupplierOfferCatalogConversionReadinessService,
 )
 
@@ -132,6 +134,12 @@ class SupplierOfferCatalogConversionReadinessServiceTests(TestCase):
         self.assertEqual(r.status_label_message_key, "admin_a6a_status_needs_preparation")
         self.assertEqual(r.main_blocker_message_key, "admin_a6a_blocker_offer_tour_link")
         self.assertFalse(r.mini_app_cta_safe)
+        self.assertEqual(len(r.guided_actions), 1)
+        self.assertEqual(
+            r.guided_actions[0].callback_data,
+            f"{ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX}42",
+        )
+        self.assertIsNone(r.guided_actions[0].url)
 
     def test_ready_for_review_with_detail(self) -> None:
         item = self._minimal_supplier_item(
@@ -166,13 +174,62 @@ class SupplierOfferCatalogConversionReadinessServiceTests(TestCase):
             safety_summary=safety,
             generated_at=now,
         )
-        r = SupplierOfferCatalogConversionReadinessService.build_from_console_item(item, detail=detail)
+        r = SupplierOfferCatalogConversionReadinessService.build_from_console_item(
+            item,
+            detail=detail,
+            context=CatalogConversionReadinessContext(mini_app_open_url="https://mini.example/app"),
+        )
         assert r is not None
         self.assertEqual(r.readiness_status, "ready_for_review")
         self.assertEqual(r.status_label_message_key, "admin_a6a_status_ready_for_review")
         self.assertIsNone(r.main_blocker_message_key)
         self.assertTrue(r.mini_app_cta_safe)
         self.assertTrue(r.has_tour_link)
+        self.assertEqual(len(r.guided_actions), 2)
+        self.assertEqual(r.guided_actions[0].callback_data, f"{ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX}42")
+        self.assertEqual(r.guided_actions[1].url, "https://mini.example/app")
+
+    def test_ready_for_review_single_button_without_mini_app_url(self) -> None:
+        item = self._minimal_supplier_item(
+            cta_safety_status="exact_tour_ready",
+            conversion_target_kind="exact_tour",
+            prepare_conversion_chain_plan_status="already_prepared",
+        )
+        now = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
+        safety = AdminPublishingConsoleSupplierOfferSafetySummaryRead(note="n")
+        detail = AdminPublishingConsoleSupplierOfferDetailRead(
+            supplier_offer_id=42,
+            candidate_key="supplier_offer:42",
+            console_status="ready",
+            review_package_path="/rp",
+            publish_readiness=self._base_pr(),
+            console_preview=item.console_preview,
+            template_library=item.template_library,
+            preview_payload=item.preview_payload,
+            conversion_summary=AdminPublishingConsoleSupplierOfferConversionSummaryRead(
+                has_tour_bridge=True,
+                has_catalog_visible_tour=True,
+                has_active_execution_link=True,
+            ),
+            linked_tour_summary=AdminPublishingConsoleSupplierOfferLinkedTourSummaryRead(),
+            publication_summary=AdminPublishingConsoleSupplierOfferPublicationSummaryRead(
+                lifecycle_status="approved",
+                published_at=None,
+                showcase_chat_id=None,
+                showcase_message_id=None,
+                already_published=False,
+            ),
+            safety_summary=safety,
+            generated_at=now,
+        )
+        r = SupplierOfferCatalogConversionReadinessService.build_from_console_item(
+            item,
+            detail=detail,
+            context=CatalogConversionReadinessContext(mini_app_open_url=None),
+        )
+        assert r is not None
+        self.assertEqual(len(r.guided_actions), 1)
+        self.assertEqual(r.guided_actions[0].callback_data, f"{ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX}42")
 
     def test_blocked_media_gate(self) -> None:
         item = self._minimal_supplier_item(
@@ -183,4 +240,6 @@ class SupplierOfferCatalogConversionReadinessServiceTests(TestCase):
         assert r is not None
         self.assertEqual(r.readiness_status, "blocked")
         self.assertEqual(r.main_blocker_message_key, "admin_a6a_blocker_media_gate")
+        self.assertEqual(len(r.guided_actions), 1)
+        self.assertEqual(r.guided_actions[0].callback_data, f"{ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX}42")
 

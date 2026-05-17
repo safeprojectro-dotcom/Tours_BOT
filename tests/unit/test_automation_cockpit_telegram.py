@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from app.bot.constants import ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX
 from app.bot.automation_cockpit_telegram import (
     cockpit_card_callback,
+    cockpit_card_keyboard,
     cockpit_queue_keyboard,
     cockpit_summary_keyboard,
     find_card_in_cockpit,
@@ -28,6 +30,7 @@ from app.schemas.admin_automation_cockpit import (
 from app.schemas.supplier_clarification_draft import SupplierClarificationDraftRead
 from app.schemas.supplier_offer_intake_validation import SupplierOfferIntakeValidationRead
 from app.schemas.supplier_offer_catalog_conversion_readiness import (
+    CatalogConversionGuidedActionRead,
     SupplierOfferCatalogConversionReadinessRead,
 )
 from app.services.supplier_clarification_draft_service import SupplierClarificationDraftService
@@ -43,6 +46,7 @@ def _sample_card(
     *,
     commercial: bool = False,
     source_type: str = "supplier_offer",
+    source_id: int = 42,
     source_paths: dict[str, str] | None = None,
     blocker_summary: str | None = None,
     catalog_conversion_readiness: SupplierOfferCatalogConversionReadinessRead | None = None,
@@ -61,7 +65,7 @@ def _sample_card(
     return AdminAutomationCockpitCardRead(
         card_id="x",
         source_type=source_type,
-        source_id=42,
+        source_id=source_id,
         title="Test Offer",
         status="needs_attention",
         status_label="Needs attention",
@@ -210,6 +214,74 @@ def test_format_cockpit_card_detail_a6a_ro_humanized_no_message_keys() -> None:
     assert "admin_a6a_" not in body
     assert "cta_safety" not in body.lower()
     assert "prepare_chain:" not in body
+
+
+def test_cockpit_card_keyboard_a6b_links_operator_workflow_not_mutation_shortcuts() -> None:
+    snap = SupplierOfferCatalogConversionReadinessRead(
+        readiness_status="needs_internal_preparation",
+        status_label_message_key="admin_a6a_status_needs_preparation",
+        main_blocker_message_key="admin_a6a_blocker_offer_tour_link",
+        warnings_message_keys=[],
+        next_step_message_key="admin_a6a_next_prepare_offer_tour_link",
+        has_tour_link=False,
+        has_execution_link=False,
+        mini_app_cta_safe=False,
+        catalog_visible=False,
+        guided_actions=[
+            CatalogConversionGuidedActionRead(
+                label_message_key="admin_a6b_btn_continue_in_operator_workflow",
+                callback_data=f"{ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX}42",
+            ),
+        ],
+    )
+    c = _sample_card(catalog_conversion_readiness=snap)
+    kb = cockpit_card_keyboard(
+        "en",
+        queue_code="catalog_conversion",
+        card_refresh_callback=cockpit_card_callback("catalog_conversion", "supplier_offer", 42),
+        card=c,
+    )
+    flat = [b for row in kb.as_markup().inline_keyboard for b in row]
+    callbacks = [x.callback_data for x in flat if getattr(x, "callback_data", None)]
+    assert any(x and str(x).startswith(ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX) for x in callbacks)
+    joined = " ".join(str(x) for x in callbacks if x)
+    assert "ao:ow:tbp:" not in joined
+    labels = [x.text for x in flat]
+    assert not any("admin_a6b" in t for t in labels)
+
+
+def test_cockpit_card_keyboard_a6b_ready_includes_mini_app_url_when_set() -> None:
+    snap = SupplierOfferCatalogConversionReadinessRead(
+        readiness_status="ready_for_review",
+        status_label_message_key="admin_a6a_status_ready_for_review",
+        main_blocker_message_key=None,
+        warnings_message_keys=[],
+        next_step_message_key="admin_a6a_next_verify_mini_app",
+        has_tour_link=True,
+        has_execution_link=True,
+        mini_app_cta_safe=True,
+        catalog_visible=True,
+        guided_actions=[
+            CatalogConversionGuidedActionRead(
+                label_message_key="admin_a6b_btn_verify_in_operator_workflow",
+                callback_data=f"{ADMIN_OPS_OW_REVIEW_REFRESH_PREFIX}99",
+            ),
+            CatalogConversionGuidedActionRead(
+                label_message_key="admin_a6b_btn_open_mini_app",
+                url="https://mini.example/open",
+            ),
+        ],
+    )
+    c = _sample_card(catalog_conversion_readiness=snap, source_type="supplier_offer", source_id=99)
+    kb = cockpit_card_keyboard(
+        "en",
+        queue_code="offer_readiness",
+        card_refresh_callback=cockpit_card_callback("offer_readiness", "supplier_offer", 99),
+        card=c,
+    )
+    flat = [b for row in kb.as_markup().inline_keyboard for b in row]
+    urls = [x.url for x in flat if x.url]
+    assert "https://mini.example/open" in urls
 
 
 def test_format_cockpit_queue_includes_a6a_hint_when_present() -> None:

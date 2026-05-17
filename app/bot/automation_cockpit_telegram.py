@@ -1291,6 +1291,15 @@ def cockpit_card_keyboard(
             text=translate(language_code, "admin_automation_cockpit_btn_clarification_outbox_list"),
             callback_data=cockpit_outbox_list_callback(queue_code, "supplier_offer", out_offer_id),
         )
+    if card is not None:
+        snap = card.catalog_conversion_readiness
+        if snap is not None:
+            for ga in snap.guided_actions:
+                label = translate(language_code, ga.label_message_key)
+                if ga.url:
+                    kb.button(text=label, url=ga.url)
+                else:
+                    kb.button(text=label, callback_data=ga.callback_data)
     kb.button(
         text=translate(language_code, "admin_automation_cockpit_btn_back_queue"),
         callback_data=f"{ADMIN_AUTOMATION_COCKPIT_QUEUE_PREFIX}{q_abbrev}",

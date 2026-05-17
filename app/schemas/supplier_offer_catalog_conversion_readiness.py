@@ -4,13 +4,31 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 CatalogConversionReadinessStatus = Literal[
     "ready_for_review",
     "needs_internal_preparation",
     "blocked",
 ]
+
+
+class CatalogConversionGuidedActionRead(BaseModel):
+    """A6B: single inline action for catalog/conversion readiness (callback or external URL only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    label_message_key: str = Field(description="messages.py key; never shown raw to users.")
+    callback_data: str | None = Field(default=None, description="Telegram callback when not a URL action.")
+    url: str | None = Field(default=None, description="HTTPS URL for open-in-browser style actions.")
+
+    @model_validator(mode="after")
+    def _xor_target(self) -> "CatalogConversionGuidedActionRead":
+        has_cb = self.callback_data is not None and self.callback_data != ""
+        has_url = self.url is not None and self.url != ""
+        if has_cb == has_url:
+            raise ValueError("Exactly one of callback_data or url must be set.")
+        return self
 
 
 class SupplierOfferCatalogConversionReadinessRead(BaseModel):
@@ -49,9 +67,14 @@ class SupplierOfferCatalogConversionReadinessRead(BaseModel):
         default=None,
         description="Tour listed for Mini App catalog when known from detail.",
     )
+    guided_actions: list[CatalogConversionGuidedActionRead] = Field(
+        default_factory=list,
+        description="A6B: safe next-step buttons (existing guarded Telegram flows or HTTPS links).",
+    )
 
 
 __all__ = [
+    "CatalogConversionGuidedActionRead",
     "CatalogConversionReadinessStatus",
     "SupplierOfferCatalogConversionReadinessRead",
 ]
