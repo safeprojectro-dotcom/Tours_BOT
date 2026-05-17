@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     ops_queue_token: str | None = Field(default=None, alias="OPS_QUEUE_TOKEN")
     #: Shared secret for read-only admin API (`GET /admin/...`). If unset, admin routes stay disabled.
     admin_api_token: str | None = Field(default=None, alias="ADMIN_API_TOKEN")
+    #: S1D-1: predeparture operational sales-push window — departure within N whole-day deltas from ``now``.
+    predeparture_sales_push_days_before: int = Field(default=2, alias="PREDEPARTURE_SALES_PUSH_DAYS_BEFORE")
+    #: S1D-1: low-availability trigger when remaining seats are in ``1..N`` inclusive.
+    low_availability_seats_threshold: int = Field(default=2, alias="LOW_AVAILABILITY_SEATS_THRESHOLD")
 
     #: B7.4C: durable media ingestion foundation (no real S3 in this slice). Unknown values treated as ``disabled``.
     media_storage_backend: str = Field(default=MediaStorageBackend.DISABLED.value, alias="MEDIA_STORAGE_BACKEND")
@@ -113,6 +117,28 @@ class Settings(BaseSettings):
             return None
         s = str(v).strip()
         return s or None
+
+    @field_validator("predeparture_sales_push_days_before", mode="before")
+    @classmethod
+    def _coerce_predeparture_sales_push_days_before(cls, v: object) -> int:
+        if v is None or v == "":
+            return 2
+        try:
+            n = int(v)
+        except (TypeError, ValueError):
+            return 2
+        return max(1, min(30, n))
+
+    @field_validator("low_availability_seats_threshold", mode="before")
+    @classmethod
+    def _coerce_low_availability_seats_threshold(cls, v: object) -> int:
+        if v is None or v == "":
+            return 2
+        try:
+            n = int(v)
+        except (TypeError, ValueError):
+            return 2
+        return max(1, min(500, n))
 
     @field_validator("media_storage_allow_https_fetch", mode="before")
     @classmethod

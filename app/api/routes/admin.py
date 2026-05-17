@@ -28,6 +28,7 @@ from app.schemas.admin_departure_passenger_counts import (
     AdminDeparturePassengerCountsListRead,
     AdminDeparturePassengerCountsRead,
 )
+from app.schemas.admin_operational_sales_push_preview import AdminOperationalSalesPushPreviewRead
 from app.schemas.admin_supplier_telegram_contact_resolution import AdminSupplierTelegramContactResolutionRead
 from app.schemas.supplier_notification_outbox import SupplierNotificationOutboxDeliveryResultRead
 from app.schemas.admin_ops_dashboard import AdminOpsDashboardRead, parse_include_sections_query
@@ -98,6 +99,7 @@ from app.services.admin_prepare_conversion_chain_plan_service import AdminPrepar
 from app.services.prepare_conversion_chain_execution_service import PrepareConversionChainExecutionService
 from app.services.admin_automation_cockpit_service import AdminAutomationCockpitService
 from app.services.admin_departure_passenger_counts_service import AdminDeparturePassengerCountsService
+from app.services.admin_operational_sales_push_preview_service import AdminOperationalSalesPushPreviewService
 from app.services.admin_supplier_telegram_contact_resolution_service import (
     AdminSupplierTelegramContactResolutionService,
 )
@@ -875,6 +877,21 @@ def get_admin_tour_departure_passenger_counts(
 ) -> AdminDeparturePassengerCountsRead:
     """S1A: read-only Layer A aggregates for one tour departure (orders + inventory; no manifest)."""
     payload = AdminDeparturePassengerCountsService().read_for_tour(db, tour_id=tour_id)
+    if payload is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour not found.")
+    return payload
+
+
+@router.get(
+    "/tours/{tour_id}/operational-sales-push-preview",
+    response_model=AdminOperationalSalesPushPreviewRead,
+)
+def get_admin_tour_operational_sales_push_preview(
+    tour_id: int,
+    db: Session = Depends(get_db),
+) -> AdminOperationalSalesPushPreviewRead:
+    """S1D-1: read-only operational sales-push eligibility + plain preview; no Telegram channel publish."""
+    payload = AdminOperationalSalesPushPreviewService().read_for_tour(db, tour_id=tour_id)
     if payload is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour not found.")
     return payload

@@ -116,6 +116,23 @@ Track future-gated decisions:
 
 ---
 
+## Checkpoint Sync — S1D-1 operational sales push eligibility and preview (2026-05-17)
+
+**Shipped:** read-only **`AdminOperationalSalesPushPreviewService`** **`/`** **`AdminOperationalSalesPushPreviewRead`** **`;`** **`GET /admin/tours/{tour_id}/operational-sales-push-preview`** **`;`** **`PREDEPARTURE_SALES_PUSH_DAYS_BEFORE`** (default **2**) **`/`** **`LOW_AVAILABILITY_SEATS_THRESHOLD`** (default **2**) **`;`** **S1A** aggregates for **`seats_available`** **`;`** **no** channel publish **`/`** Telegram send **`/`** scheduler **`/`** supplier notification **`/`** customer PII **`/`** Layer A mutation **.**
+
+Track future-gated decisions:
+
+- Whether predeparture window stays global **2** days **or** becomes per-tour **`/`** per-channel **`.**
+- Whether low-availability threshold stays global **2** **or** becomes per-tour **`/`** policy-driven **`.**
+- Whether exact remaining seat count must always appear in public copy **or** sometimes stay hidden **`.**
+- Whether **combined** predeparture **+** low-availability should use a stronger **`/`** distinct template **`.**
+- Whether a future scheduler should pre-build previews **or** remain on-demand only **`.**
+- Whether admin approval **`/`** audit is required before any channel publish (**`S1D-2`**) **`.**
+- Whether preview responses should attach supplier-offer context when tours are linked **`.**
+- **No** fake urgency **;** **no** publish without system-confirmed availability **`.**
+
+---
+
 ## Checkpoint Sync — A1V Telegram cockpit (2026-05-16)
 
 **Shipped:** read-only admin Telegram surface (`/admin_cockpit` + **📊 Automation Cockpit** button) over **`AdminAutomationCockpitService.read_cockpit`** — see **[`docs/HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md`](HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md)**.
