@@ -127,9 +127,28 @@ Track future-gated decisions:
 - Whether exact remaining seat count must always appear in public copy **or** sometimes stay hidden **`.**
 - Whether **combined** predeparture **+** low-availability should use a stronger **`/`** distinct template **`.**
 - Whether a future scheduler should pre-build previews **or** remain on-demand only **`.**
-- Whether admin approval **`/`** audit is required before any channel publish (**`S1D-2`**) **`.**
+- Whether additional admin approval **`/`** persisted audit is needed beyond **S1D-2** publish **(** **`confirm`** **+** structured logs**)** **`.**
 - Whether preview responses should attach supplier-offer context when tours are linked **`.**
 - **No** fake urgency **;** **no** publish without system-confirmed availability **`.**
+
+---
+
+## Checkpoint Sync — S1D-2 admin-gated operational sales push channel publish (2026-05-17)
+
+**Shipped:** **`AdminOperationalSalesPushPublishService`** **`;`** **`AdminOperationalSalesPushPublishBody`** **`/`** **`AdminOperationalSalesPushChannelPublishResultRead`** **`;`** **`POST /admin/tours/{tour_id}/operational-sales-push/publish`** **`;`** **`send_channel_plain_message`** **`;`** publish requires **`confirm: true`** **`;`** re-runs **S1D-1** at publish **`;`** sends to **`TELEGRAM_OFFER_SHOWCASE_CHANNEL_ID`** with **`TELEGRAM_BOT_TOKEN`** **`;`** no persisted audit table **(** structured logging only**)** **.**
+
+Track future-gated decisions:
+
+- Whether scheduled operational sales push should exist later **`.**
+- Whether admin publish action needs a dedicated persisted audit table **`.**
+- Whether publish history should be visible in admin **`.**
+- Whether Telegram admin UI should expose preview **`/`** publish buttons **`.**
+- Whether predeparture and low-availability pushes need separate anti-duplicate rules **`.**
+- Whether the same tour may receive multiple operational sales push posts **`.**
+- Whether operational sales push publish should enqueue supplier **`/`** admin notifications later **`.**
+- Whether channel copy should be localized per audience **`/`** channel **`.**
+- **No** automatic channel publish without separate go **`/`** no-go **`.**
+- **No** fake urgency **;** **no** publish without eligible system preview **`.**
 
 ---
 

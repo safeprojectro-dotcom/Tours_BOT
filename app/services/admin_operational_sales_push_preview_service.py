@@ -25,6 +25,16 @@ def _to_utc(dt: datetime) -> datetime:
     return dt.astimezone(UTC)
 
 
+def channel_plain_text_for_operational_sales_push_read(read: AdminOperationalSalesPushPreviewRead) -> str | None:
+    """Strip internal ops-only footer; keep factual urgency lines for public channel (S1D-2)."""
+    if not read.preview_plain or not read.eligible_for_operational_sales_push_preview:
+        return None
+    t = read.preview_plain.replace("Operational sales push preview:", "", 1).strip()
+    t = t.replace("Inventory confirmed from Layer A; not published to Telegram.", "").strip()
+    t = " ".join(t.split())
+    return t if t else None
+
+
 class AdminOperationalSalesPushPreviewService:
     """S1D-1: system-confirmed counts via S1A; dual triggers — predeparture window and/or low seats."""
 

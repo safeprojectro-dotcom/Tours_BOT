@@ -29,6 +29,10 @@ from app.schemas.admin_departure_passenger_counts import (
     AdminDeparturePassengerCountsRead,
 )
 from app.schemas.admin_operational_sales_push_preview import AdminOperationalSalesPushPreviewRead
+from app.schemas.admin_operational_sales_push_publish import (
+    AdminOperationalSalesPushChannelPublishResultRead,
+    AdminOperationalSalesPushPublishBody,
+)
 from app.schemas.admin_supplier_telegram_contact_resolution import AdminSupplierTelegramContactResolutionRead
 from app.schemas.supplier_notification_outbox import SupplierNotificationOutboxDeliveryResultRead
 from app.schemas.admin_ops_dashboard import AdminOpsDashboardRead, parse_include_sections_query
@@ -100,6 +104,13 @@ from app.services.prepare_conversion_chain_execution_service import PrepareConve
 from app.services.admin_automation_cockpit_service import AdminAutomationCockpitService
 from app.services.admin_departure_passenger_counts_service import AdminDeparturePassengerCountsService
 from app.services.admin_operational_sales_push_preview_service import AdminOperationalSalesPushPreviewService
+from app.services.admin_operational_sales_push_publish_service import (
+    AdminOperationalSalesPushPublishService,
+    OperationalSalesPushPublishConfigError,
+    OperationalSalesPushPublishNotEligibleError,
+    OperationalSalesPushPublishTourNotFoundError,
+)
+from app.services.telegram_showcase_client import TelegramShowcaseSendError
 from app.services.admin_supplier_telegram_contact_resolution_service import (
     AdminSupplierTelegramContactResolutionService,
 )
@@ -895,6 +906,53 @@ def get_admin_tour_operational_sales_push_preview(
     if payload is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour not found.")
     return payload
+
+
+@router.post(
+    "/tours/{tour_id}/operational-sales-push/publish",
+    response_model=AdminOperationalSalesPushChannelPublishResultRead,
+)
+def post_admin_tour_operational_sales_push_publish(
+    tour_id: int,
+    body: AdminOperationalSalesPushPublishBody,
+    db: Session = Depends(get_db),
+) -> AdminOperationalSalesPushChannelPublishResultRead:
+    """S1D-2: re-check S1D-1 eligibility, then post plain text to configured showcase channel."""
+    if not body.confirm:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=[
+                {
+                    "loc": ("body", "confirm"),
+                    "msg": "confirm must be true to publish to the Telegram channel.",
+                    "type": "value_error",
+                },
+            ],
+        )
+    try:
+        result = AdminOperationalSalesPushPublishService().publish_for_tour(db, tour_id=tour_id)
+    except OperationalSalesPushPublishTourNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour not found.") from None
+    except OperationalSalesPushPublishNotEligibleError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "operational_sales_push_not_eligible",
+                "eligibility_block_codes": exc.block_codes,
+            },
+        ) from None
+    except OperationalSalesPushPublishConfigError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Operational sales push channel is not configured (TELEGRAM_BOT_TOKEN and TELEGRAM_OFFER_SHOWCASE_CHANNEL_ID required).",
+        ) from None
+    except TelegramShowcaseSendError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"code": "telegram_channel_send_failed", "message": str(exc)},
+        ) from None
+    db.commit()
+    return result
 
 
 @router.get(
