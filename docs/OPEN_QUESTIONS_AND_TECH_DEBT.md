@@ -152,6 +152,25 @@ Track future-gated decisions:
 
 ---
 
+## Checkpoint Sync — O1-DG production role identity access and boarding design gate (2026-05-20)
+
+**Shipped (docs-only):** **[`docs/O1_PRODUCTION_ROLE_IDENTITY_ACCESS_BOARDING_DESIGN_GATE.md`](O1_PRODUCTION_ROLE_IDENTITY_ACCESS_BOARDING_DESIGN_GATE.md)** **`—`** **`P0`** **`→`** **O1** production design gate **`;`** does **not** replace **[`docs/OPERATIONAL_AUTOMATION_ROADMAP.md`](OPERATIONAL_AUTOMATION_ROADMAP.md)** or **[`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)** **.** Physical demo chain reference **`:`** **[`docs/DEMO1_PHYSICAL_TELEGRAM_DEMO_SMOKE_PLAYBOOK.md`](DEMO1_PHYSICAL_TELEGRAM_DEMO_SMOKE_PLAYBOOK.md)** **.**
+
+Track future-gated decisions:
+
+- Whether **`O1A`** (**Production IAM baseline design **`/`** schema review**) sequences **policy** before **schema** or the reverse **`.**
+- Whether supplier org **`/`** membership model prefers **OIDC**, **magic link**, **password+MFA**, or **phased** rollout **`.**
+- Whether driver session anchors primarily **to driver person** vs **enrolled vehicle device** **`.**
+- Whether boarding allows **offline verification** (**cache** **`/`** public keys**) **or** mandates **online-only** default **`.**
+- Whether **M1** marketing QR and **O1** secure tokens remain **cryptographically isolated** in implementation (**design gate requires yes** **;** enforce in code**)** **`.**
+- Whether manifest **row-level** read requires **two-person approval** **`/`** break-glass only **`.**
+- Whether scan audit should store **GPS** **`/`** coarse location **`.**
+- Whether trip closeout report is **legally** **`/`** financially binding or **operational** only **`.**
+- **No** passenger manifest **UI** **`/`** export before IAM **`/`** purpose-limit **`/`** audit gate **`.**
+- **No** secure QR generation **`/`** scan **`/`** driver client implied by **O1-DG** text alone **`.**
+
+---
+
 ## Checkpoint Sync — A1V Telegram cockpit (2026-05-16)
 
 **Shipped:** read-only admin Telegram surface (`/admin_cockpit` + **📊 Automation Cockpit** button) over **`AdminAutomationCockpitService.read_cockpit`** — see **[`docs/HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md`](HANDOFF_A1V_VISIBLE_ADMIN_BUTTON_SURFACE_OVER_COCKPIT.md)**.
