@@ -158,7 +158,7 @@ Track future-gated decisions:
 
 Track future-gated decisions:
 
-- Whether **`O1A`** (**Production IAM baseline design **`/`** schema review**) sequences **policy** before **schema** or the reverse **`.**
+- Whether **`O1A-1`** (**IAM final entity list **`/`** additive schema design**) sequences **policy** before **schema** or the reverse **`.**
 - Whether supplier org **`/`** membership model prefers **OIDC**, **magic link**, **password+MFA**, or **phased** rollout **`.**
 - Whether driver session anchors primarily **to driver person** vs **enrolled vehicle device** **`.**
 - Whether boarding allows **offline verification** (**cache** **`/`** public keys**) **or** mandates **online-only** default **`.**
@@ -168,6 +168,22 @@ Track future-gated decisions:
 - Whether trip closeout report is **legally** **`/`** financially binding or **operational** only **`.**
 - **No** passenger manifest **UI** **`/`** export before IAM **`/`** purpose-limit **`/`** audit gate **`.**
 - **No** secure QR generation **`/`** scan **`/`** driver client implied by **O1-DG** text alone **`.**
+
+---
+
+## Checkpoint Sync — O1A production IAM baseline schema review (2026-05-20)
+
+**Shipped (docs-only):** **[`docs/O1A_PRODUCTION_IAM_BASELINE_SCHEMA_REVIEW.md`](O1A_PRODUCTION_IAM_BASELINE_SCHEMA_REVIEW.md)** **`—`** under **`P0`** **`→`** **O1** after **O1-DG** **`;`** inventories **`users`**, **`suppliers`**, **`supplier_api_credentials`**, Mini App vs bot identity patterns, **`ADMIN_API_TOKEN`**, **`TELEGRAM_ADMIN_ALLOWLIST_USER_IDS`**, **`OPS_QUEUE_TOKEN`** **`;`** gaps **`&`** anti-duplication rules as in doc **.**
+
+Track future-gated decisions:
+
+- When **`Telegram`** Mini App **`init_data`** validation lands on **`/mini-app`** vs transitional query **`/`** body **`telegram_user_id`** **`.**
+- Whether **`assigned_operator`** **`/`** handoff operator stays on **`users`** or migrates to a **staff** **`/`** **role** model **`.**
+- Whether **`supplier_api_credentials`** stay **M2M-only** when **per-person** supplier staff appears **`.**
+- Whether **`O1A-1`** emits **one** additive migration pack **or** phased table groups **(** admin IAM vs operational entities**)** **`.**
+- **No** second **`users`**-like customer table **`;`** **no** parallel **`suppliers`** root **`.**
+- **No** **`ADMIN_API_TOKEN`** as long-term RBAC **`;`** plan cutover **`/`** break-glass **`.**
+- **No** **M1** marketing QR signing mixed with **O1** ticket **`/`** boarding tokens **`.**
 
 ---
 
